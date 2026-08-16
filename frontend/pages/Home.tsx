@@ -23,11 +23,11 @@ export default function Home() {
       <div className="flex items-center gap-3 pt-2">
         {user ? (
           <Button size="lg" asChild>
-            <Link href={routes["dashboard"]()}>Go to dashboard</Link>
+            <Link href={routes.dashboard()}>Go to dashboard</Link>
           </Button>
         ) : (
           <Button size="lg" asChild>
-            <Link href={routes["login"]()}>Sign in with Microsoft</Link>
+            <Link href={routes.login()}>Sign in with Microsoft</Link>
           </Button>
         )}
       </div>

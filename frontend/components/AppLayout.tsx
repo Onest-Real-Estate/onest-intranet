@@ -22,7 +22,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
   function handleLogout(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    router.post(routes["logout"]());
+    router.post(routes.logout());
   }
 
   return (
@@ -30,18 +30,15 @@ export function AppLayout({ children }: { children: ReactNode }) {
       <header className="sticky top-0 z-10 border-b bg-background/95 backdrop-blur">
         <div className="mx-auto flex h-14 w-full max-w-5xl items-center justify-between px-4">
           <nav className="flex items-center">
-            <Link
-              href={routes["home"]()}
-              className="text-sm font-semibold tracking-tight"
-            >
+            <Link href={routes.home()} className="text-sm font-semibold tracking-tight">
               Onest
             </Link>
             <Separator orientation="vertical" className="mx-3 h-5" />
             <Button variant="ghost" size="sm" asChild>
-              <Link href={routes["home"]()}>Home</Link>
+              <Link href={routes.home()}>Home</Link>
             </Button>
             <Button variant="ghost" size="sm" asChild>
-              <Link href={routes["dashboard"]()}>Dashboard</Link>
+              <Link href={routes.dashboard()}>Dashboard</Link>
             </Button>
           </nav>
           <div className="flex items-center gap-3">
@@ -62,7 +59,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
               </>
             ) : (
               <Button size="sm" asChild>
-                <Link href={routes["login"]()}>Sign in</Link>
+                <Link href={routes.login()}>Sign in</Link>
               </Button>
             )}
           </div>

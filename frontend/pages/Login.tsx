@@ -28,7 +28,7 @@ export default function Login() {
         </CardHeader>
         <CardContent>
           {/* Full page POST — the OAuth handshake redirects to Microsoft. */}
-          <form method="post" action={routes["microsoft_login"]()}>
+          <form method="post" action={routes.microsoft_login()}>
             <input type="hidden" name="csrfmiddlewaretoken" value={csrfToken} />
             <Button type="submit" size="lg" className="w-full">
               <MicrosoftLogo className="size-4" />

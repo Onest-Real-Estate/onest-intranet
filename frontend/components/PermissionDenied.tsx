@@ -20,7 +20,7 @@ export function PermissionDenied() {
         administrator if you believe this is a mistake.
       </p>
       <Button asChild>
-        <Link href={routes["home"]()}>Back to home</Link>
+        <Link href={routes.home()}>Back to home</Link>
       </Button>
     </div>
   );

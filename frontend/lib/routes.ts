@@ -6,6 +6,6 @@ import URLS from "@/types/routes";
  *
  *   pnpm run routes:generate
  *
- * Usage: `routes["dashboard"]()` or `routes["subscription-success"](username, pk)`.
+ * Usage: `routes.dashboard()` or `routes["subscription-success"](username, pk)`.
  */
 export const routes = URLS;
