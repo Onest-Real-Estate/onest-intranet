@@ -1,0 +1,121 @@
+name: onest-prod
+
+# Production stack. The web image builds the frontend and runs gunicorn;
+# static files are served by WhiteNoise. The database, object storage, and
+# mail server are external/managed services configured through .env — this
+# stack runs the web app, celery workers, the celery-beat scheduler, and
+# Redis.
+#
+#   docker compose --env-file .env -f deployment/compose.prod.yaml up -d --build
+
+# Shared config for the celery worker and beat services (prod image with deps
+# baked in; DB/storage are external, Redis is in this stack).
+x-celery-service: &celery-service
+  build:
+    context: ..
+    dockerfile: deployment/Containerfile.prod
+  restart: unless-stopped
+  environment: &celery-env
+    DJANGO_DEBUG: "0"
+    DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:?set DJANGO_SECRET_KEY in .env}
+    # PostgreSQL — same external/managed database as the web service
+    DB_ENGINE: ${DB_ENGINE:-django.db.backends.postgresql}
+    DB_NAME: ${POSTGRES_DB:-onest}
+    DB_USER: ${POSTGRES_USER:-onest}
+    DB_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    DB_HOST: ${POSTGRES_HOST:?set POSTGRES_HOST in .env}
+    DB_PORT: ${POSTGRES_PORT:-5432}
+    # Redis: db 0 is the cache; celery uses dedicated DBs (see settings)
+    REDIS_URL: redis://redis:6379/0
+    CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/1}
+    CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/2}
+    # Error tracking (Sentry SDK)
+    SENTRY_DSN: ${SENTRY_DSN:-}
+    SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-production}
+    SENTRY_TRACES_SAMPLE_RATE: ${SENTRY_TRACES_SAMPLE_RATE:-0}
+    SENTRY_SEND_DEFAULT_PII: ${SENTRY_SEND_DEFAULT_PII:-0}
+    LOG_LEVEL: ${LOG_LEVEL:-INFO}
+  depends_on:
+    redis:
+      condition: service_healthy
+
+services:
+  web:
+    build:
+      context: ..
+      dockerfile: deployment/Containerfile.prod
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-8000}:8000"
+    environment:
+      DJANGO_DEBUG: "0"
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:?set DJANGO_SECRET_KEY in .env}
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1}
+      # PostgreSQL — external/managed database (no bundled db service).
+      DB_ENGINE: ${DB_ENGINE:-django.db.backends.postgresql}
+      DB_NAME: ${POSTGRES_DB:-onest}
+      DB_USER: ${POSTGRES_USER:-onest}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      DB_HOST: ${POSTGRES_HOST:?set POSTGRES_HOST in .env}
+      DB_PORT: ${POSTGRES_PORT:-5432}
+      # Redis (cache + sessions) — bundled in this stack.
+      REDIS_URL: redis://redis:6379/0
+      # Email — external SMTP relay via .env (no bundled mail server).
+      EMAIL_BACKEND: ${EMAIL_BACKEND:-django.core.mail.backends.smtp.EmailBackend}
+      EMAIL_HOST: ${EMAIL_HOST:-}
+      EMAIL_PORT: ${EMAIL_PORT:-587}
+      EMAIL_HOST_USER: ${EMAIL_HOST_USER:-}
+      EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD:-}
+      EMAIL_USE_TLS: ${EMAIL_USE_TLS:-1}
+      DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL:-Onest <noreply@onest.local>}
+      # Object storage — external S3-compatible service via .env (MinIO,
+      # AWS S3, Cloudflare R2, ...). Omit AWS_S3_ENDPOINT_URL to use real AWS
+      # S3; set AWS_S3_CUSTOM_DOMAIN if media is served from a public host.
+      USE_S3: ${USE_S3:-1}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:?set AWS_ACCESS_KEY_ID in .env}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:?set AWS_SECRET_ACCESS_KEY in .env}
+      AWS_STORAGE_BUCKET_NAME: ${AWS_STORAGE_BUCKET_NAME:-onest}
+      AWS_S3_ENDPOINT_URL: ${AWS_S3_ENDPOINT_URL:-}
+      AWS_S3_CUSTOM_DOMAIN: ${AWS_S3_CUSTOM_DOMAIN:-}
+      AWS_S3_URL_PROTOCOL: ${AWS_S3_URL_PROTOCOL:-https:}
+      AWS_S3_REGION_NAME: ${AWS_S3_REGION_NAME:-us-east-1}
+      # Virtual-hosted style for AWS S3; set to "path" for MinIO-style endpoints.
+      AWS_S3_ADDRESSING_STYLE: ${AWS_S3_ADDRESSING_STYLE:-virtual}
+      # Microsoft SSO
+      MICROSOFT_CLIENT_ID: ${MICROSOFT_CLIENT_ID:-}
+      MICROSOFT_CLIENT_SECRET: ${MICROSOFT_CLIENT_SECRET:-}
+      MICROSOFT_TENANT: ${MICROSOFT_TENANT:-common}
+      # Error tracking (Sentry SDK)
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-production}
+      SENTRY_TRACES_SAMPLE_RATE: ${SENTRY_TRACES_SAMPLE_RATE:-0}
+      SENTRY_SEND_DEFAULT_PII: ${SENTRY_SEND_DEFAULT_PII:-0}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      GUNICORN_WORKERS: ${GUNICORN_WORKERS:-3}
+      GUNICORN_THREADS: ${GUNICORN_THREADS:-2}
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 45s
+
+  celery:
+    <<: *celery-service
+    command: ./deployment/entrypoint.celery.sh worker -l info
+
+  celery-beat:
+    <<: *celery-service
+    command: ./deployment/entrypoint.celery.sh beat -l info
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10

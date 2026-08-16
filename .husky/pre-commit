@@ -1,0 +1,12 @@
+# Auto-fix staged files (ruff for Python, biome for frontend).
+pnpm exec lint-staged
+
+# Full project gates — run on every commit.
+uv run ruff check .
+uv run ruff format --check .
+uv run ty check
+uv run pytest
+uv run python manage.py makemigrations --check --dry-run
+pnpm typecheck
+pnpm test
+pnpm exec biome check .

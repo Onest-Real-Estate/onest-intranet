@@ -1,0 +1,31 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Django runtime files
+db.sqlite3
+staticfiles/
+
+# Environment
+.env
+deployment/.env.prod
+
+# Frontend (Node)
+node_modules/
+
+# Vite build output (served by Django via STATICFILES_DIRS)
+assets/*
+
+# Keep the directory in git so Django check passes before the first build
+!assets/.gitkeep
+
+
+node_modules/*
+

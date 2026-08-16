@@ -1,0 +1,26 @@
+# syntax=docker/dockerfile:1
+# Development image: Django + all Python deps. The Vite dev server runs on the
+# host (`pnpm run dev`); Django loads assets from it via django-vite.
+FROM ghcr.io/astral-sh/uv:python3.14-bookworm-slim
+
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+WORKDIR /app
+
+# curl is used by the compose healthcheck.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install dependencies (layer is cached until pyproject.toml / uv.lock change).
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-install-project
+
+COPY . .
+RUN chmod +x deployment/entrypoint.dev.sh deployment/entrypoint.celery.sh
+
+EXPOSE 8000
+CMD ["./deployment/entrypoint.dev.sh"]

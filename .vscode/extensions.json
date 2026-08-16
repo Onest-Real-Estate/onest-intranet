@@ -1,0 +1,11 @@
+{
+  "recommendations": [
+    // Python / Django
+    "ms-python.python",
+    "charliermarsh.ruff",
+    "batisteo.vscode-django",
+    // Frontend (React / TypeScript / Tailwind)
+    "biomejs.biome",
+    "bradlc.vscode-tailwindcss"
+  ]
+}

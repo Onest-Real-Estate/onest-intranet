@@ -1,0 +1,52 @@
+[project]
+name = "onest"
+version = "0.1.0"
+description = "Django + Inertia.js + React + shadcn/ui starter with Microsoft SSO"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "django>=6.0.8",
+    "django-ninja>=1.6.2",
+    "inertia-django>=1.2.0",
+    "django-allauth>=65.0",
+    "django-vite>=3.1.0",
+    "django-typescript-routes>=0.4.0",
+    "python-decouple>=3.8",
+    "gunicorn>=26.0.0",
+    "psycopg[binary]>=3.3.4",
+    "django-redis>=7.0.0",
+    "django-storages[boto3]>=1.14.6",
+    "whitenoise>=6.12.0",
+    "celery>=5.6.0",
+    "django-celery-beat>=2.8.0",
+    "sentry-sdk[django]>=2.20.0",
+]
+
+[dependency-groups]
+dev = [
+    "django-silk>=5.5.0",  # SQL profiling (N+1 detection); dev only, see config/settings.py
+    "django-types>=0.24.0",
+    "pytest>=8.3.0",
+    "pytest-django>=4.9.0",
+    "ruff>=0.16.3",
+    "ty>=0.0.72",
+]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings"
+testpaths = ["apps"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py313"
+exclude = ["assets", "staticfiles", "frontend", "apps/**/migrations"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "C4"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["apps", "config"]
+
+[tool.ty.environment]
+# Match the project's minimum Python version (project.requires-python).
+python-version = "3.14"

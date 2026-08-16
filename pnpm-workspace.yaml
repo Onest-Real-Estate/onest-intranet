@@ -1,0 +1,4 @@
+# Supply-chain hardening: don't install package versions published within the
+# last 7 days (10080 minutes), so compromised releases are usually detected
+# and removed before they can reach us. Set to 0 to disable.
+minimumReleaseAge: 10080

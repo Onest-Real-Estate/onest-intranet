@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  push:
+    branches: [main,staging,development]
+  pull_request:
+
+# Mirrors the checks in .husky/pre-commit (minus lint-staged, which only
+# auto-fixes staged files):
+#   uv run ruff check .
+#   uv run ruff format --check .
+#   uv run ty check
+#   uv run pytest
+#   uv run python manage.py makemigrations --check --dry-run
+#   pnpm typecheck
+#   pnpm test
+#   pnpm exec biome check .
+
+jobs:
+  backend:
+    name: Backend (ruff · ty · pytest · migrations)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8
+        with:
+          python-version-file: .python-version
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Lint (ruff check)
+        run: uv run ruff check .
+
+      - name: Format (ruff format --check)
+        run: uv run ruff format --check .
+
+      - name: Type check (ty)
+        run: uv run ty check
+
+      - name: Tests (pytest)
+        run: uv run pytest
+
+      - name: Migrations up to date
+        run: uv run python manage.py makemigrations --check --dry-run
+
+  frontend:
+    name: Frontend (typecheck · biome)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.3.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type check (tsc)
+        run: pnpm typecheck
+
+      - name: Tests (vitest)
+        run: pnpm test
+
+      - name: Lint + format (biome)
+        run: pnpm exec biome check .
