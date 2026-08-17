@@ -1,6 +1,5 @@
-# syntax=docker/dockerfile:1
 # Production image: builds the frontend bundle, then a slim Django runtime
-# serving it with gunicorn + WhiteNoise. Media files are stored on MinIO (S3).
+# serving it with gunicorn + WhiteNoise. Media files are stored on S3.
 
 # ---- frontend build ----
 FROM node:22-alpine AS frontend

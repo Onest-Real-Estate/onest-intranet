@@ -1,9 +1,5 @@
-from django.contrib.auth import logout as auth_logout
 from django.contrib.auth.decorators import login_required
-from django.shortcuts import redirect
-from django.views.decorators.http import require_POST
 from inertia import inertia, render
-from inertia.http import clear_history
 
 
 @inertia("Home")
@@ -11,24 +7,10 @@ def home(request):
     return {}
 
 
-@inertia("Login")
-def login_page(request):
-    if request.user.is_authenticated:
-        return redirect("dashboard")
-    return {}
-
-
 @login_required
 @inertia("Dashboard")
 def dashboard(request):
     return {}
-
-
-@require_POST
-def logout(request):
-    auth_logout(request)
-    clear_history(request)
-    return redirect("home")
 
 
 def permission_denied(request, exception=None):

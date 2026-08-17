@@ -20,9 +20,12 @@ on **Tailwind CSS v4**.
 .
 ├── config/                  # Django project (settings, urls, wsgi/asgi)
 ├── apps/
-│   └── web/                 # Django app: Inertia pages, shared props, logout
+│   ├── user/                # Django app: user model, admin, auth page views
+│   │   ├── views/           #   Login page and logout view
+│   │   └── urls.py
+│   └── web/                 # Django app: Inertia pages and shared props
 │       ├── middleware.py    #   shares `user` + `csrfToken` with every page
-│       ├── views.py         #   Home, Login, Dashboard (login_required), logout
+│       ├── views.py         #   Home and Dashboard (login_required)
 │       └── urls.py
 ├── templates/
 │   └── layout.html          # Inertia layout; loads the Vite bundle
