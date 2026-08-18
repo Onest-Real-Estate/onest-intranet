@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(uv run pytest:*)",
+      "Bash(uv run ruff:*)",
+      "Bash(uv run ty check:*)",
+      "Bash(uv run python manage.py check:*)",
+      "Bash(uv run python manage.py makemigrations --check --dry-run:*)",
+      "Bash(uv run python manage.py showmigrations:*)",
+      "Bash(uv run python manage.py generate_typescript_routes:*)",
+      "Bash(uv sync:*)",
+      "Bash(pnpm test:*)",
+      "Bash(pnpm typecheck:*)",
+      "Bash(pnpm run typecheck:*)",
+      "Bash(pnpm run test:*)",
+      "Bash(pnpm run routes:generate:*)",
+      "Bash(pnpm run build:*)",
+      "Bash(pnpm exec biome check:*)",
+      "Bash(pnpm exec tsc:*)",
+      "Bash(pnpm install:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      "Bash(git branch:*)",
+      "Bash(gh pr view:*)",
+      "Bash(gh pr diff:*)",
+      "Bash(gh pr list:*)",
+      "Bash(docker compose --env-file .env -f deployment/compose.dev.yaml ps:*)",
+      "Bash(docker compose --env-file .env -f deployment/compose.dev.yaml logs:*)",
+      "Bash(make test:*)",
+      "Bash(make migrate:*)",
+      "Bash(make makemigrations:*)"
+    ],
+    "ask": [
+      "Bash(uv run python manage.py migrate:*)",
+      "Bash(make clean:*)",
+      "Bash(docker compose:*)"
+    ],
+    "deny": [
+      "Read(./.env)",
+      "Read(./deployment/.env.prod)",
+      "Read(./.venv/**)",
+      "Read(./node_modules/**)"
+    ]
+  }
+}

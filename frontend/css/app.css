@@ -37,6 +37,9 @@
   --success-foreground: oklch(0.99 0 0);
   --warning: oklch(0.68 0.14 70);
   --warning-foreground: oklch(0.22 0.025 65);
+  /* Warning as *text*: --warning is a surface tint and only reaches ~2.4:1
+     against a card, so status copy needs its own darker step. */
+  --warning-ink: oklch(0.45 0.115 68);
   --info: oklch(0.52 0.13 245);
   --info-foreground: oklch(0.99 0 0);
   --border: oklch(0.89 0.014 78);
@@ -84,6 +87,7 @@
   --success-foreground: oklch(0.17 0.02 150);
   --warning: oklch(0.78 0.13 76);
   --warning-foreground: oklch(0.2 0.025 65);
+  --warning-ink: oklch(0.82 0.12 78);
   --info: oklch(0.7 0.12 245);
   --info-foreground: oklch(0.17 0.02 245);
   --border: oklch(1 0 0 / 12%);
@@ -129,6 +133,7 @@
   --color-success-foreground: var(--success-foreground);
   --color-warning: var(--warning);
   --color-warning-foreground: var(--warning-foreground);
+  --color-warning-ink: var(--warning-ink);
   --color-info: var(--info);
   --color-info-foreground: var(--info-foreground);
   --color-border: var(--border);
@@ -161,10 +166,13 @@
 
   html {
     @apply bg-background;
+    /* Browser chrome ships with no design system of its own. */
+    scrollbar-color: var(--border) transparent;
   }
 
   body {
     @apply min-h-svh bg-background font-sans text-foreground antialiased;
+    caret-color: var(--primary);
   }
 
   h1,
@@ -187,9 +195,49 @@
   ::selection {
     background: color-mix(in oklab, var(--brand-gold) 35%, transparent);
   }
+
+  /* Figures line up column-wise wherever numbers are compared or scanned. */
+  th,
+  td {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/*
+ * Reduced motion is a promise the whole app has to keep, including the
+ * transitions Tailwind utilities set inline on components. Only !important
+ * reliably outranks them, which is why biome flags the four lines below.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/*
+ * Deferred dashboard widgets land after the shell has painted. The rise is
+ * feedback for that one state change — each group resolves on its own clock,
+ * so this is arrival, not a page-load sequence. It is an animation rather than
+ * a transition from a hidden default, so a widget stays visible if it never
+ * runs (headless renderers, background tabs, reduced motion).
+ */
+@keyframes arrive {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
 }
 
 @layer utilities {
+  .arrive {
+    animation: arrive 240ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
   .brand-text {
     color: var(--brand-gold);
   }
@@ -199,7 +247,22 @@
     color: var(--brand-ink);
   }
 
+  /* The signature gold action — sign-in and other brand moments. */
+  .brand-action {
+    background: var(--brand-gold);
+    color: var(--brand-ink);
+  }
+
+  .brand-action:hover {
+    background: color-mix(in oklab, var(--brand-gold) 92%, var(--brand-ink));
+  }
+
   .page-shell {
     @apply mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-8;
+  }
+
+  /* Gold-tinted well behind Lucide marks — see IconWell. */
+  .brand-well {
+    background: color-mix(in oklab, var(--brand-gold) 18%, transparent);
   }
 }

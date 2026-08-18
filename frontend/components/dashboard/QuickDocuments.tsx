@@ -1,8 +1,11 @@
+import { Link } from "@inertiajs/react";
 import type { LucideIcon } from "lucide-react";
 import { BookOpen, FilePenLine, FileText, FolderOpen } from "lucide-react";
 
+import { IconWell } from "@/components/IconWell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { routes } from "@/lib/routes";
 import type { DashboardDocument } from "@/types";
 
 const DOC_ICONS: Record<string, LucideIcon> = {
@@ -13,11 +16,18 @@ const DOC_ICONS: Record<string, LucideIcon> = {
 
 export function QuickDocuments({ documents }: { documents: DashboardDocument[] }) {
   return (
-    <Card>
+    <Card className="arrive">
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <FolderOpen className="size-5" strokeWidth={1.5} />
-          Quick documents
+        <CardTitle asChild className="flex items-center gap-2">
+          <h2>
+            <IconWell
+              icon={FolderOpen}
+              tone="muted"
+              className="size-8"
+              iconClassName="size-4"
+            />
+            Quick documents
+          </h2>
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -26,13 +36,19 @@ export function QuickDocuments({ documents }: { documents: DashboardDocument[] }
             const Icon = DOC_ICONS[doc.id] ?? FileText;
             return (
               <li key={doc.id}>
-                <button
-                  type="button"
-                  className="hover:bg-muted/50 flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm"
+                {/* Until the document store exists, these lead to the section
+                    that will hold them rather than to nothing at all. */}
+                <Link
+                  href={routes.coming_soon("documents-forms")}
+                  className="hover:bg-muted/50 focus-visible:ring-ring focus-visible:ring-offset-background group flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
                 >
-                  <Icon className="text-muted-foreground size-4" strokeWidth={1.5} />
+                  <Icon
+                    className="text-muted-foreground group-hover:text-foreground size-4 transition-colors"
+                    strokeWidth={1.5}
+                    aria-hidden
+                  />
                   {doc.name}
-                </button>
+                </Link>
               </li>
             );
           })}

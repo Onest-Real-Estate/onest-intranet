@@ -1,3 +1,4 @@
+import { Slot } from "@radix-ui/react-slot";
 import type * as React from "react";
 
 import { cn } from "@/lib/utils";
@@ -25,9 +26,20 @@ function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
   );
 }
 
-function CardTitle({ className, ...props }: React.ComponentProps<"div">) {
+/**
+ * `asChild` lets a card title carry real heading semantics (`<h2>`, `<h3>`)
+ * without losing the slot styling — a screen reader can then navigate the
+ * dashboard widgets by heading. Mirrors the `asChild` pattern in Badge.
+ */
+function CardTitle({
+  className,
+  asChild = false,
+  ...props
+}: React.ComponentProps<"div"> & { asChild?: boolean }) {
+  const Comp = asChild ? Slot : "div";
+
   return (
-    <div
+    <Comp
       data-slot="card-title"
       className={cn("leading-none font-semibold", className)}
       {...props}

@@ -21,10 +21,13 @@ This system translates the gold house-and-key logo into an accessible, practical
 | Muted | `oklch(0.96 0.008 78)` | Secondary surfaces and table headers |
 | Destructive | `oklch(0.56 0.20 27)` | Errors and irreversible actions |
 | Success | `oklch(0.49 0.12 150)` | Completed and healthy states |
-| Warning | `oklch(0.68 0.14 70)` | Attention-needed states |
+| Warning | `oklch(0.68 0.14 70)` | Attention-needed *surfaces* (badges, banners) |
+| Warning ink | `oklch(0.45 0.115 68)` | Attention-needed **text** (`text-warning-ink`) |
 | Info | `oklch(0.52 0.13 245)` | Neutral notices and guidance |
 
-Use `bg-primary`, `text-muted-foreground`, `border-border`, and the other semantic utilities exposed in `frontend/css/app.css`. Use `brand-text` and `brand-surface` only for brand expression—not general UI state. The `.dark` class switches the complete token set, including charts and sidebar colors.
+Use `bg-primary`, `text-muted-foreground`, `border-border`, and the other semantic utilities exposed in `frontend/css/app.css`. Use `brand-text`, `brand-surface`, `brand-well` (tinted icon well), and `brand-action` (the signature gold call to action, as on sign-in) only for brand expression—not general UI state. The `.dark` class switches the complete token set, including charts and sidebar colors.
+
+`--warning` is a surface tint: as text on a card it only reaches about 2.4:1. Status **copy** uses `text-warning-ink`, which is the same hue darkened to a readable step. The same distinction applies in reverse to `--warning-foreground`, which is the ink that sits *on* a warning surface and renders near-black anywhere else.
 
 ## Typography
 
@@ -44,7 +47,7 @@ Use sentence case. Reserve all caps for the compact ONEST wordmark. Keep paragra
 
 ## Spacing and layout
 
-Use Tailwind's 4 px spacing scale. The default gaps are 8 px for tightly related controls, 16 px for component content, 24 px between sections, and 40–64 px for page-level separation. Use the shared `page-shell` utility for application pages; it provides a `max-w-6xl` centered container and responsive gutters.
+Use Tailwind's 4 px spacing scale. The default gaps are 8 px for tightly related controls, 16 px for component content, 24 px between sections, and 40–64 px for page-level separation. The dashboard is the reference implementation: 40 px between bands, 24 px within a band, 12 px between a section heading and its content — the contrast between those intervals is what creates rhythm. Use the shared `page-shell` utility for application pages; it provides a `max-w-6xl` centered container and responsive gutters.
 
 Forms should be one column by default. Data-heavy views can expand to a responsive grid, but related labels and values should stay visually grouped.
 
@@ -61,9 +64,16 @@ Forms should be one column by default. Data-heavy views can expand to a responsi
 - **Cards:** group one concept or task. Avoid nesting cards unless hierarchy would otherwise be ambiguous.
 - **Badges:** use for short states or categories, not sentences. Pair semantic colors with explicit words such as “Approved” or “Overdue.”
 - **Tables:** right-align numbers, keep headers concise, and use a muted header surface. On narrow screens, prioritize or stack columns rather than shrinking text below 14 px.
-- **Navigation:** keep the primary nav stable. Active items use the accent surface and should also expose `aria-current="page"`.
+- **Navigation:** keep the primary nav stable. Active items use the accent surface and should also expose `aria-current="page"`. Sidebar sections are declared in `HUB_NAV_GROUPS` with an uppercase group label; sections without a backend show a derived "Soon" pill (`isComingSoon`).
+- **Icon tiles:** one tile vocabulary via `IconWell`. `tone="brand"` (gold) is for the stat row and brand moments; `tone="muted"` is the repeated tile in panel headers. Gold only reads as meaningful while it stays off most tiles.
+- **Header metadata:** static facts in a card header (a date, a count) use a muted pill with no border or chevron, so they never pose as a dropdown.
+- **Badges:** `warning` uses `text-warning-ink` over the tint, never `--warning-foreground` — that token is the ink for a *solid* warning surface and disappears on a dark card.
+- **Interactive cards and rows:** one response — border tint, a one-pixel lift, a shadow step, trailing icon to full ink, 150 ms. Focus rings carry `ring-offset-2`.
+- **Arrival motion:** deferred content uses the `.arrive` utility (240 ms rise + fade). Use an animation, never a transition from a hidden default, so content stays visible if it never runs.
 
-All interactive controls need a visible focus ring, a minimum practical target of 36 px (44 px on touch-heavy screens), a disabled state, and clear hover/pressed feedback. Animations should generally stay between 120–200 ms and respect reduced-motion preferences.
+All interactive controls need a visible focus ring, a minimum practical target of 36 px (44 px on touch-heavy screens), a disabled state, and clear hover/pressed feedback. Animations should generally stay between 120–200 ms; `app.css` carries a global `prefers-reduced-motion` override so individual components do not have to repeat it.
+
+A control whose backend does not exist yet says so rather than doing nothing: mark it `aria-disabled` with a tooltip naming what is missing (see `PendingAction` in `HubLayout`), or point it at the `coming_soon` section that will own it.
 
 ## Icons and imagery
 
@@ -72,6 +82,7 @@ Use Lucide icons at 16–20 px with a consistent 1.5 px stroke (`LucideProvider`
 ## Implementation checklist
 
 - Choose semantic tokens rather than raw palette values.
+- Give each page a `<Head title>`, one `h1`, and heading elements for widget titles (`<CardTitle asChild><h2>…`).
 - Check light and `.dark` themes.
 - Check keyboard focus and logical tab order.
 - Verify empty, loading, error, disabled, and success states.

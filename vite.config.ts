@@ -33,5 +33,10 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
     host: "localhost",
+    // Django serves the page, Vite serves the assets. Without an explicit
+    // origin, imported images resolve to /static/... on the Django origin,
+    // which only has them after a production build — so the login hero and
+    // logo 404 in dev. Absolute dev URLs keep them pointing at Vite.
+    origin: "http://localhost:5173",
   },
 });

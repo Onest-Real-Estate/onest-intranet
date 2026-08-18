@@ -41,18 +41,25 @@ function Ring({ percent }: { percent: number }) {
 
 export function TrainingResources({ training }: { training: DashboardTraining }) {
   return (
-    <div className="grid gap-4 sm:grid-cols-2">
+    <div className="arrive grid gap-4 sm:grid-cols-2">
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <GraduationCap className="size-5" strokeWidth={1.5} />
-            Continuing ED
+          <CardTitle asChild className="flex items-center gap-2">
+            <h2>
+              <IconWell
+                icon={GraduationCap}
+                tone="muted"
+                className="size-8"
+                iconClassName="size-4"
+              />
+              Continuing ED
+            </h2>
           </CardTitle>
         </CardHeader>
         <CardContent className="flex items-center gap-4">
           <div className="relative">
             <Ring percent={training.percent} />
-            <span className="absolute inset-0 grid place-items-center text-sm font-semibold">
+            <span className="absolute inset-0 grid place-items-center text-sm font-semibold tabular-nums">
               {training.percent}%
             </span>
           </div>
@@ -61,9 +68,16 @@ export function TrainingResources({ training }: { training: DashboardTraining })
       </Card>
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Megaphone className="size-5" strokeWidth={1.5} />
-            Resources
+          <CardTitle asChild className="flex items-center gap-2">
+            <h2>
+              <IconWell
+                icon={Megaphone}
+                tone="muted"
+                className="size-8"
+                iconClassName="size-4"
+              />
+              Resources
+            </h2>
           </CardTitle>
         </CardHeader>
         <CardContent className="flex items-start gap-3">
