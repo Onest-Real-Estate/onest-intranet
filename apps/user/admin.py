@@ -4,7 +4,7 @@ from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 from django.contrib.auth.forms import ReadOnlyPasswordHashField
 from django.utils.translation import gettext_lazy as _
 
-from .models import User
+from .models import Office, User
 
 
 class UserCreationForm(forms.ModelForm):
@@ -49,16 +49,74 @@ class UserChangeForm(forms.ModelForm):
         fields = "__all__"
 
 
+class OfficeChildInline(admin.TabularInline):
+    model = Office
+    fk_name = "parent"
+    extra = 0
+    fields = ("name", "slug", "kind", "is_assignable", "is_active", "sort_order")
+    show_change_link = True
+
+
+@admin.register(Office)
+class OfficeAdmin(admin.ModelAdmin):
+    list_display = (
+        "name",
+        "kind",
+        "parent",
+        "is_assignable",
+        "is_active",
+        "sort_order",
+    )
+    list_filter = ("kind", "is_assignable", "is_active")
+    search_fields = ("name", "slug")
+    prepopulated_fields = {"slug": ("name",)}
+    inlines = [OfficeChildInline]
+    ordering = ("sort_order", "name")
+
+
 @admin.register(User)
 class UserAdmin(DjangoUserAdmin):
     add_form = UserCreationForm
     form = UserChangeForm
     ordering = ["email"]
-    list_display = ["email", "display_name", "is_staff", "is_active"]
-    search_fields = ["email", "display_name", "first_name", "last_name"]
+    list_display = [
+        "email",
+        "display_name",
+        "office",
+        "is_staff",
+        "is_superuser",
+        "is_active",
+    ]
+    list_filter = ["is_staff", "is_superuser", "is_active", "groups", "office"]
+    search_fields = [
+        "email",
+        "display_name",
+        "first_name",
+        "last_name",
+        "mls_number",
+        "nrds_number",
+    ]
     fieldsets = (
         (None, {"fields": ("email", "password")}),
-        (_("Personal info"), {"fields": ("display_name", "first_name", "last_name")}),
+        (
+            _("Personal info"),
+            {
+                "fields": (
+                    "display_name",
+                    "first_name",
+                    "last_name",
+                    "phone_number",
+                )
+            },
+        ),
+        (
+            _("Address"),
+            {"fields": ("street_address", "city", "state", "zip_code")},
+        ),
+        (
+            _("Office & licenses"),
+            {"fields": ("office", "mls_number", "nrds_number", "profile_completed")},
+        ),
         (
             _("Permissions"),
             {
@@ -82,3 +140,4 @@ class UserAdmin(DjangoUserAdmin):
             },
         ),
     )
+    autocomplete_fields = ["office"]

@@ -1,6 +1,7 @@
 import "./css/app.css";
 
 import { createInertiaApp } from "@inertiajs/react";
+import { LucideProvider } from "lucide-react";
 import type { ComponentType } from "react";
 import { createRoot } from "react-dom/client";
 
@@ -18,11 +19,15 @@ createInertiaApp<PageProps>({
     return page().then((module) => (module as { default: ComponentType }).default);
   },
   setup({ el, App, props }) {
-    createRoot(el).render(<App {...props} />);
+    createRoot(el).render(
+      <LucideProvider strokeWidth={1.5} size={20}>
+        <App {...props} />
+      </LucideProvider>,
+    );
   },
   progress: {
     delay: 250,
-    color: "#0f172a",
+    color: "#ddb52a",
     includeCSS: true,
     showSpinner: true,
   },

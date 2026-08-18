@@ -25,7 +25,7 @@ on **Tailwind CSS v4**.
 │   │   └── urls.py
 │   └── web/                 # Django app: Inertia pages and shared props
 │       ├── middleware.py    #   shares `user` + `csrfToken` with every page
-│       ├── views.py         #   Home and Dashboard (login_required)
+│       └── views.py         #   Dashboard (login_required)
 │       └── urls.py
 ├── templates/
 │   └── layout.html          # Inertia layout; loads the Vite bundle
@@ -80,13 +80,22 @@ dev server, so no build step is needed while developing.
    MICROSOFT_CLIENT_SECRET=<client secret value>
    MICROSOFT_TENANT=common        # common | organizations | consumers | <tenant-id>
    ```
-5. Restart `runserver` and visit http://localhost:8000/login — you should be
+5. Restart `runserver` and visit http://localhost:8000/ — you should be
    redirected to Microsoft and back into `/dashboard`.
 
 > The Microsoft app itself is configured from settings in
 > `config/settings.py` (`SOCIALACCOUNT_PROVIDERS`), so no admin/social-app
 > record is required. Change the `tenant` to `organizations` or a specific
 > tenant id to restrict who can sign in.
+
+> **Troubleshooting — `AADSTS50194`** (“application is not configured as a
+> multi-tenant application … usage of the `/common` endpoint is not
+> supported”): your app registration is single-tenant, so it can't use
+> `MICROSOFT_TENANT=common`. Set it to your Entra tenant ID instead (Azure
+> portal → **Microsoft Entra ID → Overview → Tenant ID**, or the app
+> registration's **Directory (tenant) ID**) — or change the registration's
+> **Supported account types** to multi-tenant in Azure. A single-tenant
+> intranet app should use the tenant ID.
 
 ### How auth works
 
@@ -95,11 +104,93 @@ dev server, so no build step is needed while developing.
 - On callback, allauth creates/logs in the user and redirects to
   `LOGIN_REDIRECT_URL` (`/dashboard`).
 - The **Dashboard** view is `login_required`; unauthenticated Inertia requests
-  are redirected to `/login`.
+  are redirected to `/`.
 - **Sign out** uses `router.post("/logout")` — Inertia's HTTP client reads the
   `XSRF-TOKEN` cookie and sends it back as `X-XSRF-TOKEN` (that's why
   `CSRF_COOKIE_NAME`/`CSRF_HEADER_NAME` are set that way in settings). The view
   logs the user out and clears the Inertia browser history.
+
+## Post-signup onboarding flow
+
+New users (first Microsoft SSO login) are asked to complete their profile
+before using the app. `ProfileCompletionMiddleware`
+(`apps/user/middleware.py`) redirects them to `/onboarding` until they submit
+`ProfileForm` (`apps/user/forms.py`). Staff and the admin, onboarding, and
+logout URLs are exempt.
+
+- **Required at onboarding**: first name, last name, US phone number, street
+  address, city, state, ZIP, and office location. Microsoft Graph already
+  fills first/last name (and phone when it's a valid US number) so those
+  fields are pre-filled.
+- **Optional (add later)**: MLS number and NRDS number. They appear on
+  onboarding and on `/profile` so people can fill them in whenever they have
+  them.
+- The form saves onto the existing user and sets `profile_completed = True`;
+  invalid submissions re-render the page with errors (HTTP 422).
+- **Existing users are not affected**: the `0003_user_phone_number_...`
+  migration marks all pre-existing accounts as complete, so only new signups
+  go through the flow.
+- Office locations come from the `Office` table (head office → region →
+  regional office → branch), seeded by `0004_office_and_profile_fields`.
+  Manage the tree in the Django admin (`/admin/user/office/`).
+- Edit later at `/profile` (`frontend/pages/Profile.tsx`). The onboarding
+  page is `frontend/pages/Onboarding.tsx`.
+
+## Permissions & roles
+
+Roles are Django **Groups** (`auth.Group`), plus Django's built-in
+`is_superuser` flag for Superadmin. Permissions are Django's `app.codename`
+permissions, granted to groups — members inherit them automatically.
+
+| Role | How it is represented | Typical access |
+| --- | --- | --- |
+| **Superadmin** | `is_superuser` + `is_staff` (Django admin) | Full `/admin/` and every permission |
+| **Admin** | Group `Admins` | Company-wide hub admin (not Django admin unless also staff) |
+| **Region manager** | Group `Region Managers` | Scoped to a region in the office tree |
+| **Branch manager** | Group `Branch Managers` | Scoped to a branch |
+| **Agent** | Group `Users` (default on Microsoft signup) | Day-to-day hub for a single office |
+
+Assign groups on the user in `/admin/user/user/` under **Permissions → Groups**.
+Region and branch scope currently follows the user's `office` (and its
+parents in the org tree). Superadmins are created with
+`uv run python manage.py createsuperuser`.
+
+- **Default role**: every new signup (including the first Microsoft SSO
+  login) is added to the group named in `DEFAULT_USER_GROUP` (default
+  `"Users"`). The `apps/user/signals.py` handler creates the group if it's
+  missing; migrations `0002` and `0005` seed the agent and management groups.
+- **Guard views** with `apps.web.permissions.permission_required` (the
+  server-side equivalent of the frontend `PermissionRequired` component —
+  same `all`/`any` semantics):
+
+  ```python
+  from apps.web.permissions import permission_required
+
+
+  @permission_required(all_permissions=["web.view_report"])
+  @inertia("Reports")
+  def reports(request):
+      return {}
+  ```
+
+  `all_permissions=[...]` requires every listed permission,
+  `any_permissions=[...]` requires at least one. Anonymous users are sent to
+  the login page (with `next`); authenticated users without the permissions
+  get the PermissionDenied Inertia page (403, via `handler403`). For
+  django-ninja APIs, use `PermissionRequiredAuth` from the same module as the
+  `auth=` argument.
+- **In the UI**: every page receives `user.permissions`, `user.roles`,
+  `user.roleLabel`, `user.isStaff`, and `user.isSuperuser`. Guard UI with the
+  `PermissionRequired` component (`frontend/components/PermissionRequired.tsx`)
+  or `hasPermission` from `frontend/lib/permissions.ts`:
+
+  ```tsx
+  import { PermissionRequired } from "@/components/PermissionRequired";
+
+  <PermissionRequired permission={{ all: ["web.view_report"] }}>
+    <ReportsTable />
+  </PermissionRequired>
+  ```
 
 ## Type-safe Django URLs in TypeScript
 

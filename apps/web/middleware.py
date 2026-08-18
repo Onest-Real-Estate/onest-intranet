@@ -1,6 +1,8 @@
 from django.middleware.csrf import get_token
 from inertia import share
 
+from apps.user.roles import ordered_role_names, primary_role_label
+
 
 class InertiaShareMiddleware:
     """Attach props shared with every Inertia page (user, csrf token)."""
@@ -14,6 +16,11 @@ class InertiaShareMiddleware:
             "name": user.display_name or user.get_full_name() or user.email,
             # Django auth permission codenames, e.g. "user.view_user".
             "permissions": sorted(user.get_all_permissions()),
+            # Role (Django group) names, highest-priority first.
+            "roles": ordered_role_names(user),
+            "roleLabel": primary_role_label(user),
+            "isStaff": user.is_staff,
+            "isSuperuser": user.is_superuser,
         }
 
     def __init__(self, get_response):

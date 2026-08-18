@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import { AppLayout } from "@/components/AppLayout";
+import { HubLayout } from "@/components/HubLayout";
 import { PermissionDenied } from "@/components/PermissionDenied";
 
 /**
@@ -12,4 +12,4 @@ export default function PermissionDeniedPage() {
   return <PermissionDenied />;
 }
 
-PermissionDeniedPage.layout = (page: ReactNode) => <AppLayout>{page}</AppLayout>;
+PermissionDeniedPage.layout = (page: ReactNode) => <HubLayout>{page}</HubLayout>;

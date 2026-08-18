@@ -6,6 +6,7 @@ from django.contrib.auth.models import AnonymousUser, Permission
 from django.core.exceptions import PermissionDenied
 from django.http import HttpResponse
 from django.test import override_settings
+from django.urls import reverse
 
 from apps.user.models import User
 from apps.web.permissions import PermissionRequiredAuth, permission_required
@@ -68,7 +69,7 @@ def test_permission_required_redirects_anonymous_users(rf):
     wrapped = permission_required(all_permissions=["user.view_user"])(ok_view)
     response = wrapped(request)
     assert response.status_code == 302
-    assert response.url.startswith("/login")
+    assert response.url == f"{reverse('login')}?next=/"
 
 
 @pytest.mark.django_db
@@ -135,7 +136,9 @@ def test_permission_denied_handler_returns_403_html_for_full_load(rf):
 @pytest.mark.django_db
 @override_settings(ROOT_URLCONF="apps.web.tests.urlconf")
 def test_permission_required_denial_renders_403_page(client):
-    user = User.objects.create_user(email="alice@example.com")
+    # profile_completed=True so ProfileCompletionMiddleware doesn't redirect
+    # to /onboarding before the permission check runs.
+    user = User.objects.create_user(email="alice@example.com", profile_completed=True)
     client.force_login(user)
 
     response = client.get("/protected", HTTP_X_INERTIA="true")

@@ -58,6 +58,10 @@ MIDDLEWARE = [
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "allauth.account.middleware.AccountMiddleware",
+    # New SSO users are sent through the /onboarding flow until their profile
+    # is complete (apps/user/middleware.py). Runs after auth so request.user
+    # is available, before Inertia so redirects pass through cleanly.
+    "apps.user.middleware.ProfileCompletionMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     # Inertia must run after the auth middleware; the share middleware runs
@@ -323,7 +327,7 @@ AUTHENTICATION_BACKENDS = [
     "allauth.account.auth_backends.AuthenticationBackend",
 ]
 
-LOGIN_URL = "/login"
+LOGIN_URL = "/"
 LOGIN_REDIRECT_URL = "/dashboard"
 ACCOUNT_LOGOUT_REDIRECT_URL = "/"
 
@@ -349,6 +353,13 @@ SOCIALACCOUNT_PROVIDERS = {
         }
     }
 }
+
+# New signups (including the first Microsoft SSO login) are added to this
+# group automatically — see apps/user/signals.py. Roles are Django Groups:
+# create them in the admin (/admin/auth/group/), grant permissions there,
+# and members inherit them. The default group is seeded by the
+# 0002_default_user_group migration.
+DEFAULT_USER_GROUP = "Users"
 
 # ---------------------------------------------------------------------------
 # Sentry (error tracking — sentry.io or PostHog error tracking)

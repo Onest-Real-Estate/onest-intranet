@@ -9,6 +9,10 @@ function user(permissions: string[]): User {
     email: "alice@example.com",
     name: "Alice",
     permissions,
+    roles: [],
+    roleLabel: "Agent",
+    isStaff: false,
+    isSuperuser: false,
   };
 }
 

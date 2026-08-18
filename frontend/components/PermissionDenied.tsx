@@ -13,14 +13,14 @@ import { routes } from "@/lib/routes";
 export function PermissionDenied() {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-6 px-6 py-20 text-center">
-      <ShieldAlert className="size-12 text-destructive" aria-hidden />
+      <ShieldAlert className="size-12 text-destructive" strokeWidth={1.5} aria-hidden />
       <h1 className="text-3xl font-semibold tracking-tight">Permission denied</h1>
       <p className="max-w-md text-muted-foreground">
         You don't have the required permission to view this page. Contact an
         administrator if you believe this is a mistake.
       </p>
       <Button asChild>
-        <Link href={routes.home()}>Back to home</Link>
+        <Link href={routes.dashboard()}>Back to dashboard</Link>
       </Button>
     </div>
   );

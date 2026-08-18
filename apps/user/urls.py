@@ -1,8 +1,21 @@
 from django.urls import path
+from django.views.generic import RedirectView
 
-from . import views
+from .views.auth_views import (
+    login_page,
+    logout,
+    onboarding,
+    onboarding_submit,
+    profile,
+    profile_submit,
+)
 
 urlpatterns = [
-    path("login", views.login_page, name="login"),
-    path("logout", views.logout, name="logout"),
+    path("", login_page, name="login"),
+    path("login", RedirectView.as_view(pattern_name="login", query_string=True)),
+    path("logout", logout, name="logout"),
+    path("onboarding", onboarding, name="onboarding"),
+    path("onboarding/submit", onboarding_submit, name="onboarding_submit"),
+    path("profile", profile, name="profile"),
+    path("profile/submit", profile_submit, name="profile_submit"),
 ]

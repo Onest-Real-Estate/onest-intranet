@@ -2,7 +2,7 @@ import json
 import re
 
 import pytest
-from django.contrib.auth.models import Permission
+from django.contrib.auth.models import Group, Permission
 from django.urls import reverse
 
 from apps.user.models import User
@@ -19,20 +19,20 @@ def inertia_page_script(response):
 
 
 @pytest.mark.django_db
-def test_home_renders_inertia_page(client):
-    response = client.get(reverse("home"))
+def test_root_is_login_page(client):
+    response = client.get(reverse("login"))
     assert response.status_code == 200
     data = inertia_page_script(response)
-    assert data["component"] == "Home"
+    assert data["component"] == "Login"
 
 
 @pytest.mark.django_db
-def test_home_inertia_request_returns_json(client):
-    response = client.get(reverse("home"), HTTP_X_INERTIA="true")
+def test_root_inertia_request_returns_json(client):
+    response = client.get(reverse("login"), HTTP_X_INERTIA="true")
     assert response.status_code == 200
     assert response["Content-Type"] == "application/json"
     data = json.loads(response.content)
-    assert data["component"] == "Home"
+    assert data["component"] == "Login"
     assert data["props"]["user"] is None
     assert "csrfToken" in data["props"]
 
@@ -47,7 +47,10 @@ def test_dashboard_requires_login(client):
 @pytest.mark.django_db
 def test_dashboard_shares_user(client):
     user = User.objects.create_user(
-        email="alice@example.com", first_name="Alice", last_name="Smith"
+        email="alice@example.com",
+        first_name="Alice",
+        last_name="Smith",
+        profile_completed=True,
     )
     client.force_login(user)
     response = client.get(reverse("dashboard"), HTTP_X_INERTIA="true")
@@ -58,14 +61,97 @@ def test_dashboard_shares_user(client):
         "email": "alice@example.com",
         "name": "Alice Smith",
         "permissions": [],
+        "roles": [],
+        "roleLabel": "Agent",
+        "isStaff": False,
+        "isSuperuser": False,
     }
 
 
 @pytest.mark.django_db
 def test_dashboard_shares_user_permissions(client):
-    user = User.objects.create_user(email="alice@example.com")
+    user = User.objects.create_user(email="alice@example.com", profile_completed=True)
     user.user_permissions.add(Permission.objects.get(codename="view_user"))
     client.force_login(user)
     response = client.get(reverse("dashboard"), HTTP_X_INERTIA="true")
     data = json.loads(response.content)
     assert data["props"]["user"]["permissions"] == ["user.view_user"]
+
+
+@pytest.mark.django_db
+def test_dashboard_shares_group_roles_and_permissions(client):
+    user = User.objects.create_user(email="alice@example.com", profile_completed=True)
+    group = Group.objects.create(name="Editors")
+    group.permissions.add(Permission.objects.get(codename="view_user"))
+    user.groups.add(group)
+    client.force_login(user)
+    response = client.get(reverse("dashboard"), HTTP_X_INERTIA="true")
+    data = json.loads(response.content)
+    assert data["props"]["user"]["roles"] == ["Editors"]
+    assert data["props"]["user"]["roleLabel"] == "Agent"
+    assert data["props"]["user"]["permissions"] == ["user.view_user"]
+
+
+@pytest.mark.django_db
+def test_dashboard_defers_widget_payloads_on_first_load(client):
+    user = User.objects.create_user(email="alice@example.com", profile_completed=True)
+    client.force_login(user)
+    response = client.get(reverse("dashboard"), HTTP_X_INERTIA="true")
+    data = json.loads(response.content)
+    assert "stats" not in data["props"]
+    assert "transactions" not in data["props"]
+    assert data["deferredProps"]["stats"] == ["stats"]
+    assert "quickApps" in data["deferredProps"]["pipeline"]
+    assert "schedule" in data["deferredProps"]["widgets"]
+
+
+@pytest.mark.django_db
+def test_dashboard_partial_reload_returns_deferred_stats(client):
+    user = User.objects.create_user(email="alice@example.com", profile_completed=True)
+    client.force_login(user)
+    response = client.get(
+        reverse("dashboard"),
+        HTTP_X_INERTIA="true",
+        HTTP_X_INERTIA_PARTIAL_DATA="stats",
+        HTTP_X_INERTIA_PARTIAL_COMPONENT="Dashboard",
+    )
+    data = json.loads(response.content)
+    assert data["props"]["stats"]["activeTransactions"]["value"] == "6"
+    assert "commissionYtd" in data["props"]["stats"]
+
+
+@pytest.mark.django_db
+def test_dashboard_partial_reload_returns_transactions(client):
+    user = User.objects.create_user(email="alice@example.com", profile_completed=True)
+    client.force_login(user)
+    response = client.get(
+        reverse("dashboard"),
+        HTTP_X_INERTIA="true",
+        HTTP_X_INERTIA_PARTIAL_DATA="transactions",
+        HTTP_X_INERTIA_PARTIAL_COMPONENT="Dashboard",
+    )
+    data = json.loads(response.content)
+    assert len(data["props"]["transactions"]) == 4
+    assert data["props"]["transactions"][0]["status"] in {"on_track", "action_needed"}
+
+
+@pytest.mark.django_db
+def test_coming_soon_renders_named_section(client):
+    user = User.objects.create_user(email="alice@example.com", profile_completed=True)
+    client.force_login(user)
+    response = client.get(
+        reverse("coming_soon", kwargs={"section": "my-contract"}),
+        HTTP_X_INERTIA="true",
+    )
+    assert response.status_code == 200
+    data = json.loads(response.content)
+    assert data["component"] == "ComingSoon"
+    assert data["props"]["title"] == "My contract"
+
+
+@pytest.mark.django_db
+def test_coming_soon_unknown_section_is_404(client):
+    user = User.objects.create_user(email="alice@example.com", profile_completed=True)
+    client.force_login(user)
+    response = client.get(reverse("coming_soon", kwargs={"section": "not-a-section"}))
+    assert response.status_code == 404
