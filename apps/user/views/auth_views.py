@@ -69,12 +69,24 @@ def onboarding(request: HttpRequest):
 @require_POST
 def onboarding_submit(request: HttpRequest):
     """Save onboarding details and mark the profile complete."""
+    from apps.audit.events import publish
+
     user = cast(User, request.user)
     form = ProfileForm(request.POST, instance=user)
     if form.is_valid():
         user = form.save()
         user.profile_completed = True
         user.save(update_fields=["profile_completed"])
+        publish(
+            "user.onboarded",
+            actor_id=str(user.pk),
+            subject=f"user:{user.pk}",
+            payload={
+                "user_id": user.pk,
+                "email": user.email,
+                "office_id": user.office_id,
+            },
+        )
         return redirect("dashboard")
     return _render_profile_form(request, component="Onboarding", form=form, status=422)
 
