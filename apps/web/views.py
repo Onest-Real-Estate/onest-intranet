@@ -11,10 +11,10 @@ from .dashboard import (
     dashboard_market,
     dashboard_quick_apps,
     dashboard_schedule,
-    dashboard_stats,
     dashboard_training,
     dashboard_transactions,
 )
+from .metrics import dashboard_metrics
 from .operations import (
     OPERATIONS_DESTINATIONS,
     OperationsDestination,
@@ -27,7 +27,9 @@ from .operations import (
 @inertia("Dashboard")
 def dashboard(request):
     return {
-        "stats": defer(lambda: dashboard_stats(), group="stats"),
+        # Selection and calculation both live in web.metrics; the view never
+        # decides which figures a user may read.
+        "metrics": defer(lambda: dashboard_metrics(request.user), group="metrics"),
         "quickApps": defer(lambda: dashboard_quick_apps(), group="pipeline"),
         "announcements": defer(lambda: dashboard_announcements(), group="pipeline"),
         "transactions": defer(lambda: dashboard_transactions(), group="pipeline"),

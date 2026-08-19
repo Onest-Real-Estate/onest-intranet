@@ -344,8 +344,7 @@ def enforce_policy(policy_key: str):
     return decorator
 
 
-def scope_q_for_user_offices(user, *, field_name: str) -> Q:
-    access = get_effective_access(user)
+def _office_scope_q(access, *, field_name: str) -> Q:
     if access.company_wide:
         return Q()
     filters = Q()
@@ -358,6 +357,10 @@ def scope_q_for_user_offices(user, *, field_name: str) -> Q:
     return filters
 
 
+def scope_q_for_user_offices(user, *, field_name: str) -> Q:
+    return _office_scope_q(get_effective_access(user), field_name=field_name)
+
+
 def scope_queryset_for_user_office(
     user,
     queryset: QuerySet,
@@ -366,7 +369,12 @@ def scope_queryset_for_user_office(
 ) -> QuerySet:
     if getattr(user, "is_superuser", False):
         return queryset
-    filters = scope_q_for_user_offices(user, field_name=field_name)
+    access = get_effective_access(user)
+    # Company-wide access yields an empty ``Q``, which is falsy — reading it as
+    # "no scope" would hand a brokerage-wide admin an empty queryset.
+    if access.company_wide:
+        return queryset
+    filters = _office_scope_q(access, field_name=field_name)
     if not filters:
         return queryset.none()
     return queryset.filter(filters)

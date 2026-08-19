@@ -12,17 +12,44 @@ export interface User {
   isSuperuser: boolean;
 }
 
-export interface DashboardStat {
-  value: string;
+/**
+ * Dashboard metrics, selected and calculated server-side by
+ * `apps/web/metrics.py`. The page renders whatever arrives: which cards a user
+ * gets is a permission and scope decision the client is never asked to make.
+ */
+export type MetricScopeLevel = "self" | "office" | "region" | "company";
+
+export interface DashboardMetric {
+  key: string;
+  label: string;
+  /** Presentation hint for the figure; the value arrives already formatted. */
+  format: "count" | "currency" | "percent";
+  scopeLevel: MetricScopeLevel;
+  /** How the figure is calculated — surfaced as the card's tooltip. */
+  definition: string;
+  availability: "available" | "unavailable";
+  /** Why the figure cannot be shown; present only when unavailable. */
+  unavailableReason?: string;
+  /** Null while unavailable — an unmeasured metric has no number to round. */
+  value: string | null;
   hint: string;
-  tone: "default" | "alert" | "warning" | "success";
+  tone: "neutral" | "success" | "warning" | "destructive";
+  trend: "up" | "down" | "flat";
+  /** Server-reversed destination, already guarded by its own permission. */
+  drillDown: { href: string; label: string } | null;
 }
 
-export interface DashboardStats {
-  activeTransactions: DashboardStat;
-  upcomingClosings: DashboardStat;
-  pendingTasks: DashboardStat;
-  commissionYtd: DashboardStat;
+export interface DashboardMetricGroup {
+  key: string;
+  title: string;
+  description: string;
+  metrics: DashboardMetric[];
+}
+
+export interface DashboardMetrics {
+  /** What the team figures cover, e.g. "Fairfax VA" or "Brokerage-wide". */
+  scope: { level: MetricScopeLevel; label: string };
+  groups: DashboardMetricGroup[];
 }
 
 export interface DashboardQuickApp {
@@ -141,7 +168,7 @@ export interface PageProps {
 
 /** Dashboard page props. Deferred widgets are undefined until Inertia loads them. */
 export interface DashboardPageProps extends PageProps {
-  stats?: DashboardStats;
+  metrics?: DashboardMetrics;
   quickApps?: DashboardQuickApp[];
   announcements?: DashboardAnnouncements;
   transactions?: DashboardTransaction[];
