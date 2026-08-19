@@ -1,7 +1,13 @@
 import pytest
 from django.core.exceptions import ValidationError
+from django.db import IntegrityError
 
-from apps.user.models import Office
+from apps.user.models import Office, OfficeContactAssignment, User
+from apps.user.office_payloads import (
+    office_internal_payload,
+    office_selector_payload,
+    office_summary_payload,
+)
 from apps.user.office_seed import SeedConflictError, seed_offices
 
 # ---------------------------------------------------------------------------
@@ -56,6 +62,13 @@ def test_seed_creates_current_markets():
 def test_seed_canonical_slugs_exist():
     slugs = set(Office.objects.values_list("slug", flat=True))
     assert slugs >= EXPECTED_SLUGS
+
+
+@pytest.mark.django_db
+def test_existing_offices_backfilled_with_stable_keys():
+    stable_keys = set(Office.objects.values_list("stable_key", flat=True))
+    assert "charlottesville-va" in stable_keys
+    assert "region-mid-atlantic" in stable_keys
 
 
 @pytest.mark.django_db
@@ -201,6 +214,14 @@ def test_branch_path_and_region():
         "Onest Real Estate / Mid-Atlantic / Virginia / Charlottesville VA"
     )
     assert office.region_name() == "Mid-Atlantic"
+    assert office.region is not None
+    assert office.region.slug == "region-mid-atlantic"
+
+
+@pytest.mark.django_db
+def test_region_points_to_itself_for_direct_lookup():
+    office = Office.objects.get(slug="region-mid-atlantic")
+    assert office.region_id == office.pk
 
 
 @pytest.mark.django_db
@@ -245,6 +266,49 @@ def test_branch_must_sit_under_regional_office():
         office.full_clean()
 
 
+@pytest.mark.django_db
+def test_office_rejects_self_parenting():
+    office = Office.objects.get(slug="charlottesville-va")
+    office.parent = office
+    with pytest.raises(ValidationError):
+        office.full_clean()
+
+
+@pytest.mark.django_db
+def test_office_rejects_parent_cycle():
+    regional = Office.objects.get(slug="ro-virginia")
+    branch = Office.objects.get(slug="charlottesville-va")
+    regional.parent = branch
+    with pytest.raises(ValidationError):
+        regional.full_clean()
+
+
+@pytest.mark.django_db
+def test_stable_key_is_immutable_after_creation():
+    office = Office.objects.get(slug="charlottesville-va")
+    office.stable_key = "new-key"
+    with pytest.raises(ValidationError):
+        office.full_clean()
+
+
+@pytest.mark.django_db
+def test_office_validates_optional_contact_fields():
+    office = Office.objects.get(slug="charlottesville-va")
+    office.state = "ZZ"
+    office.zip_code = "bad"
+    office.main_phone = "123"
+    with pytest.raises(ValidationError):
+        office.full_clean()
+
+
+@pytest.mark.django_db
+def test_for_region_returns_only_that_region_members():
+    region = Office.objects.get(slug="region-mid-atlantic")
+    slugs = set(Office.for_region(region).values_list("slug", flat=True))
+    assert "charlottesville-va" in slugs
+    assert "connecticut" not in slugs
+
+
 # ---------------------------------------------------------------------------
 # Inactive offices excluded from new assignments but remain in DB
 # ---------------------------------------------------------------------------
@@ -287,3 +351,127 @@ def test_onboarding_office_choices_from_database():
     choices_after = Office.grouped_choices()
     names_after = {o["name"] for g in choices_after for o in g["offices"]}
     assert "Charlottesville VA" not in names_after
+
+
+# ---------------------------------------------------------------------------
+# Office contact assignments
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_office_contact_assignment_rejects_cross_office_user():
+    office = Office.objects.get(slug="charlottesville-va")
+    other_office = Office.objects.get(slug="fairfax-va")
+    user = User.objects.create_user(
+        email="agent@example.com",
+        office=other_office,
+    )
+    assignment = OfficeContactAssignment(
+        office=office,
+        user=user,
+        assignment_type=OfficeContactAssignment.AssignmentType.MANAGER,
+    )
+    with pytest.raises(ValidationError):
+        assignment.full_clean()
+
+
+@pytest.mark.django_db
+def test_office_contact_assignment_rejects_invalid_date_range():
+    office = Office.objects.get(slug="charlottesville-va")
+    user = User.objects.create_user(email="agent@example.com", office=office)
+    assignment = OfficeContactAssignment(
+        office=office,
+        user=user,
+        assignment_type=OfficeContactAssignment.AssignmentType.ADMIN,
+        starts_at="2026-08-10",
+        ends_at="2026-08-09",
+    )
+    with pytest.raises(ValidationError):
+        assignment.full_clean()
+
+
+@pytest.mark.django_db
+def test_office_contact_assignment_unique_per_user_and_type():
+    office = Office.objects.get(slug="charlottesville-va")
+    user = User.objects.create_user(email="agent@example.com", office=office)
+    OfficeContactAssignment.objects.create(
+        office=office,
+        user=user,
+        assignment_type=OfficeContactAssignment.AssignmentType.BROKER_CONTACT,
+    )
+    with pytest.raises(IntegrityError):
+        OfficeContactAssignment.objects.create(
+            office=office,
+            user=user,
+            assignment_type=OfficeContactAssignment.AssignmentType.BROKER_CONTACT,
+        )
+
+
+@pytest.mark.django_db
+def test_office_contact_assignment_only_one_primary_per_type():
+    office = Office.objects.get(slug="charlottesville-va")
+    user1 = User.objects.create_user(email="agent1@example.com", office=office)
+    user2 = User.objects.create_user(email="agent2@example.com", office=office)
+    OfficeContactAssignment.objects.create(
+        office=office,
+        user=user1,
+        assignment_type=OfficeContactAssignment.AssignmentType.BROKER_CONTACT,
+        is_primary=True,
+    )
+    with pytest.raises(IntegrityError):
+        OfficeContactAssignment.objects.create(
+            office=office,
+            user=user2,
+            assignment_type=OfficeContactAssignment.AssignmentType.BROKER_CONTACT,
+            is_primary=True,
+        )
+
+
+# ---------------------------------------------------------------------------
+# Public / internal payload boundaries
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_office_selector_payload_is_minimal():
+    office = Office.objects.get(slug="charlottesville-va")
+    payload = office_selector_payload(office)
+    assert payload["name"] == "Charlottesville VA"
+    assert "internalEmail" not in payload
+    assert "accessInstructions" not in payload
+
+
+@pytest.mark.django_db
+def test_office_summary_payload_excludes_internal_fields():
+    office = Office.objects.get(slug="charlottesville-va")
+    office.internal_email = "internal@example.com"
+    office.access_instructions = "Use side entrance."
+    office.save()
+    payload = office_summary_payload(office)
+    assert "internalEmail" not in payload
+    assert "accessInstructions" not in payload
+
+
+@pytest.mark.django_db
+def test_office_internal_payload_includes_internal_fields():
+    office = Office.objects.get(slug="charlottesville-va")
+    office.internal_email = "internal@example.com"
+    office.access_instructions = "Use side entrance."
+    office.save()
+    payload = office_internal_payload(office)
+    assert payload["internalEmail"] == "internal@example.com"
+    assert payload["accessInstructions"] == "Use side entrance."
+
+
+@pytest.mark.django_db
+def test_office_admin_locks_stable_identity_after_create():
+    from django.test import RequestFactory
+
+    from apps.user.admin import OfficeAdmin
+
+    office = Office.objects.get(slug="charlottesville-va")
+    request = RequestFactory().get("/")
+    admin = OfficeAdmin(Office, None)
+    readonly = admin.get_readonly_fields(request, office)
+    assert "stable_key" in readonly
+    assert "region" in readonly
