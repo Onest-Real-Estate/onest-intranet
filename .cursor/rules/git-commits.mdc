@@ -1,0 +1,10 @@
+---
+description: Git commit conventions for this project
+alwaysApply: true
+---
+
+# Git Commit Conventions
+
+- Never add a `Co-authored-by: Cursor` (or any AI tool) trailer to commits.
+- Write commit messages in the imperative mood, describing *why* not *what*.
+- Do not include `--no-verify` or skip pre-commit hooks unless explicitly asked.
