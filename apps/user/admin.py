@@ -5,6 +5,8 @@ from django.contrib.auth.forms import ReadOnlyPasswordHashField
 from django.http import HttpRequest
 from django.utils.translation import gettext_lazy as _
 
+from apps.audit.service import actor_from_user, log_model_change
+
 from .models import Office, OfficeContactAssignment, User
 
 
@@ -156,6 +158,83 @@ class OfficeAdmin(admin.ModelAdmin):
             readonly.extend(["stable_key", "region"])
         return readonly
 
+    def save_model(self, request, obj, form, change):
+        before = None
+        if change:
+            before = Office.objects.get(pk=obj.pk)
+        super().save_model(request, obj, form, change)
+        log_model_change(
+            "office.updated" if change else "office.created",
+            actor=actor_from_user(request.user),
+            instance=obj,
+            before_instance=before,
+            snapshot_fields=[
+                "name",
+                "stable_key",
+                "slug",
+                "kind",
+                "parent",
+                "region",
+                "is_assignable",
+                "is_active",
+                "street_address",
+                "city",
+                "state",
+                "zip_code",
+                "main_phone",
+                "public_email",
+                "internal_email",
+                "office_hours",
+                "parking_instructions",
+                "access_instructions",
+            ],
+            metadata={"admin": True},
+        )
+
+    def save_formset(self, request, form, formset, change):
+        instances = formset.save(commit=False)
+        actor = actor_from_user(request.user)
+        for deleted in formset.deleted_objects:
+            log_model_change(
+                "office.assignment.deleted",
+                actor=actor,
+                instance=deleted,
+                before_instance=deleted,
+                snapshot_fields=[
+                    "office",
+                    "user",
+                    "assignment_type",
+                    "is_primary",
+                    "starts_at",
+                    "ends_at",
+                ],
+                metadata={"admin": True},
+            )
+            deleted.delete()
+        for instance in instances:
+            before = None
+            action = "office.assignment.created"
+            if instance.pk:
+                before = OfficeContactAssignment.objects.get(pk=instance.pk)
+                action = "office.assignment.updated"
+            instance.save()
+            log_model_change(
+                action,
+                actor=actor,
+                instance=instance,
+                before_instance=before,
+                snapshot_fields=[
+                    "office",
+                    "user",
+                    "assignment_type",
+                    "is_primary",
+                    "starts_at",
+                    "ends_at",
+                ],
+                metadata={"admin": True},
+            )
+        formset.save_m2m()
+
 
 @admin.register(User)
 class UserAdmin(DjangoUserAdmin):
@@ -242,6 +321,8 @@ class UserAdmin(DjangoUserAdmin):
 
     @admin.action(description="Reset onboarding for selected users")
     def reset_onboarding(self, request: HttpRequest, queryset):
+        actor = actor_from_user(request.user)
+        before_by_pk = {user.pk: User.objects.get(pk=user.pk) for user in queryset}
         count = queryset.update(
             profile_completed=False,
             profile_completed_at=None,
@@ -250,9 +331,48 @@ class UserAdmin(DjangoUserAdmin):
         for user in queryset:
             user.onboarding_version = (user.onboarding_version or 0) + 1
             user.save(update_fields=["onboarding_version"])
+            log_model_change(
+                "user.onboarding.reset",
+                actor=actor,
+                instance=user,
+                before_instance=before_by_pk[user.pk],
+                snapshot_fields=[
+                    "profile_completed",
+                    "profile_completed_at",
+                    "onboarding_version",
+                    "office",
+                ],
+                metadata={"admin": True},
+            )
         self.message_user(
             request,
             f"Reset onboarding for {count} user(s). "
             "They will be redirected to /onboarding on next login.",
             messages.SUCCESS,
         )
+
+    def save_model(self, request, obj, form, change):
+        before = None
+        if change:
+            before = User.objects.get(pk=obj.pk)
+        super().save_model(request, obj, form, change)
+        if change:
+            log_model_change(
+                "user.role_scope.updated",
+                actor=actor_from_user(request.user),
+                instance=obj,
+                before_instance=before,
+                snapshot_fields=[
+                    "office",
+                    "is_active",
+                    "is_staff",
+                    "is_superuser",
+                    "profile_completed",
+                ],
+                metadata={
+                    "groups": list(obj.groups.values_list("name", flat=True)),
+                    "permissions": list(
+                        obj.user_permissions.values_list("codename", flat=True)
+                    ),
+                },
+            )

@@ -114,10 +114,34 @@ def onboarding_submit(request: HttpRequest):
         )
 
     with transaction.atomic():
+        from apps.audit.service import actor_from_user, log_model_change
+
+        before_user = User.objects.get(pk=user.pk)
         saved_user = form.save(commit=False)
         saved_user.profile_completed = True
         saved_user.profile_completed_at = timezone.now()
         saved_user.save()
+        log_model_change(
+            "user.onboarding.completed",
+            actor=actor_from_user(user),
+            instance=saved_user,
+            before_instance=before_user,
+            snapshot_fields=[
+                "first_name",
+                "last_name",
+                "display_name",
+                "phone_number",
+                "street_address",
+                "city",
+                "state",
+                "zip_code",
+                "office",
+                "profile_completed",
+                "profile_completed_at",
+                "onboarding_version",
+            ],
+            metadata={"path": request.path},
+        )
         try:
             from apps.audit.events import publish
 
