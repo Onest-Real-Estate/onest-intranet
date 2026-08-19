@@ -4,7 +4,7 @@ The navigation *structure* — labels, icons, order, grouping — lives in
 ``frontend/lib/hub-nav.ts``. This module owns the two facts the client must
 not invent for itself:
 
-* which agent and administrative modules are actually built (``HUB_FEATURES``), and
+* which agent and administrative modules are actually available (``HUB_FEATURES``), and
 * which office the signed-in user belongs to (``primary_office_payload``).
 
 Both ride along as Inertia shared props (see ``web.middleware``). Hiding a
@@ -23,7 +23,8 @@ from apps.web.operations import OPERATIONS_DESTINATIONS, OPERATIONS_FEATURES
 
 # Agent keys match ``HUB_SECTIONS``; administrative keys come from the reviewed
 # operations registry. Flip an entry to True only in the commit that ships its
-# live destination. Availability never changes the route's permission policy.
+# live destination. Missing entries fail closed; explicit false entries expose
+# only the protected Soon route. Availability never changes its permission policy.
 HUB_FEATURES: dict[str, bool] = {
     **dict.fromkeys(HUB_SECTIONS, False),
     **OPERATIONS_FEATURES,
@@ -57,8 +58,8 @@ def primary_office_payload(user) -> PrimaryOffice | None:
 
     Derived solely from ``user.office``; no office identifier is ever accepted
     from the client. ``None`` covers both the ordinary pre-onboarding case and
-    the data error where an onboarded user lost their office, and the sidebar
-    renders an explicit "office not set" state for it rather than a dead link.
+    the data error where an onboarded user lost their office; office-scoped
+    navigation then fails closed rather than rendering a dead destination.
     """
     if not getattr(user, "is_authenticated", False):
         return None

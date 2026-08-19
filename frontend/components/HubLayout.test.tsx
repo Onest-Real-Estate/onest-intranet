@@ -5,7 +5,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { axe } from "vitest-axe";
 
 import { HubLayout } from "@/components/HubLayout";
-import { HUB_ADMIN_NAV, HUB_NAV_GROUPS, resolveHubNav } from "@/lib/hub-nav";
+import {
+  HUB_ADMIN_NAV,
+  HUB_FEATURE_KEYS,
+  HUB_NAV_EXPANSION_STORAGE_KEY,
+  resolveHubNav,
+} from "@/lib/hub-nav";
 import type { HubFeatures, PageProps, PrimaryOffice, User } from "@/types";
 
 const pageProps = vi.hoisted(() => ({ current: {} as PageProps, url: "/dashboard" }));
@@ -40,14 +45,7 @@ const office: PrimaryOffice = {
 };
 
 function features(overrides: HubFeatures = {}): HubFeatures {
-  const base: HubFeatures = {};
-  for (const group of HUB_NAV_GROUPS) {
-    for (const item of group.items) {
-      if (item.feature) {
-        base[item.feature] = false;
-      }
-    }
-  }
+  const base = Object.fromEntries(HUB_FEATURE_KEYS.map((key) => [key, true]));
   return { ...base, ...overrides };
 }
 
@@ -87,8 +85,7 @@ function nav() {
 }
 
 /**
- * Visible item labels. The first span in a nav link is the title; the rest of
- * the link is the decorative marker and the screen-reader sentence.
+ * Visible item labels. Every mode renders from the same resolved registry.
  */
 function navTitles() {
   return within(nav())
@@ -98,16 +95,17 @@ function navTitles() {
 
 function approvedTitles() {
   return resolveHubNav(agent, features(), office).flatMap((group) =>
-    group.items.map((item) => item.title),
+    group.items.map((item) => item.label),
   );
 }
 
 function adminPermissions() {
-  return HUB_ADMIN_NAV.flatMap((item) => item.permission?.all ?? []);
+  return HUB_ADMIN_NAV.flatMap((item) => item.permissions.all ?? []);
 }
 
 beforeEach(() => {
   routerPost.mockClear();
+  window.localStorage.clear();
   setViewport(1280);
   setPage();
 });
@@ -164,48 +162,57 @@ describe("HubLayout navigation", () => {
     expect(current[0]).toHaveTextContent("Dashboard");
   });
 
-  it("explains an unbuilt destination to assistive tech, not just visually", () => {
+  it("renders an explicitly registered disabled module as Soon", () => {
+    setPage({ features: features({ "my-contract": false }) });
     render(
       <HubLayout>
         <p>content</p>
       </HubLayout>,
     );
-    const link = within(nav()).getByRole("link", {
-      name: /My contract/,
+    const contract = within(nav()).getByRole("link", { name: /My contract/ });
+    expect(contract).toHaveTextContent("Soon");
+    expect(contract).toHaveAccessibleDescription("My contract is coming soon");
+  });
+
+  it("updates a module immediately when availability changes", () => {
+    const rendered = renderLayout();
+    expect(
+      within(nav()).getByRole("link", { name: "My contract" }),
+    ).toBeInTheDocument();
+
+    setPage({ features: features({ "my-contract": false }) });
+    rendered.rerender(
+      <HubLayout>
+        <p>content</p>
+      </HubLayout>,
+    );
+
+    const contract = within(nav()).getByRole("link", { name: /My contract/ });
+    expect(contract).toHaveTextContent("Soon");
+    expect(contract).toHaveAccessibleDescription("My contract is coming soon");
+  });
+
+  it("renders no destinations while permission context is incomplete", () => {
+    setPage({
+      user: { ...agent, permissions: undefined } as unknown as User,
     });
-    expect(link).toHaveAccessibleDescription("My contract is not available yet");
+    renderLayout();
+    expect(within(nav()).queryAllByRole("link")).toHaveLength(0);
   });
 
-  it("drops the marker once the backend enables the module", () => {
-    setPage({ features: features({ "my-contract": true }) });
-    render(
-      <HubLayout>
-        <p>content</p>
-      </HubLayout>,
-    );
-    const link = within(nav()).getByRole("link", { name: /My contract/ });
-    expect(link).not.toHaveAccessibleDescription();
-  });
-
-  it("keeps office destinations present and explained when there is no office", () => {
+  it("hides office destinations when there is no safe office context", () => {
     setPage({
       primaryOffice: null,
-      features: features({
-        "office-info": true,
-        "office-resources": true,
-        "office-inventory": true,
-      }),
     });
     render(
       <HubLayout>
         <p>content</p>
       </HubLayout>,
     );
-    expect(screen.getByText("My office")).toBeInTheDocument();
-    const link = within(nav()).getByRole("link", { name: /Office info/ });
-    expect(link).toHaveAccessibleDescription(
-      "Office info needs an office on your profile",
-    );
+    expect(screen.queryByText("My office")).not.toBeInTheDocument();
+    expect(
+      within(nav()).queryByRole("link", { name: /Office info/ }),
+    ).not.toBeInTheDocument();
   });
 
   it("shows a manager who is also a Realtor one sidebar with no duplicates", () => {
@@ -243,18 +250,13 @@ describe("HubLayout navigation", () => {
     expect(
       within(nav())
         .getAllByRole("region")
-        .map((group) => group.getAttribute("aria-labelledby")),
-    ).toEqual([
-      "hub-nav-administration-people",
-      "hub-nav-administration-operations",
-      "hub-nav-administration-content",
-      "hub-nav-administration-governance-support",
-    ]);
+        .map((group) => group.getAttribute("aria-label")),
+    ).toEqual(["People", "Operations", "Content", "Governance & support"]);
     for (const item of HUB_ADMIN_NAV) {
       expect(
         within(nav())
           .getAllByRole("link")
-          .find((link) => link.getAttribute("href") === item.href),
+          .find((link) => link.getAttribute("href") === item.route.href),
       ).toBeInTheDocument();
     }
   });
@@ -277,6 +279,45 @@ describe("HubLayout navigation", () => {
     expect(
       within(nav()).getByRole("link", { name: /Add New User/ }),
     ).not.toHaveAttribute("aria-current");
+  });
+
+  it("supports keyboard-operated nested sections and persists only section keys", async () => {
+    setPage({
+      user: {
+        ...agent,
+        permissions: ["web.view_users", "web.view_new_agents"],
+      },
+    });
+    renderLayout();
+    const people = within(nav()).getByRole("button", { name: "People" });
+    expect(people).toHaveAttribute("aria-expanded", "true");
+
+    people.focus();
+    await userEvent.keyboard("{Enter}");
+
+    expect(people).toHaveAttribute("aria-expanded", "false");
+    expect(window.localStorage.getItem(HUB_NAV_EXPANSION_STORAGE_KEY)).not.toContain(
+      "admin-people",
+    );
+  });
+
+  it("forces the active deep-link section open without trusting stale storage", () => {
+    window.localStorage.setItem(HUB_NAV_EXPANSION_STORAGE_KEY, '["unknown-section"]');
+    setPage(
+      {
+        user: { ...agent, permissions: ["web.view_users"] },
+      },
+      "/operations/users/42",
+    );
+    renderLayout();
+    expect(within(nav()).getByRole("button", { name: "People" })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    expect(within(nav()).getByRole("link", { name: "Users" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
   });
 
   it("removes the Administration heading after the last permission is revoked", () => {
@@ -307,6 +348,15 @@ describe("HubLayout navigation", () => {
     );
     await userEvent.click(screen.getAllByRole("button", { name: /sidebar/i })[0]);
     expect(navTitles()).toEqual(approvedTitles());
+  });
+
+  it("supports the documented keyboard shortcut for the collapsed rail", async () => {
+    renderLayout();
+    const sidebar = document.querySelector('[data-slot="sidebar"]');
+    expect(sidebar).toHaveAttribute("data-state", "expanded");
+    await userEvent.keyboard("{Control>}b{/Control}");
+    expect(sidebar).toHaveAttribute("data-state", "collapsed");
+    expect(within(nav()).getByRole("link", { name: "Dashboard" })).toBeInTheDocument();
   });
 
   it("keeps long specialty labels usable in the mobile drawer", async () => {

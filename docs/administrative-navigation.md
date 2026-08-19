@@ -1,6 +1,6 @@
 # Administrative navigation
 
-Administrative destinations use the same `HUB_NAV_GROUPS` registry and responsive
+Administrative destinations use the same `HUB_NAV_REGISTRY` and responsive
 sidebar as agent destinations. The `Administration` group is omitted when none of
 its entries pass the current user's effective-permission checks. Roles are not read
 by the frontend to decide visibility.
@@ -37,11 +37,13 @@ permission succeeds.
 | 150 | Governance & support | Offices | `admin_offices` | `web.manage_offices` | Office tree scope |
 | 160 | Governance & support | IT Support | `admin_it_support` | `web.view_it_support` | Support request scope |
 
-All modules are intentionally unavailable until their domain backend ships. An
-authorized direct visit renders the protected unavailable page; an unauthorized
-visit receives a 403 without the destination label. Removing a permission takes
-effect on the next request. When a module becomes live, replace its placeholder
-view and set its feature key to `True` in the same change.
+All modules are intentionally unavailable until their domain backend ships. Their
+explicit false feature keys show the protected destinations as “Soon” only to roles
+whose effective permissions allow them; missing keys still hide. An authorized
+direct visit can render the protected unavailable page, while an unauthorized visit
+receives a 403 without the destination label. Removing a permission takes effect on
+the next request. When a module becomes live, replace its placeholder view and set
+its feature key to `True` in the same change.
 
 ## Baseline management grants
 
