@@ -91,8 +91,11 @@ ROUTE_POLICIES: dict[str, AuthorizationPolicy] = {
     ),
     "headshot_upload": AuthorizationPolicy(
         key="headshot_upload",
-        access="onboarding_only",
-        description="Upload the current user's headshot preview.",
+        access="authenticated",
+        description=(
+            "Replace or remove the current user's headshot, from onboarding "
+            "or the profile page."
+        ),
         methods=("POST",),
         route_names=("headshot_upload",),
         allow_incomplete_profile=True,
@@ -102,7 +105,7 @@ ROUTE_POLICIES: dict[str, AuthorizationPolicy] = {
     "profile": AuthorizationPolicy(
         key="profile",
         access="authenticated",
-        description="Render the signed-in user's profile editor.",
+        description="Render the signed-in user's own agent profile editor.",
         methods=("GET",),
         route_names=("profile",),
         scope_rule="self_only",
@@ -110,7 +113,10 @@ ROUTE_POLICIES: dict[str, AuthorizationPolicy] = {
     "profile_submit": AuthorizationPolicy(
         key="profile_submit",
         access="authenticated",
-        description="Persist the signed-in user's profile updates.",
+        description=(
+            "Persist the signed-in user's self-editable profile fields. "
+            "Never addresses a user identifier supplied by the client."
+        ),
         methods=("POST",),
         route_names=("profile_submit",),
         scope_rule="self_only",

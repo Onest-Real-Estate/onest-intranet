@@ -286,6 +286,21 @@ def _assignment_target(
     return AuditTarget(target_type="user.role_assignment")
 
 
+def locked_assignment_queryset():
+    """The assignment row, locked for update, with its scope loaded.
+
+    ``of=("self",)`` is load-bearing: ``scope_office`` is nullable, so
+    ``select_related`` reaches it through a LEFT OUTER JOIN, and PostgreSQL
+    refuses a bare ``FOR UPDATE`` that spans the nullable side of an outer
+    join. SQLite drops row locking altogether, so nothing on a developer
+    machine reproduces it — ``test_role_assignments`` compiles this queryset
+    against the PostgreSQL backend to keep the guarantee testable.
+    """
+    return UserRoleAssignment.objects.select_for_update(of=("self",)).select_related(
+        "scope_office", "scope_office__region", "user"
+    )
+
+
 def create_role_assignment(
     *,
     actor: User,
@@ -398,11 +413,7 @@ def revoke_role_assignment(
         )
 
     with transaction.atomic():
-        locked = (
-            UserRoleAssignment.objects.select_for_update()
-            .select_related("scope_office", "scope_office__region", "user")
-            .get(pk=assignment.pk)
-        )
+        locked = locked_assignment_queryset().get(pk=assignment.pk)
         before = {
             "status": locked.status,
             "revoked_at": locked.revoked_at.isoformat() if locked.revoked_at else None,
