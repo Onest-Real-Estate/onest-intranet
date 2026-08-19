@@ -366,15 +366,16 @@ def scope_queryset_for_user_office(
     queryset: QuerySet,
     *,
     field_name: str,
+    access=None,
 ) -> QuerySet:
     if getattr(user, "is_superuser", False):
         return queryset
-    access = get_effective_access(user)
+    effective = get_effective_access(user) if access is None else access
     # Company-wide access yields an empty ``Q``, which is falsy — reading it as
     # "no scope" would hand a brokerage-wide admin an empty queryset.
-    if access.company_wide:
+    if effective.company_wide:
         return queryset
-    filters = _office_scope_q(access, field_name=field_name)
+    filters = _office_scope_q(effective, field_name=field_name)
     if not filters:
         return queryset.none()
     return queryset.filter(filters)

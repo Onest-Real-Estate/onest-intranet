@@ -174,6 +174,13 @@ def metrics_props(client, user) -> dict:
     return inertia_props(response)["metrics"]
 
 
+def metrics_data(client, user) -> dict:
+    """Unwrap the widget envelope down to the metric payload."""
+    widget = metrics_props(client, user)
+    assert widget["status"] == "ready"
+    return widget["data"]
+
+
 # --------------------------------------------------------------------------- #
 # Registry shape
 # --------------------------------------------------------------------------- #
@@ -572,7 +579,7 @@ def test_year_to_date_start_follows_the_local_calendar_year():
 
 @pytest.mark.django_db
 def test_agent_dashboard_returns_only_self_metrics(client):
-    payload = metrics_props(client, agent("page-agent@example.com", branch()))
+    payload = metrics_data(client, agent("page-agent@example.com", branch()))
     assert [group["key"] for group in payload["groups"]] == ["myPipeline", "myWork"]
     assert payload_keys(payload) == list(SELF_METRIC_KEYS)
     assert payload["scope"] == {"level": "self", "label": "My book of business"}
@@ -584,7 +591,7 @@ def test_agent_dashboard_returns_only_self_metrics(client):
 @pytest.mark.django_db
 def test_branch_manager_dashboard_labels_the_scope_it_aggregates(client):
     office = branch()
-    payload = metrics_props(client, branch_manager("page-branch@example.com", office))
+    payload = metrics_data(client, branch_manager("page-branch@example.com", office))
     assert payload["scope"] == {"level": "office", "label": office.name}
     assert [group["key"] for group in payload["groups"]] == [
         "myPipeline",
@@ -595,7 +602,9 @@ def test_branch_manager_dashboard_labels_the_scope_it_aggregates(client):
 
 
 @pytest.mark.django_db
-def test_user_without_a_role_gets_an_empty_metric_payload(client):
-    payload = metrics_props(client, make_user("page-nobody@example.com"))
-    assert payload["groups"] == []
-    assert payload["scope"]["level"] == MetricScope.SELF
+def test_user_without_a_role_gets_an_empty_metric_widget(client):
+    """No entitled figures is an empty state with a next step, not a blank card."""
+    widget = metrics_props(client, make_user("page-nobody@example.com"))
+    assert widget["status"] == "empty"
+    assert widget["data"] is None
+    assert widget["emptyState"]["title"] == "No metrics for your role yet"

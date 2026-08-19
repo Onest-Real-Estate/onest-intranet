@@ -1,20 +1,9 @@
 from django.http import Http404
-from inertia import defer, inertia, render
+from inertia import inertia, render
 
 from .authorization import enforce_policy
 from .contracts import list_response
-from .dashboard import (
-    HUB_SECTIONS,
-    dashboard_action_items,
-    dashboard_announcements,
-    dashboard_documents,
-    dashboard_market,
-    dashboard_quick_apps,
-    dashboard_schedule,
-    dashboard_training,
-    dashboard_transactions,
-)
-from .metrics import dashboard_metrics
+from .dashboard import HUB_SECTIONS, deferred_widget_props, greeting_payload
 from .operations import (
     OPERATIONS_DESTINATIONS,
     OperationsDestination,
@@ -26,18 +15,15 @@ from .operations import (
 @enforce_policy("dashboard")
 @inertia("Dashboard")
 def dashboard(request):
+    """Compose the page; every query lives behind a widget provider.
+
+    The greeting is the one prop that is not deferred — it is shell, and it is
+    computed server-side so the salutation and the date agree with the day
+    boundaries every provider uses.
+    """
     return {
-        # Selection and calculation both live in web.metrics; the view never
-        # decides which figures a user may read.
-        "metrics": defer(lambda: dashboard_metrics(request.user), group="metrics"),
-        "quickApps": defer(lambda: dashboard_quick_apps(), group="pipeline"),
-        "announcements": defer(lambda: dashboard_announcements(), group="pipeline"),
-        "transactions": defer(lambda: dashboard_transactions(), group="pipeline"),
-        "training": defer(lambda: dashboard_training(), group="pipeline"),
-        "schedule": defer(lambda: dashboard_schedule(), group="widgets"),
-        "actionItems": defer(lambda: dashboard_action_items(), group="widgets"),
-        "market": defer(lambda: dashboard_market(), group="widgets"),
-        "documents": defer(lambda: dashboard_documents(), group="widgets"),
+        "greeting": greeting_payload(request.user),
+        **deferred_widget_props(request.user),
     }
 
 

@@ -329,6 +329,7 @@ def scoped_user_queryset(context: MetricContext):
         context.user,
         User.objects.filter(is_active=True),
         field_name="office",
+        access=context.access,
     )
 
 
@@ -758,19 +759,24 @@ def _metric_payload(definition: MetricDefinition, context: MetricContext) -> dic
     }
 
 
-def dashboard_metrics(user: User, *, at: datetime | None = None) -> dict[str, Any]:
+def dashboard_metrics(
+    user: User,
+    *,
+    at: datetime | None = None,
+    access: EffectiveAccess | None = None,
+) -> dict[str, Any]:
     """Grouped metric payload for the Inertia dashboard page."""
-    access = get_effective_access(user)
-    scope = resolve_scope(user, access)
+    effective = get_effective_access(user) if access is None else access
+    scope = resolve_scope(user, effective)
     context = MetricContext(
         user=user,
-        access=access,
+        access=effective,
         scope=scope,
         now=at or now(),
     )
     selected = [
         definition
-        for definition in select_metrics(user, access=access)
+        for definition in select_metrics(user, access=effective)
         if SOURCE_MODULE_AVAILABILITY[definition.source_module]
         or definition.unavailable_behavior == UnavailableBehavior.MARK
     ]
@@ -801,6 +807,6 @@ def dashboard_metrics(user: User, *, at: datetime | None = None) -> dict[str, An
         else MetricScope.SELF
     )
     return {
-        "scope": metric_scope_payload(access, reported_scope),
+        "scope": metric_scope_payload(effective, reported_scope),
         "groups": groups,
     }

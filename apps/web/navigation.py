@@ -18,7 +18,7 @@ from typing import Any, TypedDict, cast
 
 from apps.user.models import User
 from apps.user.services.role_assignments import get_effective_permissions
-from apps.web.dashboard import HUB_SECTIONS
+from apps.web.dashboard.sections import HUB_SECTIONS
 from apps.web.operations import OPERATIONS_DESTINATIONS, OPERATIONS_FEATURES
 
 # Agent keys match ``HUB_SECTIONS``; administrative keys come from the reviewed
