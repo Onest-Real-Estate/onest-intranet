@@ -1,6 +1,7 @@
 import { Link, router, usePage } from "@inertiajs/react";
 import {
   Bell,
+  ChevronDown,
   CircleHelp,
   LogOut,
   Palette,
@@ -8,7 +9,13 @@ import {
   Settings,
   UserRound,
 } from "lucide-react";
-import type { CSSProperties, FormEvent, ReactNode } from "react";
+import {
+  type CSSProperties,
+  type FormEvent,
+  type ReactNode,
+  useEffect,
+  useState,
+} from "react";
 
 import { BrandMark } from "@/components/BrandMark";
 import { SearchControl } from "@/components/design-system/search-control";
@@ -39,11 +46,16 @@ import {
 } from "@/components/ui/sidebar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
+  HUB_NAV_EXPANSION_STORAGE_KEY,
+  HUB_NAV_SECTIONS,
+  type HubNavSectionKey,
+  hubNavItemDescription,
   isHubNavItemActive,
+  parseHubNavExpansion,
+  type ResolvedHubNavGroup,
   type ResolvedHubNavItem,
   resolveHubNav,
-  unavailableDescription,
-  unavailableLabel,
+  resolveHubNavSections,
 } from "@/lib/hub-nav";
 import { routes } from "@/lib/routes";
 import type { PageProps, User } from "@/types";
@@ -74,24 +86,34 @@ function roleSummary(
   return `${roleLabel ?? roles[0]} +${roles.length - 1}`;
 }
 
+function storedExpansionState(): string | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  try {
+    return window.localStorage.getItem(HUB_NAV_EXPANSION_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
 function NavList({ items, current }: { items: ResolvedHubNavItem[]; current: string }) {
   return (
     <SidebarMenu>
       {items.map((item) => {
         const active = isHubNavItemActive(item, current);
-        const marker = unavailableLabel(item.unavailable);
-        const description = unavailableDescription(item);
+        const description = hubNavItemDescription(item);
         const noteId = description ? `hub-nav-${item.key}-note` : undefined;
         return (
           <SidebarMenuItem key={item.key}>
             <SidebarMenuButton
               asChild
               isActive={active}
-              tooltip={description ?? item.title}
+              tooltip={description ?? item.label}
               className="h-9 rounded-lg px-2.5 font-normal transition-[background-color,color] duration-(--motion-fast) data-[active=true]:font-semibold group-data-[collapsible=icon]:rounded-lg"
             >
               <Link
-                href={item.href}
+                href={item.route.href}
                 aria-current={active ? "page" : undefined}
                 aria-describedby={noteId}
               >
@@ -103,17 +125,13 @@ function NavList({ items, current }: { items: ResolvedHubNavItem[]; current: str
                   }
                   strokeWidth={1.5}
                 />
-                <span>{item.title}</span>
-                {/* Unbuilt sections stay honest but quiet: plain type, no chip.
-                    Nine pills down one rail reads as a mockup, not a product.
-                    The marker is decorative — the sentence beside it is what
-                    assistive tech reads, and it survives the collapsed rail. */}
-                {marker ? (
+                <span className="min-w-0 truncate">{item.label}</span>
+                {item.availability === "coming-soon" ? (
                   <span
                     aria-hidden
                     className="text-muted-foreground ml-auto shrink-0 text-[0.6875rem] group-data-[collapsible=icon]:hidden"
                   >
-                    {marker}
+                    Soon
                   </span>
                 ) : null}
                 {description ? (
@@ -131,44 +149,56 @@ function NavList({ items, current }: { items: ResolvedHubNavItem[]; current: str
 }
 
 function NavGroupItems({
-  items,
+  group,
   current,
-  groupKey,
+  expandedSections,
+  onSectionToggle,
 }: {
-  items: ResolvedHubNavItem[];
+  group: ResolvedHubNavGroup;
   current: string;
-  groupKey: string;
+  expandedSections: Set<HubNavSectionKey>;
+  onSectionToggle: (section: HubNavSectionKey, active: boolean) => void;
 }) {
-  if (!items.some((item) => item.subsection)) {
-    return <NavList items={items} current={current} />;
+  const sections = resolveHubNavSections(group);
+  if (sections.length === 0) {
+    return <NavList items={group.items} current={current} />;
   }
 
-  const sections: { label: string; items: ResolvedHubNavItem[] }[] = [];
-  for (const item of items) {
-    const label = item.subsection ?? "Other";
-    const currentSection = sections.at(-1);
-    if (currentSection?.label === label) {
-      currentSection.items.push(item);
-    } else {
-      sections.push({ label, items: [item] });
-    }
-  }
+  const rootItems = group.items.filter((item) => !item.section);
 
   return (
     <div className="grid gap-2">
+      {rootItems.length > 0 ? <NavList items={rootItems} current={current} /> : null}
       {sections.map((section) => {
-        const labelId = `hub-nav-${groupKey}-${section.label
-          .toLowerCase()
-          .replaceAll(/[^a-z0-9]+/g, "-")}`;
+        const active = section.items.some((item) => isHubNavItemActive(item, current));
+        const open = expandedSections.has(section.key) || active;
+        const panelId = `hub-nav-section-${section.key}`;
         return (
-          <section key={section.label} aria-labelledby={labelId}>
-            <h3
-              id={labelId}
-              className="text-muted-foreground/80 px-2.5 pt-1 pb-1 text-[0.6875rem] font-medium tracking-[0.02em] group-data-[collapsible=icon]:hidden"
+          <section key={section.key} aria-label={section.label}>
+            <button
+              type="button"
+              aria-expanded={open}
+              aria-controls={panelId}
+              onClick={() => onSectionToggle(section.key, active)}
+              className="text-muted-foreground hover:text-foreground focus-visible:ring-sidebar-ring flex w-full items-center gap-2 rounded-md px-2.5 pt-1 pb-1 text-left text-[0.6875rem] font-medium tracking-[0.02em] focus-visible:ring-2 focus-visible:outline-none group-data-[collapsible=icon]:hidden"
             >
-              {section.label}
-            </h3>
-            <NavList items={section.items} current={current} />
+              <span className="min-w-0 flex-1 truncate">{section.label}</span>
+              <ChevronDown
+                aria-hidden
+                className={`size-3.5 shrink-0 transition-transform motion-reduce:transition-none ${
+                  open ? "rotate-0" : "-rotate-90"
+                }`}
+                strokeWidth={1.5}
+              />
+            </button>
+            <div
+              id={panelId}
+              className={
+                open ? undefined : "hidden group-data-[collapsible=icon]:block"
+              }
+            >
+              <NavList items={section.items} current={current} />
+            </div>
           </section>
         );
       })}
@@ -267,6 +297,36 @@ export function HubLayout({ children }: { children: ReactNode }) {
   const { user, features, primaryOffice } = page.props;
   const current = page.url.split("?")[0];
   const navGroups = resolveHubNav(user, features, primaryOffice);
+  const [expandedSections, setExpandedSections] = useState<Set<HubNavSectionKey>>(() =>
+    parseHubNavExpansion(storedExpansionState()),
+  );
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        HUB_NAV_EXPANSION_STORAGE_KEY,
+        JSON.stringify([...expandedSections].sort()),
+      );
+    } catch {
+      // Storage can be disabled by browser policy; navigation stays usable.
+    }
+  }, [expandedSections]);
+
+  function toggleSection(section: HubNavSectionKey, containsActiveItem: boolean) {
+    if (containsActiveItem) {
+      return;
+    }
+    setExpandedSections((currentSections) => {
+      const next = new Set(currentSections);
+      if (next.has(section)) {
+        next.delete(section);
+      } else {
+        next.add(section);
+      }
+      const known = new Set(HUB_NAV_SECTIONS.map((item) => item.key));
+      return new Set([...next].filter((item) => known.has(item)));
+    });
+  }
 
   function signOut() {
     router.post(routes.logout());
@@ -281,8 +341,8 @@ export function HubLayout({ children }: { children: ReactNode }) {
   const role = roleSummary(user?.roles, user?.roleLabel);
 
   return (
-    // Long operational labels carry a trailing availability marker and remain
-    // readable at supported widths without crowding the icon or marker.
+    // Long operational labels and their quiet Soon marker remain readable at
+    // supported widths without crowding their icons.
     <SidebarProvider style={{ "--sidebar-width": "17.5rem" } as CSSProperties}>
       {/* First focusable element on the page — before the whole nav list. */}
       <a
@@ -323,9 +383,10 @@ export function HubLayout({ children }: { children: ReactNode }) {
                 </SidebarGroupLabel>
                 <SidebarGroupContent>
                   <NavGroupItems
-                    items={group.items}
+                    group={group}
                     current={current}
-                    groupKey={group.label.toLowerCase().replaceAll(/[^a-z0-9]+/g, "-")}
+                    expandedSections={expandedSections}
+                    onSectionToggle={toggleSection}
                   />
                 </SidebarGroupContent>
               </SidebarGroup>

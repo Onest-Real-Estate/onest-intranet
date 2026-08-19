@@ -140,6 +140,8 @@ logout URLs are exempt.
 
 The reviewed route-to-permission mapping for the shared administrative navigation
 is documented in [`docs/administrative-navigation.md`](docs/administrative-navigation.md).
+The contributor contract for the configuration-driven desktop/mobile registry is
+documented in [`docs/navigation.md`](docs/navigation.md).
 
 Roles are Django **Groups** (`auth.Group`), plus Django's built-in
 `is_superuser` flag for Superadmin. Permissions are Django's `app.codename`
