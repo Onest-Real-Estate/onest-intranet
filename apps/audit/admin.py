@@ -1,10 +1,10 @@
-"""Admin for DomainEvent and EventDelivery with operator replay action."""
+"""Admin for DomainEvent, EventDelivery, and AuditEvent."""
 
 from django.contrib import admin, messages
 from django.http import HttpRequest
 from django.utils.html import format_html
 
-from .models import DomainEvent, EventDelivery
+from .models import AuditEvent, DomainEvent, EventDelivery
 
 
 class EventDeliveryInline(admin.TabularInline):
@@ -159,3 +159,66 @@ class AuditPermissions(admin.ModelAdmin):
     """Placeholder to surface the can_replay_events permission in the admin."""
 
     pass
+
+
+@admin.register(AuditEvent)
+class AuditEventAdmin(admin.ModelAdmin):
+    list_display = [
+        "occurred_at",
+        "action",
+        "outcome",
+        "actor_label",
+        "target_label",
+        "source",
+        "request_id",
+    ]
+    list_filter = ["outcome", "source", "actor_type", "action"]
+    search_fields = [
+        "action",
+        "actor_id",
+        "actor_label",
+        "target_id",
+        "target_label",
+        "request_id",
+    ]
+    readonly_fields = [
+        "id",
+        "payload_version",
+        "action",
+        "actor_type",
+        "actor_id",
+        "actor_label",
+        "actor_snapshot",
+        "impersonated_by",
+        "target_type",
+        "target_id",
+        "target_label",
+        "target_snapshot",
+        "organization_id",
+        "office_id",
+        "region_id",
+        "source",
+        "channel",
+        "request_id",
+        "correlation_id",
+        "remote_addr",
+        "user_agent",
+        "outcome",
+        "reason",
+        "before",
+        "after",
+        "changes",
+        "metadata",
+        "occurred_at",
+        "recorded_at",
+    ]
+    ordering = ["-occurred_at", "-recorded_at"]
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False

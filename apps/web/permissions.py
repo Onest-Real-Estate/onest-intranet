@@ -12,6 +12,9 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from ninja.security import SessionAuth
 
+from apps.audit.models import AuditEvent
+from apps.audit.service import AuditTarget, actor_from_user, log_event
+
 
 def _has_permissions(user, any_permissions, all_permissions):
     """True when the user holds every permission in ``all_permissions`` and
@@ -44,6 +47,22 @@ def permission_required(any_permissions=(), all_permissions=(), login_url=None):
         @wraps(view_func)
         def _wrapped_view(request, *args, **kwargs):
             if not _has_permissions(request.user, any_permissions, all_permissions):
+                log_event(
+                    "security.permission.denied",
+                    actor=actor_from_user(request.user),
+                    target=AuditTarget(
+                        target_type="view",
+                        target_label=request.path,
+                        target_snapshot={
+                            "any_permissions": list(any_permissions),
+                            "all_permissions": list(all_permissions),
+                        },
+                    ),
+                    outcome=AuditEvent.Outcome.DENIED,
+                    source="request",
+                    channel="permission_required",
+                    reason="missing_permissions",
+                )
                 raise PermissionDenied
             return view_func(request, *args, **kwargs)
 
