@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -15,6 +15,18 @@ import type { HubFeatures, PageProps, PrimaryOffice, User } from "@/types";
 
 const pageProps = vi.hoisted(() => ({ current: {} as PageProps, url: "/dashboard" }));
 const routerPost = vi.hoisted(() => vi.fn());
+const routerReload = vi.hoisted(() => vi.fn());
+const routerEvents = vi.hoisted(
+  () => new Map<string, Set<(event: CustomEvent) => unknown>>(),
+);
+const routerOn = vi.hoisted(() =>
+  vi.fn((name: string, callback: (event: CustomEvent) => unknown) => {
+    const listeners = routerEvents.get(name) ?? new Set();
+    listeners.add(callback);
+    routerEvents.set(name, listeners);
+    return () => listeners.delete(callback);
+  }),
+);
 
 vi.mock("@inertiajs/react", () => ({
   usePage: () => ({ props: pageProps.current, url: pageProps.url }),
@@ -24,7 +36,7 @@ vi.mock("@inertiajs/react", () => ({
     </a>
   ),
   Head: () => null,
-  router: { post: routerPost },
+  router: { on: routerOn, post: routerPost, reload: routerReload },
 }));
 
 const agent: User = {
@@ -56,6 +68,11 @@ function setPage(overrides: Partial<PageProps> = {}, url = "/dashboard") {
     requestId: "req-1",
     features: features(),
     primaryOffice: office,
+    shell: {
+      authorizationVersion: "access-v1",
+      help: { url: null },
+      session: { authenticated: true },
+    },
     ...overrides,
   };
   pageProps.url = url;
@@ -105,10 +122,24 @@ function adminPermissions() {
 
 beforeEach(() => {
   routerPost.mockClear();
+  routerReload.mockClear();
+  routerOn.mockClear();
+  routerEvents.clear();
   window.localStorage.clear();
+  window.requestAnimationFrame = (callback) => {
+    return window.setTimeout(() => callback(0), 0);
+  };
   setViewport(1280);
   setPage();
 });
+
+function fireRouterEvent(name: string, detail: Record<string, unknown> = {}) {
+  act(() => {
+    for (const listener of routerEvents.get(name) ?? []) {
+      listener(new CustomEvent(name, { detail }));
+    }
+  });
+}
 
 function renderLayout() {
   return render(
@@ -160,6 +191,46 @@ describe("HubLayout navigation", () => {
       .filter((link) => link.getAttribute("aria-current") === "page");
     expect(current).toHaveLength(1);
     expect(current[0]).toHaveTextContent("Dashboard");
+  });
+
+  it("derives page context from the active route when none is supplied", () => {
+    renderLayout();
+    expect(screen.getByText("Dashboard", { selector: "header p" })).toBeVisible();
+  });
+
+  it("renders typed breadcrumbs and falls back from an unsafe back target", () => {
+    render(
+      <HubLayout
+        context={{
+          title: "A very long record name",
+          breadcrumbs: [
+            { label: "Dashboard", href: "/dashboard" },
+            { label: "Record" },
+          ],
+          back: { label: "Go back", href: "https://outside.example" },
+        }}
+      >
+        <p>content</p>
+      </HubLayout>,
+    );
+    expect(screen.getByRole("navigation", { name: "Breadcrumb" })).toBeVisible();
+    expect(screen.getByRole("link", { name: "Go back" })).toHaveAttribute(
+      "href",
+      "/dashboard",
+    );
+  });
+
+  it.each([
+    ["standard", "page-shell"],
+    ["wide", "max-w-[1600px]"],
+    ["focused", "max-w-2xl"],
+  ] as const)("supports the %s content layout", (variant, expectedClass) => {
+    render(
+      <HubLayout variant={variant}>
+        <p>content</p>
+      </HubLayout>,
+    );
+    expect(document.getElementById("hub-content")).toHaveClass(expectedClass);
   });
 
   it("renders an explicitly registered disabled module as Soon", () => {
@@ -350,6 +421,32 @@ describe("HubLayout navigation", () => {
     expect(navTitles()).toEqual(approvedTitles());
   });
 
+  it("traps focus in the mobile drawer and restores it when Escape closes", async () => {
+    setViewport(390);
+    renderLayout();
+    const trigger = screen.getAllByRole("button", { name: /sidebar/i })[0];
+    await userEvent.click(trigger);
+    const drawer = screen.getByRole("dialog");
+    expect(drawer).toContainElement(document.activeElement as HTMLElement);
+    await userEvent.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    await waitFor(() => expect(trigger).toHaveFocus());
+  });
+
+  it("closes the mobile drawer and focuses content after navigation", async () => {
+    setViewport(390);
+    renderLayout();
+    await userEvent.click(screen.getAllByRole("button", { name: /sidebar/i })[0]);
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+
+    fireRouterEvent("navigate");
+
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(document.getElementById("hub-content")).toHaveFocus();
+    });
+  });
+
   it("supports the documented keyboard shortcut for the collapsed rail", async () => {
     renderLayout();
     const sidebar = document.querySelector('[data-slot="sidebar"]');
@@ -385,6 +482,53 @@ describe("HubLayout navigation", () => {
   });
 });
 
+describe("HubLayout lifecycle and entry points", () => {
+  it("announces route loading without hiding the current content", () => {
+    renderLayout();
+    fireRouterEvent("start");
+    expect(document.getElementById("hub-content")).toHaveAttribute("aria-busy", "true");
+    expect(screen.getByRole("status")).toHaveTextContent("Loading page");
+
+    fireRouterEvent("finish");
+    expect(document.getElementById("hub-content")).toHaveAttribute(
+      "aria-busy",
+      "false",
+    );
+  });
+
+  it("offers a recoverable network error and retries fresh", async () => {
+    renderLayout();
+    fireRouterEvent("networkError", { error: new Error("offline") });
+    expect(screen.getByRole("alert")).toHaveTextContent("You’re offline");
+    await userEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(routerReload).toHaveBeenCalledWith({ fresh: true });
+  });
+
+  it("offers sign-in again when an authenticated request expires", () => {
+    renderLayout();
+    fireRouterEvent("httpException", { response: { status: 401 } });
+    expect(screen.getByRole("alert")).toHaveTextContent("Your session has expired");
+    expect(screen.getByRole("link", { name: "Sign in again" })).toHaveAttribute(
+      "href",
+      "/",
+    );
+  });
+
+  it("opens only a backend-approved help destination in a new tab", () => {
+    setPage({
+      shell: {
+        authorizationVersion: "access-v1",
+        help: { url: "https://help.onest.realestate/hub" },
+        session: { authenticated: true },
+      },
+    });
+    renderLayout();
+    expect(
+      screen.getByRole("link", { name: "Open help centre in a new tab" }),
+    ).toHaveAttribute("rel", "noopener noreferrer");
+  });
+});
+
 describe("HubLayout account card", () => {
   it("names the signed-in user and their email in the sidebar footer", () => {
     renderLayout();
@@ -403,6 +547,14 @@ describe("HubLayout account card", () => {
     renderLayout();
     await userEvent.click(screen.getByRole("button", { name: "Sign out Avery" }));
     expect(routerPost).toHaveBeenCalledWith("/logout");
+  });
+
+  it("summarizes identity and office in the header user menu", async () => {
+    renderLayout();
+    await userEvent.click(screen.getByRole("button", { name: "Avery account menu" }));
+    expect(screen.getByText("Cedar Ridge branch")).toBeInTheDocument();
+    expect(screen.getByText("Midwest")).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Profile" })).toBeInTheDocument();
   });
 
   it("renders no account card for a signed-out visitor", () => {

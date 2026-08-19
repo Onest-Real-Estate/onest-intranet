@@ -1,5 +1,4 @@
 import { Deferred, Head, usePage } from "@inertiajs/react";
-import type { ReactNode } from "react";
 import { ActionItems, ActionItemsSkeleton } from "@/components/dashboard/ActionItems";
 import {
   ActiveTransactions,
@@ -26,6 +25,7 @@ import {
   TrainingResourcesSkeleton,
 } from "@/components/dashboard/TrainingResources";
 import { HubLayout } from "@/components/HubLayout";
+import { routes } from "@/lib/routes";
 import type { DashboardPageProps } from "@/types";
 
 export default function Dashboard() {
@@ -50,7 +50,7 @@ export default function Dashboard() {
   // screen, but it still needs a ceiling so it does not sprawl on an ultrawide
   // display.
   return (
-    <div className="mx-auto flex w-full max-w-[1600px] flex-1 flex-col gap-10 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+    <div className="flex flex-1 flex-col gap-10">
       <Head title="Dashboard" />
       <DashboardGreeting user={user} />
 
@@ -103,4 +103,14 @@ export default function Dashboard() {
   );
 }
 
-Dashboard.layout = (page: ReactNode) => <HubLayout>{page}</HubLayout>;
+Dashboard.layout = () =>
+  [
+    HubLayout,
+    {
+      context: {
+        title: "Dashboard",
+        breadcrumbs: [{ label: "Dashboard", href: routes.dashboard() }],
+      },
+      variant: "wide",
+    },
+  ] as const;

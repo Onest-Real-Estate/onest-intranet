@@ -7,8 +7,7 @@ import {
   Plus,
   Trash2,
 } from "lucide-react";
-import type { ReactNode } from "react";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import {
   CardStateMessage,
   DataTable,
@@ -59,6 +58,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { buildListUrl, visitListUrl } from "@/lib/list-query";
+import { routes } from "@/lib/routes";
 import { CONTRACT_STATUS, presentStatus } from "@/lib/status";
 import type { PageProps } from "@/types";
 import type { ListResponse, ValidationErrors } from "@/types/design-system";
@@ -150,7 +150,7 @@ export default function DesignSystem() {
   const activeFilterCount = contracts.filters.status ? 1 : 0;
 
   return (
-    <div className="page-shell grid gap-12 py-8 lg:py-10">
+    <div className="grid gap-12">
       <Head title="Design system" />
       <PageHeader
         eyebrow="ONEST foundation"
@@ -549,4 +549,17 @@ export default function DesignSystem() {
   );
 }
 
-DesignSystem.layout = (page: ReactNode) => <HubLayout>{page}</HubLayout>;
+DesignSystem.layout = () =>
+  [
+    HubLayout,
+    {
+      context: {
+        title: "Design system",
+        breadcrumbs: [
+          { label: "Dashboard", href: routes.dashboard() },
+          { label: "Design system", href: routes.design_system() },
+        ],
+      },
+      variant: "standard",
+    },
+  ] as const;

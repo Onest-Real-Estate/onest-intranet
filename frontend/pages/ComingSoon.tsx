@@ -1,6 +1,5 @@
 import { Head, Link, usePage } from "@inertiajs/react";
 import { ArrowLeft, Construction } from "lucide-react";
-import type { ReactNode } from "react";
 
 import { HubLayout } from "@/components/HubLayout";
 import { IconWell } from "@/components/IconWell";
@@ -33,7 +32,7 @@ export default function ComingSoon() {
   const { title, administrative = false, scope } = usePage<ComingSoonProps>().props;
 
   return (
-    <div className="flex flex-1 items-center justify-center px-4 py-16">
+    <div className="flex flex-1 items-center justify-center py-8">
       <Head title={title} />
       <Card className="w-full max-w-md">
         <CardHeader>
@@ -67,4 +66,18 @@ export default function ComingSoon() {
   );
 }
 
-ComingSoon.layout = (page: ReactNode) => <HubLayout>{page}</HubLayout>;
+ComingSoon.layout = (props: ComingSoonProps) =>
+  [
+    HubLayout,
+    {
+      context: {
+        title: props.title,
+        breadcrumbs: [
+          { label: "Dashboard", href: routes.dashboard() },
+          { label: props.title },
+        ],
+        back: { label: "Back to dashboard", href: routes.dashboard() },
+      },
+      variant: "focused",
+    },
+  ] as const;

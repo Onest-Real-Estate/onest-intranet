@@ -1,8 +1,8 @@
 import { Head, usePage } from "@inertiajs/react";
-import type { ReactNode } from "react";
 
 import { HubLayout } from "@/components/HubLayout";
 import { NotFound } from "@/components/NotFound";
+import { routes } from "@/lib/routes";
 import type { PageProps } from "@/types";
 
 export default function NotFoundPage() {
@@ -16,4 +16,14 @@ export default function NotFoundPage() {
   );
 }
 
-NotFoundPage.layout = (page: ReactNode) => <HubLayout>{page}</HubLayout>;
+NotFoundPage.layout = () =>
+  [
+    HubLayout,
+    {
+      context: {
+        title: "Page not found",
+        back: { label: "Back to dashboard", href: routes.dashboard() },
+      },
+      variant: "focused",
+    },
+  ] as const;

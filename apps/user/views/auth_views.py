@@ -77,7 +77,7 @@ def _ensure_default_agent_assignment(user: User) -> None:
 def login_page(request: HttpRequest):
     if request.user.is_authenticated:
         return redirect("dashboard")
-    return {}
+    return {"sessionExpired": request.GET.get("reason") == "session-expired"}
 
 
 @enforce_policy("logout")

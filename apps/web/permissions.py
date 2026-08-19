@@ -11,7 +11,7 @@ from ninja.security import SessionAuth
 
 from apps.audit.models import AuditEvent
 from apps.audit.service import AuditTarget, actor_from_user, log_event
-from apps.web.authorization import _has_permissions
+from apps.web.authorization import _has_permissions, unauthenticated_redirect
 
 
 def permission_required(any_permissions=(), all_permissions=(), login_url=None):
@@ -33,9 +33,7 @@ def permission_required(any_permissions=(), all_permissions=(), login_url=None):
     def decorator(view_func):
         def _wrapped_view(request, *args, **kwargs):
             if not request.user.is_authenticated:
-                from django.contrib.auth.views import redirect_to_login
-
-                return redirect_to_login(request.get_full_path(), login_url=login_url)
+                return unauthenticated_redirect(request, login_url=login_url)
             if not _has_permissions(request.user, any_permissions, all_permissions):
                 log_event(
                     "security.permission.denied",

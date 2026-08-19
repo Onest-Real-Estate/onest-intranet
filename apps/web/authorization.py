@@ -9,6 +9,7 @@ from django.contrib.auth.views import redirect_to_login
 from django.core.exceptions import PermissionDenied
 from django.db.models import Q, QuerySet
 from django.http import HttpRequest, HttpResponse, JsonResponse
+from django.urls import reverse
 
 from apps.audit.models import AuditEvent
 from apps.audit.service import AuditTarget, actor_from_user, log_event
@@ -287,7 +288,18 @@ def _unauthenticated_response(
 ) -> HttpResponse:
     if policy.auth_behavior == "json":
         return _json_denial(401, "authentication_required", request)
-    return redirect_to_login(request.get_full_path())
+    return unauthenticated_redirect(request)
+
+
+def unauthenticated_redirect(
+    request: HttpRequest, *, login_url: str | None = None
+) -> HttpResponse:
+    """Redirect safely, marking only interrupted Inertia sessions as expired."""
+
+    destination = login_url
+    if destination is None and request.headers.get("X-Inertia") == "true":
+        destination = f"{reverse('login')}?reason=session-expired"
+    return redirect_to_login(request.get_full_path(), login_url=destination)
 
 
 def enforce_policy(policy_key: str):

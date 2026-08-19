@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 from django.contrib.auth.models import Group
@@ -78,11 +79,18 @@ def get_effective_assignments(user: User, *, at=None) -> list[UserRoleAssignment
     return list(active_assignment_queryset(user, at=at))
 
 
-def get_effective_role_keys(user: User, *, at=None) -> list[str]:
+def get_effective_role_keys(
+    user: User,
+    *,
+    at=None,
+    assignments: Sequence[UserRoleAssignment] | None = None,
+) -> list[str]:
     seen: set[str] = set()
     role_keys: list[str] = []
-    assignments = get_effective_assignments(user, at=at)
-    for assignment in assignments:
+    effective_assignments = (
+        get_effective_assignments(user, at=at) if assignments is None else assignments
+    )
+    for assignment in effective_assignments:
         if assignment.role not in seen:
             seen.add(assignment.role)
             role_keys.append(assignment.role)
@@ -107,14 +115,21 @@ def get_primary_role_key(user: User, *, at=None) -> str | None:
     return role_keys[0] if role_keys else None
 
 
-def get_effective_permissions(user: User, *, at=None) -> set[str]:
+def get_effective_permissions(
+    user: User,
+    *,
+    at=None,
+    assignments: Sequence[UserRoleAssignment] | None = None,
+) -> set[str]:
     if getattr(user, "is_anonymous", False):
         return set()
     if getattr(user, "is_superuser", False):
         return set(user.get_all_permissions())
 
-    assignments = get_effective_assignments(user, at=at)
-    if not assignments:
+    effective_assignments = (
+        get_effective_assignments(user, at=at) if assignments is None else assignments
+    )
+    if not effective_assignments:
         return set(user.get_all_permissions())
 
     permissions = set(
@@ -123,7 +138,7 @@ def get_effective_permissions(user: User, *, at=None) -> set[str]:
     normalized = {f"{app_label}.{codename}" for app_label, codename in permissions}
     role_keys = []
     seen: set[str] = set()
-    for assignment in assignments:
+    for assignment in effective_assignments:
         if assignment.role not in seen:
             seen.add(assignment.role)
             role_keys.append(assignment.role)
@@ -162,8 +177,10 @@ def has_effective_permissions(
 
 def get_effective_access(user: User, *, at=None) -> EffectiveAccess:
     assignments = tuple(get_effective_assignments(user, at=at))
-    role_keys = tuple(get_effective_role_keys(user, at=at))
-    permissions = frozenset(get_effective_permissions(user, at=at))
+    role_keys = tuple(get_effective_role_keys(user, at=at, assignments=assignments))
+    permissions = frozenset(
+        get_effective_permissions(user, at=at, assignments=assignments)
+    )
     region_keys: set[str] = set()
     office_keys: set[str] = set()
     company_wide = False
