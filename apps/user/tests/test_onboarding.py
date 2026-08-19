@@ -354,7 +354,9 @@ def test_admin_reset_clears_completion(client):
 @pytest.mark.django_db
 def test_headshot_upload_requires_login(client):
     response = client.post(reverse("headshot_upload"))
-    assert response.status_code == 302
+    assert response.status_code == 401
+    data = json.loads(response.content)
+    assert data["error"] == "authentication_required"
 
 
 @pytest.mark.django_db

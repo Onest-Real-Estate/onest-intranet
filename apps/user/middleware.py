@@ -1,9 +1,7 @@
 from django.shortcuts import redirect
+from django.urls import Resolver404, resolve
 
-# Paths that must stay reachable before the profile is complete: the
-# onboarding flow itself, sign-out, and the Django admin. /profile is
-# gated — incomplete users should finish onboarding first.
-EXEMPT_PREFIXES = ("/admin", "/onboarding", "/logout")
+from apps.web.authorization import get_authorization_policy, is_non_route_exempt_path
 
 
 class ProfileCompletionMiddleware:
@@ -19,11 +17,14 @@ class ProfileCompletionMiddleware:
 
     def __call__(self, request):
         user = request.user
-        if (
-            user.is_authenticated
-            and not user.is_staff
-            and not user.profile_completed
-            and not request.path.startswith(EXEMPT_PREFIXES)
-        ):
+        if user.is_authenticated and not user.is_staff and not user.profile_completed:
+            if is_non_route_exempt_path(request.path):
+                return self.get_response(request)
+            try:
+                policy = get_authorization_policy(resolve(request.path_info).func)
+            except Resolver404:
+                policy = None
+            if policy is not None and policy.allow_incomplete_profile:
+                return self.get_response(request)
             return redirect("onboarding")
         return self.get_response(request)

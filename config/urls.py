@@ -16,3 +16,4 @@ if settings.DEBUG:
 # Custom 403 page (PermissionDenied Inertia page) — see
 # apps/web/views.permission_denied.
 handler403 = "apps.web.views.permission_denied"
+handler404 = "apps.web.views.not_found"

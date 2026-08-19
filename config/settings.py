@@ -60,6 +60,7 @@ MIDDLEWARE = [
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "allauth.account.middleware.AccountMiddleware",
+    "apps.web.middleware.AuthorizationPolicyMiddleware",
     # New SSO users are sent through the /onboarding flow until their profile
     # is complete (apps/user/middleware.py). Runs after auth so request.user
     # is available, before Inertia so redirects pass through cleanly.

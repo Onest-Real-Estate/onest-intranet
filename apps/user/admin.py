@@ -7,6 +7,12 @@ from django.http import HttpRequest
 from django.utils.translation import gettext_lazy as _
 
 from apps.audit.service import actor_from_user, log_model_change
+from apps.web.authorization import (
+    assert_admin_bulk_scope,
+    has_admin_permission,
+    scope_queryset_for_offices,
+    scope_queryset_for_user_office,
+)
 
 from .models import (
     Office,
@@ -190,6 +196,38 @@ class UserRoleAssignmentAdmin(admin.ModelAdmin):
             )
         return readonly
 
+    def has_module_permission(self, request):
+        return has_admin_permission(
+            request.user,
+            "user.view_userroleassignment",
+        )
+
+    def has_view_permission(self, request, obj=None):
+        return has_admin_permission(
+            request.user,
+            "user.view_userroleassignment",
+        )
+
+    def has_add_permission(self, request):
+        return has_admin_permission(request.user, "user.add_userroleassignment")
+
+    def has_change_permission(self, request, obj=None):
+        return has_admin_permission(request.user, "user.change_userroleassignment")
+
+    def get_queryset(self, request):
+        queryset = (
+            super()
+            .get_queryset(request)
+            .select_related(
+                "scope_office", "scope_office__region", "user", "user__office"
+            )
+        )
+        return scope_queryset_for_user_office(
+            request.user,
+            queryset,
+            field_name="scope_office",
+        )
+
     def save_model(self, request, obj, form, change):
         try:
             if not change:
@@ -253,6 +291,27 @@ class UserRoleAssignmentMigrationConflictAdmin(admin.ModelAdmin):
     search_fields = ("user__email", "legacy_role", "detail")
     autocomplete_fields = ("user",)
     readonly_fields = ("user", "legacy_role", "detail", "created_at")
+
+    def has_module_permission(self, request):
+        return has_admin_permission(
+            request.user,
+            "user.view_userroleassignmentmigrationconflict",
+        )
+
+    def has_view_permission(self, request, obj=None):
+        return has_admin_permission(
+            request.user,
+            "user.view_userroleassignmentmigrationconflict",
+        )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(Office)
@@ -325,6 +384,22 @@ class OfficeAdmin(admin.ModelAdmin):
         if obj is not None:
             readonly.extend(["stable_key", "region"])
         return readonly
+
+    def has_module_permission(self, request):
+        return has_admin_permission(request.user, "user.view_office")
+
+    def has_view_permission(self, request, obj=None):
+        return has_admin_permission(request.user, "user.view_office")
+
+    def has_add_permission(self, request):
+        return has_admin_permission(request.user, "user.add_office")
+
+    def has_change_permission(self, request, obj=None):
+        return has_admin_permission(request.user, "user.change_office")
+
+    def get_queryset(self, request):
+        queryset = super().get_queryset(request).select_related("region", "parent")
+        return scope_queryset_for_offices(request.user, queryset)
 
     def save_model(self, request, obj, form, change):
         before = None
@@ -497,14 +572,27 @@ class UserAdmin(DjangoUserAdmin):
 
     @admin.action(description="Reset onboarding for selected users")
     def reset_onboarding(self, request: HttpRequest, queryset):
+        scoped_queryset = scope_queryset_for_user_office(
+            request.user,
+            queryset,
+            field_name="office",
+        )
+        assert_admin_bulk_scope(
+            request.user,
+            queryset,
+            scoped_queryset=scoped_queryset,
+            policy_key="user_admin_reset_onboarding",
+        )
         actor = actor_from_user(request.user)
-        before_by_pk = {user.pk: User.objects.get(pk=user.pk) for user in queryset}
-        count = queryset.update(
+        before_by_pk = {
+            user.pk: User.objects.get(pk=user.pk) for user in scoped_queryset
+        }
+        count = scoped_queryset.update(
             profile_completed=False,
             profile_completed_at=None,
         )
         # Increment version so the reset is distinguishable from the original.
-        for user in queryset:
+        for user in scoped_queryset:
             user.onboarding_version = (user.onboarding_version or 0) + 1
             user.save(update_fields=["onboarding_version"])
             log_model_change(
@@ -525,6 +613,28 @@ class UserAdmin(DjangoUserAdmin):
             f"Reset onboarding for {count} user(s). "
             "They will be redirected to /onboarding on next login.",
             messages.SUCCESS,
+        )
+
+    def has_module_permission(self, request):
+        return has_admin_permission(request.user, "user.view_user")
+
+    def has_view_permission(self, request, obj=None):
+        return has_admin_permission(request.user, "user.view_user")
+
+    def has_add_permission(self, request):
+        return has_admin_permission(request.user, "user.add_user")
+
+    def has_change_permission(self, request, obj=None):
+        return has_admin_permission(request.user, "user.change_user")
+
+    def get_queryset(self, request):
+        queryset = (
+            super().get_queryset(request).select_related("office", "office__region")
+        )
+        return scope_queryset_for_user_office(
+            request.user,
+            queryset,
+            field_name="office",
         )
 
     def save_model(self, request, obj, form, change):

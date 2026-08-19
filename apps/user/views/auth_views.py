@@ -1,7 +1,6 @@
 from typing import cast
 
 from django.contrib.auth import logout as auth_logout
-from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import redirect
@@ -9,6 +8,8 @@ from django.utils import timezone
 from django.views.decorators.http import require_GET, require_POST
 from inertia import inertia, render
 from inertia.http import clear_history
+
+from apps.web.authorization import enforce_policy
 
 from ..forms import ProfileForm, form_errors, profile_page_props
 from ..models import User, UserRoleAssignment
@@ -71,6 +72,7 @@ def _ensure_default_agent_assignment(user: User) -> None:
     assignment.save()
 
 
+@enforce_policy("login_page")
 @inertia("Login")
 def login_page(request: HttpRequest):
     if request.user.is_authenticated:
@@ -78,6 +80,7 @@ def login_page(request: HttpRequest):
     return {}
 
 
+@enforce_policy("logout")
 @require_POST
 def logout(request: HttpRequest):
     auth_logout(request)
@@ -104,7 +107,7 @@ def _render_profile_form(
     return response
 
 
-@login_required
+@enforce_policy("onboarding")
 @require_GET
 @inertia("Onboarding")
 def onboarding(request: HttpRequest):
@@ -115,7 +118,7 @@ def onboarding(request: HttpRequest):
     return profile_page_props(user)
 
 
-@login_required
+@enforce_policy("onboarding_submit")
 @require_POST
 def onboarding_submit(request: HttpRequest):
     """Save onboarding details and mark the profile complete, atomically."""
@@ -186,15 +189,15 @@ def onboarding_submit(request: HttpRequest):
     return redirect("dashboard")
 
 
-@login_required
+@enforce_policy("headshot_upload")
 @require_POST
 def headshot_upload(request: HttpRequest) -> JsonResponse:
     """AJAX endpoint: validate and upload headshot, return URL.
 
     Returns JSON so the multi-step frontend can preview before final submit.
     The saved file path is stored in the session; onboarding_submit reads it.
-    Only the owning user's upload is accepted (authentication enforced by
-    @login_required; no cross-user upload is possible through this endpoint).
+    Only the owning user's upload is accepted; no cross-user upload is possible
+    through this endpoint.
     """
     from ..headshot import validate_headshot
 
@@ -216,7 +219,7 @@ def headshot_upload(request: HttpRequest) -> JsonResponse:
     return JsonResponse({"url": user.headshot.url})
 
 
-@login_required
+@enforce_policy("profile")
 @require_GET
 @inertia("Profile")
 def profile(request: HttpRequest):
@@ -224,7 +227,7 @@ def profile(request: HttpRequest):
     return profile_page_props(cast(User, request.user))
 
 
-@login_required
+@enforce_policy("profile_submit")
 @require_POST
 def profile_submit(request: HttpRequest):
     user = cast(User, request.user)

@@ -144,7 +144,11 @@ def dispatch_event(self, event_id: str) -> None:
 
 
 @shared_task(ignore_result=True)
-def replay_event(event_id: str, consumer_id: str | None = None) -> None:
+def replay_event(
+    event_id: str,
+    consumer_id: str | None = None,
+    initiator: dict[str, str] | None = None,
+) -> None:
     """Operator-initiated replay.  Resets dead/failed deliveries and re-dispatches.
 
     Restricted to admin use via the Django admin action or management command.
@@ -152,11 +156,20 @@ def replay_event(event_id: str, consumer_id: str | None = None) -> None:
     exposed via any API.
     """
     from apps.audit.models import DomainEvent, EventDelivery
+    from apps.audit.replay import revalidate_replay_initiator
 
     try:
         event = DomainEvent.objects.get(pk=event_id)
     except DomainEvent.DoesNotExist:
         logger.error("replay_event: DomainEvent %s not found", event_id)
+        return
+
+    if not revalidate_replay_initiator(
+        initiator, event_id=event_id, consumer_id=consumer_id
+    ):
+        logger.warning(
+            "replay_event: denied event=%s consumer=%s", event_id, consumer_id
+        )
         return
 
     qs = EventDelivery.objects.filter(event=event)
