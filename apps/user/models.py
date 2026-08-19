@@ -191,6 +191,13 @@ class User(AbstractUser):
         null=True,
         blank=True,
     )
+    headshot = models.ImageField(
+        _("headshot"),
+        upload_to="apps.user.headshot.headshot_upload_path",
+        null=True,
+        blank=True,
+        help_text=_("Profile photo. Must be JPEG/PNG, ≤5 MB, at least 200×200 px."),
+    )
     profile_completed = models.BooleanField(
         _("profile completed"),
         default=False,
@@ -198,6 +205,19 @@ class User(AbstractUser):
             "Whether the user finished the post-signup details flow "
             "(onboarding). New SSO users are redirected to /onboarding "
             "until this is true."
+        ),
+    )
+    profile_completed_at = models.DateTimeField(
+        _("profile completed at"),
+        null=True,
+        blank=True,
+    )
+    onboarding_version = models.PositiveSmallIntegerField(
+        _("onboarding version"),
+        default=0,
+        help_text=_(
+            "Incremented on each admin reset so historical completions remain "
+            "distinguishable from re-onboardings."
         ),
     )
 

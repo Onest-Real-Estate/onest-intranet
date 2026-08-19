@@ -1,7 +1,8 @@
 from django import forms
-from django.contrib import admin
+from django.contrib import admin, messages
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 from django.contrib.auth.forms import ReadOnlyPasswordHashField
+from django.http import HttpRequest
 from django.utils.translation import gettext_lazy as _
 
 from .models import Office, User
@@ -114,8 +115,21 @@ class UserAdmin(DjangoUserAdmin):
             {"fields": ("street_address", "city", "state", "zip_code")},
         ),
         (
+            _("Profile & photo"),
+            {"fields": ("headshot",)},
+        ),
+        (
             _("Office & licenses"),
-            {"fields": ("office", "mls_number", "nrds_number", "profile_completed")},
+            {
+                "fields": (
+                    "office",
+                    "mls_number",
+                    "nrds_number",
+                    "profile_completed",
+                    "profile_completed_at",
+                    "onboarding_version",
+                )
+            },
         ),
         (
             _("Permissions"),
@@ -141,3 +155,22 @@ class UserAdmin(DjangoUserAdmin):
         ),
     )
     autocomplete_fields = ["office"]
+    readonly_fields = ["profile_completed_at"]
+    actions = ["reset_onboarding"]
+
+    @admin.action(description="Reset onboarding for selected users")
+    def reset_onboarding(self, request: HttpRequest, queryset):
+        count = queryset.update(
+            profile_completed=False,
+            profile_completed_at=None,
+        )
+        # Increment version so the reset is distinguishable from the original.
+        for user in queryset:
+            user.onboarding_version = (user.onboarding_version or 0) + 1
+            user.save(update_fields=["onboarding_version"])
+        self.message_user(
+            request,
+            f"Reset onboarding for {count} user(s). "
+            "They will be redirected to /onboarding on next login.",
+            messages.SUCCESS,
+        )

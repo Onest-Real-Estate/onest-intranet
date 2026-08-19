@@ -4,6 +4,7 @@ from typing import Any, cast
 from django import forms
 from django.utils.translation import gettext_lazy as _
 
+from .headshot import validate_headshot
 from .models import Office, User
 from .us import (
     US_STATE_CHOICES,
@@ -14,8 +15,21 @@ from .us import (
 
 
 class ProfileForm(forms.ModelForm):
-    """Shared onboarding + profile-edit form."""
+    """Shared onboarding + profile-edit form.
 
+    Mass-assignment guard
+    ---------------------
+    Only the fields listed in ``Meta.fields`` can be set through this form.
+    Administrative fields (is_staff, is_superuser, groups, user_permissions,
+    profile_completed, onboarding_version) are excluded and cannot be set
+    through a crafted POST.
+    """
+
+    headshot = forms.ImageField(
+        label=_("Profile photo"),
+        required=False,
+        help_text=_("JPEG or PNG, at least 200×200 px, max 5 MB."),
+    )
     first_name = forms.CharField(label=_("First name"), max_length=150, required=True)
     last_name = forms.CharField(label=_("Last name"), max_length=150, required=True)
     phone_number = forms.CharField(
@@ -76,7 +90,9 @@ class ProfileForm(forms.ModelForm):
 
     class Meta:
         model = User
+        # Explicit allowlist — admin-controlled fields are NOT here.
         fields = (
+            "headshot",
             "first_name",
             "last_name",
             "phone_number",
@@ -105,6 +121,20 @@ class ProfileForm(forms.ModelForm):
 
     def clean_mls_number(self):
         return (self.cleaned_data.get("mls_number") or "").strip()
+
+    def clean_headshot(self):
+        upload = self.cleaned_data.get("headshot")
+        if upload:
+            validate_headshot(upload)
+        return upload
+
+    def clean_office(self):
+        office = self.cleaned_data.get("office")
+        if office is not None and (not office.is_active or not office.is_assignable):
+            raise forms.ValidationError(
+                _("That office is no longer available. Please select an active office.")
+            )
+        return office
 
     def save(self, commit=True):
         user = super().save(commit=False)
@@ -144,6 +174,7 @@ def profile_initial(user: User, posted: Mapping[str, Any] | None = None) -> dict
         "officeId": value("office"),
         "mlsNumber": value("mls_number"),
         "nrdsNumber": value("nrds_number"),
+        "headshotUrl": user.headshot.url if user.headshot else None,
     }
 
 
