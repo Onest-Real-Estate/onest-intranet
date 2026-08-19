@@ -16,7 +16,6 @@ import {
   FormErrorSummary,
   type UploadedFile,
 } from "@/components/design-system";
-import type { OfficeGroup, StateOption } from "@/components/ProfileFormFields";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -40,44 +39,13 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { routes } from "@/lib/routes";
-import type { PageProps } from "@/types";
-import type { ValidationErrors } from "@/types/design-system";
+import type { OnboardingPageProps, OnboardingProfileValues } from "@/types";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-interface OnboardingPageProps extends PageProps {
-  initial: {
-    firstName: string;
-    lastName: string;
-    phoneNumber: string;
-    streetAddress: string;
-    city: string;
-    state: string;
-    zipCode: string;
-    officeId: string;
-    mlsNumber: string;
-    nrdsNumber: string;
-    headshotUrl: string | null;
-  };
-  validation: ValidationErrors;
-  offices: OfficeGroup[];
-  states: StateOption[];
-}
-
-interface FormValues {
-  firstName: string;
-  lastName: string;
-  phoneNumber: string;
-  streetAddress: string;
-  city: string;
-  state: string;
-  zipCode: string;
-  officeId: string;
-  mlsNumber: string;
-  nrdsNumber: string;
-}
+type FormValues = Omit<OnboardingProfileValues, "headshotUrl">;
 
 // ---------------------------------------------------------------------------
 // Steps

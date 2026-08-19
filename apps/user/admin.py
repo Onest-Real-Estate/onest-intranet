@@ -498,8 +498,10 @@ class UserAdmin(DjangoUserAdmin):
         "display_name",
         "first_name",
         "last_name",
+        "preferred_name",
         "mls_number",
         "nrds_number",
+        "license_number",
     ]
     fieldsets = (
         (None, {"fields": ("email", "password")}),
@@ -510,7 +512,9 @@ class UserAdmin(DjangoUserAdmin):
                     "display_name",
                     "first_name",
                     "last_name",
+                    "preferred_name",
                     "phone_number",
+                    "preferred_contact_method",
                 )
             },
         ),
@@ -520,7 +524,19 @@ class UserAdmin(DjangoUserAdmin):
         ),
         (
             _("Profile & photo"),
-            {"fields": ("headshot",)},
+            {"fields": ("headshot", "bio", "languages")},
+        ),
+        (
+            _("Links"),
+            {
+                "fields": (
+                    "website_url",
+                    "linkedin_url",
+                    "facebook_url",
+                    "instagram_url",
+                    "x_url",
+                )
+            },
         ),
         (
             _("Office & licenses"),
@@ -529,6 +545,9 @@ class UserAdmin(DjangoUserAdmin):
                     "office",
                     "mls_number",
                     "nrds_number",
+                    "license_number",
+                    "license_state",
+                    "license_expires_on",
                     "profile_completed",
                     "profile_completed_at",
                     "onboarding_version",

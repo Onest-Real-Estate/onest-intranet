@@ -6,6 +6,21 @@ from django.db.models import Q
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
+from .headshot import headshot_upload_path
+from .profile_fields import (
+    BIO_MAX_LENGTH,
+    LANGUAGE_CHOICES,
+    MAX_LICENSE_FUTURE_YEARS,
+    MAX_URL_LENGTH,
+    PREFERRED_CONTACT_CHOICES,
+    SOCIAL_PLATFORMS,
+    normalize_bio,
+    normalize_languages,
+    normalize_license_number,
+    normalize_name,
+    normalize_preferred_contact_method,
+    normalize_url,
+)
 from .roles import ROLE_BY_KEY, ScopeType, is_valid_scope_type
 from .us import (
     US_STATE_CHOICES,
@@ -427,6 +442,59 @@ class User(AbstractUser):
         blank=True,
         help_text=_("Optional 8- or 9-digit NRDS ID. Can be added later."),
     )
+    preferred_name = models.CharField(
+        _("preferred name"),
+        max_length=150,
+        blank=True,
+        help_text=_(
+            "What colleagues and clients should call you, if not your legal first name."
+        ),
+    )
+    license_number = models.CharField(
+        _("license number"),
+        max_length=32,
+        blank=True,
+        help_text=_("Real estate license number, as printed on the license."),
+    )
+    license_state = models.CharField(
+        _("license state"),
+        max_length=2,
+        choices=US_STATE_CHOICES,
+        blank=True,
+    )
+    license_expires_on = models.DateField(
+        _("license expires on"),
+        null=True,
+        blank=True,
+    )
+    website_url = models.URLField(_("website"), max_length=MAX_URL_LENGTH, blank=True)
+    linkedin_url = models.URLField(_("LinkedIn"), max_length=MAX_URL_LENGTH, blank=True)
+    facebook_url = models.URLField(_("Facebook"), max_length=MAX_URL_LENGTH, blank=True)
+    instagram_url = models.URLField(
+        _("Instagram"), max_length=MAX_URL_LENGTH, blank=True
+    )
+    x_url = models.URLField(_("X"), max_length=MAX_URL_LENGTH, blank=True)
+    bio = models.TextField(
+        _("professional bio"),
+        max_length=BIO_MAX_LENGTH,
+        blank=True,
+        help_text=_("A short introduction shown alongside your name in the hub."),
+    )
+    # A short, closed set of codes with no per-language reporting need: a JSON
+    # list keeps the value together instead of spreading it over a join table.
+    languages = models.JSONField(
+        _("languages"),
+        default=list,
+        blank=True,
+        help_text=_("Language codes from %(count)d supported options.")
+        % {"count": len(LANGUAGE_CHOICES)},
+    )
+    preferred_contact_method = models.CharField(
+        _("preferred contact method"),
+        max_length=16,
+        choices=PREFERRED_CONTACT_CHOICES,
+        blank=True,
+    )
     office = models.ForeignKey(
         Office,
         verbose_name=_("office"),
@@ -437,7 +505,10 @@ class User(AbstractUser):
     )
     headshot = models.ImageField(
         _("headshot"),
-        upload_to="apps.user.headshot.headshot_upload_path",
+        # The callable, not its dotted name: quoting it turned the path into a
+        # literal directory and stored the browser-supplied filename, which is
+        # exactly what ``headshot_upload_path`` exists to prevent.
+        upload_to=headshot_upload_path,
         null=True,
         blank=True,
         help_text=_("Profile photo. Must be JPEG/PNG, ≤5 MB, at least 200×200 px."),
@@ -495,6 +566,102 @@ class User(AbstractUser):
             errors["office"] = _("Pick an active office from the locations we serve.")
         if errors:
             raise ValidationError(errors)
+
+    def clean_fields(self, exclude=None):
+        """Normalize the professional fields before Django validates them.
+
+        ``full_clean`` runs ``clean_fields`` before ``clean``, so normalizing
+        any later would be too late: ``URLField``'s validator would reject a
+        perfectly good ``example.com`` before it was ever upgraded to
+        ``https://example.com``. A field we could not normalize is excluded
+        from the built-in pass so it is reported once, in our wording.
+        """
+        excluded = set(exclude or ())
+        errors = self._normalize_professional_profile()
+        try:
+            super().clean_fields(exclude=excluded | set(errors))
+        except ValidationError as exc:
+            errors.update(exc.error_dict or {})
+        reportable = {
+            field: error for field, error in errors.items() if field not in excluded
+        }
+        if reportable:
+            raise ValidationError(reportable)
+
+    def _normalize_professional_profile(self) -> dict:
+        """Normalize the self-service professional fields in one pass.
+
+        Kept beside the onboarding normalization above so a value written by
+        onboarding and the same value written by the profile editor cannot end
+        up stored in two different shapes.
+        """
+        errors: dict = {}
+        self.preferred_name = normalize_name(self.preferred_name)
+        self.license_number = normalize_license_number(self.license_number)
+
+        if self.license_state and self.license_state not in US_STATE_CODES:
+            errors["license_state"] = _("Enter a valid US state code.")
+
+        if self.license_expires_on is not None:
+            latest = timezone.localdate().replace(
+                year=timezone.localdate().year + MAX_LICENSE_FUTURE_YEARS
+            )
+            if self.license_expires_on > latest:
+                errors["license_expires_on"] = _(
+                    "Enter the expiration date printed on your license."
+                )
+
+        # A state or an expiry with no number identifies nothing.
+        if not self.license_number and (self.license_state or self.license_expires_on):
+            errors["license_number"] = _(
+                "Add your license number alongside its state or expiration date."
+            )
+
+        for field, allowed_hosts, label in (
+            ("website_url", (), "website"),
+            *(
+                (platform.field, platform.hosts, platform.label)
+                for platform in SOCIAL_PLATFORMS
+            ),
+        ):
+            try:
+                setattr(
+                    self,
+                    field,
+                    normalize_url(
+                        getattr(self, field), allowed_hosts=allowed_hosts, label=label
+                    ),
+                )
+            except ValidationError as exc:
+                errors[field] = exc
+
+        try:
+            self.bio = normalize_bio(self.bio)
+        except ValidationError as exc:
+            errors["bio"] = exc
+
+        try:
+            self.languages = normalize_languages(self.languages)
+        except ValidationError as exc:
+            errors["languages"] = exc
+
+        try:
+            self.preferred_contact_method = normalize_preferred_contact_method(
+                self.preferred_contact_method
+            )
+        except ValidationError as exc:
+            errors["preferred_contact_method"] = exc
+
+        return errors
+
+    def preferred_display_name(self) -> str:
+        """The name to greet this person by — preferred first, then legal."""
+        return (
+            self.preferred_name
+            or self.first_name
+            or self.display_name
+            or self.email.split("@")[0]
+        )
 
 
 class UserRoleAssignment(models.Model):

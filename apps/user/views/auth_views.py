@@ -1,6 +1,8 @@
+from collections.abc import Callable
 from typing import cast
 
 from django.contrib.auth import logout as auth_logout
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import redirect
@@ -11,9 +13,16 @@ from inertia.http import clear_history
 
 from apps.web.authorization import enforce_policy
 
-from ..forms import ProfileForm, form_errors, profile_page_props
+from ..forms import (
+    ProfileForm,
+    SelfProfileForm,
+    form_errors,
+    profile_page_props,
+    self_profile_page_props,
+)
 from ..models import User, UserRoleAssignment
 from ..roles import AGENT, ScopeType
+from ..services.profile import can_self_assign_office
 
 __all__ = [
     "login_page",
@@ -30,37 +39,110 @@ __all__ = [
 # and here as a secondary guard on the raw POST data.
 _PROTECTED_FIELDS = frozenset(
     {
+        "id",
+        "pk",
         "is_staff",
         "is_superuser",
         "is_active",
         "groups",
         "user_permissions",
+        "role",
+        "roles",
+        "role_assignments",
         "profile_completed",
         "profile_completed_at",
         "onboarding_version",
         "date_joined",
         "last_login",
+        "display_name",
         "email",
         "password",
     }
 )
 
+# Profile fields whose audit snapshot is safe to keep. Contact details and the
+# photo are excluded — ``apps.audit.service`` redacts them anyway, and there is
+# no reason to route a home address through the event stream to find out.
+_PROFILE_AUDIT_FIELDS = [
+    "first_name",
+    "last_name",
+    "preferred_name",
+    "state",
+    "city",
+    "office",
+    "mls_number",
+    "nrds_number",
+    "license_number",
+    "license_state",
+    "license_expires_on",
+    "preferred_contact_method",
+    "languages",
+    "website_url",
+    "linkedin_url",
+    "facebook_url",
+    "instagram_url",
+    "x_url",
+]
 
-def _has_protected_field(request: HttpRequest) -> bool:
-    return bool(_PROTECTED_FIELDS & set(request.POST.keys()))
+
+def _rejected_fields(
+    request: HttpRequest, extra: frozenset[str] = frozenset()
+) -> frozenset[str]:
+    return (_PROTECTED_FIELDS | extra) & set(request.POST.keys())
 
 
-def _ensure_default_agent_assignment(user: User) -> None:
+def _log_protected_field_rejection(
+    request: HttpRequest, fields: frozenset[str]
+) -> None:
+    from apps.audit.models import AuditEvent
+    from apps.audit.service import AuditTarget, actor_from_user, log_event
+
+    log_event(
+        "security.profile.protected_field_rejected",
+        actor=actor_from_user(request.user),
+        target=AuditTarget(
+            target_type="endpoint",
+            target_label=request.path,
+            # Field *names* only; the submitted values are never recorded.
+            target_snapshot={"fields": sorted(fields)},
+        ),
+        outcome=AuditEvent.Outcome.DENIED,
+        source="request",
+        channel=request.method or "",
+        reason="protected_field_in_payload",
+    )
+
+
+def _sync_default_agent_assignment(user: User) -> None:
+    """Keep exactly one office-scoped Agent assignment, on the current office.
+
+    Moving office used to leave the old assignment live, quietly widening the
+    user's scope to both offices; the stale one is revoked here instead.
+    """
     if user.office is None:
         return
-    if UserRoleAssignment.objects.filter(
+
+    live = UserRoleAssignment.objects.filter(
         user=user,
         role=AGENT,
         scope_type=ScopeType.OFFICE,
-        scope_office=user.office,
         status__in=["scheduled", "active"],
-    ).exists():
+    ).select_related("scope_office", "scope_office__region", "user")
+
+    stale = [item for item in live if item.scope_office != user.office]
+    if stale:
+        from ..services.role_assignments import revoke_role_assignment
+
+        for assignment in stale:
+            revoke_role_assignment(
+                actor=user,
+                assignment=assignment,
+                business_reason="Office changed from the profile page.",
+            )
+
+    if any(item.scope_office == user.office for item in live):
         return
+
     assignment = UserRoleAssignment(
         user=user,
         role=AGENT,
@@ -92,6 +174,7 @@ def _render_profile_form(
     request: HttpRequest,
     *,
     component: str,
+    props_builder: Callable[..., dict],
     form: ProfileForm | None = None,
     status: int = 200,
 ) -> HttpResponse:
@@ -101,7 +184,7 @@ def _render_profile_form(
     response = render(
         request,
         component,
-        profile_page_props(user, errors=errors, posted=posted),
+        props_builder(user, errors=errors, posted=posted),
     )
     response.status_code = status
     return response
@@ -126,7 +209,9 @@ def onboarding_submit(request: HttpRequest):
 
     # Secondary mass-assignment guard — block crafted POSTs even if the form
     # somehow failed to exclude these fields.
-    if _has_protected_field(request):
+    rejected = _rejected_fields(request)
+    if rejected:
+        _log_protected_field_rejection(request, rejected)
         return HttpResponse("Forbidden", status=403)
 
     # Already completed — idempotency: just redirect.
@@ -136,7 +221,11 @@ def onboarding_submit(request: HttpRequest):
     form = ProfileForm(request.POST, request.FILES, instance=user)
     if not form.is_valid():
         return _render_profile_form(
-            request, component="Onboarding", form=form, status=422
+            request,
+            component="Onboarding",
+            props_builder=profile_page_props,
+            form=form,
+            status=422,
         )
 
     with transaction.atomic():
@@ -147,7 +236,7 @@ def onboarding_submit(request: HttpRequest):
         saved_user.profile_completed = True
         saved_user.profile_completed_at = timezone.now()
         saved_user.save()
-        _ensure_default_agent_assignment(saved_user)
+        _sync_default_agent_assignment(saved_user)
         log_model_change(
             "user.onboarding.completed",
             actor=actor_from_user(user),
@@ -192,14 +281,21 @@ def onboarding_submit(request: HttpRequest):
 @enforce_policy("headshot_upload")
 @require_POST
 def headshot_upload(request: HttpRequest) -> JsonResponse:
-    """AJAX endpoint: validate and upload headshot, return URL.
+    """AJAX endpoint: replace or remove the signed-in user's headshot.
 
-    Returns JSON so the multi-step frontend can preview before final submit.
-    The saved file path is stored in the session; onboarding_submit reads it.
-    Only the owning user's upload is accepted; no cross-user upload is possible
-    through this endpoint.
+    Returns JSON so onboarding and the profile page can both show a preview and
+    upload progress before the surrounding form is submitted. The endpoint only
+    ever reads ``request.user``; no user identifier is accepted from the client,
+    so no cross-user upload or deletion is possible through it.
     """
     from ..headshot import validate_headshot
+    from ..services.profile import remove_headshot, replace_headshot
+
+    user = cast(User, request.user)
+
+    if request.POST.get("remove") == "1":
+        remove_headshot(user)
+        return JsonResponse({"url": None})
 
     upload = request.FILES.get("headshot")
     if not upload:
@@ -207,37 +303,62 @@ def headshot_upload(request: HttpRequest) -> JsonResponse:
 
     try:
         validate_headshot(upload)
-    except Exception as exc:
-        return JsonResponse({"error": str(exc)}, status=422)
+    except ValidationError as exc:
+        return JsonResponse({"error": " ".join(exc.messages)}, status=422)
 
-    user = cast(User, request.user)
-    if user.headshot:
-        user.headshot.delete(save=False)
-    user.headshot = upload  # ty: ignore[invalid-assignment]
-    user.save(update_fields=["headshot"])
-
-    return JsonResponse({"url": user.headshot.url})
+    return JsonResponse({"url": replace_headshot(user, upload)})
 
 
 @enforce_policy("profile")
 @require_GET
 @inertia("Profile")
 def profile(request: HttpRequest):
-    """Edit-profile page (including optional MLS / NRDS)."""
-    return profile_page_props(cast(User, request.user))
+    """The signed-in user's own profile — always their own record."""
+    return self_profile_page_props(cast(User, request.user))
 
 
 @enforce_policy("profile_submit")
 @require_POST
 def profile_submit(request: HttpRequest):
     user = cast(User, request.user)
+    can_change_office = can_self_assign_office(user)
 
-    if _has_protected_field(request):
+    # Office is administrative for anyone whose authorization is scoped by it,
+    # so for those users it joins the protected set rather than being ignored.
+    extra_protected = frozenset() if can_change_office else frozenset({"office"})
+    rejected = _rejected_fields(request, extra_protected)
+    if rejected:
+        _log_protected_field_rejection(request, rejected)
         return HttpResponse("Forbidden", status=403)
 
-    form = ProfileForm(request.POST, request.FILES, instance=user)
-    if form.is_valid():
+    form = SelfProfileForm(
+        request.POST,
+        request.FILES,
+        instance=user,
+        can_change_office=can_change_office,
+    )
+    if not form.is_valid():
+        return _render_profile_form(
+            request,
+            component="Profile",
+            props_builder=self_profile_page_props,
+            form=form,
+            status=422,
+        )
+
+    with transaction.atomic():
+        from apps.audit.service import actor_from_user, log_model_change
+
+        before_user = User.objects.get(pk=user.pk)
         saved_user = form.save()
-        _ensure_default_agent_assignment(saved_user)
-        return redirect("profile")
-    return _render_profile_form(request, component="Profile", form=form, status=422)
+        _sync_default_agent_assignment(saved_user)
+        log_model_change(
+            "user.profile.updated",
+            actor=actor_from_user(saved_user),
+            instance=saved_user,
+            before_instance=before_user,
+            snapshot_fields=_PROFILE_AUDIT_FIELDS,
+            metadata={"path": request.path},
+        )
+
+    return redirect("profile")

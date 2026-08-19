@@ -86,11 +86,16 @@ export function FileUploader({
   );
 
   useEffect(() => {
-    return () => {
-      if (localPreview) URL.revokeObjectURL(localPreview);
-      controllerRef.current?.abort();
-    };
+    if (!localPreview) {
+      return;
+    }
+    return () => URL.revokeObjectURL(localPreview);
   }, [localPreview]);
+
+  // Abort only when the uploader actually goes away. Tying this to the preview
+  // URL aborted every image upload the moment its own preview was created, and
+  // the aborted-signal guard below then swallowed the failure silently.
+  useEffect(() => () => controllerRef.current?.abort(), []);
 
   async function startUpload(file: globalThis.File) {
     setLastFile(file);

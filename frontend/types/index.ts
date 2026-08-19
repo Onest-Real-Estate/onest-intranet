@@ -1,3 +1,5 @@
+import type { StatusTone, ValidationErrors } from "@/types/design-system";
+
 export interface User {
   id: number;
   email: string;
@@ -243,4 +245,151 @@ export interface DashboardPageProps extends PageProps {
   actionItems?: DashboardWidget<DashboardActionItems>;
   market?: DashboardWidget<DashboardMarket>;
   documents?: DashboardWidget<DashboardDocument[]>;
+}
+
+// ---------------------------------------------------------------------------
+// Profile and onboarding
+// ---------------------------------------------------------------------------
+
+/** Assignable offices, grouped by region for a `<select>` with optgroups. */
+export interface OfficeGroup {
+  label: string;
+  offices: { id: number; name: string }[];
+}
+
+export interface StateOption {
+  code: string;
+  name: string;
+}
+
+export interface LanguageOption {
+  code: string;
+  name: string;
+}
+
+export interface ContactMethodOption {
+  value: string;
+  label: string;
+}
+
+/** One supported social destination. `name` is the POSTed Django field name. */
+export interface SocialPlatformOption {
+  name: string;
+  prop: string;
+  label: string;
+  placeholder: string;
+}
+
+/** The details onboarding collects. Keys mirror `forms.ONBOARDING_FIELD_MAP`. */
+export interface OnboardingProfileValues {
+  firstName: string;
+  lastName: string;
+  phoneNumber: string;
+  streetAddress: string;
+  city: string;
+  state: string;
+  zipCode: string;
+  officeId: string;
+  mlsNumber: string;
+  nrdsNumber: string;
+  headshotUrl: string | null;
+}
+
+/** Everything a user may maintain about themselves, per `SelfProfileForm`. */
+export interface SelfProfileValues extends OnboardingProfileValues {
+  preferredName: string;
+  preferredContactMethod: string;
+  licenseNumber: string;
+  /** ISO 8601 calendar date, or "" — the shape an `<input type="date">` wants. */
+  licenseExpiresOn: string;
+  licenseState: string;
+  bio: string;
+  websiteUrl: string;
+  linkedinUrl: string;
+  facebookUrl: string;
+  instagramUrl: string;
+  xUrl: string;
+  languages: string[];
+}
+
+export interface ProfileOffice {
+  id: number;
+  name: string;
+  pathLabel: string;
+  regionName: string;
+  streetAddress: string;
+  city: string;
+  state: string;
+  zipCode: string;
+  mainPhone: string;
+}
+
+export interface ProfileLicenseStatus {
+  state: "expired" | "expiring" | "current";
+  /** Days until expiry; negative once the license has lapsed. */
+  days: number;
+  tone: StatusTone;
+}
+
+/**
+ * Account facts the account holder cannot change. Rendered read-only and never
+ * accepted back: the Microsoft directory owns the email, an admin owns the rest.
+ */
+export interface ProfileIdentity {
+  email: string;
+  legalName: string;
+  displayName: string;
+  preferredDisplayName: string;
+  roles: string[];
+  office: ProfileOffice | null;
+  accountStatus: "active" | "inactive";
+  isStaff: boolean;
+  memberSince: string | null;
+  onboardingCompletedAt: string | null;
+  licenseStatus: ProfileLicenseStatus | null;
+}
+
+export interface ProfileCompletenessItem {
+  key: string;
+  label: string;
+  section: string;
+  sectionLabel: string;
+  /** Collected during onboarding — reported separately from optional gaps. */
+  required: boolean;
+}
+
+export interface ProfileCompleteness {
+  completed: number;
+  total: number;
+  percent: number;
+  missing: ProfileCompletenessItem[];
+}
+
+export interface ProfileLimits {
+  headshotMaxBytes: number;
+  headshotMinDimension: number;
+  bioMaxLength: number;
+  maxLanguages: number;
+}
+
+export interface OnboardingPageProps extends PageProps {
+  initial: OnboardingProfileValues;
+  validation: ValidationErrors;
+  offices: OfficeGroup[];
+  states: StateOption[];
+}
+
+export interface ProfilePageProps extends PageProps {
+  initial: SelfProfileValues;
+  validation: ValidationErrors;
+  /** Empty when the signed-in user may not move themselves between offices. */
+  offices: OfficeGroup[];
+  states: StateOption[];
+  languageOptions: LanguageOption[];
+  contactMethods: ContactMethodOption[];
+  socialPlatforms: SocialPlatformOption[];
+  identity: ProfileIdentity;
+  editable: { office: boolean };
+  completeness: ProfileCompleteness;
+  limits: ProfileLimits;
 }
