@@ -7,7 +7,9 @@ from django.db import migrations, models
 def seed_org_tree(apps, schema_editor):
     from apps.user.office_seed import seed_offices
 
-    seed_offices(apps.get_model("user", "Office"))
+    report = seed_offices(apps.get_model("user", "Office"))
+    if report.conflicting:
+        raise RuntimeError(f"Office seed conflicts: {report.conflicting}")
 
 
 def unseed_org_tree(apps, schema_editor):
