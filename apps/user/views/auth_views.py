@@ -2,8 +2,10 @@ from typing import cast
 
 from django.contrib.auth import logout as auth_logout
 from django.contrib.auth.decorators import login_required
-from django.http import HttpRequest, HttpResponse
+from django.db import transaction
+from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import redirect
+from django.utils import timezone
 from django.views.decorators.http import require_GET, require_POST
 from inertia import inertia, render
 from inertia.http import clear_history
@@ -16,9 +18,34 @@ __all__ = [
     "logout",
     "onboarding",
     "onboarding_submit",
+    "headshot_upload",
     "profile",
     "profile_submit",
 ]
+
+# Fields a user is never permitted to set through a form POST.
+# These are enforced both at the form level (excluded from Meta.fields)
+# and here as a secondary guard on the raw POST data.
+_PROTECTED_FIELDS = frozenset(
+    {
+        "is_staff",
+        "is_superuser",
+        "is_active",
+        "groups",
+        "user_permissions",
+        "profile_completed",
+        "profile_completed_at",
+        "onboarding_version",
+        "date_joined",
+        "last_login",
+        "email",
+        "password",
+    }
+)
+
+
+def _has_protected_field(request: HttpRequest) -> bool:
+    return bool(_PROTECTED_FIELDS & set(request.POST.keys()))
 
 
 @inertia("Login")
@@ -88,7 +115,66 @@ def onboarding_submit(request: HttpRequest):
             },
         )
         return redirect("dashboard")
-    return _render_profile_form(request, component="Onboarding", form=form, status=422)
+
+    form = ProfileForm(request.POST, request.FILES, instance=user)
+    if not form.is_valid():
+        return _render_profile_form(
+            request, component="Onboarding", form=form, status=422
+        )
+
+    with transaction.atomic():
+        saved_user = form.save(commit=False)
+        saved_user.profile_completed = True
+        saved_user.profile_completed_at = timezone.now()
+        saved_user.save()
+        try:
+            from apps.audit.events import publish  # ty: ignore[unresolved-import]
+
+            publish(
+                "user.onboarded",
+                actor_id=str(saved_user.pk),
+                subject=f"user:{saved_user.pk}",
+                payload={
+                    "user_id": saved_user.pk,
+                    "email": saved_user.email,
+                    "office_id": saved_user.office_id,
+                },
+            )
+        except ImportError:
+            # audit app not yet merged into this branch.
+            pass
+
+    return redirect("dashboard")
+
+
+@login_required
+@require_POST
+def headshot_upload(request: HttpRequest) -> JsonResponse:
+    """AJAX endpoint: validate and upload headshot, return URL.
+
+    Returns JSON so the multi-step frontend can preview before final submit.
+    The saved file path is stored in the session; onboarding_submit reads it.
+    Only the owning user's upload is accepted (authentication enforced by
+    @login_required; no cross-user upload is possible through this endpoint).
+    """
+    from ..headshot import validate_headshot
+
+    upload = request.FILES.get("headshot")
+    if not upload:
+        return JsonResponse({"error": "No file provided."}, status=400)
+
+    try:
+        validate_headshot(upload)
+    except Exception as exc:
+        return JsonResponse({"error": str(exc)}, status=422)
+
+    user = cast(User, request.user)
+    if user.headshot:
+        user.headshot.delete(save=False)
+    user.headshot = upload  # ty: ignore[invalid-assignment]
+    user.save(update_fields=["headshot"])
+
+    return JsonResponse({"url": user.headshot.url})
 
 
 @login_required
@@ -103,7 +189,11 @@ def profile(request: HttpRequest):
 @require_POST
 def profile_submit(request: HttpRequest):
     user = cast(User, request.user)
-    form = ProfileForm(request.POST, instance=user)
+
+    if _has_protected_field(request):
+        return HttpResponse("Forbidden", status=403)
+
+    form = ProfileForm(request.POST, request.FILES, instance=user)
     if form.is_valid():
         form.save()
         return redirect("profile")

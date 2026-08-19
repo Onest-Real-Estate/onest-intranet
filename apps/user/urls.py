@@ -2,6 +2,7 @@ from django.urls import path
 from django.views.generic import RedirectView
 
 from .views.auth_views import (
+    headshot_upload,
     login_page,
     logout,
     onboarding,
@@ -16,6 +17,7 @@ urlpatterns = [
     path("logout", logout, name="logout"),
     path("onboarding", onboarding, name="onboarding"),
     path("onboarding/submit", onboarding_submit, name="onboarding_submit"),
+    path("onboarding/headshot", headshot_upload, name="headshot_upload"),
     path("profile", profile, name="profile"),
     path("profile/submit", profile_submit, name="profile_submit"),
 ]

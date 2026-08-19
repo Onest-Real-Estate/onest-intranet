@@ -1,8 +1,9 @@
 const URLS = {
-    'dashboard': () => `/dashboard`,
     'coming_soon': (section: string) => `/hub/${section}`,
+    'dashboard': () => `/dashboard`,
     'profile_submit': () => `/profile/submit`,
     'profile': () => `/profile`,
+    'headshot_upload': () => `/onboarding/headshot`,
     'onboarding_submit': () => `/onboarding/submit`,
     'onboarding': () => `/onboarding`,
     'logout': () => `/logout`,
