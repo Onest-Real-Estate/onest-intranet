@@ -105,7 +105,11 @@ def actor_from_user(user) -> AuditActor:
         "id": actor_id,
         "email": getattr(user, "email", ""),
         "display_name": getattr(user, "display_name", ""),
-        "office_id": str(getattr(user, "office_id", "") or ""),
+        "office_id": str(
+            getattr(getattr(user, "office", None), "stable_key", "")
+            or getattr(user, "office_id", "")
+            or ""
+        ),
     }
     return AuditActor(
         actor_type=AuditEvent.ActorType.USER,
@@ -197,7 +201,11 @@ def log_model_change(
 ):
     before = snapshot_model(before_instance, fields=snapshot_fields)
     after = snapshot_model(instance, fields=snapshot_fields)
-    office_id = str(getattr(instance, "office_id", "") or "")
+    office = getattr(instance, "office", None)
+    if office is not None:
+        office_id = str(getattr(office, "stable_key", "") or getattr(office, "pk", ""))
+    else:
+        office_id = str(getattr(instance, "office_id", "") or "")
     region = getattr(instance, "region", None)
     region_id = ""
     if region is not None:

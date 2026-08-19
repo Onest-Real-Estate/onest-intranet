@@ -56,6 +56,19 @@ function firstName(name: string): string {
   return name.split(/\s+/).filter(Boolean)[0] ?? name;
 }
 
+function roleSummary(
+  roles: string[] | undefined,
+  roleLabel: string | undefined,
+): string {
+  if (!roles || roles.length === 0) {
+    return roleLabel ?? "Agent";
+  }
+  if (roles.length === 1) {
+    return roleLabel ?? roles[0];
+  }
+  return `${roleLabel ?? roles[0]} +${roles.length - 1}`;
+}
+
 function isActivePath(current: string, href: string): boolean {
   return current === href || current.startsWith(`${href}/`);
 }
@@ -145,7 +158,7 @@ export function HubLayout({ children }: { children: ReactNode }) {
   }
 
   const name = user?.name ?? "Agent";
-  const role = user?.roleLabel ?? "Agent";
+  const role = roleSummary(user?.roles, user?.roleLabel);
 
   return (
     // A little wider than the 16rem default: the section labels carry "Soon"
