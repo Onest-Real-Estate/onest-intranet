@@ -1,3 +1,4 @@
+import { Head } from "@inertiajs/react";
 import type { ReactNode } from "react";
 
 import { HubLayout } from "@/components/HubLayout";
@@ -9,7 +10,12 @@ import { PermissionDenied } from "@/components/PermissionDenied";
  * `handler403` in config/urls.py.
  */
 export default function PermissionDeniedPage() {
-  return <PermissionDenied />;
+  return (
+    <>
+      <Head title="Permission denied" />
+      <PermissionDenied />
+    </>
+  );
 }
 
 PermissionDeniedPage.layout = (page: ReactNode) => <HubLayout>{page}</HubLayout>;

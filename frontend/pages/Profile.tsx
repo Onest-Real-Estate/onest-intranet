@@ -1,4 +1,4 @@
-import { usePage } from "@inertiajs/react";
+import { Head, usePage } from "@inertiajs/react";
 import { UserRound } from "lucide-react";
 import type { ReactNode } from "react";
 
@@ -37,11 +37,14 @@ export default function Profile() {
 
   return (
     <div className="page-shell py-10">
+      <Head title="Your profile" />
       <Card className="mx-auto w-full max-w-xl">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <UserRound className="size-5" strokeWidth={1.5} />
-            Your profile
+          <CardTitle asChild className="flex items-center gap-2">
+            <h1>
+              <UserRound className="size-5" strokeWidth={1.5} aria-hidden />
+              Your profile
+            </h1>
           </CardTitle>
           <CardDescription>
             Update your contact details, office, and license numbers.

@@ -1,4 +1,4 @@
-import { Sparkles } from "lucide-react";
+import { CalendarDays } from "lucide-react";
 
 import type { User } from "@/types";
 
@@ -17,18 +17,29 @@ function firstName(name: string): string {
 }
 
 export function DashboardGreeting({ user }: { user: User }) {
-  const hour = new Date().getHours();
+  const now = new Date();
+  const hour = now.getHours();
+  const today = now.toLocaleDateString(undefined, {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+  });
+
   return (
-    <div>
-      <h1 className="flex items-center gap-2 text-[32px] font-bold tracking-[-0.02em]">
-        <Sparkles
-          className="text-[var(--brand-gold)] size-7 shrink-0"
-          strokeWidth={1.5}
-        />
-        {greetingForHour(hour)}, {firstName(user.name)}
-      </h1>
-      <p className="mt-1 text-sm text-muted-foreground">
-        Here&apos;s what&apos;s happening at ONEST today.
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <div>
+        <h1 className="text-2xl font-bold tracking-[-0.02em] sm:text-[32px]">
+          {greetingForHour(hour)}, {firstName(user.name)}
+        </h1>
+        <p className="text-muted-foreground mt-1.5 text-sm">
+          Here&apos;s what&apos;s happening at ONEST today.
+        </p>
+      </div>
+      {/* The reference's date-range control, reduced to the one fact this
+          screen can actually state: which day it is showing. */}
+      <p className="text-muted-foreground bg-card flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm">
+        <CalendarDays className="size-4" strokeWidth={1.5} aria-hidden />
+        {today}
       </p>
     </div>
   );

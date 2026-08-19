@@ -28,3 +28,18 @@ assets/*
 
 
 node_modules/*
+
+# Claude Code — personal, machine-local overrides (shared config is .claude/settings.json)
+.claude/settings.local.json
+
+# Impeccable design skill: vendored by `npx impeccable install`, ~2 MB, and
+# reinstallable at any time. The project's own skills (add-page, checks,
+# design-system) are team-authored and stay in git.
+.claude/skills/impeccable/
+
+# Impeccable working state — config caches, hook bookkeeping, live-mode
+# artifacts and receipts. Its shareable outputs are DESIGN.md and PRODUCT.md
+# at the repo root, which are tracked.
+.impeccable/
+.impeccable-live/
+.impeccable-live.json

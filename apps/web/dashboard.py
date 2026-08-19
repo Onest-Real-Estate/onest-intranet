@@ -16,8 +16,10 @@ from django.conf import settings
 HUB_SECTIONS: dict[str, str] = {
     "my-contract": "My contract",
     "agent-transactions": "Agent transactions",
-    "office-inventory": "Office inventory",
     "my-reservations": "My reservations",
+    "office-info": "Office info",
+    "office-resources": "Office resources",
+    "office-inventory": "Office inventory",
     "training-learning": "Training & learning",
     "documents-forms": "Documents & forms",
     "marketing-resources": "Marketing resources",

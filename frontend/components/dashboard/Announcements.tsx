@@ -1,7 +1,6 @@
-import { ArrowRight, Calendar, Megaphone, Newspaper, TrendingUp } from "lucide-react";
-
+import { Calendar, Megaphone, Newspaper, TrendingUp } from "lucide-react";
+import { IconWell } from "@/components/IconWell";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { DashboardAnnouncements } from "@/types";
@@ -32,16 +31,20 @@ function TagBadge({ tag, variant }: { tag: string; variant: "secondary" | "outli
 
 export function Announcements({ data }: { data: DashboardAnnouncements }) {
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle className="flex items-center gap-2">
-          <Newspaper className="size-5" strokeWidth={1.5} />
-          News & announcements
+    <Card className="arrive">
+      <CardHeader>
+        {/* No news archive exists yet, so there is no "View all" to offer. */}
+        <CardTitle asChild className="flex items-center gap-2">
+          <h2>
+            <IconWell
+              icon={Newspaper}
+              tone="muted"
+              className="size-8"
+              iconClassName="size-4"
+            />
+            News &amp; announcements
+          </h2>
         </CardTitle>
-        <Button variant="link" size="sm" className="px-0">
-          View all
-          <ArrowRight className="size-4" strokeWidth={1.5} />
-        </Button>
       </CardHeader>
       <CardContent className="grid gap-4 lg:grid-cols-2">
         <article className="grid gap-3">
@@ -51,7 +54,7 @@ export function Announcements({ data }: { data: DashboardAnnouncements }) {
             className="h-40 w-full rounded-lg object-cover"
           />
           <TagBadge tag={data.featured.tag} variant="secondary" />
-          <h3 className="font-semibold leading-snug">{data.featured.title}</h3>
+          <h3 className="leading-snug font-semibold">{data.featured.title}</h3>
           <p className="text-muted-foreground text-sm">{data.featured.excerpt}</p>
         </article>
         <ul className="grid gap-4">

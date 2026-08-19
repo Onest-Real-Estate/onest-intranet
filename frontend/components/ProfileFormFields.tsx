@@ -36,11 +36,24 @@ export interface StateOption {
   name: string;
 }
 
-function FieldError({ message }: { message?: string }) {
+/**
+ * Rendered with a stable id so the field can point at it through
+ * `aria-describedby` — `aria-invalid` alone marks a field as wrong without
+ * ever telling a screen reader what is wrong with it.
+ */
+function FieldError({ id, message }: { id: string; message?: string }) {
   if (!message) {
     return null;
   }
-  return <p className="text-sm text-destructive">{message}</p>;
+  return (
+    <p id={id} className="text-destructive text-sm">
+      {message}
+    </p>
+  );
+}
+
+function describedBy(field: string, errors: Record<string, string>) {
+  return errors[field] ? `${field}_error` : undefined;
 }
 
 /**
@@ -75,9 +88,10 @@ export function ProfileFormFields({
             defaultValue={initial.firstName}
             autoComplete="given-name"
             aria-invalid={Boolean(errors.first_name) || undefined}
+            aria-describedby={describedBy("first_name", errors)}
             required
           />
-          <FieldError message={errors.first_name} />
+          <FieldError id="first_name_error" message={errors.first_name} />
         </div>
         <div className="grid gap-2">
           <Label htmlFor="last_name">Last name</Label>
@@ -87,9 +101,10 @@ export function ProfileFormFields({
             defaultValue={initial.lastName}
             autoComplete="family-name"
             aria-invalid={Boolean(errors.last_name) || undefined}
+            aria-describedby={describedBy("last_name", errors)}
             required
           />
-          <FieldError message={errors.last_name} />
+          <FieldError id="last_name_error" message={errors.last_name} />
         </div>
       </div>
 
@@ -103,9 +118,10 @@ export function ProfileFormFields({
           autoComplete="tel"
           placeholder="(202) 555-0100"
           aria-invalid={Boolean(errors.phone_number) || undefined}
+          aria-describedby={describedBy("phone_number", errors)}
           required
         />
-        <FieldError message={errors.phone_number} />
+        <FieldError id="phone_number_error" message={errors.phone_number} />
       </div>
 
       <div className="grid gap-2">
@@ -116,9 +132,10 @@ export function ProfileFormFields({
           defaultValue={initial.streetAddress}
           autoComplete="street-address"
           aria-invalid={Boolean(errors.street_address) || undefined}
+          aria-describedby={describedBy("street_address", errors)}
           required
         />
-        <FieldError message={errors.street_address} />
+        <FieldError id="street_address_error" message={errors.street_address} />
       </div>
 
       <div className="grid gap-4 sm:grid-cols-6">
@@ -130,15 +147,20 @@ export function ProfileFormFields({
             defaultValue={initial.city}
             autoComplete="address-level2"
             aria-invalid={Boolean(errors.city) || undefined}
+            aria-describedby={describedBy("city", errors)}
             required
           />
-          <FieldError message={errors.city} />
+          <FieldError id="city_error" message={errors.city} />
         </div>
         <div className="grid gap-2 sm:col-span-2">
           <Label htmlFor="state">State</Label>
           <input type="hidden" name="state" value={state} />
           <Select value={state || undefined} onValueChange={setState}>
-            <SelectTrigger id="state" aria-invalid={Boolean(errors.state) || undefined}>
+            <SelectTrigger
+              id="state"
+              aria-invalid={Boolean(errors.state) || undefined}
+              aria-describedby={describedBy("state", errors)}
+            >
               <SelectValue placeholder="Select a state" />
             </SelectTrigger>
             <SelectContent>
@@ -149,7 +171,7 @@ export function ProfileFormFields({
               ))}
             </SelectContent>
           </Select>
-          <FieldError message={errors.state} />
+          <FieldError id="state_error" message={errors.state} />
         </div>
         <div className="grid gap-2 sm:col-span-1">
           <Label htmlFor="zip_code">ZIP</Label>
@@ -160,9 +182,10 @@ export function ProfileFormFields({
             autoComplete="postal-code"
             placeholder="12345"
             aria-invalid={Boolean(errors.zip_code) || undefined}
+            aria-describedby={describedBy("zip_code", errors)}
             required
           />
-          <FieldError message={errors.zip_code} />
+          <FieldError id="zip_code_error" message={errors.zip_code} />
         </div>
       </div>
 
@@ -170,7 +193,11 @@ export function ProfileFormFields({
         <Label htmlFor="office">Office location</Label>
         <input type="hidden" name="office" value={officeId} />
         <Select value={officeId || undefined} onValueChange={setOfficeId}>
-          <SelectTrigger id="office" aria-invalid={Boolean(errors.office) || undefined}>
+          <SelectTrigger
+            id="office"
+            aria-invalid={Boolean(errors.office) || undefined}
+            aria-describedby={describedBy("office", errors)}
+          >
             <SelectValue placeholder="Select your office" />
           </SelectTrigger>
           <SelectContent>
@@ -186,7 +213,7 @@ export function ProfileFormFields({
             ))}
           </SelectContent>
         </Select>
-        <FieldError message={errors.office} />
+        <FieldError id="office_error" message={errors.office} />
       </div>
 
       <Separator />
@@ -206,8 +233,9 @@ export function ProfileFormFields({
             defaultValue={initial.mlsNumber}
             placeholder="Optional"
             aria-invalid={Boolean(errors.mls_number) || undefined}
+            aria-describedby={describedBy("mls_number", errors)}
           />
-          <FieldError message={errors.mls_number} />
+          <FieldError id="mls_number_error" message={errors.mls_number} />
         </div>
         <div className="grid gap-2">
           <Label htmlFor="nrds_number">NRDS number</Label>
@@ -218,8 +246,9 @@ export function ProfileFormFields({
             inputMode="numeric"
             placeholder="Optional"
             aria-invalid={Boolean(errors.nrds_number) || undefined}
+            aria-describedby={describedBy("nrds_number", errors)}
           />
-          <FieldError message={errors.nrds_number} />
+          <FieldError id="nrds_number_error" message={errors.nrds_number} />
         </div>
       </div>
     </div>

@@ -1,5 +1,6 @@
+import { Link } from "@inertiajs/react";
 import { ArrowRight, House } from "lucide-react";
-
+import { IconWell } from "@/components/IconWell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,6 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { routes } from "@/lib/routes";
 import type { DashboardTransaction } from "@/types";
 
 function statusBadge(status: DashboardTransaction["status"]) {
@@ -27,21 +29,30 @@ export function ActiveTransactions({
   transactions: DashboardTransaction[];
 }) {
   return (
-    <Card>
+    <Card className="arrive">
       <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle className="flex items-center gap-2">
-          <House className="size-5" strokeWidth={1.5} />
-          Active transactions
+        <CardTitle asChild className="flex items-center gap-2">
+          <h2>
+            <IconWell
+              icon={House}
+              tone="muted"
+              className="size-8"
+              iconClassName="size-4"
+            />
+            Active transactions
+          </h2>
         </CardTitle>
-        <Button variant="link" size="sm" className="px-0">
-          Manage pipeline
-          <ArrowRight className="size-4" strokeWidth={1.5} />
+        <Button asChild variant="link" size="sm" className="px-0">
+          <Link href={routes.coming_soon("agent-transactions")}>
+            Manage pipeline
+            <ArrowRight className="size-4" strokeWidth={1.5} aria-hidden />
+          </Link>
         </Button>
       </CardHeader>
       <CardContent>
         <Table>
           <TableHeader>
-            <TableRow>
+            <TableRow className="[&>th]:tracking-[0.06em] [&>th]:uppercase">
               <TableHead>Property</TableHead>
               <TableHead className="hidden sm:table-cell">Type</TableHead>
               <TableHead className="hidden md:table-cell">Stage</TableHead>
@@ -57,9 +68,20 @@ export function ActiveTransactions({
                     <img
                       src={row.imageUrl}
                       alt=""
+                      width={40}
+                      height={40}
                       className="size-10 rounded-md object-cover"
                     />
-                    <span className="font-medium whitespace-normal">{row.address}</span>
+                    <span className="min-w-0">
+                      <span className="block font-medium whitespace-normal">
+                        {row.address}
+                      </span>
+                      {/* What the hidden columns carried, folded into the one
+                          column small screens keep. */}
+                      <span className="text-muted-foreground block text-xs whitespace-normal md:hidden">
+                        {row.type} · {row.stage} · closes {row.closing}
+                      </span>
+                    </span>
                   </div>
                 </TableCell>
                 <TableCell className="hidden sm:table-cell">

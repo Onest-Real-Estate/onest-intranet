@@ -8,7 +8,7 @@ import {
   Settings,
   UserRound,
 } from "lucide-react";
-import type { FormEvent, ReactNode } from "react";
+import type { CSSProperties, FormEvent, ReactNode } from "react";
 
 import { BrandMark } from "@/components/BrandMark";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -35,14 +35,11 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarProvider,
+  SidebarSeparator,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
-import {
-  HUB_APP_NAV,
-  HUB_DIRECTORY_NAV,
-  HUB_PRIMARY_NAV,
-  type HubNavItem,
-} from "@/lib/hub-nav";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { HUB_NAV_GROUPS, type HubNavItem, isComingSoon } from "@/lib/hub-nav";
 import { routes } from "@/lib/routes";
 import type { PageProps } from "@/types";
 
@@ -68,18 +65,72 @@ function NavList({ items, current }: { items: HubNavItem[]; current: string }) {
     <SidebarMenu>
       {items.map((item) => {
         const active = isActivePath(current, item.href);
+        const soon = isComingSoon(item.href);
         return (
           <SidebarMenuItem key={item.href}>
-            <SidebarMenuButton asChild isActive={active} tooltip={item.title}>
+            <SidebarMenuButton
+              asChild
+              isActive={active}
+              tooltip={item.title}
+              className="transition-colors duration-150"
+            >
               <Link href={item.href} aria-current={active ? "page" : undefined}>
-                <item.icon className="size-5" strokeWidth={1.5} />
+                <item.icon
+                  className={
+                    active
+                      ? "size-5 transition-colors"
+                      : "text-muted-foreground group-hover/menu-item:text-foreground size-5 transition-colors"
+                  }
+                  strokeWidth={1.5}
+                />
                 <span>{item.title}</span>
+                {soon ? (
+                  <span
+                    className="bg-sidebar-accent/70 text-muted-foreground ml-auto shrink-0 rounded-full px-1.5 py-px text-xs font-medium tracking-[0.04em] group-data-[collapsible=icon]:hidden"
+                    aria-hidden
+                  >
+                    Soon
+                  </span>
+                ) : null}
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
         );
       })}
     </SidebarMenu>
+  );
+}
+
+/**
+ * Header affordances whose backend does not exist yet. `aria-disabled` rather
+ * than `disabled` so the control keeps focus and can still explain itself —
+ * a dead control that looks live is worse than one that says it is not ready.
+ */
+function PendingAction({
+  label,
+  note,
+  children,
+}: {
+  label: string;
+  note: string;
+  children: ReactNode;
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label={`${label} — ${note}`}
+          aria-disabled
+          className="opacity-55"
+          onClick={(event) => event.preventDefault()}
+        >
+          {children}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{note}</TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -97,12 +148,21 @@ export function HubLayout({ children }: { children: ReactNode }) {
   const role = user?.roleLabel ?? "Agent";
 
   return (
-    <SidebarProvider>
+    // A little wider than the 16rem default: the section labels carry "Soon"
+    // markers, and "Policies & compliance" needs the room.
+    <SidebarProvider style={{ "--sidebar-width": "17rem" } as CSSProperties}>
+      {/* First focusable element on the page — before the whole nav list. */}
+      <a
+        href="#hub-content"
+        className="bg-card text-foreground focus-visible:ring-ring sr-only rounded-md px-4 py-2 text-sm font-medium shadow-sm focus-visible:fixed focus-visible:top-3 focus-visible:left-3 focus-visible:z-50 focus-visible:not-sr-only focus-visible:ring-2"
+      >
+        Skip to content
+      </a>
       <Sidebar collapsible="icon">
-        <SidebarHeader>
+        <SidebarHeader className="flex-row items-center justify-between gap-1 group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:gap-2">
           <Link
             href={routes.dashboard()}
-            className="flex items-center gap-2 rounded-md px-1 py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
+            className="focus-visible:ring-sidebar-ring flex items-center gap-2 rounded-md px-1 py-1 focus-visible:ring-2 focus-visible:outline-none group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
             aria-label="ONEST HUB home"
           >
             <span className="brand-surface grid size-8 shrink-0 place-items-center rounded-lg">
@@ -112,29 +172,31 @@ export function HubLayout({ children }: { children: ReactNode }) {
               ONEST HUB
             </span>
           </Link>
+          <SidebarTrigger className="text-muted-foreground hidden md:flex" />
         </SidebarHeader>
         <SidebarContent>
-          <SidebarGroup>
-            <SidebarGroupContent>
-              <NavList items={HUB_PRIMARY_NAV} current={current} />
-            </SidebarGroupContent>
-          </SidebarGroup>
-          <SidebarGroup>
-            <SidebarGroupLabel>Apps</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <NavList items={HUB_APP_NAV} current={current} />
-            </SidebarGroupContent>
-          </SidebarGroup>
-          <SidebarGroup>
-            <SidebarGroupContent>
-              <NavList items={HUB_DIRECTORY_NAV} current={current} />
-            </SidebarGroupContent>
-          </SidebarGroup>
+          <nav aria-label="Hub sections" className="flex min-h-0 flex-col">
+            {HUB_NAV_GROUPS.map((group, index) => (
+              <div key={group.label}>
+                {index > 0 ? (
+                  <SidebarSeparator className="group-data-[collapsible=icon]:mx-1" />
+                ) : null}
+                <SidebarGroup>
+                  <SidebarGroupLabel className="text-muted-foreground text-xs font-semibold tracking-[0.08em] uppercase">
+                    {group.label}
+                  </SidebarGroupLabel>
+                  <SidebarGroupContent>
+                    <NavList items={group.items} current={current} />
+                  </SidebarGroupContent>
+                </SidebarGroup>
+              </div>
+            ))}
+          </nav>
         </SidebarContent>
         <SidebarFooter>
           {user ? (
-            <div className="flex items-center gap-2 rounded-lg bg-sidebar-accent/60 p-2 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:bg-transparent group-data-[collapsible=icon]:p-0">
-              <Avatar className="size-9 shrink-0 border border-primary/20">
+            <div className="bg-sidebar-accent/60 flex items-center gap-2 rounded-lg p-2 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:bg-transparent group-data-[collapsible=icon]:p-0">
+              <Avatar className="border-primary/20 size-9 shrink-0 border">
                 <AvatarFallback className="brand-surface text-xs font-semibold">
                   {initials(name)}
                 </AvatarFallback>
@@ -145,42 +207,65 @@ export function HubLayout({ children }: { children: ReactNode }) {
               </div>
             </div>
           ) : null}
+          <p className="text-muted-foreground px-2 pb-1 text-xs group-data-[collapsible=icon]:hidden">
+            oNEST Real Estate
+          </p>
         </SidebarFooter>
       </Sidebar>
       <SidebarInset>
-        <header className="bg-background/90 sticky top-0 z-10 flex h-14 items-center gap-2 border-b px-4 backdrop-blur-xl">
-          <SidebarTrigger />
-          <div className="relative mx-auto hidden min-w-0 max-w-xl flex-1 md:block">
-            <Search
-              className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2"
-              strokeWidth={1.5}
-            />
-            <Input
-              type="search"
-              placeholder="Search across ONEST…"
-              className="pl-9"
-              aria-label="Search across ONEST"
-            />
-          </div>
+        <header className="bg-background/90 sticky top-0 z-10 flex h-16 items-center gap-2 border-b px-4 backdrop-blur-xl">
+          <SidebarTrigger className="md:hidden" />
+          <Tooltip>
+            {/* The wrapper carries the tooltip: a disabled input fires no
+                pointer events of its own. */}
+            <TooltipTrigger asChild>
+              <div className="relative hidden w-full max-w-sm min-w-0 md:block">
+                <Search
+                  className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2"
+                  strokeWidth={1.5}
+                />
+                <Input
+                  type="search"
+                  placeholder="Search across ONEST — coming soon"
+                  className="pl-9"
+                  aria-label="Search across ONEST — coming soon"
+                  disabled
+                />
+              </div>
+            </TooltipTrigger>
+            <TooltipContent>Search arrives with the next release</TooltipContent>
+          </Tooltip>
           <div className="ml-auto flex items-center gap-1">
-            <Button variant="ghost" size="icon" aria-label="Help">
+            <PendingAction label="Help" note="Help centre is not wired up yet">
               <CircleHelp className="size-5" strokeWidth={1.5} />
-            </Button>
-            <Button variant="ghost" size="icon" aria-label="Notifications">
+            </PendingAction>
+            <PendingAction
+              label="Notifications"
+              note="Notifications are not wired up yet"
+            >
               <Bell className="size-5" strokeWidth={1.5} />
-            </Button>
-            <Button variant="ghost" size="icon" aria-label="Create new">
+            </PendingAction>
+            <PendingAction label="Create new" note="Quick create is not wired up yet">
               <Plus className="size-5" strokeWidth={1.5} />
-            </Button>
+            </PendingAction>
             {user ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="rounded-full">
+                  <Button
+                    variant="ghost"
+                    className="h-10 gap-2 rounded-full px-1 lg:pr-3"
+                  >
                     <Avatar className="size-8">
-                      <AvatarFallback className="brand-surface text-[10px] font-semibold">
+                      <AvatarFallback className="brand-surface text-xs font-semibold">
                         {initials(name)}
                       </AvatarFallback>
                     </Avatar>
+                    <span className="hidden min-w-0 text-left leading-tight lg:block">
+                      <span className="block truncate text-sm font-medium">{name}</span>
+                      <span className="text-muted-foreground block truncate text-xs">
+                        {role}
+                      </span>
+                    </span>
                     <span className="sr-only">{firstName(name)} account menu</span>
                   </Button>
                 </DropdownMenuTrigger>
@@ -221,7 +306,9 @@ export function HubLayout({ children }: { children: ReactNode }) {
             <form id="hub-logout" className="hidden" onSubmit={handleLogout} />
           </div>
         </header>
-        <div className="flex flex-1 flex-col">{children}</div>
+        <div id="hub-content" className="flex flex-1 flex-col">
+          {children}
+        </div>
       </SidebarInset>
     </SidebarProvider>
   );

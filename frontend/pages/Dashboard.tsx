@@ -1,4 +1,4 @@
-import { Deferred, usePage } from "@inertiajs/react";
+import { Deferred, Head, usePage } from "@inertiajs/react";
 import type { ReactNode } from "react";
 import { ActionItems, ActionItemsSkeleton } from "@/components/dashboard/ActionItems";
 import {
@@ -46,30 +46,34 @@ export default function Dashboard() {
     return null;
   }
 
+  // Wider than `page-shell`: the twelve-column widget grid is the point of this
+  // screen, but it still needs a ceiling so it does not sprawl on an ultrawide
+  // display.
   return (
-    <div className="flex flex-1 flex-col gap-6 px-4 py-6 sm:px-6">
+    <div className="mx-auto flex w-full max-w-[1600px] flex-1 flex-col gap-10 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+      <Head title="Dashboard" />
       <DashboardGreeting user={user} />
 
-      <Deferred data="stats" fallback={<StatCardsSkeleton />}>
-        {stats ? <StatCards stats={stats} /> : null}
-      </Deferred>
+      {/* Band: where the day stands, and the tools to act on it. Figures and
+          launchers are one thought, so they sit a section apart (24px) rather
+          than a page apart. */}
+      <div className="flex flex-col gap-6">
+        <Deferred data="stats" fallback={<StatCardsSkeleton />}>
+          {stats ? <StatCards stats={stats} /> : null}
+        </Deferred>
+        <Deferred data="quickApps" fallback={<QuickAppsSkeleton />}>
+          {quickApps ? <QuickApps apps={quickApps} /> : null}
+        </Deferred>
+      </div>
 
+      {/*
+        Band: the working grid. The rail leads in source order so a phone —
+        where the columns collapse into one — opens on today's obligations
+        instead of scrolling past news to reach them; `xl:order` puts it back
+        on the right once there are two columns to read side by side.
+      */}
       <div className="grid gap-6 xl:grid-cols-12">
-        <div className="grid gap-6 xl:col-span-8">
-          <Deferred data="quickApps" fallback={<QuickAppsSkeleton />}>
-            {quickApps ? <QuickApps apps={quickApps} /> : null}
-          </Deferred>
-          <Deferred data="announcements" fallback={<AnnouncementsSkeleton />}>
-            {announcements ? <Announcements data={announcements} /> : null}
-          </Deferred>
-          <Deferred data="transactions" fallback={<ActiveTransactionsSkeleton />}>
-            {transactions ? <ActiveTransactions transactions={transactions} /> : null}
-          </Deferred>
-          <Deferred data="training" fallback={<TrainingResourcesSkeleton />}>
-            {training ? <TrainingResources training={training} /> : null}
-          </Deferred>
-        </div>
-        <div className="grid gap-6 xl:col-span-4">
+        <div className="grid gap-6 xl:order-2 xl:col-span-4">
           <Deferred data="schedule" fallback={<MyDaySkeleton />}>
             {schedule ? <MyDay schedule={schedule} /> : null}
           </Deferred>
@@ -81,6 +85,17 @@ export default function Dashboard() {
           </Deferred>
           <Deferred data="documents" fallback={<QuickDocumentsSkeleton />}>
             {documents ? <QuickDocuments documents={documents} /> : null}
+          </Deferred>
+        </div>
+        <div className="grid gap-6 xl:order-1 xl:col-span-8">
+          <Deferred data="announcements" fallback={<AnnouncementsSkeleton />}>
+            {announcements ? <Announcements data={announcements} /> : null}
+          </Deferred>
+          <Deferred data="transactions" fallback={<ActiveTransactionsSkeleton />}>
+            {transactions ? <ActiveTransactions transactions={transactions} /> : null}
+          </Deferred>
+          <Deferred data="training" fallback={<TrainingResourcesSkeleton />}>
+            {training ? <TrainingResources training={training} /> : null}
           </Deferred>
         </div>
       </div>

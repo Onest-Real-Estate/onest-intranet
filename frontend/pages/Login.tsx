@@ -4,6 +4,7 @@ import { ArrowRight } from "lucide-react";
 import { MicrosoftLogo } from "@/components/MicrosoftLogo";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
 import loginHero from "@/images/loginpage.jpg";
 import onestLogo from "@/images/onest.png";
 import { routes } from "@/lib/routes";
@@ -13,26 +14,32 @@ export default function Login() {
   const { csrfToken } = usePage<PageProps>().props;
 
   return (
-    <div className="grid min-h-svh bg-[#f8f7f3] lg:grid-cols-2">
+    <div className="bg-background grid min-h-svh lg:grid-cols-2">
       <Head title="Sign in" />
-      <aside className="relative hidden overflow-hidden lg:block">
-        <img
-          src={loginHero}
-          alt=""
-          className="absolute inset-0 size-full object-cover"
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-[#1b1c18]/35 via-transparent to-[#1b1c18]/10" />
+      {/*
+        Decorative, and 2.4 MB — as an <img> every phone downloads it to render
+        a panel that is hidden below `lg`. A background image on a
+        `display: none` element is never fetched, so small screens skip it.
+      */}
+      <aside
+        className="relative hidden overflow-hidden bg-cover bg-center lg:block"
+        style={{ backgroundImage: `url(${loginHero})` }}
+      >
+        <div className="from-foreground/35 to-foreground/10 absolute inset-0 bg-gradient-to-t via-transparent" />
       </aside>
 
-      <div className="flex items-center justify-center px-6 py-16 sm:px-10">
-        <Card className="w-full max-w-md rounded-[14px] border-[#e9e6de] py-8 shadow-[0_4px_12px_rgba(23,23,23,0.03)]">
+      <main className="flex items-center justify-center px-6 py-16 sm:px-10">
+        <Card className="w-full max-w-md rounded-xl py-8 shadow-lg">
           <CardHeader className="items-center text-center">
             <img
               src={onestLogo}
               alt="ONEST Real Estate"
+              width={153}
+              height={96}
               className="mx-auto h-24 w-auto object-contain"
             />
-            <CardDescription className="text-base text-[#7a7a75]">
+            <h1 className="sr-only">Sign in to ONEST HUB</h1>
+            <CardDescription className="text-base">
               Sign in to your agent portal
             </CardDescription>
           </CardHeader>
@@ -43,25 +50,25 @@ export default function Login() {
               <Button
                 type="submit"
                 size="lg"
-                className="h-12 w-full rounded-lg bg-[#ddb52a] font-semibold text-[#0d0d0d] shadow-none hover:bg-[#d0aa24]"
+                className="brand-action h-12 w-full rounded-lg font-semibold shadow-none"
               >
                 <MicrosoftLogo className="size-5" />
                 Sign in with Microsoft
-                <ArrowRight className="size-4" strokeWidth={1.5} />
+                <ArrowRight className="size-4" strokeWidth={1.5} aria-hidden />
               </Button>
             </form>
             <div className="grid gap-4">
-              <div className="bg-[#e9e6de] h-px w-full" />
-              <p className="text-center text-sm text-[#7a7a75]">
+              <Separator />
+              <p className="text-muted-foreground text-center text-sm">
                 New to oNEST?{" "}
-                <span className="font-semibold text-[#5a4700]">
+                <span className="text-primary font-semibold">
                   Ask your broker for access.
                 </span>
               </p>
             </div>
           </CardContent>
         </Card>
-      </div>
+      </main>
     </div>
   );
 }

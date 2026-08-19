@@ -2,20 +2,30 @@ import type { LucideIcon } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
-/** Gold-tinted icon well so Lucide marks stay visible on ivory surfaces. */
+const TONES = {
+  /** Gold-tinted: brand moments and the dashboard's headline stat row. */
+  brand: "brand-well text-foreground",
+  /** Neutral: the repeated tile in panel headers, where gold would be noise. */
+  muted: "bg-muted text-muted-foreground",
+} as const;
+
+/** Tinted tile behind a Lucide mark, so icons stay legible on ivory surfaces. */
 export function IconWell({
   icon: Icon,
+  tone = "brand",
   className,
   iconClassName,
 }: {
   icon: LucideIcon;
+  tone?: keyof typeof TONES;
   className?: string;
   iconClassName?: string;
 }) {
   return (
     <span
       className={cn(
-        "grid size-10 shrink-0 place-items-center rounded-lg bg-[color-mix(in_oklab,var(--brand-gold)_18%,transparent)] text-foreground",
+        "grid size-10 shrink-0 place-items-center rounded-lg",
+        TONES[tone],
         className,
       )}
     >

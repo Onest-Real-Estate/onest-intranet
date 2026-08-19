@@ -1,4 +1,4 @@
-import { usePage } from "@inertiajs/react";
+import { Head, usePage } from "@inertiajs/react";
 import { IdCard } from "lucide-react";
 import type { ReactNode } from "react";
 
@@ -40,11 +40,14 @@ export default function Onboarding() {
 
   return (
     <div className="flex flex-1 items-center justify-center px-4 py-16">
+      <Head title="Complete your profile" />
       <Card className="w-full max-w-xl">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <IdCard className="size-5" strokeWidth={1.5} />
-            Complete your profile
+          <CardTitle asChild className="flex items-center gap-2">
+            <h1>
+              <IdCard className="size-5" strokeWidth={1.5} aria-hidden />
+              Complete your profile
+            </h1>
           </CardTitle>
           <CardDescription>
             Confirm your details and pick the office you work from. MLS and NRDS numbers
