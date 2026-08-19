@@ -63,15 +63,19 @@ def upsert_office(
         existing = None
 
     if existing is None:
-        office = office_model.objects.create(
-            slug=slug,
-            name=name,
-            kind=kind,
-            parent=parent,
-            is_assignable=is_assignable,
-            is_active=True,
-            sort_order=sort_order,
-        )
+        create_kwargs = {
+            "slug": slug,
+            "name": name,
+            "kind": kind,
+            "parent": parent,
+            "is_assignable": is_assignable,
+            "is_active": True,
+            "sort_order": sort_order,
+        }
+        field_names = {field.name for field in office_model._meta.get_fields()}
+        if "stable_key" in field_names:
+            create_kwargs["stable_key"] = slug
+        office = office_model.objects.create(**create_kwargs)
         report.created.append(slug)
         return office
 
@@ -85,11 +89,14 @@ def upsert_office(
         )
 
     # Matched: update structural fields only; preserve is_active.
-    office_model.objects.filter(pk=existing.pk).update(
-        parent=parent,
-        is_assignable=is_assignable,
-        sort_order=sort_order,
-    )
+    updates = {
+        "parent": parent,
+        "is_assignable": is_assignable,
+        "sort_order": sort_order,
+    }
+    if hasattr(existing, "stable_key") and not existing.stable_key:
+        updates["stable_key"] = slug
+    office_model.objects.filter(pk=existing.pk).update(**updates)
     existing.refresh_from_db()
     report.matched.append(slug)
     return existing

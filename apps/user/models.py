@@ -2,9 +2,17 @@ from django.contrib.auth.base_user import BaseUserManager
 from django.contrib.auth.models import AbstractUser
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.db.models import Q
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
-from .us import US_STATE_CHOICES, normalize_nrds, normalize_us_phone, normalize_us_zip
+from .us import (
+    US_STATE_CHOICES,
+    US_STATE_CODES,
+    normalize_nrds,
+    normalize_us_phone,
+    normalize_us_zip,
+)
 
 
 class UserManager(BaseUserManager):
@@ -55,12 +63,21 @@ class Office(models.Model):
     }
 
     name = models.CharField(_("name"), max_length=150)
+    stable_key = models.SlugField(_("stable key"), unique=True, max_length=80)
     slug = models.SlugField(_("slug"), unique=True, max_length=80)
     kind = models.CharField(_("kind"), max_length=32, choices=Kind.choices)
     parent = models.ForeignKey(
         "self",
         verbose_name=_("parent"),
         related_name="children",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+    )
+    region = models.ForeignKey(
+        "self",
+        verbose_name=_("region"),
+        related_name="region_offices",
         on_delete=models.PROTECT,
         null=True,
         blank=True,
@@ -73,38 +90,145 @@ class Office(models.Model):
     )
     is_active = models.BooleanField(_("active"), default=True)
     sort_order = models.PositiveSmallIntegerField(_("sort order"), default=0)
+    street_address = models.CharField(_("street address"), max_length=255, blank=True)
+    city = models.CharField(_("city"), max_length=100, blank=True)
+    state = models.CharField(
+        _("state"), max_length=2, choices=US_STATE_CHOICES, blank=True
+    )
+    zip_code = models.CharField(_("ZIP code"), max_length=10, blank=True)
+    main_phone = models.CharField(_("main phone"), max_length=30, blank=True)
+    public_email = models.EmailField(_("public email"), blank=True)
+    internal_email = models.EmailField(_("internal email"), blank=True)
+    office_hours = models.JSONField(_("office hours"), default=list, blank=True)
+    parking_instructions = models.TextField(_("parking instructions"), blank=True)
+    access_instructions = models.TextField(_("access instructions"), blank=True)
+    access_instructions_internal = models.BooleanField(
+        _("access instructions are internal"),
+        default=True,
+    )
+    updated_at = models.DateTimeField(_("updated at"), auto_now=True)
+    created_at = models.DateTimeField(_("created at"), default=timezone.now)
 
     class Meta:
         ordering = ["sort_order", "name"]
         verbose_name = _("office")
         verbose_name_plural = _("offices")
+        indexes = [
+            models.Index(
+                fields=["is_active", "is_assignable"],
+                name="user_office_active_assignable",
+            ),
+            models.Index(
+                fields=["region", "is_active"], name="user_office_region_active"
+            ),
+        ]
 
     def __str__(self):
         return self.path_label()
 
     def clean(self):
         super().clean()
-        if self.kind == self.Kind.HEAD_OFFICE:
-            if self.parent:
-                raise ValidationError(
-                    {"parent": _("The head office cannot have a parent.")}
-                )
-            return
-        expected = self._PARENT_KIND.get(self.kind)
-        if not self.parent:
-            raise ValidationError(
-                {"parent": _("This office must sit under a parent in the org tree.")}
+        if self.pk:
+            original = (
+                type(self).objects.filter(pk=self.pk).values("stable_key").first()
             )
-        parent_kind = getattr(self.parent, "kind", None)
-        if parent_kind != expected:
+            if original and original["stable_key"] != self.stable_key:
+                raise ValidationError(
+                    {"stable_key": _("Stable identity cannot be changed once created.")}
+                )
+        if self.kind == self.Kind.HEAD_OFFICE and self.parent:
             raise ValidationError(
-                {
-                    "parent": _("A %(kind)s must sit under a %(parent)s.")
-                    % {
-                        "kind": self.Kind(self.kind).label.lower(),
-                        "parent": self.Kind(expected).label.lower(),
+                {"parent": _("The head office cannot have a parent.")}
+            )
+        if self.kind == self.Kind.HEAD_OFFICE:
+            pass
+        else:
+            expected = self._PARENT_KIND.get(self.kind)
+            if not self.parent:
+                raise ValidationError(
+                    {
+                        "parent": _(
+                            "This office must sit under a parent in the org tree."
+                        )
                     }
-                }
+                )
+            parent_kind = getattr(self.parent, "kind", None)
+            if parent_kind != expected:
+                raise ValidationError(
+                    {
+                        "parent": _("A %(kind)s must sit under a %(parent)s.")
+                        % {
+                            "kind": self.Kind(self.kind).label.lower(),
+                            "parent": self.Kind(expected).label.lower(),
+                        }
+                    }
+                )
+        parent = self.parent
+        if parent is not None and parent.pk == self.pk:
+            raise ValidationError({"parent": _("An office cannot be its own parent.")})
+        self._validate_parent_cycle()
+        self._validate_region_consistency()
+        errors = {}
+        if self.state and self.state not in US_STATE_CODES:
+            errors["state"] = _("Enter a valid US state code.")
+        if self.zip_code:
+            try:
+                self.zip_code = normalize_us_zip(self.zip_code)
+            except ValidationError as exc:
+                errors["zip_code"] = exc
+        if self.main_phone:
+            try:
+                self.main_phone = normalize_us_phone(self.main_phone)
+            except ValidationError as exc:
+                errors["main_phone"] = exc
+        if errors:
+            raise ValidationError(errors)
+
+    def _validate_parent_cycle(self) -> None:
+        seen: set[int] = set()
+        node = self.parent
+        while node is not None:
+            if node.pk == self.pk:
+                raise ValidationError(
+                    {"parent": _("This parent selection creates a hierarchy cycle.")}
+                )
+            if node.pk in seen:
+                raise ValidationError(
+                    {"parent": _("This parent selection creates a hierarchy cycle.")}
+                )
+            seen.add(node.pk)
+            node = node.parent
+
+    def _nearest_region(self) -> "Office | None":
+        if self.kind == self.Kind.HEAD_OFFICE:
+            return None
+        if self.kind == self.Kind.REGION:
+            return self
+        node = self.parent
+        seen: set[int] = set()
+        while node is not None and node.pk not in seen:
+            seen.add(node.pk)
+            if node.kind == self.Kind.REGION:
+                return node
+            node = node.parent
+        return None
+
+    def _validate_region_consistency(self) -> None:
+        expected_region = self._nearest_region()
+        if self.kind == self.Kind.HEAD_OFFICE and self.region is not None:
+            raise ValidationError(
+                {"region": _("The head office must not belong to a region.")}
+            )
+        if self.kind == self.Kind.REGION and self.region_id not in {None, self.pk}:
+            raise ValidationError(
+                {"region": _("A region office must point to itself as its region.")}
+            )
+        if expected_region is not None and self.region_id not in {
+            None,
+            expected_region.pk,
+        }:
+            raise ValidationError(
+                {"region": _("Region must match the nearest region in the hierarchy.")}
             )
 
     def path_label(self) -> str:
@@ -121,28 +245,41 @@ class Office(models.Model):
 
     def region_name(self) -> str:
         """Nearest region (or 'Head office') for grouping pick-lists."""
-        node: Office | None = self
-        seen: set[int] = set()
-        while node is not None and id(node) not in seen:
-            seen.add(id(node))
-            if node.kind == self.Kind.REGION:
-                return node.name
-            if node.kind == self.Kind.HEAD_OFFICE:
-                return node.name
-            node = node.parent
+        region = self.region or self._nearest_region()
+        if region is not None:
+            return region.name
         return self.name
+
+    @classmethod
+    def active_queryset(cls):
+        return cls.objects.filter(is_active=True)
 
     @classmethod
     def assignable_queryset(cls):
         return (
-            cls.objects.filter(is_assignable=True, is_active=True)
-            .select_related("parent", "parent__parent", "parent__parent__parent")
+            cls.active_queryset()
+            .filter(is_assignable=True)
+            .select_related(
+                "parent", "parent__parent", "parent__parent__parent", "region"
+            )
             .order_by("sort_order", "name")
         )
 
     @classmethod
+    def visible_queryset(cls):
+        return cls.objects.select_related(
+            "parent", "parent__parent", "parent__parent__parent", "region"
+        ).order_by("sort_order", "name")
+
+    @classmethod
+    def for_region(cls, region: "Office"):
+        return cls.visible_queryset().filter(region=region)
+
+    @classmethod
     def grouped_choices(cls) -> list[dict]:
         """Offices grouped by region, for a ``<select>`` with optgroups."""
+        from apps.user.office_payloads import office_selector_payload
+
         groups: dict[str, list[dict]] = {}
         order: list[str] = []
         for office in cls.assignable_queryset():
@@ -150,8 +287,114 @@ class Office(models.Model):
             if group not in groups:
                 groups[group] = []
                 order.append(group)
-            groups[group].append({"id": office.pk, "name": office.name})
+            groups[group].append(office_selector_payload(office))
         return [{"label": label, "offices": groups[label]} for label in order]
+
+    @property
+    def branch_manager(self):
+        return (
+            OfficeContactAssignment.objects.filter(
+                office=self,
+                assignment_type=OfficeContactAssignment.AssignmentType.MANAGER,
+            )
+            .select_related("user")
+            .first()
+        )
+
+    @property
+    def branch_admin(self):
+        return (
+            OfficeContactAssignment.objects.filter(
+                office=self,
+                assignment_type=OfficeContactAssignment.AssignmentType.ADMIN,
+            )
+            .select_related("user")
+            .first()
+        )
+
+    @property
+    def broker_contacts(self):
+        return OfficeContactAssignment.objects.filter(
+            office=self,
+            assignment_type=OfficeContactAssignment.AssignmentType.BROKER_CONTACT,
+        ).select_related("user")
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        desired_region_id = None
+        if self.kind == self.Kind.REGION:
+            desired_region_id = self.pk
+        elif self.kind != self.Kind.HEAD_OFFICE:
+            nearest_region = self._nearest_region()
+            desired_region_id = nearest_region.pk if nearest_region else None
+        if self.region_id != desired_region_id:
+            type(self).objects.filter(pk=self.pk).update(region_id=desired_region_id)
+            self.region_id = desired_region_id
+
+
+class OfficeContactAssignment(models.Model):
+    class AssignmentType(models.TextChoices):
+        MANAGER = "manager", _("Manager")
+        ADMIN = "admin", _("Admin")
+        BROKER_CONTACT = "broker_contact", _("Broker contact")
+
+    office = models.ForeignKey(
+        Office,
+        verbose_name=_("office"),
+        related_name="contact_assignments",
+        on_delete=models.CASCADE,
+    )
+    user = models.ForeignKey(
+        "User",
+        verbose_name=_("user"),
+        related_name="office_contact_assignments",
+        on_delete=models.PROTECT,
+    )
+    assignment_type = models.CharField(
+        _("assignment type"),
+        max_length=32,
+        choices=AssignmentType.choices,
+    )
+    is_primary = models.BooleanField(_("primary"), default=False)
+    starts_at = models.DateField(_("starts at"), null=True, blank=True)
+    ends_at = models.DateField(_("ends at"), null=True, blank=True)
+
+    class Meta:
+        ordering = ["assignment_type", "-is_primary", "user__email"]
+        verbose_name = _("office contact assignment")
+        verbose_name_plural = _("office contact assignments")
+        constraints = [
+            models.UniqueConstraint(
+                fields=["office", "user", "assignment_type"],
+                name="user_office_contact_unique",
+            ),
+            models.UniqueConstraint(
+                fields=["office", "assignment_type"],
+                condition=Q(is_primary=True),
+                name="user_office_contact_primary_unique",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["office", "assignment_type"],
+                name="user_office_contact_type",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.office} / {self.assignment_type} / {self.user}"
+
+    def clean(self):
+        super().clean()
+        errors = {}
+        if self.ends_at and self.starts_at and self.ends_at < self.starts_at:
+            errors["ends_at"] = _("End date cannot be earlier than the start date.")
+        user_office = self.user.office
+        office_pk = self.office.pk if self.office else None
+        if user_office is not None and user_office.pk != office_pk:
+            errors["user"] = _("Assigned staff must belong to the same office.")
+        if errors:
+            raise ValidationError(errors)
 
 
 class User(AbstractUser):

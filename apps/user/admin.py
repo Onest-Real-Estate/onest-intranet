@@ -5,7 +5,7 @@ from django.contrib.auth.forms import ReadOnlyPasswordHashField
 from django.http import HttpRequest
 from django.utils.translation import gettext_lazy as _
 
-from .models import Office, User
+from .models import Office, OfficeContactAssignment, User
 
 
 class UserCreationForm(forms.ModelForm):
@@ -54,25 +54,107 @@ class OfficeChildInline(admin.TabularInline):
     model = Office
     fk_name = "parent"
     extra = 0
-    fields = ("name", "slug", "kind", "is_assignable", "is_active", "sort_order")
+    fields = (
+        "name",
+        "stable_key",
+        "slug",
+        "kind",
+        "is_assignable",
+        "is_active",
+        "sort_order",
+    )
     show_change_link = True
+
+
+class OfficeContactAssignmentInline(admin.TabularInline):
+    model = OfficeContactAssignment
+    extra = 0
+    autocomplete_fields = ["user"]
+    fields = (
+        "assignment_type",
+        "user",
+        "is_primary",
+        "starts_at",
+        "ends_at",
+    )
+
+
+class OfficeAdminForm(forms.ModelForm):
+    class Meta:
+        model = Office
+        fields = "__all__"
 
 
 @admin.register(Office)
 class OfficeAdmin(admin.ModelAdmin):
+    form = OfficeAdminForm
     list_display = (
         "name",
+        "stable_key",
         "kind",
+        "region",
         "parent",
         "is_assignable",
         "is_active",
         "sort_order",
     )
-    list_filter = ("kind", "is_assignable", "is_active")
-    search_fields = ("name", "slug")
+    list_filter = ("kind", "region", "is_assignable", "is_active")
+    search_fields = ("name", "slug", "stable_key", "city", "public_email")
     prepopulated_fields = {"slug": ("name",)}
-    inlines = [OfficeChildInline]
+    inlines = [OfficeChildInline, OfficeContactAssignmentInline]
     ordering = ("sort_order", "name")
+    autocomplete_fields = ["parent", "region"]
+    fieldsets = (
+        (
+            _("Identity"),
+            {
+                "fields": (
+                    "name",
+                    "stable_key",
+                    "slug",
+                    "kind",
+                    "is_active",
+                    "is_assignable",
+                    "sort_order",
+                )
+            },
+        ),
+        (_("Hierarchy"), {"fields": ("parent", "region")}),
+        (
+            _("Address & contact"),
+            {
+                "fields": (
+                    "street_address",
+                    "city",
+                    "state",
+                    "zip_code",
+                    "main_phone",
+                    "public_email",
+                    "internal_email",
+                    "office_hours",
+                )
+            },
+        ),
+        (
+            _("Operations"),
+            {
+                "fields": (
+                    "parking_instructions",
+                    "access_instructions",
+                    "access_instructions_internal",
+                    "created_at",
+                    "updated_at",
+                )
+            },
+        ),
+    )
+    readonly_fields = ("created_at", "updated_at")
+
+    def get_readonly_fields(self, request, obj=None):
+        readonly = list(super().get_readonly_fields(request, obj))
+        if obj is not None:
+            readonly.extend(["stable_key", "region"])
+        return readonly
 
 
 @admin.register(User)
