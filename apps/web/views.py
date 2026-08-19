@@ -2,6 +2,7 @@ from django.http import Http404
 from inertia import defer, inertia, render
 
 from .authorization import enforce_policy
+from .contracts import list_response
 from .dashboard import (
     HUB_SECTIONS,
     dashboard_action_items,
@@ -39,6 +40,85 @@ def coming_soon(request, section: str):
     if title is None:
         raise Http404()
     return {"title": title, "section": section}
+
+
+_CATALOG_CONTRACTS = (
+    {
+        "id": "ON-1048",
+        "client": "Avery Johnson",
+        "property": "1428 Grove Avenue",
+        "status": "pending_signature",
+        "updated": "Aug 19, 2026",
+    },
+    {
+        "id": "ON-1047",
+        "client": "Morgan Lee",
+        "property": "88 Franklin Street",
+        "status": "approved",
+        "updated": "Aug 18, 2026",
+    },
+    {
+        "id": "ON-1046",
+        "client": "Taylor Bennett",
+        "property": "9045 Cedar Ridge Drive",
+        "status": "incomplete",
+        "updated": "Aug 17, 2026",
+    },
+    {
+        "id": "ON-1045",
+        "client": "Jordan Williams",
+        "property": "16 Market Square",
+        "status": "pending_documents",
+        "updated": "Aug 16, 2026",
+    },
+    {
+        "id": "ON-1044",
+        "client": "Casey Thompson",
+        "property": "707 Lakeview Court",
+        "status": "settled",
+        "updated": "Aug 15, 2026",
+    },
+    {
+        "id": "ON-1043",
+        "client": "Riley Davis",
+        "property": "310 Goldfinch Lane",
+        "status": "archived",
+        "updated": "Aug 14, 2026",
+    },
+)
+
+
+@enforce_policy("design_system")
+@inertia("DesignSystem")
+def design_system(request):
+    """Living catalog plus a real URL-driven list contract example."""
+    query = request.GET.get("q", "").strip()
+    status = request.GET.get("status", "").strip()
+    try:
+        page = max(1, int(request.GET.get("page", "1")))
+    except ValueError:
+        page = 1
+    rows = [
+        row
+        for row in _CATALOG_CONTRACTS
+        if (not query or query.casefold() in " ".join(row.values()).casefold())
+        and (not status or row["status"] == status)
+    ]
+    page_size = 3
+    total_pages = max(1, (len(rows) + page_size - 1) // page_size)
+    page = min(page, total_pages)
+    start = (page - 1) * page_size
+    return {
+        "contracts": list_response(
+            rows[start : start + page_size],
+            page=page,
+            page_size=page_size,
+            total_items=len(rows),
+            filters={"q": query, "status": status},
+            sort_key="updated",
+            sort_direction="desc",
+        )
+    }
 
 
 def permission_denied(request, exception=None):

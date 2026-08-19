@@ -315,7 +315,7 @@ DJANGO_VITE = {
 # ---------------------------------------------------------------------------
 INERTIA_LAYOUT = "layout.html"
 # Bump whenever the frontend bundle changes so stale clients get a full reload.
-INERTIA_VERSION = "1"
+INERTIA_VERSION = "2"
 
 # Inertia's HTTP client reads the XSRF-TOKEN cookie and echoes it back as the
 # X-XSRF-TOKEN header, so we align Django's CSRF cookie/header names with that.

@@ -1,18 +1,21 @@
 import { Head, usePage } from "@inertiajs/react";
 import {
   Building2,
-  Camera,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
   IdCard,
-  Loader2,
   MapPin,
   User2,
 } from "lucide-react";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 
 import { AuthLayout } from "@/components/AuthLayout";
+import {
+  FileUploader,
+  FormErrorSummary,
+  type UploadedFile,
+} from "@/components/design-system";
 import type { OfficeGroup, StateOption } from "@/components/ProfileFormFields";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -38,6 +41,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { routes } from "@/lib/routes";
 import type { PageProps } from "@/types";
+import type { ValidationErrors } from "@/types/design-system";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -57,7 +61,7 @@ interface OnboardingPageProps extends PageProps {
     nrdsNumber: string;
     headshotUrl: string | null;
   };
-  errors: Record<string, string>;
+  validation: ValidationErrors;
   offices: OfficeGroup[];
   states: StateOption[];
 }
@@ -101,7 +105,7 @@ function FieldError({ id, message }: { id: string; message?: string }) {
   );
 }
 
-function describedBy(field: string, errors: Record<string, string>) {
+function describedBy(field: string, errors: Record<string, string | undefined>) {
   return errors[field] ? `${field}_error` : undefined;
 }
 
@@ -120,98 +124,58 @@ function HeadshotUploader({
   onUploaded: (url: string) => void;
   error?: string;
 }) {
-  const [preview, setPreview] = useState<string | null>(initialUrl);
-  const [uploading, setUploading] = useState(false);
-  const [uploadError, setUploadError] = useState<string | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  async function handleFile(file: File) {
-    setUploadError(null);
-    setUploading(true);
-    const fd = new FormData();
-    fd.append("headshot", file);
-    fd.append("csrfmiddlewaretoken", csrfToken);
-    try {
-      const res = await fetch(routes.headshot_upload(), {
-        method: "POST",
-        body: fd,
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        setUploadError(json.error ?? "Upload failed. Please try again.");
-      } else {
-        setPreview(json.url);
-        onUploaded(json.url);
-      }
-    } catch {
-      setUploadError("Network error. Please try again.");
-    } finally {
-      setUploading(false);
-    }
-  }
-
+  const initialFile: UploadedFile | null = initialUrl
+    ? { name: "Current profile photo", url: initialUrl, type: "image" }
+    : null;
   return (
-    <div className="flex flex-col items-center gap-4">
-      <button
-        type="button"
-        className="group relative size-32 cursor-pointer overflow-hidden rounded-full border-2 border-dashed border-muted-foreground/40 bg-muted transition hover:border-primary"
-        onClick={() => inputRef.current?.click()}
-        aria-label="Upload profile photo"
-      >
-        {preview ? (
-          <img
-            src={preview}
-            alt="Headshot preview"
-            className="size-full object-cover"
-          />
-        ) : (
-          <div className="flex size-full flex-col items-center justify-center gap-1 text-muted-foreground">
-            <Camera className="size-8" strokeWidth={1.5} aria-hidden />
-            <span className="text-xs">Add photo</span>
-          </div>
-        )}
-        {uploading && (
-          <div className="absolute inset-0 flex items-center justify-center bg-background/60">
-            <Loader2 className="size-6 animate-spin text-primary" aria-hidden />
-          </div>
-        )}
-        <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition group-hover:opacity-100">
-          <Camera className="size-6 text-white" strokeWidth={1.5} aria-hidden />
-        </div>
-      </button>
-
-      <input
-        ref={inputRef}
-        type="file"
+    <div className="grid gap-2">
+      <FileUploader
+        label="Add profile photo"
+        description="JPEG or PNG · at least 200×200 px · max 5 MB"
         accept="image/jpeg,image/png"
-        className="sr-only"
-        aria-label="Select profile photo"
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          if (file) handleFile(file);
+        maxSize={5 * 1024 * 1024}
+        value={initialFile}
+        removable={false}
+        validate={(file) =>
+          ["image/jpeg", "image/png"].includes(file.type)
+            ? null
+            : "Choose a JPEG or PNG image. The server will verify its contents."
+        }
+        upload={async (file, { signal, onProgress }) => {
+          const formData = new FormData();
+          formData.append("headshot", file);
+          formData.append("csrfmiddlewaretoken", csrfToken);
+          onProgress(20);
+          const response = await fetch(routes.headshot_upload(), {
+            method: "POST",
+            body: formData,
+            signal,
+          });
+          const payload = (await response.json()) as {
+            error?: string;
+            url?: string;
+          };
+          if (!response.ok) {
+            throw new Error(payload.error ?? "Upload failed. Please try again.");
+          }
+          if (!payload.url) {
+            throw new Error("The server did not return an uploaded file URL.");
+          }
+          onProgress(100);
+          onUploaded(payload.url);
+          return {
+            name: file.name,
+            url: payload.url,
+            size: file.size,
+            type: file.type,
+          };
         }}
       />
-
-      {(uploadError || error) && (
+      {error ? (
         <p className="text-destructive text-center text-sm" role="alert">
-          {uploadError ?? error}
+          {error}
         </p>
-      )}
-
-      {!uploading && (
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => inputRef.current?.click()}
-        >
-          {preview ? "Replace photo" : "Choose photo"}
-        </Button>
-      )}
-
-      <p className="text-muted-foreground text-center text-xs">
-        JPEG or PNG · at least 200×200 px · max 5 MB
-      </p>
+      ) : null}
     </div>
   );
 }
@@ -276,8 +240,11 @@ function StepProgress({ steps, current }: { steps: typeof STEPS; current: StepId
 // ---------------------------------------------------------------------------
 
 export default function Onboarding() {
-  const { csrfToken, initial, errors, offices, states } =
+  const { csrfToken, initial, validation, offices, states } =
     usePage<OnboardingPageProps>().props;
+  const errors = Object.fromEntries(
+    Object.entries(validation.fields).map(([field, messages]) => [field, messages[0]]),
+  ) as Record<string, string | undefined>;
 
   const [step, setStep] = useState<StepId>(
     // If there are server-side errors, jump to the relevant step.
@@ -387,6 +354,7 @@ export default function Onboarding() {
             <input type="hidden" name="nrds_number" value={values.nrdsNumber} />
 
             <CardContent className="grid gap-6">
+              <FormErrorSummary errors={validation} />
               {/* ── Step 1: Personal ─────────────────────────────────── */}
               {step === "personal" && (
                 <div className="grid gap-6">

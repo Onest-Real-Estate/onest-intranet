@@ -1,88 +1,71 @@
-import { Calendar, Megaphone, Newspaper, TrendingUp } from "lucide-react";
-import { IconWell } from "@/components/IconWell";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  PanelHeader,
+  SurfaceCard,
+  SurfaceCardContent,
+} from "@/components/design-system/surface-card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 import type { DashboardAnnouncements } from "@/types";
 
-function tagIcon(tag: string) {
-  const key = tag.toLowerCase();
-  if (key.includes("market")) {
-    return TrendingUp;
-  }
-  if (key.includes("event") || key.includes("training")) {
-    return Calendar;
-  }
-  if (key.includes("company") || key.includes("news")) {
-    return Newspaper;
-  }
-  return Megaphone;
-}
-
-function TagBadge({ tag, variant }: { tag: string; variant: "secondary" | "outline" }) {
-  const Icon = tagIcon(tag);
+/**
+ * Categories are not statuses: they need to be readable, not colour-coded. A
+ * quiet editorial eyebrow keeps the headline as the thing you actually scan.
+ */
+function Tag({ children, className }: { children: string; className?: string }) {
   return (
-    <Badge variant={variant} className="rounded-full">
-      <Icon className="size-3" strokeWidth={1.5} />
-      {tag}
-    </Badge>
+    <p
+      className={cn(
+        "text-muted-foreground text-[0.6875rem] font-semibold tracking-[0.08em] uppercase",
+        className,
+      )}
+    >
+      {children}
+    </p>
   );
 }
 
 export function Announcements({ data }: { data: DashboardAnnouncements }) {
   return (
-    <Card className="arrive">
-      <CardHeader>
-        {/* No news archive exists yet, so there is no "View all" to offer. */}
-        <CardTitle asChild className="flex items-center gap-2">
-          <h2>
-            <IconWell
-              icon={Newspaper}
-              tone="muted"
-              className="size-8"
-              iconClassName="size-4"
-            />
-            News &amp; announcements
-          </h2>
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="grid gap-4 lg:grid-cols-2">
-        <article className="grid gap-3">
+    <SurfaceCard className="arrive">
+      {/* No news archive exists yet, so there is no "View all" to offer. */}
+      <PanelHeader title="News & announcements" />
+      <SurfaceCardContent className="grid gap-6 lg:grid-cols-2">
+        <article className="grid content-start gap-2">
           <img
             src={data.featured.imageUrl}
             alt=""
-            className="h-40 w-full rounded-lg object-cover"
+            className="mb-1 h-44 w-full rounded-lg object-cover"
           />
-          <TagBadge tag={data.featured.tag} variant="secondary" />
+          <Tag>{data.featured.tag}</Tag>
           <h3 className="leading-snug font-semibold">{data.featured.title}</h3>
-          <p className="text-muted-foreground text-sm">{data.featured.excerpt}</p>
+          <p className="text-muted-foreground text-sm leading-6">
+            {data.featured.excerpt}
+          </p>
         </article>
-        <ul className="grid gap-4">
+        <ul className="grid content-start gap-4">
           {data.items.map((item) => (
             <li
               key={item.title}
-              className="grid gap-1 border-b pb-4 last:border-0 last:pb-0"
+              className="grid gap-1.5 border-b pb-4 last:border-0 last:pb-0"
             >
-              <TagBadge tag={item.tag} variant="outline" />
-              <h3 className="font-medium leading-snug">{item.title}</h3>
-              <p className="text-muted-foreground text-sm">{item.excerpt}</p>
+              <Tag>{item.tag}</Tag>
+              <h3 className="leading-snug font-medium">{item.title}</h3>
+              <p className="text-muted-foreground text-sm leading-6">{item.excerpt}</p>
             </li>
           ))}
         </ul>
-      </CardContent>
-    </Card>
+      </SurfaceCardContent>
+    </SurfaceCard>
   );
 }
 
 export function AnnouncementsSkeleton() {
   return (
-    <Card>
-      <CardHeader>
-        <Skeleton className="h-5 w-48" />
-      </CardHeader>
-      <CardContent className="grid gap-4 lg:grid-cols-2">
+    <SurfaceCard>
+      <PanelHeader title="News & announcements" />
+      <SurfaceCardContent className="grid gap-6 lg:grid-cols-2">
         <div className="grid gap-3">
-          <Skeleton className="h-40 w-full rounded-lg" />
+          <Skeleton className="h-44 w-full rounded-lg" />
           <Skeleton className="h-4 w-24" />
           <Skeleton className="h-5 w-full" />
         </div>
@@ -90,7 +73,7 @@ export function AnnouncementsSkeleton() {
           <Skeleton className="h-20 w-full" />
           <Skeleton className="h-20 w-full" />
         </div>
-      </CardContent>
-    </Card>
+      </SurfaceCardContent>
+    </SurfaceCard>
   );
 }

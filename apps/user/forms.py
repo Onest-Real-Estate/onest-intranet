@@ -4,6 +4,8 @@ from typing import Any, cast
 from django import forms
 from django.utils.translation import gettext_lazy as _
 
+from apps.web.contracts import empty_validation_errors, validation_errors
+
 from .headshot import validate_headshot
 from .models import Office, User
 from .us import (
@@ -144,12 +146,9 @@ class ProfileForm(forms.ModelForm):
         return user
 
 
-def form_errors(form: forms.BaseForm) -> dict[str, str]:
-    """Flatten Django form errors into ``field → message`` for Inertia."""
-    return {
-        field: ", ".join(error["message"] for error in error_data)
-        for field, error_data in form.errors.get_json_data().items()
-    }
+def form_errors(form: forms.BaseForm) -> dict:
+    """Return the shared field/form validation payload for Inertia."""
+    return validation_errors(form)
 
 
 def profile_initial(user: User, posted: Mapping[str, Any] | None = None) -> dict:
@@ -186,7 +185,7 @@ def profile_page_props(
 ):
     return {
         "initial": profile_initial(user, posted),
-        "errors": errors or {},
+        "validation": errors or empty_validation_errors(),
         "offices": Office.grouped_choices(),
         "states": [{"code": code, "name": name} for code, name in US_STATE_CHOICES],
     }

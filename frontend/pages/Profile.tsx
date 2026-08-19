@@ -1,7 +1,12 @@
 import { Head, usePage } from "@inertiajs/react";
-import { UserRound } from "lucide-react";
 import type { ReactNode } from "react";
-
+import {
+  FormErrorSummary,
+  PageHeader,
+  SurfaceCard,
+  SurfaceCardContent,
+  SurfaceCardFooter,
+} from "@/components/design-system";
 import { HubLayout } from "@/components/HubLayout";
 import {
   type OfficeGroup,
@@ -10,20 +15,13 @@ import {
   type StateOption,
 } from "@/components/ProfileFormFields";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { routes } from "@/lib/routes";
 import type { PageProps } from "@/types";
+import type { ValidationErrors } from "@/types/design-system";
 
 interface ProfilePageProps extends PageProps {
   initial: ProfileFormValues;
-  errors: Record<string, string>;
+  validation: ValidationErrors;
   offices: OfficeGroup[];
   states: StateOption[];
 }
@@ -32,25 +30,22 @@ interface ProfilePageProps extends PageProps {
  * Profile edit — same fields as onboarding, including optional MLS / NRDS.
  */
 export default function Profile() {
-  const { csrfToken, initial, errors, offices, states } =
+  const { csrfToken, initial, validation, offices, states } =
     usePage<ProfilePageProps>().props;
 
   return (
-    <div className="page-shell py-10">
+    // One column, one width: the page header sits directly above the form it
+    // introduces rather than floating out at the page gutter.
+    <div className="mx-auto grid w-full max-w-2xl gap-6 px-4 py-8 sm:px-6 lg:py-10">
       <Head title="Your profile" />
-      <Card className="mx-auto w-full max-w-xl">
-        <CardHeader>
-          <CardTitle asChild className="flex items-center gap-2">
-            <h1>
-              <UserRound className="size-5" strokeWidth={1.5} aria-hidden />
-              Your profile
-            </h1>
-          </CardTitle>
-          <CardDescription>
-            Update your contact details, office, and license numbers.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+      <PageHeader
+        title="Your profile"
+        description="Keep your contact details, office, and license information current."
+      />
+      {/* No card heading: the page header above already names this form, and
+          repeating the title inside the only card on the page is noise. */}
+      <SurfaceCard>
+        <SurfaceCardContent>
           <form
             id="profile-form"
             method="post"
@@ -58,20 +53,21 @@ export default function Profile() {
             className="grid gap-6"
           >
             <input type="hidden" name="csrfmiddlewaretoken" value={csrfToken} />
+            <FormErrorSummary errors={validation} />
             <ProfileFormFields
               initial={initial}
-              errors={errors}
+              validation={validation}
               offices={offices}
               states={states}
             />
           </form>
-        </CardContent>
-        <CardFooter className="w-full">
-          <Button type="submit" form="profile-form" size="lg" className="w-full">
+        </SurfaceCardContent>
+        <SurfaceCardFooter className="justify-end border-t pt-5">
+          <Button type="submit" form="profile-form">
             Save changes
           </Button>
-        </CardFooter>
-      </Card>
+        </SurfaceCardFooter>
+      </SurfaceCard>
     </div>
   );
 }

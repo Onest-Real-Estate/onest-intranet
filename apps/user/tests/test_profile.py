@@ -66,4 +66,4 @@ def test_profile_submit_rerenders_errors(client):
     assert response.status_code == 422
     data = json.loads(response.content)
     assert data["component"] == "Profile"
-    assert "zip_code" in data["props"]["errors"]
+    assert "zip_code" in data["props"]["validation"]["fields"]

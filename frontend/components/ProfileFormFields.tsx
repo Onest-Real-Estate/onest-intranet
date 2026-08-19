@@ -1,5 +1,6 @@
 import { useState } from "react";
 
+import { FormFieldError, fieldA11yProps } from "@/components/design-system/form";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -12,6 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import type { ValidationErrors } from "@/types/design-system";
 
 export interface ProfileFormValues {
   firstName: string;
@@ -41,21 +43,6 @@ export interface StateOption {
  * `aria-describedby` — `aria-invalid` alone marks a field as wrong without
  * ever telling a screen reader what is wrong with it.
  */
-function FieldError({ id, message }: { id: string; message?: string }) {
-  if (!message) {
-    return null;
-  }
-  return (
-    <p id={id} className="text-destructive text-sm">
-      {message}
-    </p>
-  );
-}
-
-function describedBy(field: string, errors: Record<string, string>) {
-  return errors[field] ? `${field}_error` : undefined;
-}
-
 /**
  * Shared fields for onboarding and profile edit. Posts as a plain HTML form
  * so Django/Inertia can validate server-side (HTTP 422 on errors).
@@ -65,17 +52,24 @@ function describedBy(field: string, errors: Record<string, string>) {
  */
 export function ProfileFormFields({
   initial,
-  errors,
+  validation,
   offices,
   states,
 }: {
   initial: ProfileFormValues;
-  errors: Record<string, string>;
+  validation: ValidationErrors;
   offices: OfficeGroup[];
   states: StateOption[];
 }) {
   const [state, setState] = useState(initial.state);
   const [officeId, setOfficeId] = useState(initial.officeId);
+  const errors = Object.fromEntries(
+    Object.entries(validation.fields).map(([field, messages]) => [field, messages[0]]),
+  ) as Record<string, string | undefined>;
+
+  function describedBy(field: string) {
+    return fieldA11yProps(field, validation)["aria-describedby"];
+  }
 
   return (
     <div className="grid gap-4">
@@ -88,10 +82,10 @@ export function ProfileFormFields({
             defaultValue={initial.firstName}
             autoComplete="given-name"
             aria-invalid={Boolean(errors.first_name) || undefined}
-            aria-describedby={describedBy("first_name", errors)}
+            aria-describedby={describedBy("first_name")}
             required
           />
-          <FieldError id="first_name_error" message={errors.first_name} />
+          <FormFieldError id="first_name_error" message={errors.first_name} />
         </div>
         <div className="grid gap-2">
           <Label htmlFor="last_name">Last name</Label>
@@ -101,10 +95,10 @@ export function ProfileFormFields({
             defaultValue={initial.lastName}
             autoComplete="family-name"
             aria-invalid={Boolean(errors.last_name) || undefined}
-            aria-describedby={describedBy("last_name", errors)}
+            aria-describedby={describedBy("last_name")}
             required
           />
-          <FieldError id="last_name_error" message={errors.last_name} />
+          <FormFieldError id="last_name_error" message={errors.last_name} />
         </div>
       </div>
 
@@ -118,10 +112,10 @@ export function ProfileFormFields({
           autoComplete="tel"
           placeholder="(202) 555-0100"
           aria-invalid={Boolean(errors.phone_number) || undefined}
-          aria-describedby={describedBy("phone_number", errors)}
+          aria-describedby={describedBy("phone_number")}
           required
         />
-        <FieldError id="phone_number_error" message={errors.phone_number} />
+        <FormFieldError id="phone_number_error" message={errors.phone_number} />
       </div>
 
       <div className="grid gap-2">
@@ -132,10 +126,10 @@ export function ProfileFormFields({
           defaultValue={initial.streetAddress}
           autoComplete="street-address"
           aria-invalid={Boolean(errors.street_address) || undefined}
-          aria-describedby={describedBy("street_address", errors)}
+          aria-describedby={describedBy("street_address")}
           required
         />
-        <FieldError id="street_address_error" message={errors.street_address} />
+        <FormFieldError id="street_address_error" message={errors.street_address} />
       </div>
 
       <div className="grid gap-4 sm:grid-cols-6">
@@ -147,10 +141,10 @@ export function ProfileFormFields({
             defaultValue={initial.city}
             autoComplete="address-level2"
             aria-invalid={Boolean(errors.city) || undefined}
-            aria-describedby={describedBy("city", errors)}
+            aria-describedby={describedBy("city")}
             required
           />
-          <FieldError id="city_error" message={errors.city} />
+          <FormFieldError id="city_error" message={errors.city} />
         </div>
         <div className="grid gap-2 sm:col-span-2">
           <Label htmlFor="state">State</Label>
@@ -159,7 +153,7 @@ export function ProfileFormFields({
             <SelectTrigger
               id="state"
               aria-invalid={Boolean(errors.state) || undefined}
-              aria-describedby={describedBy("state", errors)}
+              aria-describedby={describedBy("state")}
             >
               <SelectValue placeholder="Select a state" />
             </SelectTrigger>
@@ -171,7 +165,7 @@ export function ProfileFormFields({
               ))}
             </SelectContent>
           </Select>
-          <FieldError id="state_error" message={errors.state} />
+          <FormFieldError id="state_error" message={errors.state} />
         </div>
         <div className="grid gap-2 sm:col-span-1">
           <Label htmlFor="zip_code">ZIP</Label>
@@ -182,10 +176,10 @@ export function ProfileFormFields({
             autoComplete="postal-code"
             placeholder="12345"
             aria-invalid={Boolean(errors.zip_code) || undefined}
-            aria-describedby={describedBy("zip_code", errors)}
+            aria-describedby={describedBy("zip_code")}
             required
           />
-          <FieldError id="zip_code_error" message={errors.zip_code} />
+          <FormFieldError id="zip_code_error" message={errors.zip_code} />
         </div>
       </div>
 
@@ -196,7 +190,7 @@ export function ProfileFormFields({
           <SelectTrigger
             id="office"
             aria-invalid={Boolean(errors.office) || undefined}
-            aria-describedby={describedBy("office", errors)}
+            aria-describedby={describedBy("office")}
           >
             <SelectValue placeholder="Select your office" />
           </SelectTrigger>
@@ -213,7 +207,7 @@ export function ProfileFormFields({
             ))}
           </SelectContent>
         </Select>
-        <FieldError id="office_error" message={errors.office} />
+        <FormFieldError id="office_error" message={errors.office} />
       </div>
 
       <Separator />
@@ -233,9 +227,9 @@ export function ProfileFormFields({
             defaultValue={initial.mlsNumber}
             placeholder="Optional"
             aria-invalid={Boolean(errors.mls_number) || undefined}
-            aria-describedby={describedBy("mls_number", errors)}
+            aria-describedby={describedBy("mls_number")}
           />
-          <FieldError id="mls_number_error" message={errors.mls_number} />
+          <FormFieldError id="mls_number_error" message={errors.mls_number} />
         </div>
         <div className="grid gap-2">
           <Label htmlFor="nrds_number">NRDS number</Label>
@@ -246,9 +240,9 @@ export function ProfileFormFields({
             inputMode="numeric"
             placeholder="Optional"
             aria-invalid={Boolean(errors.nrds_number) || undefined}
-            aria-describedby={describedBy("nrds_number", errors)}
+            aria-describedby={describedBy("nrds_number")}
           />
-          <FieldError id="nrds_number_error" message={errors.nrds_number} />
+          <FormFieldError id="nrds_number_error" message={errors.nrds_number} />
         </div>
       </div>
     </div>

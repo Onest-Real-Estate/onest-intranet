@@ -1,6 +1,10 @@
 # Onest intranet design system
 
-This system translates the gold house-and-key logo into an accessible, practical interface for daily internal use. The logo's sampled gold, `#B6852E`, is the signature color; semantic UI tokens use contrast-adjusted variants where needed.
+Component APIs, state coverage, accessibility expectations, and change policy are
+documented in [`design-system-components.md`](design-system-components.md). The
+authenticated living catalog is available at `/design-system`.
+
+This system translates the gold house-and-key logo into an accessible, practical interface for daily internal use. The approved oNEST gold, `#DDB52A`, is the signature color; semantic UI tokens use contrast-adjusted variants where needed.
 
 ## Principles
 
@@ -13,7 +17,7 @@ This system translates the gold house-and-key logo into an accessible, practical
 
 | Role | Light reference | Use |
 | --- | --- | --- |
-| Brand gold | `#B6852E` | Logo, small highlights, decorative details |
+| Brand gold | `#DDB52A` | Logo, small highlights, decorative details |
 | Primary | `oklch(0.50 0.115 74)` | Primary actions, active navigation, links |
 | Background | `oklch(0.985 0.006 80)` | App canvas |
 | Foreground | `oklch(0.22 0.018 72)` | Main text |
@@ -36,9 +40,9 @@ The preferred UI face is **Plus Jakarta Sans** (self-hosted variable cut), falli
 | Style | Tailwind recipe | Typical use |
 | --- | --- | --- |
 | Display | `text-[40px] font-bold leading-12 tracking-[-0.02em]` | Rare hero copy |
-| Page title | `text-[32px] font-bold leading-10 tracking-[-0.02em]` | One per page |
-| Section title | `text-xl font-semibold tracking-tight` | Major page sections |
-| Card title | `font-semibold leading-none` | Card headings |
+| Page title | `text-[clamp(1.5rem,2.4vw,1.875rem)] font-semibold tracking-[-0.02em]` | One per page, via `PageHeader` |
+| Section title | `text-base font-semibold tracking-[-0.01em]` | Page sections and panel headings |
+| Card title | `font-semibold leading-none` | Nested card headings |
 | Body | `text-sm` or `text-base leading-6` | Interface and long-form copy |
 | Supporting | `text-sm text-muted-foreground` | Descriptions and metadata |
 | Label | `text-xs font-semibold tracking-[0.02em]` | Form and data labels |
@@ -47,7 +51,9 @@ Use sentence case. Reserve all caps for the compact ONEST wordmark. Keep paragra
 
 ## Spacing and layout
 
-Use Tailwind's 4 px spacing scale. The default gaps are 8 px for tightly related controls, 16 px for component content, 24 px between sections, and 40–64 px for page-level separation. The dashboard is the reference implementation: 40 px between bands, 24 px within a band, 12 px between a section heading and its content — the contrast between those intervals is what creates rhythm. Use the shared `page-shell` utility for application pages; it provides a `max-w-6xl` centered container and responsive gutters.
+Use Tailwind's 4 px spacing scale. The default gaps are 8 px for tightly related controls, 16 px for component content, 24 px between sections, and 40–64 px for page-level separation. The dashboard is the reference implementation: 40 px between bands, 24 px within a band, 12 px between a section heading and its content — the contrast between those intervals is what creates rhythm. Use the shared `page-shell` utility for application pages; it provides a `max-w-6xl` centered container and responsive gutters. A single-column form page sets its own narrower width instead, so the page header stays aligned with the form it introduces rather than floating out at the gutter (see `pages/Profile.tsx`).
+
+The workspace panel is flush: it runs to the top and right edges of the window with no margin, radius, or shadow of its own. The sidebar's right border is the only seam between navigation and content — a floating, rounded content card wastes edge space and reads as a demo rather than an application.
 
 Forms should be one column by default. Data-heavy views can expand to a responsive grid, but related labels and values should stay visually grouped.
 
@@ -63,11 +69,12 @@ Forms should be one column by default. Data-heavy views can expand to a responsi
 - **Forms:** labels remain visible above fields. Place validation messages directly below the field with `text-destructive`. Do not use placeholder text as a label.
 - **Cards:** group one concept or task. Avoid nesting cards unless hierarchy would otherwise be ambiguous.
 - **Badges:** use for short states or categories, not sentences. Pair semantic colors with explicit words such as “Approved” or “Overdue.”
-- **Tables:** right-align numbers, keep headers concise, and use a muted header surface. On narrow screens, prioritize or stack columns rather than shrinking text below 14 px.
-- **Navigation:** keep the primary nav stable. Active items use the accent surface and should also expose `aria-current="page"`. Sidebar sections are declared in `HUB_NAV_GROUPS` with an uppercase group label; sections without a backend show a derived "Soon" pill (`isComingSoon`).
-- **Icon tiles:** one tile vocabulary via `IconWell`. `tone="brand"` (gold) is for the stat row and brand moments; `tone="muted"` is the repeated tile in panel headers. Gold only reads as meaningful while it stays off most tiles.
-- **Header metadata:** static facts in a card header (a date, a count) use a muted pill with no border or chevron, so they never pose as a dropdown.
+- **Tables:** right-align numbers, keep headers concise, and use a muted header surface. Column headers render as 12 px micro-caps (`uppercase`, `tracking-[0.06em]`) so they read as labels rather than a first row of data. A table inside a card uses `frame="bare"` — one frame, not two. On narrow screens, prioritize or stack columns rather than shrinking text below 14 px.
+- **Navigation:** keep the primary nav stable. The active item uses the sidebar accent surface, semibold type, a `text-primary` icon, and the gold left rail, and it also exposes `aria-current="page"`. Sidebar sections are declared in `HUB_NAV_GROUPS`; the uppercase group label is the only separation — no rules between groups. Sections without a backend show a derived "Soon" marker (`isComingSoon`) as plain muted type, never a pill: a rail of a dozen chips reads as a mockup rather than a product.
+- **Icon tiles:** one tile vocabulary via `IconWell`. `tone="brand"` (gold) marks a small, countable set of brand moments — the quick-access launchers, the empty-state mark. `tone="muted"` is available for a one-off neutral tile. Panel headings carry **no** tile: the heading identifies the panel, and a tile repeated beside every title on a page competes with the data underneath it.
+- **Panel headers:** use `PanelHeader` — heading, optional description, and at most one right-hand slot: `meta` for a static fact or `action` for a real control. Static facts render through `SurfaceCardMeta` as plain muted type, never a pill or a chevron, so they cannot pose as a dropdown.
 - **Badges:** `warning` uses `text-warning-ink` over the tint, never `--warning-foreground` — that token is the ink for a *solid* warning surface and disappears on a dark card.
+- **Timelines:** the default marker is a toned dot; `current` widens its ring. Pass `icon` only where the mark means something — a check on a step that is genuinely complete. A check on every entry claims progress the data does not support.
 - **Interactive cards and rows:** one response — border tint, a one-pixel lift, a shadow step, trailing icon to full ink, 150 ms. Focus rings carry `ring-offset-2`.
 - **Arrival motion:** deferred content uses the `.arrive` utility (240 ms rise + fade). Use an animation, never a transition from a hidden default, so content stays visible if it never runs.
 

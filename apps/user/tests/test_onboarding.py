@@ -82,7 +82,7 @@ def test_onboarding_renders_page_with_initial_values(client):
     assert data["props"]["initial"]["firstName"] == "Bob"
     assert data["props"]["initial"]["lastName"] == "Lee"
     assert data["props"]["initial"]["phoneNumber"] == "(202) 555-0100"
-    assert data["props"]["errors"] == {}
+    assert data["props"]["validation"] == {"fields": {}, "form": []}
     group_labels = [group["label"] for group in data["props"]["offices"]]
     assert "Mid-Atlantic" in group_labels
     assert any(state["code"] == "VA" for state in data["props"]["states"])
@@ -139,7 +139,7 @@ def test_onboarding_submit_rerenders_with_errors(client):
     assert response.status_code == 422
     data = inertia_page_script(response)
     assert data["component"] == "Onboarding"
-    assert "first_name" in data["props"]["errors"]
+    assert "first_name" in data["props"]["validation"]["fields"]
     user.refresh_from_db()
     assert user.profile_completed is False
 
@@ -155,7 +155,7 @@ def test_onboarding_submit_rerenders_with_errors_for_inertia(client):
     )
     assert response.status_code == 422
     data = json.loads(response.content)
-    assert "first_name" in data["props"]["errors"]
+    assert "first_name" in data["props"]["validation"]["fields"]
     assert data["props"]["initial"]["firstName"] == ""
 
 
@@ -170,7 +170,7 @@ def test_onboarding_rejects_invalid_us_phone(client):
     )
     assert response.status_code == 422
     data = json.loads(response.content)
-    assert "phone_number" in data["props"]["errors"]
+    assert "phone_number" in data["props"]["validation"]["fields"]
 
 
 # ---------------------------------------------------------------------------
@@ -190,7 +190,7 @@ def test_onboarding_rejects_region_as_office(client):
     )
     assert response.status_code == 422
     data = json.loads(response.content)
-    assert "office" in data["props"]["errors"]
+    assert "office" in data["props"]["validation"]["fields"]
 
 
 @pytest.mark.django_db
@@ -208,7 +208,7 @@ def test_onboarding_rejects_inactive_office(client):
     )
     assert response.status_code == 422
     data = json.loads(response.content)
-    assert "office" in data["props"]["errors"]
+    assert "office" in data["props"]["validation"]["fields"]
 
 
 @pytest.mark.django_db
@@ -222,7 +222,7 @@ def test_onboarding_rejects_unknown_office_id(client):
     )
     assert response.status_code == 422
     data = json.loads(response.content)
-    assert "office" in data["props"]["errors"]
+    assert "office" in data["props"]["validation"]["fields"]
 
 
 # ---------------------------------------------------------------------------
