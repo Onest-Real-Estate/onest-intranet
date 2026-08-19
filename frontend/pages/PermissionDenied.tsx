@@ -1,8 +1,9 @@
-import { Head } from "@inertiajs/react";
+import { Head, usePage } from "@inertiajs/react";
 import type { ReactNode } from "react";
 
 import { HubLayout } from "@/components/HubLayout";
 import { PermissionDenied } from "@/components/PermissionDenied";
+import type { PageProps } from "@/types";
 
 /**
  * Inertia page wrapper for `PermissionDenied`, registered so Django can
@@ -10,10 +11,12 @@ import { PermissionDenied } from "@/components/PermissionDenied";
  * `handler403` in config/urls.py.
  */
 export default function PermissionDeniedPage() {
+  const { requestId } = usePage<PageProps>().props;
+
   return (
     <>
       <Head title="Permission denied" />
-      <PermissionDenied />
+      <PermissionDenied requestId={requestId} />
     </>
   );
 }

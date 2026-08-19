@@ -6,30 +6,12 @@ the real enforcement. Permissions are Django auth codenames (e.g.
 ``user.permissions`` by ``web.middleware.InertiaShareMiddleware``.
 """
 
-from functools import wraps
-
-from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from ninja.security import SessionAuth
 
 from apps.audit.models import AuditEvent
 from apps.audit.service import AuditTarget, actor_from_user, log_event
-from apps.user.services.role_assignments import (
-    has_effective_permission,
-    has_effective_permissions,
-)
-
-
-def _has_permissions(user, any_permissions, all_permissions):
-    """True when the user holds every permission in ``all_permissions`` and
-    at least one in ``any_permissions`` (empty tuples are not required)."""
-    has_all = not all_permissions or has_effective_permissions(
-        user, tuple(all_permissions)
-    )
-    has_any = not any_permissions or any(
-        has_effective_permission(user, permission) for permission in any_permissions
-    )
-    return has_all and has_any
+from apps.web.authorization import _has_permissions
 
 
 def permission_required(any_permissions=(), all_permissions=(), login_url=None):
@@ -49,9 +31,11 @@ def permission_required(any_permissions=(), all_permissions=(), login_url=None):
     """
 
     def decorator(view_func):
-        @login_required(login_url=login_url)
-        @wraps(view_func)
         def _wrapped_view(request, *args, **kwargs):
+            if not request.user.is_authenticated:
+                from django.contrib.auth.views import redirect_to_login
+
+                return redirect_to_login(request.get_full_path(), login_url=login_url)
             if not _has_permissions(request.user, any_permissions, all_permissions):
                 log_event(
                     "security.permission.denied",
@@ -72,6 +56,8 @@ def permission_required(any_permissions=(), all_permissions=(), login_url=None):
                 raise PermissionDenied
             return view_func(request, *args, **kwargs)
 
+        _wrapped_view.__name__ = getattr(view_func, "__name__", "_wrapped_view")
+        _wrapped_view.__doc__ = getattr(view_func, "__doc__", None)
         return _wrapped_view
 
     return decorator

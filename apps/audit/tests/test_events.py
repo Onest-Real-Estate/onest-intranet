@@ -34,6 +34,7 @@ from apps.audit.events import (
     registry,
 )
 from apps.audit.models import DomainEvent, EventDelivery
+from apps.audit.replay import system_replay_initiator
 from apps.audit.tasks import (
     MAX_ATTEMPTS,
     _backoff_seconds,
@@ -356,7 +357,7 @@ def test_replay_resets_dead_delivery():
     )
 
     with patch("apps.audit.tasks.dispatch_event.delay") as mock_dispatch:
-        replay_event(str(event.id))
+        replay_event(str(event.id), initiator=system_replay_initiator("test"))
 
     delivery.refresh_from_db()
     assert delivery.status == EventDelivery.Status.PENDING
@@ -369,7 +370,44 @@ def test_replay_unknown_event_logs_and_returns():
     """Replay of a nonexistent event must log an error and not raise."""
     missing_id = str(uuid.uuid4())
     # Should not raise.
-    replay_event(missing_id)
+    replay_event(missing_id, initiator=system_replay_initiator("test"))
+
+
+@pytest.mark.django_db
+def test_replay_denied_when_initiator_loses_permission():
+    from django.contrib.auth.models import Permission
+
+    from apps.user.models import User
+
+    user = User.objects.create_user(email="manager@example.com", profile_completed=True)
+    user.user_permissions.add(Permission.objects.get(codename="can_replay_events"))
+    event = DomainEvent.objects.create(
+        name="user.onboarded",
+        version=1,
+        actor_id=str(user.pk),
+        subject=f"user:{user.pk}",
+        payload={"user_id": user.pk, "email": user.email, "office_id": None},
+        status=DomainEvent.Status.FAILED,
+    )
+    delivery = EventDelivery.objects.create(
+        event=event,
+        consumer="audit.log_event",
+        status=EventDelivery.Status.DEAD,
+        attempts=MAX_ATTEMPTS,
+    )
+    initiator = {
+        "actor_type": "user",
+        "actor_id": str(user.pk),
+        "request_id": "req-lost",
+    }
+    user.user_permissions.clear()
+
+    with patch("apps.audit.tasks.dispatch_event.delay") as mock_dispatch:
+        replay_event(str(event.id), initiator=initiator)
+
+    delivery.refresh_from_db()
+    assert delivery.status == EventDelivery.Status.DEAD
+    mock_dispatch.assert_not_called()
 
 
 # ---------------------------------------------------------------------------

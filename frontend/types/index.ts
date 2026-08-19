@@ -106,6 +106,7 @@ export interface DashboardDocument {
 export interface PageProps {
   user: User | null;
   csrfToken: string;
+  requestId: string;
   [key: string]: unknown;
 }
 

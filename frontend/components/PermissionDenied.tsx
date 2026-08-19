@@ -10,7 +10,7 @@ import { routes } from "@/lib/routes";
  * full-page version for real 403s is registered as an Inertia page in
  * `frontend/pages/PermissionDenied.tsx`.
  */
-export function PermissionDenied() {
+export function PermissionDenied({ requestId }: { requestId?: string }) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-6 px-6 py-20 text-center">
       <ShieldAlert className="size-12 text-destructive" strokeWidth={1.5} aria-hidden />
@@ -19,6 +19,11 @@ export function PermissionDenied() {
         You don't have the required permission to view this page. Contact an
         administrator if you believe this is a mistake.
       </p>
+      {requestId ? (
+        <p className="text-muted-foreground rounded-md border px-3 py-2 text-xs">
+          Request ID: {requestId}
+        </p>
+      ) : null}
       <Button asChild>
         <Link href={routes.dashboard()}>Back to dashboard</Link>
       </Button>

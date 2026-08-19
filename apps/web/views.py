@@ -1,7 +1,7 @@
-from django.contrib.auth.decorators import login_required
 from django.http import Http404
 from inertia import defer, inertia, render
 
+from .authorization import enforce_policy
 from .dashboard import (
     HUB_SECTIONS,
     dashboard_action_items,
@@ -16,7 +16,7 @@ from .dashboard import (
 )
 
 
-@login_required
+@enforce_policy("dashboard")
 @inertia("Dashboard")
 def dashboard(request):
     return {
@@ -32,7 +32,7 @@ def dashboard(request):
     }
 
 
-@login_required
+@enforce_policy("coming_soon")
 @inertia("ComingSoon")
 def coming_soon(request, section: str):
     title = HUB_SECTIONS.get(section)
@@ -49,6 +49,18 @@ def permission_denied(request, exception=None):
     failures. Returns a 403 whether the request is a full page load (HTML
     with data-page) or an Inertia visit (JSON).
     """
-    response = render(request, "PermissionDenied")
+    response = render(
+        request,
+        "PermissionDenied",
+        {"requestId": getattr(request, "audit_request_id", "")},
+    )
     response.status_code = 403
+    return response
+
+
+def not_found(request, exception=None):
+    response = render(
+        request, "NotFound", {"requestId": getattr(request, "audit_request_id", "")}
+    )
+    response.status_code = 404
     return response

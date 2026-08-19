@@ -33,6 +33,8 @@ class AuditContextMiddleware:
         )
         token = set_audit_context(ctx)
         try:
-            return self.get_response(request)
+            response = self.get_response(request)
+            response["X-Request-ID"] = request_id
+            return response
         finally:
             reset_audit_context(token)
