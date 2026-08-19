@@ -4,7 +4,7 @@ The navigation *structure* — labels, icons, order, grouping — lives in
 ``frontend/lib/hub-nav.ts``. This module owns the two facts the client must
 not invent for itself:
 
-* which hub modules are actually built (``HUB_FEATURES``), and
+* which agent and administrative modules are actually built (``HUB_FEATURES``), and
 * which office the signed-in user belongs to (``primary_office_payload``).
 
 Both ride along as Inertia shared props (see ``web.middleware``). Hiding a
@@ -14,14 +14,20 @@ own ``enforce_policy`` entry in ``web.authorization``.
 
 from __future__ import annotations
 
-from typing import Any, TypedDict
+from typing import Any, TypedDict, cast
 
+from apps.user.models import User
+from apps.user.services.role_assignments import get_effective_permissions
 from apps.web.dashboard import HUB_SECTIONS
+from apps.web.operations import OPERATIONS_DESTINATIONS, OPERATIONS_FEATURES
 
-# Keyed by the same slug as ``HUB_SECTIONS`` and the ``coming_soon`` route, so
-# a section has exactly one name across the backend, the URL, and the nav
-# registry. Flip an entry to True in the commit that ships its real route.
-HUB_FEATURES: dict[str, bool] = dict.fromkeys(HUB_SECTIONS, False)
+# Agent keys match ``HUB_SECTIONS``; administrative keys come from the reviewed
+# operations registry. Flip an entry to True only in the commit that ships its
+# live destination. Availability never changes the route's permission policy.
+HUB_FEATURES: dict[str, bool] = {
+    **dict.fromkeys(HUB_SECTIONS, False),
+    **OPERATIONS_FEATURES,
+}
 
 
 class PrimaryOffice(TypedDict):
@@ -30,9 +36,20 @@ class PrimaryOffice(TypedDict):
     regionName: str
 
 
-def hub_feature_states() -> dict[str, bool]:
-    """Explicit availability per hub section — never inferred from the URL."""
-    return dict(HUB_FEATURES)
+def hub_feature_states(user=None) -> dict[str, bool]:
+    """Availability filtered so unauthorized administrative keys are not shared."""
+    states = {section: HUB_FEATURES[section] for section in HUB_SECTIONS}
+    if not getattr(user, "is_authenticated", False):
+        return states
+    permissions = get_effective_permissions(cast(User, user))
+    states.update(
+        {
+            destination.feature: HUB_FEATURES[destination.feature]
+            for destination in OPERATIONS_DESTINATIONS
+            if destination.permission in permissions
+        }
+    )
+    return states
 
 
 def primary_office_payload(user) -> PrimaryOffice | None:
@@ -57,6 +74,6 @@ def primary_office_payload(user) -> PrimaryOffice | None:
 
 def navigation_context(user) -> dict[str, Any]:
     return {
-        "features": hub_feature_states(),
+        "features": hub_feature_states(user),
         "primaryOffice": primary_office_payload(user),
     }

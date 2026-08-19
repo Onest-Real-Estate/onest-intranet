@@ -177,9 +177,6 @@ def get_effective_access(user: User, *, at=None) -> EffectiveAccess:
             region_keys.add(assignment.scope_office.stable_key)
         if assignment.scope_type == ScopeType.OFFICE:
             office_keys.add(assignment.scope_office.stable_key)
-            region = assignment.scope_office.region
-            if region is not None:
-                region_keys.add(region.stable_key)
     if not assignments:
         office = getattr(user, "office", None)
         if ADMIN in role_keys:

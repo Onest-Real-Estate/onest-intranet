@@ -39,6 +39,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
+  isHubNavItemActive,
   type ResolvedHubNavItem,
   resolveHubNav,
   unavailableDescription,
@@ -73,15 +74,11 @@ function roleSummary(
   return `${roleLabel ?? roles[0]} +${roles.length - 1}`;
 }
 
-function isActivePath(current: string, href: string): boolean {
-  return current === href || current.startsWith(`${href}/`);
-}
-
 function NavList({ items, current }: { items: ResolvedHubNavItem[]; current: string }) {
   return (
     <SidebarMenu>
       {items.map((item) => {
-        const active = isActivePath(current, item.href);
+        const active = isHubNavItemActive(item, current);
         const marker = unavailableLabel(item.unavailable);
         const description = unavailableDescription(item);
         const noteId = description ? `hub-nav-${item.key}-note` : undefined;
@@ -130,6 +127,52 @@ function NavList({ items, current }: { items: ResolvedHubNavItem[]; current: str
         );
       })}
     </SidebarMenu>
+  );
+}
+
+function NavGroupItems({
+  items,
+  current,
+  groupKey,
+}: {
+  items: ResolvedHubNavItem[];
+  current: string;
+  groupKey: string;
+}) {
+  if (!items.some((item) => item.subsection)) {
+    return <NavList items={items} current={current} />;
+  }
+
+  const sections: { label: string; items: ResolvedHubNavItem[] }[] = [];
+  for (const item of items) {
+    const label = item.subsection ?? "Other";
+    const currentSection = sections.at(-1);
+    if (currentSection?.label === label) {
+      currentSection.items.push(item);
+    } else {
+      sections.push({ label, items: [item] });
+    }
+  }
+
+  return (
+    <div className="grid gap-2">
+      {sections.map((section) => {
+        const labelId = `hub-nav-${groupKey}-${section.label
+          .toLowerCase()
+          .replaceAll(/[^a-z0-9]+/g, "-")}`;
+        return (
+          <section key={section.label} aria-labelledby={labelId}>
+            <h3
+              id={labelId}
+              className="text-muted-foreground/80 px-2.5 pt-1 pb-1 text-[0.6875rem] font-medium tracking-[0.02em] group-data-[collapsible=icon]:hidden"
+            >
+              {section.label}
+            </h3>
+            <NavList items={section.items} current={current} />
+          </section>
+        );
+      })}
+    </div>
   );
 }
 
@@ -238,9 +281,9 @@ export function HubLayout({ children }: { children: ReactNode }) {
   const role = roleSummary(user?.roles, user?.roleLabel);
 
   return (
-    // A little wider than the 16rem default: "Policies & compliance" carries a
-    // trailing "Soon" marker and still has to fit on one line.
-    <SidebarProvider style={{ "--sidebar-width": "16.5rem" } as CSSProperties}>
+    // Long operational labels carry a trailing availability marker and remain
+    // readable at supported widths without crowding the icon or marker.
+    <SidebarProvider style={{ "--sidebar-width": "17.5rem" } as CSSProperties}>
       {/* First focusable element on the page — before the whole nav list. */}
       <a
         href="#hub-content"
@@ -279,7 +322,11 @@ export function HubLayout({ children }: { children: ReactNode }) {
                   {group.label}
                 </SidebarGroupLabel>
                 <SidebarGroupContent>
-                  <NavList items={group.items} current={current} />
+                  <NavGroupItems
+                    items={group.items}
+                    current={current}
+                    groupKey={group.label.toLowerCase().replaceAll(/[^a-z0-9]+/g, "-")}
+                  />
                 </SidebarGroupContent>
               </SidebarGroup>
             ))}

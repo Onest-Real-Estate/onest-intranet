@@ -138,6 +138,9 @@ logout URLs are exempt.
 
 ## Permissions & roles
 
+The reviewed route-to-permission mapping for the shared administrative navigation
+is documented in [`docs/administrative-navigation.md`](docs/administrative-navigation.md).
+
 Roles are Django **Groups** (`auth.Group`), plus Django's built-in
 `is_superuser` flag for Superadmin. Permissions are Django's `app.codename`
 permissions, granted to groups — members inherit them automatically.

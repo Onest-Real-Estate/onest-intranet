@@ -163,6 +163,25 @@ def test_effective_permissions_union_mixed_roles_and_scopes():
 
 
 @pytest.mark.django_db
+def test_office_assignment_does_not_promote_access_to_the_parent_region():
+    actor = User.objects.create_superuser(email="admin@example.com", password="x")
+    office = assignable_office()
+    manager = User.objects.create_user(email="branch@example.com", office=office)
+    create_role_assignment(
+        actor=actor,
+        target_user=manager,
+        role=BRANCH_MANAGER,
+        scope_type=ScopeType.OFFICE,
+        scope_office=office,
+    )
+
+    access = get_effective_access(manager)
+
+    assert access.office_keys == frozenset({office.stable_key})
+    assert access.region_keys == frozenset()
+
+
+@pytest.mark.django_db
 def test_self_revocation_of_last_management_role_is_blocked():
     office = assignable_office()
     actor = User.objects.create_user(email="manager@example.com", office=office)

@@ -17,6 +17,7 @@ from apps.user.services.role_assignments import (
     has_effective_permission,
     has_effective_permissions,
 )
+from apps.web.operations import OPERATIONS_DESTINATIONS, operations_policy_key
 
 logger = logging.getLogger("apps.authorization")
 
@@ -138,6 +139,21 @@ ROUTE_POLICIES: dict[str, AuthorizationPolicy] = {
         scope_rule="self_only",
     ),
 }
+
+ROUTE_POLICIES.update(
+    {
+        operations_policy_key(destination): AuthorizationPolicy(
+            key=operations_policy_key(destination),
+            access="permission_protected",
+            description=f"Render the {destination.label} administrative destination.",
+            methods=("GET",),
+            route_names=(destination.route_name,),
+            all_permissions=(destination.permission,),
+            scope_rule=destination.scope_rule,
+        )
+        for destination in OPERATIONS_DESTINATIONS
+    }
+)
 
 NON_ROUTE_SURFACES: tuple[AuthorizationPolicy, ...] = (
     AuthorizationPolicy(

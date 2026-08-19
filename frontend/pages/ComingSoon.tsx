@@ -18,15 +18,19 @@ import type { PageProps } from "@/types";
 interface ComingSoonProps extends PageProps {
   title: string;
   section: string;
+  administrative?: boolean;
+  scope?: {
+    level: string;
+    label: string;
+  };
 }
 
 /**
- * Placeholder for the hub sections that have no backend yet. Seven of the
- * eleven nav items land here, so it is the second most visited screen in the
- * product and is written for agents rather than for the team building it.
+ * Placeholder for registered modules that do not have a domain backend yet.
+ * Copy adapts to agent and permission-protected administrative destinations.
  */
 export default function ComingSoon() {
-  const { title } = usePage<ComingSoonProps>().props;
+  const { title, administrative = false, scope } = usePage<ComingSoonProps>().props;
 
   return (
     <div className="flex flex-1 items-center justify-center px-4 py-16">
@@ -40,14 +44,16 @@ export default function ComingSoon() {
             </h1>
           </CardTitle>
           <CardDescription>
-            We&apos;re still building this part of the hub. It isn&apos;t available yet,
-            and nothing you need to act on is hiding here.
+            {administrative
+              ? "This administrative module is registered and protected, but it isn’t enabled yet."
+              : "We’re still building this part of the hub. It isn’t available yet, and nothing you need to act on is hiding here."}
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
           <p className="text-muted-foreground text-sm">
-            Your transactions, schedule, and action items are on the dashboard in the
-            meantime.
+            {administrative
+              ? `Your current administrative access is ${scope?.label ?? "scope-limited"}. No records or counts are exposed while this module is unavailable.`
+              : "Your transactions, schedule, and action items are on the dashboard in the meantime."}
           </p>
           <Button asChild variant="outline" className="w-fit">
             <Link href={routes.dashboard()}>

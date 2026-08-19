@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  HUB_ADMIN_NAV,
   HUB_NAV_GROUPS,
   type HubNavGroup,
   type HubNavItem,
+  isHubNavItemActive,
   type ResolvedHubNavGroup,
   type ResolvedHubNavItem,
   resolveHubNav,
@@ -48,6 +50,14 @@ function features(overrides: HubFeatures = {}): HubFeatures {
 
 function allItems(): HubNavItem[] {
   return HUB_NAV_GROUPS.flatMap((group) => group.items);
+}
+
+function agentItems(): HubNavItem[] {
+  return allItems().filter((item) => !item.key.startsWith("admin-"));
+}
+
+function adminPermissions(): string[] {
+  return HUB_ADMIN_NAV.flatMap((item) => item.permission?.all ?? []);
 }
 
 /**
@@ -105,6 +115,7 @@ describe("HUB_NAV_GROUPS structure", () => {
       "Tools",
       "My office",
       "Directory",
+      "Administration",
     ]);
   });
 
@@ -131,6 +142,24 @@ describe("HUB_NAV_GROUPS structure", () => {
       ],
       "My office": ["Office info", "Office resources", "Office inventory"],
       Directory: ["Agent directory"],
+      Administration: [
+        "Users",
+        "New Agent List",
+        "Add New User",
+        "Assign User Roles",
+        "Agent Contracts",
+        "Transactions",
+        "Inventory",
+        "Reservations",
+        "Announcements",
+        "Training",
+        "Documents",
+        "Compliance",
+        "Feedback",
+        "Platform Tasks",
+        "Offices",
+        "IT Support",
+      ],
     });
   });
 
@@ -145,6 +174,22 @@ describe("HUB_NAV_GROUPS structure", () => {
       routes.dashboard(),
       routes.profile(),
       ...Object.keys(features()).map((section) => routes.coming_soon(section)),
+      routes.admin_users(),
+      routes.admin_new_agents(),
+      routes.admin_add_user(),
+      routes.admin_assign_roles(),
+      routes.admin_agent_contracts(),
+      routes.admin_transactions(),
+      routes.admin_inventory(),
+      routes.admin_reservations(),
+      routes.admin_announcements(),
+      routes.admin_training(),
+      routes.admin_documents(),
+      routes.admin_compliance(),
+      routes.admin_feedback(),
+      routes.admin_platform_tasks(),
+      routes.admin_offices(),
+      routes.admin_it_support(),
     ]);
     for (const item of allItems()) {
       expect(known).toContain(item.href);
@@ -153,7 +198,7 @@ describe("HUB_NAV_GROUPS structure", () => {
 
   it("routes every unbuilt item through the coming_soon page, never a 404", () => {
     for (const item of allItems()) {
-      if (item.feature) {
+      if (item.feature && !item.key.startsWith("admin-")) {
         expect(item.href).toBe(routes.coming_soon(item.feature));
       }
     }
@@ -184,7 +229,7 @@ describe("resolveHubNav", () => {
       "Directory",
     ]);
     expect(groups.flatMap((group) => group.items).map((item) => item.title)).toEqual(
-      allItems().map((item) => item.title),
+      agentItems().map((item) => item.title),
     );
   });
 
@@ -196,7 +241,7 @@ describe("resolveHubNav", () => {
     const groups = resolveHubNav(
       user({
         roles: ["Branch Managers", "Users"],
-        permissions: ["user.view_user", "user.change_user"],
+        permissions: adminPermissions(),
       }),
       features(),
       office,
@@ -246,6 +291,134 @@ describe("resolveHubNav", () => {
     );
     expect(groups.map((group) => group.label)).toEqual(["Open", "Restricted"]);
     expect(groups[0].items[0].title).toBe("Open item");
+  });
+});
+
+describe("administrative navigation", () => {
+  it("declares one distinct minimum permission for every destination", () => {
+    expect(
+      Object.fromEntries(
+        HUB_ADMIN_NAV.map((item) => [item.title, item.permission?.all?.[0]]),
+      ),
+    ).toEqual({
+      Users: "web.view_users",
+      "New Agent List": "web.view_new_agents",
+      "Add New User": "web.add_users",
+      "Assign User Roles": "web.assign_user_roles",
+      "Agent Contracts": "web.view_agent_contracts",
+      Transactions: "web.view_transactions",
+      Inventory: "web.view_inventory",
+      Reservations: "web.view_reservations",
+      Announcements: "web.manage_announcements",
+      Training: "web.manage_training",
+      Documents: "web.manage_documents",
+      Compliance: "web.view_compliance",
+      Feedback: "web.view_feedback",
+      "Platform Tasks": "web.view_platform_tasks",
+      Offices: "web.manage_offices",
+      "IT Support": "web.view_it_support",
+    });
+    expect(new Set(adminPermissions()).size).toBe(16);
+  });
+
+  it("breaks Administration into ordered operational subsections", () => {
+    expect(
+      Object.fromEntries(
+        ["People", "Operations", "Content", "Governance & support"].map(
+          (subsection) => [
+            subsection,
+            HUB_ADMIN_NAV.filter((item) => item.subsection === subsection).map(
+              (item) => item.title,
+            ),
+          ],
+        ),
+      ),
+    ).toEqual({
+      People: [
+        "Users",
+        "New Agent List",
+        "Add New User",
+        "Assign User Roles",
+        "Agent Contracts",
+      ],
+      Operations: ["Transactions", "Inventory", "Reservations"],
+      Content: ["Announcements", "Training", "Documents"],
+      "Governance & support": [
+        "Compliance",
+        "Feedback",
+        "Platform Tasks",
+        "Offices",
+        "IT Support",
+      ],
+    });
+  });
+
+  it.each([
+    ["Branch admin", ["web.view_users"], ["Users"]],
+    ["Regional coordinator", ["web.view_transactions"], ["Transactions"]],
+    ["Compliance", ["web.view_compliance"], ["Compliance"]],
+    ["Accountant", ["web.view_transactions"], ["Transactions"]],
+    ["Marketing", ["web.manage_announcements"], ["Announcements"]],
+    ["IT support", ["web.view_it_support"], ["IT Support"]],
+  ])("shows only the %s specialty destinations", (_persona, permissions, labels) => {
+    const groups = resolveHubNav(user({ permissions }), features(), office);
+    expect(
+      groups
+        .find((group) => group.label === "Administration")
+        ?.items.map((item) => item.title),
+    ).toEqual(labels);
+  });
+
+  it("does not render an empty Administration heading", () => {
+    const groups = resolveHubNav(user(), features(), office);
+    expect(groups.some((group) => group.label === "Administration")).toBe(false);
+  });
+
+  it("keeps unavailable modules visible only after permission succeeds", () => {
+    const groups = resolveHubNav(
+      user({ permissions: ["web.view_compliance"] }),
+      features(),
+      office,
+    );
+    const compliance = itemByKey(groups, "admin-compliance");
+    expect(compliance.unavailable).toBe("feature");
+    expect(compliance.href).toBe(routes.admin_compliance());
+    expect(unavailableDescription(compliance)).toBe("Compliance is not available yet");
+  });
+
+  it("keeps list and detail routes active without activating create", () => {
+    const users = HUB_ADMIN_NAV.find((item) => item.key === "admin-users");
+    const addUser = HUB_ADMIN_NAV.find((item) => item.key === "admin-add-user");
+    expect(users).toBeDefined();
+    expect(addUser).toBeDefined();
+    if (!users || !addUser) {
+      return;
+    }
+    expect(isHubNavItemActive(users, "/operations/users/42")).toBe(true);
+    expect(isHubNavItemActive(users, "/operations/users/new")).toBe(false);
+    expect(isHubNavItemActive(addUser, "/operations/users/new/confirm")).toBe(true);
+    expect(isHubNavItemActive(users, "/operations/users?status=active")).toBe(true);
+  });
+
+  it("deduplicates the combined agent and administrative registry", () => {
+    const groups = resolveHubNav(
+      user({
+        roles: ["Admins", "Users"],
+        roleLabel: "Admin",
+        permissions: adminPermissions(),
+      }),
+      features(),
+      office,
+    );
+    const keys = groups.flatMap((group) => group.items).map((item) => item.key);
+    expect(new Set(keys).size).toBe(keys.length);
+    expect(groups.map((group) => group.label)).toEqual([
+      "General",
+      "Tools",
+      "My office",
+      "Directory",
+      "Administration",
+    ]);
   });
 });
 

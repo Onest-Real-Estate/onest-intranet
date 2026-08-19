@@ -15,6 +15,7 @@ from apps.web.navigation import (
     hub_feature_states,
     primary_office_payload,
 )
+from apps.web.operations import OPERATIONS_FEATURES
 
 
 def shared_props(client):
@@ -43,7 +44,7 @@ def branch_office():
 
 
 def test_every_hub_section_declares_its_availability():
-    assert set(HUB_FEATURES) == set(HUB_SECTIONS)
+    assert set(HUB_FEATURES) == set(HUB_SECTIONS) | set(OPERATIONS_FEATURES)
 
 
 def test_no_hub_module_is_enabled_yet():
@@ -58,8 +59,19 @@ def test_feature_states_are_a_copy_callers_cannot_corrupt():
     assert HUB_FEATURES["my-contract"] is False
 
 
+@pytest.mark.django_db
+def test_unauthorized_administrative_feature_keys_are_not_shared(client):
+    account = agent()
+    client.force_login(account)
+
+    props = shared_props(client)
+
+    assert props["features"] == dict.fromkeys(HUB_SECTIONS, False)
+    assert not any(key.startswith("admin-") for key in props["features"])
+
+
 def test_every_unbuilt_section_has_a_reachable_placeholder_route():
-    for section in HUB_FEATURES:
+    for section in HUB_SECTIONS:
         try:
             reverse("coming_soon", args=[section])
         except NoReverseMatch:  # pragma: no cover - guards a registry typo
@@ -176,7 +188,7 @@ def test_a_manager_who_is_also_an_agent_gets_one_set_of_context(client):
     props = shared_props(client)
     assert props["user"]["roles"] == [BRANCH_MANAGER, AGENT]
     assert props["primaryOffice"]["id"] == office.pk
-    assert props["features"] == dict.fromkeys(HUB_SECTIONS, False)
+    assert props["features"] == hub_feature_states(user)
 
 
 @pytest.mark.django_db
@@ -194,7 +206,7 @@ def test_unauthenticated_visitors_get_no_office_context(client):
 
 @pytest.mark.django_db
 def test_hub_destinations_reject_anonymous_direct_access(client):
-    for section in HUB_FEATURES:
+    for section in HUB_SECTIONS:
         response = client.get(reverse("coming_soon", args=[section]))
         assert response.status_code == 302
         assert response.url.startswith(reverse("login"))

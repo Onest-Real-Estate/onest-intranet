@@ -99,7 +99,7 @@ class InertiaShareMiddleware:
             csrfToken=lambda: get_token(request),
             requestId=lambda: getattr(request, "audit_request_id", ""),
             # Nav feature state and office context — see web.navigation.
-            features=hub_feature_states,
+            features=lambda: hub_feature_states(request.user),
             primaryOffice=lambda: primary_office_payload(request.user),
         )
         return self.get_response(request)

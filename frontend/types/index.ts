@@ -112,8 +112,8 @@ export interface PrimaryOffice {
 }
 
 /**
- * Availability per hub section, keyed by the section slug used in the
- * `coming_soon` URL. Shared by web.navigation.HUB_FEATURES.
+ * Availability per agent or administrative module, keyed by the stable item
+ * slug in the shared navigation registries. Shared by web.navigation.HUB_FEATURES.
  */
 export type HubFeatures = Record<string, boolean>;
 
