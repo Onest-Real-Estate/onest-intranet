@@ -1,5 +1,5 @@
 import { Head, usePage } from "@inertiajs/react";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Clock3 } from "lucide-react";
 
 import { MicrosoftLogo } from "@/components/MicrosoftLogo";
 import { Button } from "@/components/ui/button";
@@ -10,8 +10,12 @@ import onestLogo from "@/images/onest.png";
 import { routes } from "@/lib/routes";
 import type { PageProps } from "@/types";
 
+interface LoginPageProps extends PageProps {
+  sessionExpired: boolean;
+}
+
 export default function Login() {
-  const { csrfToken } = usePage<PageProps>().props;
+  const { csrfToken, sessionExpired } = usePage<LoginPageProps>().props;
 
   return (
     <div className="bg-background grid min-h-svh lg:grid-cols-2">
@@ -44,6 +48,20 @@ export default function Login() {
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-6">
+            {sessionExpired ? (
+              <div
+                role="status"
+                className="bg-muted flex items-start gap-3 rounded-lg border px-3.5 py-3 text-left"
+              >
+                <Clock3 aria-hidden className="text-primary mt-0.5 size-4" />
+                <div>
+                  <p className="text-sm font-semibold">Your session expired</p>
+                  <p className="text-muted-foreground mt-0.5 text-xs leading-5">
+                    Sign in again to continue securely.
+                  </p>
+                </div>
+              </div>
+            ) : null}
             {/* Full page POST — the OAuth handshake redirects to Microsoft. */}
             <form method="post" action={routes.microsoft_login()}>
               <input type="hidden" name="csrfmiddlewaretoken" value={csrfToken} />

@@ -37,17 +37,21 @@ class PrimaryOffice(TypedDict):
     regionName: str
 
 
-def hub_feature_states(user=None) -> dict[str, bool]:
+def hub_feature_states(user=None, *, permissions=None) -> dict[str, bool]:
     """Availability filtered so unauthorized administrative keys are not shared."""
     states = {section: HUB_FEATURES[section] for section in HUB_SECTIONS}
     if not getattr(user, "is_authenticated", False):
         return states
-    permissions = get_effective_permissions(cast(User, user))
+    effective_permissions = (
+        get_effective_permissions(cast(User, user))
+        if permissions is None
+        else permissions
+    )
     states.update(
         {
             destination.feature: HUB_FEATURES[destination.feature]
             for destination in OPERATIONS_DESTINATIONS
-            if destination.permission in permissions
+            if destination.permission in effective_permissions
         }
     )
     return states

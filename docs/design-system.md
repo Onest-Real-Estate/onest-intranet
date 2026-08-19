@@ -51,7 +51,7 @@ Use sentence case. Reserve all caps for the compact ONEST wordmark. Keep paragra
 
 ## Spacing and layout
 
-Use Tailwind's 4 px spacing scale. The default gaps are 8 px for tightly related controls, 16 px for component content, 24 px between sections, and 40–64 px for page-level separation. The dashboard is the reference implementation: 40 px between bands, 24 px within a band, 12 px between a section heading and its content — the contrast between those intervals is what creates rhythm. Use the shared `page-shell` utility for application pages; it provides a `max-w-6xl` centered container and responsive gutters. A single-column form page sets its own narrower width instead, so the page header stays aligned with the form it introduces rather than floating out at the gutter (see `pages/Profile.tsx`).
+Use Tailwind's 4 px spacing scale. The default gaps are 8 px for tightly related controls, 16 px for component content, 24 px between sections, and 40–64 px for page-level separation. The dashboard is the reference implementation: 40 px between bands, 24 px within a band, 12 px between a section heading and its content — the contrast between those intervals is what creates rhythm. `HubLayout` owns application-page width and responsive gutters through its `standard`, `wide`, and `focused` variants; pages must not add a second outer `page-shell`. See [`application-shell.md`](application-shell.md) for the layout contract.
 
 The workspace panel is flush: it runs to the top and right edges of the window with no margin, radius, or shadow of its own. The sidebar's right border is the only seam between navigation and content — a floating, rounded content card wastes edge space and reads as a demo rather than an application.
 

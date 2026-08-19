@@ -1,8 +1,8 @@
 import { Head, usePage } from "@inertiajs/react";
-import type { ReactNode } from "react";
 
 import { HubLayout } from "@/components/HubLayout";
 import { PermissionDenied } from "@/components/PermissionDenied";
+import { routes } from "@/lib/routes";
 import type { PageProps } from "@/types";
 
 /**
@@ -21,4 +21,14 @@ export default function PermissionDeniedPage() {
   );
 }
 
-PermissionDeniedPage.layout = (page: ReactNode) => <HubLayout>{page}</HubLayout>;
+PermissionDeniedPage.layout = () =>
+  [
+    HubLayout,
+    {
+      context: {
+        title: "Permission denied",
+        back: { label: "Back to dashboard", href: routes.dashboard() },
+      },
+      variant: "focused",
+    },
+  ] as const;

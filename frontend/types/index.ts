@@ -117,12 +117,25 @@ export interface PrimaryOffice {
  */
 export type HubFeatures = Record<string, boolean>;
 
+export interface ShellSharedProps {
+  /** Changes whenever roles, permissions, or authorization scope changes. */
+  authorizationVersion: string;
+  help: {
+    /** Backend-validated HTTPS destination; null keeps the entry point disabled. */
+    url: string | null;
+  };
+  session: {
+    authenticated: boolean;
+  };
+}
+
 export interface PageProps {
   user: User | null;
   csrfToken: string;
   requestId: string;
   features: HubFeatures;
   primaryOffice: PrimaryOffice | null;
+  shell: ShellSharedProps;
   [key: string]: unknown;
 }
 

@@ -1,5 +1,4 @@
 import { Head, usePage } from "@inertiajs/react";
-import type { ReactNode } from "react";
 import {
   FormErrorSummary,
   PageHeader,
@@ -36,7 +35,7 @@ export default function Profile() {
   return (
     // One column, one width: the page header sits directly above the form it
     // introduces rather than floating out at the page gutter.
-    <div className="mx-auto grid w-full max-w-2xl gap-6 px-4 py-8 sm:px-6 lg:py-10">
+    <div className="grid gap-6">
       <Head title="Your profile" />
       <PageHeader
         title="Your profile"
@@ -72,4 +71,17 @@ export default function Profile() {
   );
 }
 
-Profile.layout = (page: ReactNode) => <HubLayout>{page}</HubLayout>;
+Profile.layout = () =>
+  [
+    HubLayout,
+    {
+      context: {
+        title: "Your profile",
+        breadcrumbs: [
+          { label: "Dashboard", href: routes.dashboard() },
+          { label: "Your profile", href: routes.profile() },
+        ],
+      },
+      variant: "focused",
+    },
+  ] as const;
