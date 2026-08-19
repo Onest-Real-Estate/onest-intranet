@@ -1,5 +1,6 @@
 const URLS = {
     'coming_soon': (section: string) => `/hub/${section}`,
+    'design_system': () => `/design-system`,
     'dashboard': () => `/dashboard`,
     'profile_submit': () => `/profile/submit`,
     'profile': () => `/profile`,

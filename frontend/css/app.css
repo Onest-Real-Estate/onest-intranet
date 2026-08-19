@@ -17,6 +17,14 @@
   --brand-ink: #0d0d0d;
 
   --radius: 0.75rem;
+  --radius-card: 0.875rem;
+  --motion-fast: 150ms;
+  --motion-base: 200ms;
+  --motion-slow: 280ms;
+  --ease-standard: cubic-bezier(0.16, 1, 0.3, 1);
+  --elevation-card: 0 4px 12px oklch(0.2 0.01 72 / 4%);
+  --elevation-card-hover: 0 10px 28px oklch(0.2 0.01 72 / 8%);
+  --elevation-popover: 0 18px 48px oklch(0.16 0.01 72 / 14%);
   --background: oklch(0.985 0.006 80);
   --foreground: oklch(0.22 0.018 72);
   --card: oklch(1 0 0);
@@ -43,6 +51,7 @@
   --info: oklch(0.52 0.13 245);
   --info-foreground: oklch(0.99 0 0);
   --border: oklch(0.89 0.014 78);
+  --border-strong: oklch(0.78 0.02 76);
   --input: oklch(0.86 0.018 78);
   --ring: oklch(0.61 0.12 76);
   --chart-1: oklch(0.63 0.14 77);
@@ -91,6 +100,7 @@
   --info: oklch(0.7 0.12 245);
   --info-foreground: oklch(0.17 0.02 245);
   --border: oklch(1 0 0 / 12%);
+  --border-strong: oklch(1 0 0 / 22%);
   --input: oklch(1 0 0 / 16%);
   --ring: oklch(0.7 0.12 78);
   --chart-1: oklch(0.72 0.13 78);
@@ -137,6 +147,7 @@
   --color-info: var(--info);
   --color-info-foreground: var(--info-foreground);
   --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
   --color-input: var(--input);
   --color-ring: var(--ring);
   --color-chart-1: var(--chart-1);
@@ -157,6 +168,9 @@
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
   --radius-2xl: calc(var(--radius) + 8px);
+  --shadow-card: var(--elevation-card);
+  --shadow-card-hover: var(--elevation-card-hover);
+  --shadow-popover: var(--elevation-popover);
 }
 
 @layer base {
@@ -233,9 +247,40 @@
   }
 }
 
+@keyframes dialog-overlay-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes dialog-overlay-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes dialog-content-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% + 8px)) scale(0.985);
+  }
+}
+
 @layer utilities {
   .arrive {
-    animation: arrive 240ms cubic-bezier(0.16, 1, 0.3, 1);
+    animation: arrive 240ms var(--ease-standard);
+  }
+
+  .animate-dialog-overlay-in {
+    animation: dialog-overlay-in var(--motion-base) var(--ease-standard);
+  }
+
+  .animate-dialog-overlay-out {
+    animation: dialog-overlay-out var(--motion-fast) ease-in;
+  }
+
+  .animate-dialog-content {
+    animation: dialog-content-in var(--motion-base) var(--ease-standard);
   }
 
   .brand-text {

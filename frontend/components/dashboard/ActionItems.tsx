@@ -1,7 +1,12 @@
-import { Clock, ListTodo } from "lucide-react";
+import { Clock } from "lucide-react";
 import { useState } from "react";
-import { IconWell } from "@/components/IconWell";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
+import {
+  PanelHeader,
+  SurfaceCard,
+  SurfaceCardContent,
+  SurfaceCardMeta,
+} from "@/components/design-system/surface-card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { DashboardActionItems } from "@/types";
@@ -13,30 +18,22 @@ export function ActionItems({ data }: { data: DashboardActionItems }) {
   const remaining = data.items.filter((item) => !done[item.id]).length;
 
   return (
-    <Card className="arrive">
-      <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle asChild className="flex items-center gap-2">
-          <h2>
-            <IconWell
-              icon={ListTodo}
-              tone="muted"
-              className="size-8"
-              iconClassName="size-4"
-            />
-            Action items
-          </h2>
-        </CardTitle>
-        <span className="bg-muted text-muted-foreground shrink-0 rounded-full px-2 py-0.5 text-xs tabular-nums">
-          {remaining} of {data.total} open
-        </span>
-      </CardHeader>
-      <CardContent className="grid gap-3">
+    <SurfaceCard className="arrive">
+      <PanelHeader
+        title="Action items"
+        meta={
+          <SurfaceCardMeta>
+            {remaining} of {data.total} open
+          </SurfaceCardMeta>
+        }
+      />
+      <SurfaceCardContent className="grid gap-2">
         {data.items.map((item) => {
           const checked = Boolean(done[item.id]);
           return (
             <div
               key={item.id}
-              className="flex items-start gap-3 rounded-lg border p-3 transition-opacity"
+              className="hover:bg-muted/40 flex items-start gap-3 rounded-lg border px-3 py-2.5 transition-colors"
               data-done={checked || undefined}
             >
               <Checkbox
@@ -57,8 +54,8 @@ export function ActionItems({ data }: { data: DashboardActionItems }) {
                 <span
                   className={
                     item.late && !checked
-                      ? "text-destructive flex items-center gap-1.5 text-xs"
-                      : "text-muted-foreground flex items-center gap-1.5 text-xs"
+                      ? "text-destructive mt-0.5 flex items-center gap-1.5 text-xs font-medium"
+                      : "text-muted-foreground mt-0.5 flex items-center gap-1.5 text-xs"
                   }
                 >
                   <Clock className="size-3.5" strokeWidth={1.5} aria-hidden />
@@ -68,22 +65,20 @@ export function ActionItems({ data }: { data: DashboardActionItems }) {
             </div>
           );
         })}
-      </CardContent>
-    </Card>
+      </SurfaceCardContent>
+    </SurfaceCard>
   );
 }
 
 export function ActionItemsSkeleton() {
   return (
-    <Card>
-      <CardHeader>
-        <Skeleton className="h-5 w-28" />
-      </CardHeader>
-      <CardContent className="grid gap-3">
+    <SurfaceCard>
+      <PanelHeader title="Action items" />
+      <SurfaceCardContent className="grid gap-2">
         <Skeleton className="h-16 w-full" />
         <Skeleton className="h-16 w-full" />
         <Skeleton className="h-16 w-full" />
-      </CardContent>
-    </Card>
+      </SurfaceCardContent>
+    </SurfaceCard>
   );
 }

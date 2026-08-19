@@ -121,6 +121,14 @@ ROUTE_POLICIES: dict[str, AuthorizationPolicy] = {
         route_names=("dashboard",),
         scope_rule="self_only",
     ),
+    "design_system": AuthorizationPolicy(
+        key="design_system",
+        access="authenticated",
+        description="Render the internal ONEST component catalog.",
+        methods=("GET",),
+        route_names=("design_system",),
+        scope_rule="self_only",
+    ),
     "coming_soon": AuthorizationPolicy(
         key="coming_soon",
         access="authenticated",

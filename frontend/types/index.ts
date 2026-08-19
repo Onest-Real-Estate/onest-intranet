@@ -50,7 +50,8 @@ export interface DashboardTransaction {
   type: string;
   stage: string;
   closing: string;
-  status: "on_track" | "action_needed";
+  /** Raw backend code; rendered only through an explicit presentation adapter. */
+  status: string;
 }
 
 export interface DashboardTraining {
