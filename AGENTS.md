@@ -67,6 +67,7 @@ frontend/components/ui/    shadcn/ui primitives — regenerate, don't hand-edit
 frontend/lib/      routes.ts, permissions.ts, hub-nav.ts, utils.ts
 frontend/types/    index.ts (hand-written props) · routes.ts (GENERATED)
 docs/design-system.md  Color/type/spacing contract for all UI work
+docs/dashboard-metrics.md  Metric registry: permissions, scope, calculations
 DESIGN.md          Raw design tokens (Material-style palette export)
 ```
 

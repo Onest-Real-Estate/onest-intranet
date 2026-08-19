@@ -26,3 +26,24 @@ class OperationsPermission(models.Model):
             ("manage_offices", _("Can manage scoped offices")),
             ("view_it_support", _("Can view scoped IT support requests")),
         )
+
+
+class DashboardMetricPermission(models.Model):
+    """Permission anchor for dashboard metrics whose domain models are pending.
+
+    ``OperationsPermission`` gates administrative *destinations*. These gate
+    dashboard *figures*, which are a different grant: every agent may read
+    their own pipeline, while only managers may read a team aggregate. Keeping
+    them apart means revoking one never silently widens the other.
+    """
+
+    class Meta:
+        managed = False
+        default_permissions = ()
+        permissions = (
+            ("view_own_transactions", _("Can view own transaction metrics")),
+            ("view_own_tasks", _("Can view own task metrics")),
+            ("view_own_commission", _("Can view own commission metrics")),
+            ("view_own_leads", _("Can view own lead metrics")),
+            ("view_office_tasks", _("Can view scoped team task metrics")),
+        )

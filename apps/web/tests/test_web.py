@@ -8,6 +8,7 @@ from django.contrib.auth.models import Group, Permission
 from django.urls import reverse
 
 from apps.user.models import User
+from apps.user.roles import AGENT
 from apps.user.services.role_assignments import get_effective_access
 
 
@@ -142,26 +143,28 @@ def test_dashboard_defers_widget_payloads_on_first_load(client):
     client.force_login(user)
     response = client.get(reverse("dashboard"), HTTP_X_INERTIA="true")
     data = json.loads(response.content)
-    assert "stats" not in data["props"]
+    assert "metrics" not in data["props"]
     assert "transactions" not in data["props"]
-    assert data["deferredProps"]["stats"] == ["stats"]
+    assert data["deferredProps"]["metrics"] == ["metrics"]
     assert "quickApps" in data["deferredProps"]["pipeline"]
     assert "schedule" in data["deferredProps"]["widgets"]
 
 
 @pytest.mark.django_db
-def test_dashboard_partial_reload_returns_deferred_stats(client):
+def test_dashboard_partial_reload_returns_deferred_metrics(client):
     user = User.objects.create_user(email="alice@example.com", profile_completed=True)
+    user.groups.add(Group.objects.get(name=AGENT))
     client.force_login(user)
     response = client.get(
         reverse("dashboard"),
         HTTP_X_INERTIA="true",
-        HTTP_X_INERTIA_PARTIAL_DATA="stats",
+        HTTP_X_INERTIA_PARTIAL_DATA="metrics",
         HTTP_X_INERTIA_PARTIAL_COMPONENT="Dashboard",
     )
     data = json.loads(response.content)
-    assert data["props"]["stats"]["activeTransactions"]["value"] == "6"
-    assert "commissionYtd" in data["props"]["stats"]
+    groups = data["props"]["metrics"]["groups"]
+    assert [group["key"] for group in groups] == ["myPipeline", "myWork"]
+    assert data["props"]["metrics"]["scope"]["level"] == "self"
 
 
 @pytest.mark.django_db

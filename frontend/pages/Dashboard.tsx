@@ -13,13 +13,13 @@ import {
   MarketSnapshot,
   MarketSnapshotSkeleton,
 } from "@/components/dashboard/MarketSnapshot";
+import { MetricCards, MetricCardsSkeleton } from "@/components/dashboard/MetricCards";
 import { MyDay, MyDaySkeleton } from "@/components/dashboard/MyDay";
 import { QuickApps, QuickAppsSkeleton } from "@/components/dashboard/QuickApps";
 import {
   QuickDocuments,
   QuickDocumentsSkeleton,
 } from "@/components/dashboard/QuickDocuments";
-import { StatCards, StatCardsSkeleton } from "@/components/dashboard/StatCards";
 import {
   TrainingResources,
   TrainingResourcesSkeleton,
@@ -31,7 +31,7 @@ import type { DashboardPageProps } from "@/types";
 export default function Dashboard() {
   const {
     user,
-    stats,
+    metrics,
     quickApps,
     announcements,
     transactions,
@@ -58,8 +58,8 @@ export default function Dashboard() {
           launchers are one thought, so they sit a section apart (24px) rather
           than a page apart. */}
       <div className="flex flex-col gap-6">
-        <Deferred data="stats" fallback={<StatCardsSkeleton />}>
-          {stats ? <StatCards stats={stats} /> : null}
+        <Deferred data="metrics" fallback={<MetricCardsSkeleton />}>
+          {metrics ? <MetricCards metrics={metrics} /> : null}
         </Deferred>
         <Deferred data="quickApps" fallback={<QuickAppsSkeleton />}>
           {quickApps ? <QuickApps apps={quickApps} /> : null}

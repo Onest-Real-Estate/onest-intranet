@@ -3,6 +3,10 @@
 These are stand-ins until transactions, calendar, news, and documents have
 real models. Loaders are used with ``inertia.defer`` so the hub chrome paints
 before this data arrives.
+
+The headline figures are *not* here: they come from the reviewed registry in
+``web.metrics``, which reports an unconnected source module as unavailable
+rather than inventing a number a leader might act on.
 """
 
 from __future__ import annotations
@@ -35,32 +39,6 @@ def _maybe_delay() -> None:
     """
     if settings.DEBUG and not os.environ.get("PYTEST_CURRENT_TEST"):
         time.sleep(0.35)
-
-
-def dashboard_stats() -> dict[str, Any]:
-    _maybe_delay()
-    return {
-        "activeTransactions": {
-            "value": "6",
-            "hint": "2 require attention",
-            "tone": "alert",
-        },
-        "upcomingClosings": {
-            "value": "3",
-            "hint": "Next 30 days",
-            "tone": "default",
-        },
-        "pendingTasks": {
-            "value": "4",
-            "hint": "2 due this week",
-            "tone": "warning",
-        },
-        "commissionYtd": {
-            "value": "$48,750",
-            "hint": "+12.4% vs last year",
-            "tone": "success",
-        },
-    }
 
 
 def dashboard_quick_apps() -> list[dict[str, str]]:
