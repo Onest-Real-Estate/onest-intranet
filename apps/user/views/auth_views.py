@@ -11,7 +11,8 @@ from inertia import inertia, render
 from inertia.http import clear_history
 
 from ..forms import ProfileForm, form_errors, profile_page_props
-from ..models import User
+from ..models import User, UserRoleAssignment
+from ..roles import AGENT, ScopeType
 
 __all__ = [
     "login_page",
@@ -46,6 +47,28 @@ _PROTECTED_FIELDS = frozenset(
 
 def _has_protected_field(request: HttpRequest) -> bool:
     return bool(_PROTECTED_FIELDS & set(request.POST.keys()))
+
+
+def _ensure_default_agent_assignment(user: User) -> None:
+    if user.office is None:
+        return
+    if UserRoleAssignment.objects.filter(
+        user=user,
+        role=AGENT,
+        scope_type=ScopeType.OFFICE,
+        scope_office=user.office,
+        status__in=["scheduled", "active"],
+    ).exists():
+        return
+    assignment = UserRoleAssignment(
+        user=user,
+        role=AGENT,
+        scope_type=ScopeType.OFFICE,
+        scope_office=user.office,
+    )
+    assignment.refresh_status()
+    assignment.full_clean()
+    assignment.save()
 
 
 @inertia("Login")
@@ -121,6 +144,7 @@ def onboarding_submit(request: HttpRequest):
         saved_user.profile_completed = True
         saved_user.profile_completed_at = timezone.now()
         saved_user.save()
+        _ensure_default_agent_assignment(saved_user)
         log_model_change(
             "user.onboarding.completed",
             actor=actor_from_user(user),
@@ -210,6 +234,7 @@ def profile_submit(request: HttpRequest):
 
     form = ProfileForm(request.POST, request.FILES, instance=user)
     if form.is_valid():
-        form.save()
+        saved_user = form.save()
+        _ensure_default_agent_assignment(saved_user)
         return redirect("profile")
     return _render_profile_form(request, component="Profile", form=form, status=422)

@@ -2,6 +2,7 @@ from django.middleware.csrf import get_token
 from inertia import share
 
 from apps.user.roles import ordered_role_names, primary_role_label
+from apps.user.services.role_assignments import get_effective_permissions
 
 
 class InertiaShareMiddleware:
@@ -15,7 +16,7 @@ class InertiaShareMiddleware:
             "email": user.email,
             "name": user.display_name or user.get_full_name() or user.email,
             # Django auth permission codenames, e.g. "user.view_user".
-            "permissions": sorted(user.get_all_permissions()),
+            "permissions": sorted(get_effective_permissions(user)),
             # Role (Django group) names, highest-priority first.
             "roles": ordered_role_names(user),
             "roleLabel": primary_role_label(user),

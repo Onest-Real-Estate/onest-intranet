@@ -6,6 +6,7 @@ from django.db.models import Q
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
+from .roles import ROLE_BY_KEY, ScopeType, is_valid_scope_type
 from .us import (
     US_STATE_CHOICES,
     US_STATE_CODES,
@@ -494,3 +495,194 @@ class User(AbstractUser):
             errors["office"] = _("Pick an active office from the locations we serve.")
         if errors:
             raise ValidationError(errors)
+
+
+class UserRoleAssignment(models.Model):
+    class Status(models.TextChoices):
+        SCHEDULED = "scheduled", _("Scheduled")
+        ACTIVE = "active", _("Active")
+        EXPIRED = "expired", _("Expired")
+        REVOKED = "revoked", _("Revoked")
+
+    user = models.ForeignKey(
+        "User",
+        verbose_name=_("user"),
+        related_name="role_assignments",
+        on_delete=models.PROTECT,
+    )
+    role = models.CharField(_("role"), max_length=64)
+    scope_type = models.CharField(
+        _("scope type"), max_length=32, choices=ScopeType.CHOICES
+    )
+    scope_office = models.ForeignKey(
+        Office,
+        verbose_name=_("scope office"),
+        related_name="role_assignments",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+    )
+    status = models.CharField(
+        _("status"),
+        max_length=16,
+        choices=Status.choices,
+        default=Status.ACTIVE,
+    )
+    starts_at = models.DateTimeField(_("starts at"), null=True, blank=True)
+    ends_at = models.DateTimeField(_("ends at"), null=True, blank=True)
+    assigned_by = models.ForeignKey(
+        "User",
+        verbose_name=_("assigned by"),
+        related_name="granted_role_assignments",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+    )
+    revoked_by = models.ForeignKey(
+        "User",
+        verbose_name=_("revoked by"),
+        related_name="revoked_role_assignments",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+    )
+    revoked_at = models.DateTimeField(_("revoked at"), null=True, blank=True)
+    business_reason = models.TextField(_("business reason"), blank=True)
+    created_at = models.DateTimeField(_("created at"), default=timezone.now)
+    updated_at = models.DateTimeField(_("updated at"), auto_now=True)
+
+    class Meta:
+        ordering = ["user__email", "role", "-created_at"]
+        verbose_name = _("user role assignment")
+        verbose_name_plural = _("user role assignments")
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(ends_at__isnull=True)
+                | Q(starts_at__isnull=True)
+                | Q(ends_at__gte=models.F("starts_at")),
+                name="user_role_assignment_valid_dates",
+            ),
+            models.CheckConstraint(
+                condition=Q(scope_type=ScopeType.COMPANY, scope_office__isnull=True)
+                | ~Q(scope_type=ScopeType.COMPANY),
+                name="user_role_assignment_company_scope_empty",
+            ),
+            models.CheckConstraint(
+                condition=~Q(scope_type__in=[ScopeType.REGION, ScopeType.OFFICE])
+                | Q(scope_office__isnull=False),
+                name="user_role_assignment_scoped_office_required",
+            ),
+            models.UniqueConstraint(
+                fields=["user", "role", "scope_type", "scope_office"],
+                condition=Q(status__in=["scheduled", "active"]),
+                name="user_role_assignment_unique_live_scope",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["user", "status", "starts_at", "ends_at"],
+                name="user_role_asgn_user_idx",
+            ),
+            models.Index(
+                fields=["scope_type", "scope_office", "status"],
+                name="user_role_asgn_scope_idx",
+            ),
+        ]
+
+    def __str__(self):
+        scope = self.scope_label()
+        return f"{self.user} / {self.role} / {scope}"
+
+    def scope_label(self) -> str:
+        if self.scope_type == ScopeType.COMPANY:
+            return "Company"
+        if self.scope_office is None:
+            return self.scope_type
+        return self.scope_office.path_label()
+
+    def clean(self):
+        super().clean()
+        errors = {}
+        if self.role not in ROLE_BY_KEY:
+            errors["role"] = _("Pick a supported role.")
+        elif not is_valid_scope_type(self.role, self.scope_type):
+            errors["scope_type"] = _("This role cannot be assigned with that scope.")
+
+        if self.scope_type == ScopeType.COMPANY and self.scope_office is not None:
+            errors["scope_office"] = _("Company-scoped roles cannot target an office.")
+        if (
+            self.scope_type in {ScopeType.REGION, ScopeType.OFFICE}
+            and self.scope_office is None
+        ):
+            errors["scope_office"] = _("This scope requires an office target.")
+        if (
+            self.scope_type == ScopeType.REGION
+            and self.scope_office is not None
+            and self.scope_office.kind != Office.Kind.REGION
+        ):
+            errors["scope_office"] = _("Region scope must target a region office.")
+        if (
+            self.scope_type == ScopeType.OFFICE
+            and self.scope_office is not None
+            and self.scope_office.kind
+            not in {Office.Kind.BRANCH, Office.Kind.REGIONAL_OFFICE}
+        ):
+            errors["scope_office"] = _("Office scope must target an assignable office.")
+        if self.ends_at and self.starts_at and self.ends_at < self.starts_at:
+            errors["ends_at"] = _("End date cannot be earlier than the start date.")
+        if self.status == self.Status.REVOKED and self.revoked_at is None:
+            errors["revoked_at"] = _(
+                "Revoked assignments must record when they were revoked."
+            )
+        if self.revoked_at and self.status != self.Status.REVOKED:
+            errors["status"] = _(
+                "Only revoked assignments may store a revocation timestamp."
+            )
+        if errors:
+            raise ValidationError(errors)
+
+    def is_effective(self, at=None) -> bool:
+        at = at or timezone.now()
+        if self.status != self.Status.ACTIVE:
+            return False
+        if self.starts_at and self.starts_at > at:
+            return False
+        if self.ends_at and self.ends_at <= at:
+            return False
+        return not (self.revoked_at and self.revoked_at <= at)
+
+    def resolve_status(self, at=None) -> str:
+        at = at or timezone.now()
+        if self.revoked_at and self.revoked_at <= at:
+            return self.Status.REVOKED
+        if self.ends_at and self.ends_at <= at:
+            return self.Status.EXPIRED
+        if self.starts_at and self.starts_at > at:
+            return self.Status.SCHEDULED
+        return self.Status.ACTIVE
+
+    def refresh_status(self, at=None) -> str:
+        resolved = self.resolve_status(at=at)
+        if self.status != resolved:
+            self.status = resolved
+        return self.status
+
+
+class UserRoleAssignmentMigrationConflict(models.Model):
+    user = models.ForeignKey(
+        "User",
+        verbose_name=_("user"),
+        related_name="role_assignment_migration_conflicts",
+        on_delete=models.CASCADE,
+    )
+    legacy_role = models.CharField(_("legacy role"), max_length=64)
+    detail = models.TextField(_("detail"))
+    created_at = models.DateTimeField(_("created at"), default=timezone.now)
+
+    class Meta:
+        ordering = ["user__email", "legacy_role", "created_at"]
+        verbose_name = _("user role assignment migration conflict")
+        verbose_name_plural = _("user role assignment migration conflicts")
+
+    def __str__(self):
+        return f"{self.user} / {self.legacy_role}"

@@ -2,12 +2,25 @@ from django import forms
 from django.contrib import admin, messages
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 from django.contrib.auth.forms import ReadOnlyPasswordHashField
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.http import HttpRequest
 from django.utils.translation import gettext_lazy as _
 
 from apps.audit.service import actor_from_user, log_model_change
 
-from .models import Office, OfficeContactAssignment, User
+from .models import (
+    Office,
+    OfficeContactAssignment,
+    User,
+    UserRoleAssignment,
+    UserRoleAssignmentMigrationConflict,
+)
+from .services.role_assignments import (
+    create_role_assignment,
+    revoke_role_assignment,
+    update_role_assignment,
+    would_remove_last_management_role,
+)
 
 
 class UserCreationForm(forms.ModelForm):
@@ -85,6 +98,161 @@ class OfficeAdminForm(forms.ModelForm):
     class Meta:
         model = Office
         fields = "__all__"
+
+
+class UserRoleAssignmentAdminForm(forms.ModelForm):
+    class Meta:
+        model = UserRoleAssignment
+        fields = "__all__"
+
+
+class UserRoleAssignmentInline(admin.TabularInline):
+    model = UserRoleAssignment
+    fk_name = "user"
+    extra = 0
+    can_delete = False
+    show_change_link = True
+    fields = (
+        "role",
+        "scope_type",
+        "scope_office",
+        "status",
+        "starts_at",
+        "ends_at",
+        "business_reason",
+        "assigned_by",
+        "revoked_by",
+        "revoked_at",
+    )
+    readonly_fields = ("assigned_by", "revoked_by", "revoked_at")
+
+
+@admin.register(UserRoleAssignment)
+class UserRoleAssignmentAdmin(admin.ModelAdmin):
+    form = UserRoleAssignmentAdminForm
+    list_display = (
+        "user",
+        "role",
+        "scope_type",
+        "scope_office",
+        "status",
+        "starts_at",
+        "ends_at",
+        "assigned_by",
+        "revoked_at",
+    )
+    list_filter = ("role", "scope_type", "status")
+    search_fields = ("user__email", "business_reason")
+    autocomplete_fields = ("user", "scope_office", "assigned_by", "revoked_by")
+    readonly_fields = (
+        "assigned_by",
+        "revoked_by",
+        "revoked_at",
+        "created_at",
+        "updated_at",
+    )
+
+    fieldsets = (
+        (
+            _("Assignment"),
+            {
+                "fields": (
+                    "user",
+                    "role",
+                    "scope_type",
+                    "scope_office",
+                    "status",
+                    "starts_at",
+                    "ends_at",
+                    "business_reason",
+                )
+            },
+        ),
+        (
+            _("Lifecycle"),
+            {
+                "fields": (
+                    "assigned_by",
+                    "revoked_by",
+                    "revoked_at",
+                    "created_at",
+                    "updated_at",
+                )
+            },
+        ),
+    )
+
+    def get_readonly_fields(self, request, obj=None):
+        readonly = list(super().get_readonly_fields(request, obj))
+        if obj is not None:
+            readonly.extend(
+                ["user", "role", "scope_type", "scope_office", "assigned_by"]
+            )
+        return readonly
+
+    def save_model(self, request, obj, form, change):
+        try:
+            if not change:
+                created = create_role_assignment(
+                    actor=request.user,
+                    target_user=obj.user,
+                    role=obj.role,
+                    scope_type=obj.scope_type,
+                    scope_office=obj.scope_office,
+                    starts_at=obj.starts_at,
+                    ends_at=obj.ends_at,
+                    business_reason=obj.business_reason,
+                )
+                obj.pk = created.pk
+                obj.status = created.status
+                obj.assigned_by = created.assigned_by
+                obj.revoked_by = created.revoked_by
+                obj.revoked_at = created.revoked_at
+                return
+
+            previous = UserRoleAssignment.objects.get(pk=obj.pk)
+            if (
+                obj.status == UserRoleAssignment.Status.REVOKED
+                and previous.status != UserRoleAssignment.Status.REVOKED
+            ):
+                if would_remove_last_management_role(request.user, assignment=previous):
+                    messages.warning(
+                        request,
+                        _(
+                            "Revoking this assignment removes your last "
+                            "management role."
+                        ),
+                    )
+                updated = revoke_role_assignment(
+                    actor=request.user,
+                    assignment=previous,
+                    business_reason=obj.business_reason,
+                )
+            else:
+                updated = update_role_assignment(
+                    actor=request.user,
+                    assignment=previous,
+                    starts_at=obj.starts_at,
+                    ends_at=obj.ends_at,
+                    business_reason=obj.business_reason,
+                )
+            obj.status = updated.status
+            obj.revoked_by = updated.revoked_by
+            obj.revoked_at = updated.revoked_at
+            obj.assigned_by = updated.assigned_by
+        except (ValidationError, PermissionDenied) as exc:
+            if isinstance(exc, ValidationError):
+                raise forms.ValidationError(exc) from exc
+            raise forms.ValidationError(str(exc)) from exc
+
+
+@admin.register(UserRoleAssignmentMigrationConflict)
+class UserRoleAssignmentMigrationConflictAdmin(admin.ModelAdmin):
+    list_display = ("user", "legacy_role", "detail", "created_at")
+    list_filter = ("legacy_role",)
+    search_fields = ("user__email", "legacy_role", "detail")
+    autocomplete_fields = ("user",)
+    readonly_fields = ("user", "legacy_role", "detail", "created_at")
 
 
 @admin.register(Office)
@@ -249,7 +417,7 @@ class UserAdmin(DjangoUserAdmin):
         "is_superuser",
         "is_active",
     ]
-    list_filter = ["is_staff", "is_superuser", "is_active", "groups", "office"]
+    list_filter = ["is_staff", "is_superuser", "is_active", "office"]
     search_fields = [
         "email",
         "display_name",
@@ -299,7 +467,7 @@ class UserAdmin(DjangoUserAdmin):
                     "is_active",
                     "is_staff",
                     "is_superuser",
-                    "groups",
+                    "legacy_groups_preview",
                     "user_permissions",
                 ),
             },
@@ -316,8 +484,16 @@ class UserAdmin(DjangoUserAdmin):
         ),
     )
     autocomplete_fields = ["office"]
-    readonly_fields = ["profile_completed_at"]
+    readonly_fields = ["profile_completed_at", "legacy_groups_preview"]
     actions = ["reset_onboarding"]
+    inlines = [UserRoleAssignmentInline]
+
+    @admin.display(description="Legacy groups")
+    def legacy_groups_preview(self, obj):
+        if obj.pk is None:
+            return "-"
+        names = list(obj.groups.values_list("name", flat=True))
+        return ", ".join(names) if names else "-"
 
     @admin.action(description="Reset onboarding for selected users")
     def reset_onboarding(self, request: HttpRequest, queryset):

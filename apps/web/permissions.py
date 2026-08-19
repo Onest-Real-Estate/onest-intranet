@@ -14,14 +14,20 @@ from ninja.security import SessionAuth
 
 from apps.audit.models import AuditEvent
 from apps.audit.service import AuditTarget, actor_from_user, log_event
+from apps.user.services.role_assignments import (
+    has_effective_permission,
+    has_effective_permissions,
+)
 
 
 def _has_permissions(user, any_permissions, all_permissions):
     """True when the user holds every permission in ``all_permissions`` and
     at least one in ``any_permissions`` (empty tuples are not required)."""
-    has_all = not all_permissions or user.has_perms(all_permissions)
+    has_all = not all_permissions or has_effective_permissions(
+        user, tuple(all_permissions)
+    )
     has_any = not any_permissions or any(
-        user.has_perm(permission) for permission in any_permissions
+        has_effective_permission(user, permission) for permission in any_permissions
     )
     return has_all and has_any
 

@@ -10,6 +10,8 @@ from django.contrib.auth.models import Group
 from django.core.exceptions import ValidationError
 from django.dispatch import receiver
 
+from .models import UserRoleAssignment
+from .roles import AGENT, ScopeType
 from .us import normalize_us_phone
 
 
@@ -19,6 +21,27 @@ def assign_default_group(sender, request, user, **kwargs):
     group_name = getattr(settings, "DEFAULT_USER_GROUP", "Users")
     group, _ = Group.objects.get_or_create(name=group_name)
     user.groups.add(group)
+    if (
+        getattr(user, "office_id", None)
+        and not user.role_assignments.filter(
+            role=AGENT,
+            scope_type=ScopeType.OFFICE,
+            scope_office=user.office,
+            status__in=[
+                UserRoleAssignment.Status.SCHEDULED,
+                UserRoleAssignment.Status.ACTIVE,
+            ],
+        ).exists()
+    ):
+        assignment = UserRoleAssignment(
+            user=user,
+            role=AGENT,
+            scope_type=ScopeType.OFFICE,
+            scope_office=user.office,
+        )
+        assignment.refresh_status()
+        assignment.full_clean()
+        assignment.save()
 
 
 @receiver(user_signed_up)
