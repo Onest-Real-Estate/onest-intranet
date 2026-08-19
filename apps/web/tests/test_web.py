@@ -162,13 +162,17 @@ def test_dashboard_partial_reload_returns_deferred_metrics(client):
         HTTP_X_INERTIA_PARTIAL_COMPONENT="Dashboard",
     )
     data = json.loads(response.content)
-    groups = data["props"]["metrics"]["groups"]
+    widget = data["props"]["metrics"]
+    assert widget["status"] == "ready"
+    assert widget["version"] == 1
+    groups = widget["data"]["groups"]
     assert [group["key"] for group in groups] == ["myPipeline", "myWork"]
-    assert data["props"]["metrics"]["scope"]["level"] == "self"
+    assert widget["data"]["scope"]["level"] == "self"
 
 
 @pytest.mark.django_db
 def test_dashboard_partial_reload_returns_transactions(client):
+    """The transaction module is not built, so the widget says so plainly."""
     user = User.objects.create_user(email="alice@example.com", profile_completed=True)
     client.force_login(user)
     response = client.get(
@@ -178,8 +182,10 @@ def test_dashboard_partial_reload_returns_transactions(client):
         HTTP_X_INERTIA_PARTIAL_COMPONENT="Dashboard",
     )
     data = json.loads(response.content)
-    assert len(data["props"]["transactions"]) == 4
-    assert data["props"]["transactions"][0]["status"] in {"on_track", "action_needed"}
+    widget = data["props"]["transactions"]
+    assert widget["status"] == "unavailable"
+    assert widget["data"] is None
+    assert widget["unavailable"]["retryable"] is False
 
 
 @pytest.mark.django_db

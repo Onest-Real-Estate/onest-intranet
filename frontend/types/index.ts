@@ -127,6 +127,71 @@ export interface DashboardDocument {
   name: string;
 }
 
+export interface DashboardGreeting {
+  salutation: string;
+  name: string;
+  dateLabel: string;
+  /** Local calendar date in ISO 8601 form. */
+  dateIso: string;
+  timezone: string;
+}
+
+export interface DashboardWidgetEmptyState {
+  title: string;
+  description: string;
+  actionLabel?: string;
+  /** Server-reversed destination for the next useful action. */
+  actionHref?: string;
+}
+
+export interface DashboardWidgetUnavailable {
+  reason: string;
+  retryable: boolean;
+  actionLabel?: string;
+  /** Server-reversed destination for a module that is not connected yet. */
+  actionHref?: string;
+}
+
+interface DashboardWidgetBase {
+  /** Bumped when this widget's data shape changes. */
+  version: number;
+  generatedAt: string;
+  meta: { truncated?: boolean; [key: string]: unknown };
+}
+
+export type DashboardWidget<T> = DashboardWidgetBase &
+  (
+    | {
+        status: "ready";
+        data: T;
+        emptyState: null;
+        unavailable: null;
+      }
+    | {
+        status: "empty";
+        data: null;
+        emptyState: DashboardWidgetEmptyState;
+        unavailable: null;
+      }
+    | {
+        status: "unavailable";
+        data: null;
+        emptyState: null;
+        unavailable: DashboardWidgetUnavailable;
+      }
+  );
+
+export type DashboardWidgetProp =
+  | "metrics"
+  | "quickApps"
+  | "announcements"
+  | "transactions"
+  | "training"
+  | "schedule"
+  | "actionItems"
+  | "market"
+  | "documents";
+
 /**
  * Props available on every Inertia page. `user` and `csrfToken` are shared by
  * `web.middleware.InertiaShareMiddleware`; pages can extend this interface.
@@ -168,13 +233,14 @@ export interface PageProps {
 
 /** Dashboard page props. Deferred widgets are undefined until Inertia loads them. */
 export interface DashboardPageProps extends PageProps {
-  metrics?: DashboardMetrics;
-  quickApps?: DashboardQuickApp[];
-  announcements?: DashboardAnnouncements;
-  transactions?: DashboardTransaction[];
-  training?: DashboardTraining;
-  schedule?: DashboardSchedule;
-  actionItems?: DashboardActionItems;
-  market?: DashboardMarket;
-  documents?: DashboardDocument[];
+  greeting: DashboardGreeting;
+  metrics?: DashboardWidget<DashboardMetrics>;
+  quickApps?: DashboardWidget<DashboardQuickApp[]>;
+  announcements?: DashboardWidget<DashboardAnnouncements>;
+  transactions?: DashboardWidget<DashboardTransaction[]>;
+  training?: DashboardWidget<DashboardTraining>;
+  schedule?: DashboardWidget<DashboardSchedule>;
+  actionItems?: DashboardWidget<DashboardActionItems>;
+  market?: DashboardWidget<DashboardMarket>;
+  documents?: DashboardWidget<DashboardDocument[]>;
 }

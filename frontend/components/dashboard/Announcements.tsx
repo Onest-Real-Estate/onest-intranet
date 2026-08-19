@@ -31,11 +31,13 @@ export function Announcements({ data }: { data: DashboardAnnouncements }) {
       <PanelHeader title="News & announcements" />
       <SurfaceCardContent className="grid gap-6 lg:grid-cols-2">
         <article className="grid content-start gap-2">
-          <img
-            src={data.featured.imageUrl}
-            alt=""
-            className="mb-1 h-44 w-full rounded-lg object-cover"
-          />
+          {data.featured.imageUrl ? (
+            <img
+              src={data.featured.imageUrl}
+              alt=""
+              className="mb-1 h-44 w-full rounded-lg object-cover"
+            />
+          ) : null}
           <Tag>{data.featured.tag}</Tag>
           <h3 className="leading-snug font-semibold">{data.featured.title}</h3>
           <p className="text-muted-foreground text-sm leading-6">
