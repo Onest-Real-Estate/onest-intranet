@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { axe } from "vitest-axe";
 
 import { HubLayout } from "@/components/HubLayout";
-import { HUB_NAV_GROUPS } from "@/lib/hub-nav";
+import { HUB_ADMIN_NAV, HUB_NAV_GROUPS, resolveHubNav } from "@/lib/hub-nav";
 import type { HubFeatures, PageProps, PrimaryOffice, User } from "@/types";
 
 const pageProps = vi.hoisted(() => ({ current: {} as PageProps, url: "/dashboard" }));
@@ -97,7 +97,13 @@ function navTitles() {
 }
 
 function approvedTitles() {
-  return HUB_NAV_GROUPS.flatMap((group) => group.items).map((item) => item.title);
+  return resolveHubNav(agent, features(), office).flatMap((group) =>
+    group.items.map((item) => item.title),
+  );
+}
+
+function adminPermissions() {
+  return HUB_ADMIN_NAV.flatMap((item) => item.permission?.all ?? []);
 }
 
 beforeEach(() => {
@@ -223,6 +229,75 @@ describe("HubLayout navigation", () => {
     expect(new Set(labels).size).toBe(labels.length);
   });
 
+  it("integrates authorized administrative destinations into the same sidebar", () => {
+    setPage({
+      user: {
+        ...agent,
+        roles: ["Admins", "Users"],
+        roleLabel: "Admin",
+        permissions: adminPermissions(),
+      },
+    });
+    renderLayout();
+    expect(screen.getByText("Administration")).toBeInTheDocument();
+    expect(
+      within(nav())
+        .getAllByRole("region")
+        .map((group) => group.getAttribute("aria-labelledby")),
+    ).toEqual([
+      "hub-nav-administration-people",
+      "hub-nav-administration-operations",
+      "hub-nav-administration-content",
+      "hub-nav-administration-governance-support",
+    ]);
+    for (const item of HUB_ADMIN_NAV) {
+      expect(
+        within(nav())
+          .getAllByRole("link")
+          .find((link) => link.getAttribute("href") === item.href),
+      ).toBeInTheDocument();
+    }
+  });
+
+  it("marks a nested users detail route active without activating Add New User", () => {
+    setPage(
+      {
+        user: {
+          ...agent,
+          permissions: ["web.view_users", "web.add_users"],
+        },
+      },
+      "/operations/users/42?tab=roles",
+    );
+    renderLayout();
+    expect(within(nav()).getByRole("link", { name: /^Users/ })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    expect(
+      within(nav()).getByRole("link", { name: /Add New User/ }),
+    ).not.toHaveAttribute("aria-current");
+  });
+
+  it("removes the Administration heading after the last permission is revoked", () => {
+    setPage({ user: { ...agent, permissions: ["web.view_compliance"] } });
+    const rendered = renderLayout();
+    expect(screen.getByText("Administration")).toBeInTheDocument();
+    expect(screen.getByText("Governance & support")).toBeInTheDocument();
+    expect(screen.queryByText("People")).not.toBeInTheDocument();
+    expect(screen.queryByText("Operations")).not.toBeInTheDocument();
+    expect(screen.queryByText("Content")).not.toBeInTheDocument();
+
+    setPage({ user: agent });
+    rendered.rerender(
+      <HubLayout>
+        <p>content</p>
+      </HubLayout>,
+    );
+    expect(screen.queryByText("Administration")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Compliance/ })).not.toBeInTheDocument();
+  });
+
   it("keeps the same order and destinations in the mobile drawer", async () => {
     setViewport(390);
     render(
@@ -232,6 +307,22 @@ describe("HubLayout navigation", () => {
     );
     await userEvent.click(screen.getAllByRole("button", { name: /sidebar/i })[0]);
     expect(navTitles()).toEqual(approvedTitles());
+  });
+
+  it("keeps long specialty labels usable in the mobile drawer", async () => {
+    setViewport(390);
+    setPage({
+      user: {
+        ...agent,
+        permissions: ["web.assign_user_roles", "web.view_platform_tasks"],
+      },
+    });
+    renderLayout();
+    await userEvent.click(screen.getAllByRole("button", { name: /sidebar/i })[0]);
+    expect(
+      within(nav()).getByRole("link", { name: /Assign User Roles/ }),
+    ).toBeVisible();
+    expect(within(nav()).getByRole("link", { name: /Platform Tasks/ })).toBeVisible();
   });
 
   it("has no automated accessibility violations", async () => {

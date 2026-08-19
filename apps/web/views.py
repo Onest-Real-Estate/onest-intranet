@@ -15,6 +15,12 @@ from .dashboard import (
     dashboard_training,
     dashboard_transactions,
 )
+from .operations import (
+    OPERATIONS_DESTINATIONS,
+    OperationsDestination,
+    operations_policy_key,
+    operations_scope_payload,
+)
 
 
 @enforce_policy("dashboard")
@@ -40,6 +46,26 @@ def coming_soon(request, section: str):
     if title is None:
         raise Http404()
     return {"title": title, "section": section}
+
+
+def _operations_view(destination: OperationsDestination):
+    def operations_destination(request):
+        return {
+            "title": destination.label,
+            "section": destination.key,
+            "administrative": True,
+            "scope": operations_scope_payload(request.user),
+        }
+
+    operations_destination.__name__ = destination.route_name
+    page_view = inertia("ComingSoon")(operations_destination)
+    return enforce_policy(operations_policy_key(destination))(page_view)
+
+
+OPERATIONS_VIEWS = {
+    destination.route_name: _operations_view(destination)
+    for destination in OPERATIONS_DESTINATIONS
+}
 
 
 _CATALOG_CONTRACTS = (

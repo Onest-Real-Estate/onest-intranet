@@ -1,18 +1,30 @@
 import type { LucideIcon } from "lucide-react";
 import {
+  ArrowLeftRight,
   BookOpen,
   Boxes,
   Briefcase,
   Building2,
+  CalendarCheck,
   CalendarDays,
   ClipboardList,
   FileText,
+  FileUser,
   FolderOpen,
+  GraduationCap,
+  Headphones,
   Landmark,
   LayoutDashboard,
+  ListTodo,
   Megaphone,
+  MessageSquareText,
   Shield,
+  ShieldCheck,
+  UserCog,
+  UserPlus,
+  UserRoundSearch,
   Users,
+  Warehouse,
 } from "lucide-react";
 
 import { hasPermission, type PermissionCheck } from "@/lib/permissions";
@@ -42,6 +54,12 @@ export interface HubNavItem {
   feature?: string;
   /** Destination reads the user's own office, so it needs one to exist. */
   requiresOffice?: boolean;
+  /** Base paths that keep this item active across list/detail/create routes. */
+  activePrefixes?: string[];
+  /** More specific sibling paths that must not activate this item. */
+  activeExclusions?: string[];
+  /** Optional label used to divide a large group without creating another nav. */
+  subsection?: string;
 }
 
 export interface HubNavGroup {
@@ -164,17 +182,176 @@ export const HUB_DIRECTORY_NAV: HubNavItem[] = [
   },
 ];
 
+export const HUB_ADMIN_NAV: HubNavItem[] = [
+  {
+    key: "admin-users",
+    title: "Users",
+    href: routes.admin_users(),
+    icon: Users,
+    permission: { all: ["web.view_users"] },
+    feature: "admin-users",
+    activePrefixes: [routes.admin_users()],
+    activeExclusions: [routes.admin_add_user()],
+    subsection: "People",
+  },
+  {
+    key: "admin-new-agents",
+    title: "New Agent List",
+    href: routes.admin_new_agents(),
+    icon: UserRoundSearch,
+    permission: { all: ["web.view_new_agents"] },
+    feature: "admin-new-agents",
+    subsection: "People",
+  },
+  {
+    key: "admin-add-user",
+    title: "Add New User",
+    href: routes.admin_add_user(),
+    icon: UserPlus,
+    permission: { all: ["web.add_users"] },
+    feature: "admin-add-user",
+    subsection: "People",
+  },
+  {
+    key: "admin-assign-roles",
+    title: "Assign User Roles",
+    href: routes.admin_assign_roles(),
+    icon: UserCog,
+    permission: { all: ["web.assign_user_roles"] },
+    feature: "admin-assign-roles",
+    subsection: "People",
+  },
+  {
+    key: "admin-agent-contracts",
+    title: "Agent Contracts",
+    href: routes.admin_agent_contracts(),
+    icon: FileUser,
+    permission: { all: ["web.view_agent_contracts"] },
+    feature: "admin-agent-contracts",
+    subsection: "People",
+  },
+  {
+    key: "admin-transactions",
+    title: "Transactions",
+    href: routes.admin_transactions(),
+    icon: ArrowLeftRight,
+    permission: { all: ["web.view_transactions"] },
+    feature: "admin-transactions",
+    subsection: "Operations",
+  },
+  {
+    key: "admin-inventory",
+    title: "Inventory",
+    href: routes.admin_inventory(),
+    icon: Warehouse,
+    permission: { all: ["web.view_inventory"] },
+    feature: "admin-inventory",
+    subsection: "Operations",
+  },
+  {
+    key: "admin-reservations",
+    title: "Reservations",
+    href: routes.admin_reservations(),
+    icon: CalendarCheck,
+    permission: { all: ["web.view_reservations"] },
+    feature: "admin-reservations",
+    subsection: "Operations",
+  },
+  {
+    key: "admin-announcements",
+    title: "Announcements",
+    href: routes.admin_announcements(),
+    icon: Megaphone,
+    permission: { all: ["web.manage_announcements"] },
+    feature: "admin-announcements",
+    subsection: "Content",
+  },
+  {
+    key: "admin-training",
+    title: "Training",
+    href: routes.admin_training(),
+    icon: GraduationCap,
+    permission: { all: ["web.manage_training"] },
+    feature: "admin-training",
+    subsection: "Content",
+  },
+  {
+    key: "admin-documents",
+    title: "Documents",
+    href: routes.admin_documents(),
+    icon: FolderOpen,
+    permission: { all: ["web.manage_documents"] },
+    feature: "admin-documents",
+    subsection: "Content",
+  },
+  {
+    key: "admin-compliance",
+    title: "Compliance",
+    href: routes.admin_compliance(),
+    icon: ShieldCheck,
+    permission: { all: ["web.view_compliance"] },
+    feature: "admin-compliance",
+    subsection: "Governance & support",
+  },
+  {
+    key: "admin-feedback",
+    title: "Feedback",
+    href: routes.admin_feedback(),
+    icon: MessageSquareText,
+    permission: { all: ["web.view_feedback"] },
+    feature: "admin-feedback",
+    subsection: "Governance & support",
+  },
+  {
+    key: "admin-platform-tasks",
+    title: "Platform Tasks",
+    href: routes.admin_platform_tasks(),
+    icon: ListTodo,
+    permission: { all: ["web.view_platform_tasks"] },
+    feature: "admin-platform-tasks",
+    subsection: "Governance & support",
+  },
+  {
+    key: "admin-offices",
+    title: "Offices",
+    href: routes.admin_offices(),
+    icon: Building2,
+    permission: { all: ["web.manage_offices"] },
+    feature: "admin-offices",
+    subsection: "Governance & support",
+  },
+  {
+    key: "admin-it-support",
+    title: "IT Support",
+    href: routes.admin_it_support(),
+    icon: Headphones,
+    permission: { all: ["web.view_it_support"] },
+    feature: "admin-it-support",
+    subsection: "Governance & support",
+  },
+];
+
 /**
- * The approved agent information architecture. Group and item order here is
+ * The approved combined information architecture. Group and item order here is
  * the order everywhere — desktop, collapsed rail, and mobile drawer all render
- * this one array, so they cannot drift apart.
+ * this one array, so agent and administrative navigation cannot drift apart.
  */
 export const HUB_NAV_GROUPS: HubNavGroup[] = [
   { label: "General", items: HUB_PRIMARY_NAV },
   { label: "Tools", items: HUB_APP_NAV },
   { label: "My office", items: HUB_OFFICE_NAV },
   { label: "Directory", items: HUB_DIRECTORY_NAV },
+  { label: "Administration", items: HUB_ADMIN_NAV },
 ];
+
+export function isHubNavItemActive(item: HubNavItem, current: string): boolean {
+  const path = current.split("?")[0];
+  const matches = (prefix: string) => path === prefix || path.startsWith(`${prefix}/`);
+  if (item.activeExclusions?.some(matches)) {
+    return false;
+  }
+  return (item.activePrefixes ?? [item.href]).some(matches);
+}
 
 function unavailableReason(
   item: HubNavItem,
