@@ -95,25 +95,16 @@ def onboarding(request: HttpRequest):
 @login_required
 @require_POST
 def onboarding_submit(request: HttpRequest):
-    """Save onboarding details and mark the profile complete."""
-    from apps.audit.events import publish
-
+    """Save onboarding details and mark the profile complete, atomically."""
     user = cast(User, request.user)
-    form = ProfileForm(request.POST, instance=user)
-    if form.is_valid():
-        user = form.save()
-        user.profile_completed = True
-        user.save(update_fields=["profile_completed"])
-        publish(
-            "user.onboarded",
-            actor_id=str(user.pk),
-            subject=f"user:{user.pk}",
-            payload={
-                "user_id": user.pk,
-                "email": user.email,
-                "office_id": user.office_id,
-            },
-        )
+
+    # Secondary mass-assignment guard — block crafted POSTs even if the form
+    # somehow failed to exclude these fields.
+    if _has_protected_field(request):
+        return HttpResponse("Forbidden", status=403)
+
+    # Already completed — idempotency: just redirect.
+    if user.profile_completed:
         return redirect("dashboard")
 
     form = ProfileForm(request.POST, request.FILES, instance=user)
@@ -128,7 +119,7 @@ def onboarding_submit(request: HttpRequest):
         saved_user.profile_completed_at = timezone.now()
         saved_user.save()
         try:
-            from apps.audit.events import publish  # ty: ignore[unresolved-import]
+            from apps.audit.events import publish
 
             publish(
                 "user.onboarded",
