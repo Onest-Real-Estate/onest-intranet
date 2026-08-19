@@ -104,10 +104,25 @@ export interface DashboardDocument {
  * Props available on every Inertia page. `user` and `csrfToken` are shared by
  * `web.middleware.InertiaShareMiddleware`; pages can extend this interface.
  */
+/** The signed-in user's own office. Never addressed by an id from the client. */
+export interface PrimaryOffice {
+  id: number;
+  name: string;
+  regionName: string;
+}
+
+/**
+ * Availability per hub section, keyed by the section slug used in the
+ * `coming_soon` URL. Shared by web.navigation.HUB_FEATURES.
+ */
+export type HubFeatures = Record<string, boolean>;
+
 export interface PageProps {
   user: User | null;
   csrfToken: string;
   requestId: string;
+  features: HubFeatures;
+  primaryOffice: PrimaryOffice | null;
   [key: string]: unknown;
 }
 

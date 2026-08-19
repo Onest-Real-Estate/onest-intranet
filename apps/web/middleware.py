@@ -12,6 +12,7 @@ from apps.web.authorization import (
     get_authorization_policy,
     is_non_route_exempt_path,
 )
+from apps.web.navigation import hub_feature_states, primary_office_payload
 
 logger = logging.getLogger("apps.authorization")
 
@@ -97,5 +98,8 @@ class InertiaShareMiddleware:
             user=lambda: self.serialize_user(request.user),
             csrfToken=lambda: get_token(request),
             requestId=lambda: getattr(request, "audit_request_id", ""),
+            # Nav feature state and office context — see web.navigation.
+            features=hub_feature_states,
+            primaryOffice=lambda: primary_office_payload(request.user),
         )
         return self.get_response(request)

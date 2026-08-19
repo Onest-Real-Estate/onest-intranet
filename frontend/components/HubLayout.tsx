@@ -38,9 +38,14 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { HUB_NAV_GROUPS, type HubNavItem, isComingSoon } from "@/lib/hub-nav";
+import {
+  type ResolvedHubNavItem,
+  resolveHubNav,
+  unavailableDescription,
+  unavailableLabel,
+} from "@/lib/hub-nav";
 import { routes } from "@/lib/routes";
-import type { PageProps } from "@/types";
+import type { PageProps, User } from "@/types";
 
 function initials(name: string): string {
   return name
@@ -72,21 +77,27 @@ function isActivePath(current: string, href: string): boolean {
   return current === href || current.startsWith(`${href}/`);
 }
 
-function NavList({ items, current }: { items: HubNavItem[]; current: string }) {
+function NavList({ items, current }: { items: ResolvedHubNavItem[]; current: string }) {
   return (
     <SidebarMenu>
       {items.map((item) => {
         const active = isActivePath(current, item.href);
-        const soon = isComingSoon(item.href);
+        const marker = unavailableLabel(item.unavailable);
+        const description = unavailableDescription(item);
+        const noteId = description ? `hub-nav-${item.key}-note` : undefined;
         return (
-          <SidebarMenuItem key={item.href}>
+          <SidebarMenuItem key={item.key}>
             <SidebarMenuButton
               asChild
               isActive={active}
-              tooltip={item.title}
+              tooltip={description ?? item.title}
               className="h-9 rounded-lg px-2.5 font-normal transition-[background-color,color] duration-(--motion-fast) data-[active=true]:font-semibold group-data-[collapsible=icon]:rounded-lg"
             >
-              <Link href={item.href} aria-current={active ? "page" : undefined}>
+              <Link
+                href={item.href}
+                aria-current={active ? "page" : undefined}
+                aria-describedby={noteId}
+              >
                 <item.icon
                   className={
                     active
@@ -97,10 +108,20 @@ function NavList({ items, current }: { items: HubNavItem[]; current: string }) {
                 />
                 <span>{item.title}</span>
                 {/* Unbuilt sections stay honest but quiet: plain type, no chip.
-                    Nine pills down one rail reads as a mockup, not a product. */}
-                {soon ? (
-                  <span className="text-muted-foreground ml-auto shrink-0 text-[0.6875rem] group-data-[collapsible=icon]:hidden">
-                    Soon
+                    Nine pills down one rail reads as a mockup, not a product.
+                    The marker is decorative — the sentence beside it is what
+                    assistive tech reads, and it survives the collapsed rail. */}
+                {marker ? (
+                  <span
+                    aria-hidden
+                    className="text-muted-foreground ml-auto shrink-0 text-[0.6875rem] group-data-[collapsible=icon]:hidden"
+                  >
+                    {marker}
+                  </span>
+                ) : null}
+                {description ? (
+                  <span id={noteId} className="sr-only">
+                    {description}
                   </span>
                 ) : null}
               </Link>
@@ -145,14 +166,72 @@ function PendingAction({
   );
 }
 
+/**
+ * Signed-in identity at the foot of the rail: who you are, and the one action
+ * that ends the session. The name block is a link to the profile rather than a
+ * menu — a second dropdown holding the same items as the header one would make
+ * the reader choose between two identical doors.
+ *
+ * No card. The rule above it is the whole separation, matching the flush,
+ * border-driven seam the workspace uses everywhere else; a filled, rounded
+ * panel at the foot of a rail that is otherwise one column of type would be
+ * the only floating object on the screen. Radius survives on the hover target
+ * alone, because a square hover wash reads as a rendering bug next to the
+ * rounded nav rows directly above it.
+ *
+ * Collapsed, it degrades to the avatar alone; sign-out stays reachable from the
+ * header menu, which is the only copy that survives at that width.
+ */
+function SidebarAccount({ user, onSignOut }: { user: User; onSignOut: () => void }) {
+  return (
+    <div className="flex items-center gap-1">
+      <Link
+        href={routes.profile()}
+        className="hover:bg-sidebar-accent/50 focus-visible:ring-sidebar-ring flex min-w-0 flex-1 items-center gap-2.5 rounded-md px-1.5 py-1.5 transition-colors duration-(--motion-fast) focus-visible:ring-2 focus-visible:outline-none group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
+      >
+        <Avatar className="size-8 shrink-0">
+          <AvatarFallback className="brand-surface text-xs font-semibold">
+            {initials(user.name)}
+          </AvatarFallback>
+        </Avatar>
+        <span className="min-w-0 flex-1 text-left leading-tight group-data-[collapsible=icon]:hidden">
+          <span className="block truncate text-sm font-medium">{user.name}</span>
+          <span className="text-muted-foreground block truncate text-xs">
+            {user.email}
+          </span>
+        </span>
+      </Link>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label={`Sign out ${firstName(user.name)}`}
+            onClick={onSignOut}
+            className="text-muted-foreground hover:text-foreground size-9 shrink-0 group-data-[collapsible=icon]:hidden"
+          >
+            <LogOut className="size-4" strokeWidth={1.5} />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>Sign out</TooltipContent>
+      </Tooltip>
+    </div>
+  );
+}
+
 export function HubLayout({ children }: { children: ReactNode }) {
   const page = usePage<PageProps>();
-  const { user } = page.props;
+  const { user, features, primaryOffice } = page.props;
   const current = page.url.split("?")[0];
+  const navGroups = resolveHubNav(user, features, primaryOffice);
+
+  function signOut() {
+    router.post(routes.logout());
+  }
 
   function handleLogout(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    router.post(routes.logout());
+    signOut();
   }
 
   const name = user?.name ?? "Agent";
@@ -191,7 +270,7 @@ export function HubLayout({ children }: { children: ReactNode }) {
           {/* Group labels carry the separation. Rules between them would add a
               second divider to a rail that is already one column of type. */}
           <nav aria-label="Hub sections" className="flex min-h-0 flex-col">
-            {HUB_NAV_GROUPS.map((group) => (
+            {navGroups.map((group) => (
               <SidebarGroup
                 key={group.label}
                 className="px-2.5 pt-4 pb-0 group-data-[collapsible=icon]:px-1.5"
@@ -206,12 +285,13 @@ export function HubLayout({ children }: { children: ReactNode }) {
             ))}
           </nav>
         </SidebarContent>
-        <SidebarFooter className="px-4 pb-4 group-data-[collapsible=icon]:px-2">
-          {/* The signed-in identity lives once, in the header menu. Repeating it
-              here would be the same fact twice on the same screen. */}
-          <p className="text-muted-foreground text-xs group-data-[collapsible=icon]:hidden">
-            oNEST Real Estate
-          </p>
+        {/* The wordmark in the header already names the company; under a real
+            account row a second "oNEST Real Estate" line was just filler.
+            This rule is the one divider in the rail — group labels carry the
+            separation above it, but the account is a different kind of thing
+            from a destination and earns the seam. */}
+        <SidebarFooter className="border-sidebar-border/70 mt-2 border-t px-2.5 py-2.5 group-data-[collapsible=icon]:px-1.5">
+          {user ? <SidebarAccount user={user} onSignOut={signOut} /> : null}
         </SidebarFooter>
       </Sidebar>
       {/* Flush, not a floating card: the workspace runs to the top and right

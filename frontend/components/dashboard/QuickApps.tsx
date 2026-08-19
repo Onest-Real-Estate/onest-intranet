@@ -1,25 +1,44 @@
 import type { LucideIcon } from "lucide-react";
 import {
   AppWindow,
-  Building2,
-  Cloud,
-  Files,
+  Contact,
+  ShieldCheck,
+  Signature,
   SquareArrowOutUpRight,
 } from "lucide-react";
+import type { ReactNode } from "react";
 
 import {
   SurfaceCard,
   SurfaceCardContent,
 } from "@/components/design-system/surface-card";
 import { IconWell } from "@/components/IconWell";
+import { MicrosoftLogo } from "@/components/MicrosoftLogo";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { DashboardQuickApp } from "@/types";
 
+/**
+ * Each launcher gets a mark that says what the product *does* — a cloud for
+ * SkySlope and a window for Microsoft 365 were shapes, not meanings, and four
+ * unrelated glyphs in a row read as placeholder art.
+ *
+ * Lofty is the CRM (a contact card), SkySlope is transaction compliance (a
+ * shield), dotloop is where things get signed (a signature). The four silhouettes
+ * are deliberately unlike each other, so the row is scannable by shape before
+ * anyone reads a label.
+ *
+ * Microsoft is the one vendor whose real mark we already ship, so it uses that
+ * rather than an impression of it; the rest stay in the Lucide vocabulary the
+ * sidebar uses instead of us approximating logos we do not have.
+ */
 const APP_ICONS: Record<string, LucideIcon> = {
-  lofty: Building2,
-  skyslope: Cloud,
-  microsoft365: AppWindow,
-  dotloop: Files,
+  lofty: Contact,
+  skyslope: ShieldCheck,
+  dotloop: Signature,
+};
+
+const APP_MARKS: Record<string, ReactNode> = {
+  microsoft365: <MicrosoftLogo className="size-[1.125rem]" />,
 };
 
 export function QuickApps({ apps }: { apps: DashboardQuickApp[] }) {
@@ -28,7 +47,8 @@ export function QuickApps({ apps }: { apps: DashboardQuickApp[] }) {
       <h2 className="text-base font-semibold tracking-[-0.01em]">Quick access</h2>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {apps.map((app) => {
-          const Icon = APP_ICONS[app.id] ?? AppWindow;
+          const mark = APP_MARKS[app.id];
+          const Icon = mark ? undefined : (APP_ICONS[app.id] ?? AppWindow);
           return (
             <a
               key={app.id}
@@ -39,7 +59,9 @@ export function QuickApps({ apps }: { apps: DashboardQuickApp[] }) {
             >
               <SurfaceCard interactive className="h-full gap-0 py-0">
                 <SurfaceCardContent className="flex flex-row items-center gap-3 px-3.5 py-3">
-                  <IconWell icon={Icon} className="size-9 shrink-0" />
+                  <IconWell icon={Icon} className="size-9 shrink-0">
+                    {mark}
+                  </IconWell>
                   {/* Two short lines beat "Micros…" in a half-width card. */}
                   <span className="min-w-0 flex-1 text-sm leading-tight font-medium">
                     {app.name}
