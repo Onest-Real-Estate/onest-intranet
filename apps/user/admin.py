@@ -15,6 +15,7 @@ from apps.web.authorization import (
 )
 
 from .models import (
+    BrokerageRole,
     Office,
     OfficeContactAssignment,
     User,
@@ -184,6 +185,36 @@ class UserOfficeMembershipAdmin(admin.ModelAdmin):
     )
     autocomplete_fields = ("user", "office", "changed_by")
     readonly_fields = ("created_at", "updated_at")
+
+
+@admin.register(BrokerageRole)
+class BrokerageRoleAdmin(admin.ModelAdmin):
+    list_display = (
+        "code",
+        "display_name",
+        "is_active",
+        "is_assignable",
+        "is_protected",
+        "is_system",
+        "priority",
+    )
+    list_filter = ("is_active", "is_assignable", "is_protected", "is_system")
+    search_fields = ("code", "display_name", "group_name")
+    ordering = ("priority", "code")
+    readonly_fields = (
+        "code",
+        "group_name",
+        "is_system",
+        "is_protected",
+        "created_at",
+        "updated_at",
+    )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(UserRoleAssignment)

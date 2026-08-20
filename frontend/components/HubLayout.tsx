@@ -114,7 +114,7 @@ function roleSummary(
   roleLabel: string | undefined,
 ): string {
   if (!roles || roles.length === 0) {
-    return roleLabel ?? "Agent";
+    return roleLabel ?? "Realtor";
   }
   if (roles.length === 1) {
     return roleLabel ?? roles[0];

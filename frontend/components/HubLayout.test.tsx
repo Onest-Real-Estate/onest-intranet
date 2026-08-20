@@ -45,8 +45,8 @@ const agent: User = {
   name: "Avery Johnson",
   headshotUrl: null,
   permissions: [],
-  roles: ["Users"],
-  roleLabel: "Agent",
+  roles: ["Realtor"],
+  roleLabel: "Realtor",
   isStaff: false,
   isSuperuser: false,
 };
@@ -291,8 +291,8 @@ describe("HubLayout navigation", () => {
     setPage({
       user: {
         ...agent,
-        roles: ["Branch Managers", "Users"],
-        roleLabel: "Branch manager",
+        roles: ["Branch Manager", "Realtor"],
+        roleLabel: "Branch Manager",
         permissions: ["user.view_user"],
       },
     });
@@ -312,8 +312,8 @@ describe("HubLayout navigation", () => {
     setPage({
       user: {
         ...agent,
-        roles: ["Admins", "Users"],
-        roleLabel: "Admin",
+        roles: ["System Admin", "Realtor"],
+        roleLabel: "System Admin",
         permissions: adminPermissions(),
       },
     });

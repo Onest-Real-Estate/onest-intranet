@@ -30,8 +30,8 @@ const user: User = {
   name: "Avery Johnson",
   headshotUrl: null,
   permissions: [],
-  roles: ["Users"],
-  roleLabel: "Agent",
+  roles: ["Realtor"],
+  roleLabel: "Realtor",
   isStaff: false,
   isSuperuser: false,
 };

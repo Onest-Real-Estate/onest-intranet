@@ -21,6 +21,7 @@ authorized data belong outside the component boundary.
 | Filters | `FilterControls`, `FilterField` | Active count, reset, disabled reset, arbitrary control composition |
 | Search controls | `SearchControl` | Controlled/uncontrolled, submit, clear, loading, disabled, error, `tone="outline" \| "subtle"`, `size` |
 | Hierarchy | `HierarchyBreadcrumb`, `HierarchySelector` | Org path breadcrumbs with inactive badges; searchable grouped office picker for large trees |
+| Roles | `RoleBadge` | Stable-code role chip with optional scope; presentation only — never authorization |
 
 The catalog at `/design-system` demonstrates every family. Import from the
 barrel only when several families are needed; high-use modules can import the

@@ -20,7 +20,7 @@ from apps.audit.service import (
 )
 from apps.user.admin import UserAdmin
 from apps.user.models import Office, User
-from apps.user.roles import BRANCH_MANAGER
+from apps.user.roles import BRANCH_MANAGER, role_group_name
 from apps.user.tests.test_onboarding import assignable_office, valid_profile_post
 from apps.web.permissions import permission_required
 
@@ -120,7 +120,9 @@ def test_query_audit_events_scopes_branch_manager_to_office():
     office = assignable_office()
     other_office = Office.objects.get(slug="fairfax-va")
     manager = User.objects.create_user(email="manager@example.com", office=office)
-    manager.groups.add(Group.objects.get_or_create(name=BRANCH_MANAGER)[0])
+    manager.groups.add(
+        Group.objects.get_or_create(name=role_group_name(BRANCH_MANAGER))[0]
+    )
     manager.user_permissions.add(
         Permission.objects.get(codename="can_view_audit_events")
     )

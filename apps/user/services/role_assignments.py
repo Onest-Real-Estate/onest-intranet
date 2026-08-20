@@ -16,14 +16,19 @@ from apps.user.roles import (
     ADMIN,
     AGENT,
     BRANCH_MANAGER,
+    DELEGATING_ROLES,
+    MANAGEMENT_ROLE_KEYS,
     REGION_MANAGER,
+    ROLE_BY_GROUP,
     ROLE_BY_KEY,
     ROLE_PRIORITY,
     ScopeType,
     get_role_definition,
+    is_role_assignable,
+    normalize_role_code,
 )
 
-MANAGEMENT_ROLES = frozenset({ADMIN})
+MANAGEMENT_ROLES = MANAGEMENT_ROLE_KEYS
 
 
 @dataclass(frozen=True)
@@ -96,16 +101,21 @@ def get_effective_role_keys(
         get_effective_assignments(user, at=at) if assignments is None else assignments
     )
     for assignment in effective_assignments:
-        if assignment.role not in seen:
-            seen.add(assignment.role)
-            role_keys.append(assignment.role)
+        code = normalize_role_code(assignment.role) or assignment.role
+        if code not in seen:
+            seen.add(code)
+            role_keys.append(code)
     if not role_keys:
         extras: list[str] = []
         for group_name in user.groups.values_list("name", flat=True):
-            if group_name in ROLE_BY_KEY and group_name not in seen:
-                seen.add(group_name)
-                role_keys.append(group_name)
-            elif group_name not in seen:
+            mapped = ROLE_BY_GROUP.get(group_name)
+            code = (
+                mapped.code if mapped is not None else normalize_role_code(group_name)
+            )
+            if code and code not in seen:
+                seen.add(code)
+                role_keys.append(code)
+            elif code is None and group_name not in seen:
                 seen.add(group_name)
                 extras.append(group_name)
         extras.sort()
@@ -144,13 +154,14 @@ def get_effective_permissions(
     role_keys = []
     seen: set[str] = set()
     for assignment in effective_assignments:
-        if assignment.role not in seen:
-            seen.add(assignment.role)
-            role_keys.append(assignment.role)
+        code = normalize_role_code(assignment.role) or assignment.role
+        if code not in seen:
+            seen.add(code)
+            role_keys.append(code)
     group_names = [
         get_role_definition(role_key).group_name
         for role_key in role_keys
-        if role_key in ROLE_BY_KEY
+        if normalize_role_code(role_key) in ROLE_BY_KEY
     ]
     if group_names:
         rows = Group.objects.filter(name__in=group_names).values_list(
@@ -245,12 +256,17 @@ def actor_can_manage_assignments(
     if actor.pk is None:
         return False
 
-    definition = get_role_definition(role)
+    code = normalize_role_code(role)
+    if code is None:
+        return False
+    definition = get_role_definition(code)
     if definition.protected:
+        return False
+    if not is_role_assignable(code):
         return False
 
     access = get_effective_access(actor) if access is None else access
-    if ADMIN not in access.role_keys:
+    if not DELEGATING_ROLES.intersection(access.role_keys):
         return False
     if target_scope_type == ScopeType.COMPANY:
         return access.company_wide
@@ -339,8 +355,14 @@ def create_role_assignment(
         scope_type=scope_type,
         scope_office=scope_office,
     )
-    if role not in ROLE_BY_KEY:
+    code = normalize_role_code(role)
+    if code is None:
         raise ValidationError({"role": "Unsupported role."})
+    if not is_role_assignable(code):
+        raise ValidationError(
+            {"role": "This role is deactivated and cannot receive new assignments."}
+        )
+    role = code
 
     with transaction.atomic():
         User.objects.select_for_update().filter(pk=target_user.pk).get()

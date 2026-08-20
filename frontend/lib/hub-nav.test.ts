@@ -24,8 +24,8 @@ function user(overrides: Partial<User> = {}): User {
     name: "Avery Johnson",
     headshotUrl: null,
     permissions: [],
-    roles: ["Users"],
-    roleLabel: "Agent",
+    roles: ["Realtor"],
+    roleLabel: "Realtor",
     isStaff: false,
     isSuperuser: false,
     ...overrides,
@@ -252,7 +252,7 @@ describe("resolveHubNav", () => {
     };
     const groups = resolveHubNav(
       user({
-        roles: ["Branch Managers", "Users"],
+        roles: ["Branch Manager", "Realtor"],
         permissions: adminPermissions(),
       }),
       features(),

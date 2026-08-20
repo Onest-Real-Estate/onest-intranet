@@ -9,6 +9,7 @@ export * from "./hierarchy-breadcrumb";
 export * from "./hierarchy-selector";
 export * from "./metric-card";
 export * from "./page-header";
+export * from "./role-badge";
 export * from "./search-control";
 export * from "./status-badge";
 export * from "./surface-card";

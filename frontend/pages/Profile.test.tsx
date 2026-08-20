@@ -56,8 +56,8 @@ function setPage(overrides: Partial<ProfilePageProps> = {}) {
       name: "Bob Lee",
       headshotUrl: null,
       permissions: [],
-      roles: ["Users"],
-      roleLabel: "Agent",
+      roles: ["Realtor"],
+      roleLabel: "Realtor",
       isStaff: false,
       isSuperuser: false,
     },
@@ -99,7 +99,7 @@ function setPage(overrides: Partial<ProfilePageProps> = {}) {
       legalName: "Bob Lee",
       displayName: "Bob Lee",
       preferredDisplayName: "Bobby",
-      roles: ["Agent"],
+      roles: ["Realtor"],
       office: {
         id: 7,
         name: "Fairfax VA",
@@ -203,12 +203,12 @@ describe("Profile", () => {
     render(<Profile />);
     expect(screen.getByRole("heading", { name: "Account details" })).toBeVisible();
     expect(screen.getByText("bob@onest.realestate")).toBeInTheDocument();
-    expect(screen.getByText("Agent")).toBeInTheDocument();
+    expect(screen.getByText("Realtor")).toBeInTheDocument();
     expect(screen.getByText("Active")).toBeInTheDocument();
     // Read-only means no control at all — not a disabled one the user can focus.
     expect(screen.queryByLabelText(/work email/i)).toBeNull();
     expect(screen.queryByDisplayValue("bob@onest.realestate")).toBeNull();
-    expect(screen.queryByDisplayValue("Agent")).toBeNull();
+    expect(screen.queryByDisplayValue("Realtor")).toBeNull();
   });
 
   it("shows the brokerage record as read-only facts, never as controls", () => {
