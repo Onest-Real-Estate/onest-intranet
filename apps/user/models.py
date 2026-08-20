@@ -149,6 +149,7 @@ class Office(models.Model):
         verbose_name = _("office")
         verbose_name_plural = _("offices")
         indexes = [
+            models.Index(fields=["parent"], name="user_office_parent"),
             models.Index(
                 fields=["is_active", "is_assignable"],
                 name="user_office_active_assignable",
@@ -156,6 +157,7 @@ class Office(models.Model):
             models.Index(
                 fields=["region", "is_active"], name="user_office_region_active"
             ),
+            models.Index(fields=["kind", "is_active"], name="user_office_kind_active"),
         ]
 
     def __str__(self):
@@ -835,6 +837,112 @@ class User(AbstractUser):
             or self.display_name
             or self.email.split("@")[0]
         )
+
+
+class UserOfficeMembership(models.Model):
+    """Primary/secondary office affiliation with effective-dated history.
+
+    ``User.office`` remains the live primary pointer for hot paths. This table
+    is the auditable history and the home for approved secondary affiliations
+    that must not change the primary assignment. Hierarchy membership never
+    grants permissions by itself — see ``apps.user.services.hierarchy``.
+    """
+
+    class Kind(models.TextChoices):
+        PRIMARY = "primary", _("Primary")
+        SECONDARY = "secondary", _("Secondary")
+
+    class Status(models.TextChoices):
+        SCHEDULED = "scheduled", _("Scheduled")
+        ACTIVE = "active", _("Active")
+        ENDED = "ended", _("Ended")
+        CANCELLED = "cancelled", _("Cancelled")
+
+    user = models.ForeignKey(
+        User,
+        verbose_name=_("user"),
+        related_name="office_memberships",
+        on_delete=models.CASCADE,
+    )
+    office = models.ForeignKey(
+        Office,
+        verbose_name=_("office"),
+        related_name="memberships",
+        on_delete=models.PROTECT,
+    )
+    kind = models.CharField(_("kind"), max_length=16, choices=Kind.choices)
+    status = models.CharField(
+        _("status"),
+        max_length=16,
+        choices=Status.choices,
+        default=Status.ACTIVE,
+    )
+    starts_on = models.DateField(_("starts on"))
+    ends_on = models.DateField(_("ends on"), null=True, blank=True)
+    changed_by = models.ForeignKey(
+        User,
+        verbose_name=_("changed by"),
+        related_name="office_membership_changes",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+    )
+    business_reason = models.TextField(_("business reason"), blank=True)
+    created_at = models.DateTimeField(_("created at"), default=timezone.now)
+    updated_at = models.DateTimeField(_("updated at"), auto_now=True)
+
+    class Meta:
+        ordering = ["user_id", "kind", "-starts_on", "-pk"]
+        verbose_name = _("user office membership")
+        verbose_name_plural = _("user office memberships")
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(ends_on__isnull=True)
+                | Q(ends_on__gte=models.F("starts_on")),
+                name="user_office_membership_valid_dates",
+            ),
+            models.UniqueConstraint(
+                fields=["user"],
+                condition=Q(kind="primary", status="active"),
+                name="user_office_membership_one_active_primary",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["user", "kind", "status"],
+                name="user_office_memb_user_kind",
+            ),
+            models.Index(
+                fields=["office", "status"],
+                name="user_office_memb_office_stat",
+            ),
+            models.Index(
+                fields=["starts_on", "ends_on"],
+                name="user_office_memb_effective",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.user.pk}:{self.kind}:{self.office.pk}:{self.status}"
+
+    def clean(self):
+        super().clean()
+        errors = {}
+        if self.ends_on and self.starts_on and self.ends_on < self.starts_on:
+            errors["ends_on"] = _("End date cannot be earlier than the start date.")
+        if (
+            self.kind == self.Kind.PRIMARY
+            and self.office is not None
+            and not self.office.is_assignable
+            and self.status
+            in {
+                self.Status.SCHEDULED,
+                self.Status.ACTIVE,
+            }
+        ):
+            errors["office"] = _("Primary membership requires an assignable office.")
+        if errors:
+            raise ValidationError(errors)
 
 
 class UserRoleAssignment(models.Model):

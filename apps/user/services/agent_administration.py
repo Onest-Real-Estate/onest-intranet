@@ -891,8 +891,14 @@ def _write_administration(
     locked.save()
 
     if office_changed:
+        from apps.user.services.hierarchy import sync_primary_membership
         from apps.user.services.role_assignments import sync_default_agent_assignment
 
+        sync_primary_membership(
+            locked,
+            actor=actor,
+            business_reason="Office changed by an administrator.",
+        )
         sync_default_agent_assignment(
             locked,
             actor=actor,

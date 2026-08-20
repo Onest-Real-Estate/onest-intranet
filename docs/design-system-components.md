@@ -20,6 +20,7 @@ authorized data belong outside the component boundary.
 | Timelines | `Timeline`, `TimelineItem` | Dot or per-item `icon`, current step, semantic status tones |
 | Filters | `FilterControls`, `FilterField` | Active count, reset, disabled reset, arbitrary control composition |
 | Search controls | `SearchControl` | Controlled/uncontrolled, submit, clear, loading, disabled, error, `tone="outline" \| "subtle"`, `size` |
+| Hierarchy | `HierarchyBreadcrumb`, `HierarchySelector` | Org path breadcrumbs with inactive badges; searchable grouped office picker for large trees |
 
 The catalog at `/design-system` demonstrates every family. Import from the
 barrel only when several families are needed; high-use modules can import the

@@ -18,6 +18,7 @@ from .models import (
     Office,
     OfficeContactAssignment,
     User,
+    UserOfficeMembership,
     UserRoleAssignment,
     UserRoleAssignmentMigrationConflict,
 )
@@ -131,6 +132,58 @@ class UserRoleAssignmentInline(admin.TabularInline):
         "revoked_at",
     )
     readonly_fields = ("assigned_by", "revoked_by", "revoked_at")
+
+
+class UserOfficeMembershipInline(admin.TabularInline):
+    model = UserOfficeMembership
+    fk_name = "user"
+    extra = 0
+    can_delete = False
+    show_change_link = True
+    autocomplete_fields = ["office", "changed_by"]
+    fields = (
+        "kind",
+        "office",
+        "status",
+        "starts_on",
+        "ends_on",
+        "changed_by",
+        "business_reason",
+    )
+    readonly_fields = (
+        "kind",
+        "office",
+        "status",
+        "starts_on",
+        "ends_on",
+        "changed_by",
+        "business_reason",
+    )
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(UserOfficeMembership)
+class UserOfficeMembershipAdmin(admin.ModelAdmin):
+    list_display = (
+        "user",
+        "kind",
+        "office",
+        "status",
+        "starts_on",
+        "ends_on",
+        "changed_by",
+    )
+    list_filter = ("kind", "status")
+    search_fields = (
+        "user__email",
+        "office__name",
+        "office__stable_key",
+        "business_reason",
+    )
+    autocomplete_fields = ("user", "office", "changed_by")
+    readonly_fields = ("created_at", "updated_at")
 
 
 @admin.register(UserRoleAssignment)
@@ -580,7 +633,7 @@ class UserAdmin(DjangoUserAdmin):
     autocomplete_fields = ["office"]
     readonly_fields = ["profile_completed_at", "legacy_groups_preview"]
     actions = ["reset_onboarding"]
-    inlines = [UserRoleAssignmentInline]
+    inlines = [UserRoleAssignmentInline, UserOfficeMembershipInline]
 
     @admin.display(description="Legacy groups")
     def legacy_groups_preview(self, obj):
