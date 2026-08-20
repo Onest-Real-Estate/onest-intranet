@@ -1,161 +1,247 @@
-import { Deferred, Head, usePage } from "@inertiajs/react";
-import { ActionItems, ActionItemsSkeleton } from "@/components/dashboard/ActionItems";
-import {
-  ActiveTransactions,
-  ActiveTransactionsSkeleton,
-} from "@/components/dashboard/ActiveTransactions";
-import {
-  Announcements,
-  AnnouncementsSkeleton,
-} from "@/components/dashboard/Announcements";
-import { DashboardGreeting } from "@/components/dashboard/DashboardGreeting";
-import {
-  MarketSnapshot,
-  MarketSnapshotSkeleton,
-} from "@/components/dashboard/MarketSnapshot";
-import { MetricCards, MetricCardsSkeleton } from "@/components/dashboard/MetricCards";
-import { MyDay, MyDaySkeleton } from "@/components/dashboard/MyDay";
-import { QuickApps, QuickAppsSkeleton } from "@/components/dashboard/QuickApps";
-import {
-  QuickDocuments,
-  QuickDocumentsSkeleton,
-} from "@/components/dashboard/QuickDocuments";
-import {
-  TrainingResources,
-  TrainingResourcesSkeleton,
-} from "@/components/dashboard/TrainingResources";
-import { WidgetPanel } from "@/components/dashboard/WidgetPanel";
-import { HubLayout } from "@/components/HubLayout";
-import { routes } from "@/lib/routes";
-import type { DashboardPageProps } from "@/types";
+import { Head, router, usePage } from "@inertiajs/react";
+import { useMemo, useState } from "react";
 
+import { DashboardGreeting } from "@/components/dashboard/DashboardGreeting";
+import { DashboardProfileSwitcher } from "@/components/dashboard/DashboardProfileSwitcher";
+import { DashboardScopeSelector } from "@/components/dashboard/DashboardScopeSelector";
+import { DashboardWidgetSlot } from "@/components/dashboard/DashboardWidgetSlot";
+import { HubLayout } from "@/components/HubLayout";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { useAuthorizationStaleness } from "@/hooks/use-authorization-staleness";
+import { PREVIEW_SCOPE_OPTIONS } from "@/lib/dashboard/preview";
+import {
+  readRememberedProfile,
+  rememberProfile,
+  resolveDashboard,
+  resolveWidgets,
+} from "@/lib/dashboard/resolve";
+import type { DashboardWidgetColumn } from "@/lib/dashboard/widget-registry";
+import { routes } from "@/lib/routes";
+import type { DashboardPageProps, MetricScopeLevel } from "@/types";
+
+/**
+ * Twelfths a `wide` widget may claim, spelled out because Tailwind needs to see
+ * the class to emit it. Anything unlisted takes the full band.
+ */
+const SPAN_CLASS: Record<number, string> = {
+  4: "h-full xl:col-span-4",
+  5: "h-full xl:col-span-5",
+  6: "h-full xl:col-span-6",
+  7: "h-full xl:col-span-7",
+  8: "h-full xl:col-span-8",
+};
+
+function spanClass(span: number | undefined): string {
+  return (span && SPAN_CLASS[span]) || "h-full xl:col-span-12";
+}
+
+/**
+ * One dashboard, eleven presentations.
+ *
+ * Which widgets appear and in what order is resolved from the reader's
+ * effective roles and permissions in `lib/dashboard` — there is no per-role
+ * page component and no role conditional below. Resolution decides layout
+ * only: every widget is permission-filtered, and every provider behind it
+ * re-applies the same permissions and the reader's scope server-side.
+ */
 export default function Dashboard() {
-  const {
-    user,
-    greeting,
-    metrics,
-    quickApps,
-    announcements,
-    transactions,
-    training,
-    schedule,
-    actionItems,
-    market,
-    documents,
-  } = usePage<DashboardPageProps>().props;
+  const page = usePage<DashboardPageProps>().props;
+  const { user, greeting, shell, assignment, scope } = page;
+
+  // Null means "no remembered choice"; the reader's assigned profile wins.
+  const [chosenProfileId, setChosenProfileId] = useState<string | null>(() =>
+    readRememberedProfile(),
+  );
+  const { stale, acknowledge } = useAuthorizationStaleness(shell?.authorizationVersion);
+
+  const resolved = useMemo(
+    () => resolveDashboard(user, assignment, chosenProfileId),
+    [user, assignment, chosenProfileId],
+  );
+
+  // The scope the server says these figures cover. Absent until the scope
+  // payload ships, and never inferred client-side: guessing a breadth would
+  // relabel an office figure as a company one.
+  const serverScope = scope ?? null;
+  const scopeLevel: MetricScopeLevel | null = serverScope
+    ? (serverScope.options.find((option) => option.key === serverScope.selectedKey)
+        ?.level ?? null)
+    : null;
+
+  const widgets = useMemo(
+    () => resolveWidgets(resolved.profile, user, scopeLevel),
+    [resolved.profile, user, scopeLevel],
+  );
+
+  const scopeOptions = serverScope ? serverScope.options : PREVIEW_SCOPE_OPTIONS;
+  const showsScopeControl = scopeOptions.length > 0;
+  const showsProfileControl = resolved.available.length > 1;
+  const [previewScopeKey, setPreviewScopeKey] = useState(
+    PREVIEW_SCOPE_OPTIONS[0]?.key ?? null,
+  );
 
   if (!user) {
     return null;
   }
 
-  // Wider than `page-shell`: the twelve-column widget grid is the point of this
-  // screen, but it still needs a ceiling so it does not sprawl on an ultrawide
-  // display.
+  function selectProfile(id: string) {
+    // Returning to the assigned profile clears the memory rather than pinning
+    // it, so a later reassignment is not silently overridden.
+    const next = id === resolved.assigned.id ? null : id;
+    rememberProfile(next);
+    setChosenProfileId(next);
+  }
+
+  function refreshAll() {
+    router.reload({ onSuccess: acknowledge });
+  }
+
+  const column = (name: DashboardWidgetColumn) =>
+    widgets.filter((widget) => widget.definition.column === name);
+
+  // Said once, at the top, rather than under every badge below.
+  const hasPreview = widgets.some(
+    (widget) => !widget.withheld && !widget.definition.backed,
+  );
+
+  const wide = column("wide");
+  const main = column("main");
+  const rail = column("rail");
+
   return (
     <div className="flex flex-1 flex-col gap-10">
       <Head title="Dashboard" />
-      <DashboardGreeting greeting={greeting} user={user} />
 
-      {/* Band: where the day stands, and the tools to act on it. Figures and
-          launchers are one thought, so they sit a section apart (24px) rather
-          than a page apart. */}
-      <div className="flex flex-col gap-6">
-        <Deferred data="metrics" fallback={<MetricCardsSkeleton />}>
-          {metrics ? (
-            <WidgetPanel title="Performance" propName="metrics" widget={metrics}>
-              {(data) => <MetricCards metrics={data} />}
-            </WidgetPanel>
+      {/* Orientation is one compact band: identity and controls first, then
+          only the qualifiers that affect the figures below. */}
+      <div className="grid gap-4">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <DashboardGreeting greeting={greeting} user={user} />
+          {showsScopeControl || showsProfileControl ? (
+            <div
+              className={
+                showsScopeControl && showsProfileControl
+                  ? "bg-muted/35 grid min-w-0 gap-2 rounded-xl border p-2 sm:grid-cols-[14rem_16rem] lg:shrink-0"
+                  : showsProfileControl
+                    ? "bg-muted/35 grid min-w-0 gap-2 rounded-xl border p-2 sm:w-64 lg:shrink-0"
+                    : "bg-muted/35 grid min-w-0 gap-2 rounded-xl border p-2 sm:w-56 lg:shrink-0"
+              }
+            >
+              <DashboardScopeSelector
+                options={scopeOptions}
+                selectedKey={serverScope ? serverScope.selectedKey : previewScopeKey}
+                reloadProps={widgets.map((widget) => widget.definition.prop)}
+                interactive={serverScope !== null}
+                onSelect={serverScope ? undefined : setPreviewScopeKey}
+              />
+              <DashboardProfileSwitcher
+                profiles={resolved.available}
+                activeId={resolved.profile.id}
+                source={resolved.source}
+                onSelect={selectProfile}
+              />
+            </div>
           ) : null}
-        </Deferred>
-        <Deferred data="quickApps" fallback={<QuickAppsSkeleton />}>
-          {quickApps ? (
-            <WidgetPanel title="Quick access" propName="quickApps" widget={quickApps}>
-              {(data) => <QuickApps apps={data} />}
-            </WidgetPanel>
-          ) : null}
-        </Deferred>
+        </div>
+
+        {hasPreview || stale ? (
+          <div className="grid gap-3">
+            {hasPreview ? (
+              <p className="text-muted-foreground flex items-start gap-2 text-sm leading-5">
+                <Badge variant="warning" className="mt-0.5 shrink-0">
+                  Preview data
+                </Badge>
+                <span>
+                  Panels marked this way show illustrative figures while their data
+                  sources are being connected.
+                </span>
+              </p>
+            ) : null}
+
+            {/* One announcement for a page-wide condition. Individual panels carry
+                a quiet stale mark; the action to fix it lives here, once. */}
+            {stale ? (
+              <div
+                role="status"
+                className="border-warning/30 bg-warning/10 text-warning-ink flex flex-wrap items-center gap-3 rounded-lg border px-4 py-3 text-sm"
+              >
+                <span>
+                  Your roles or scope changed while this page was open. Refresh to see
+                  the dashboard you are entitled to now.
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="ms-auto"
+                  onClick={refreshAll}
+                >
+                  Refresh
+                </Button>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
       </div>
 
-      {/*
-        Band: the working grid. The rail leads in source order so a phone —
-        where the columns collapse into one — opens on today's obligations
-        instead of scrolling past news to reach them; `xl:order` puts it back
-        on the right once there are two columns to read side by side.
-      */}
+      {/* Band: where things stand, and the tools to act on them. Figures and
+          launchers are one thought, so they sit a section apart (24px) rather
+          than a page apart. */}
+      {wide.length > 0 ? (
+        <div className="grid items-stretch gap-6 xl:grid-cols-12">
+          {wide.map((widget) => (
+            <div
+              key={widget.definition.id}
+              className={spanClass(widget.definition.span)}
+            >
+              <DashboardWidgetSlot resolved={widget} page={page} stale={stale} />
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      {/* Band: the role-defining workflow leads in both DOM and visual order.
+          Supporting daily and utility panels follow, so keyboard, screen-reader,
+          mobile, and desktop reading order never disagree. */}
       <div className="grid items-start gap-6 xl:grid-cols-12">
-        <div className="grid content-start gap-6 xl:order-2 xl:col-span-4">
-          <Deferred data="schedule" fallback={<MyDaySkeleton />}>
-            {schedule ? (
-              <WidgetPanel title="My day" propName="schedule" widget={schedule}>
-                {(data) => <MyDay schedule={data} />}
-              </WidgetPanel>
-            ) : null}
-          </Deferred>
-          <Deferred data="actionItems" fallback={<ActionItemsSkeleton />}>
-            {actionItems ? (
-              <WidgetPanel
-                title="Action items"
-                propName="actionItems"
-                widget={actionItems}
-              >
-                {(data) => <ActionItems data={data} />}
-              </WidgetPanel>
-            ) : null}
-          </Deferred>
-          <Deferred data="market" fallback={<MarketSnapshotSkeleton />}>
-            {market ? (
-              <WidgetPanel title="Market snapshot" propName="market" widget={market}>
-                {(data) => <MarketSnapshot market={data} />}
-              </WidgetPanel>
-            ) : null}
-          </Deferred>
-          <Deferred data="documents" fallback={<QuickDocumentsSkeleton />}>
-            {documents ? (
-              <WidgetPanel
-                title="Quick documents"
-                propName="documents"
-                widget={documents}
-              >
-                {(data) => <QuickDocuments documents={data} />}
-              </WidgetPanel>
-            ) : null}
-          </Deferred>
-        </div>
-        <div className="grid content-start gap-6 xl:order-1 xl:col-span-8">
-          <Deferred data="announcements" fallback={<AnnouncementsSkeleton />}>
-            {announcements ? (
-              <WidgetPanel
-                title="News & announcements"
-                propName="announcements"
-                widget={announcements}
-              >
-                {(data) => <Announcements data={data} />}
-              </WidgetPanel>
-            ) : null}
-          </Deferred>
-          <Deferred data="transactions" fallback={<ActiveTransactionsSkeleton />}>
-            {transactions ? (
-              <WidgetPanel
-                title="Active transactions"
-                propName="transactions"
-                widget={transactions}
-              >
-                {(data) => <ActiveTransactions transactions={data} />}
-              </WidgetPanel>
-            ) : null}
-          </Deferred>
-          <Deferred data="training" fallback={<TrainingResourcesSkeleton />}>
-            {training ? (
-              <WidgetPanel
-                title="Training & resources"
-                propName="training"
-                widget={training}
-              >
-                {(data) => <TrainingResources training={data} />}
-              </WidgetPanel>
-            ) : null}
-          </Deferred>
-        </div>
+        {main.length > 0 ? (
+          <div
+            data-dashboard-column="main"
+            className={
+              rail.length > 0
+                ? "grid content-start gap-6 xl:col-span-8"
+                : "grid content-start gap-6 xl:col-span-12"
+            }
+          >
+            {main.map((widget) => (
+              <DashboardWidgetSlot
+                key={widget.definition.id}
+                resolved={widget}
+                page={page}
+                stale={stale}
+              />
+            ))}
+          </div>
+        ) : null}
+        {rail.length > 0 ? (
+          <div
+            data-dashboard-column="rail"
+            className={
+              main.length > 0
+                ? "grid content-start gap-6 xl:col-span-4"
+                : "grid content-start gap-6 xl:col-span-12"
+            }
+          >
+            {rail.map((widget) => (
+              <DashboardWidgetSlot
+                key={widget.definition.id}
+                resolved={widget}
+                page={page}
+                stale={stale}
+              />
+            ))}
+          </div>
+        ) : null}
       </div>
     </div>
   );

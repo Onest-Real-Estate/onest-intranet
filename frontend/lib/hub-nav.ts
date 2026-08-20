@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 
 import { hasPermission, type PermissionCheck } from "@/lib/permissions";
+import { getRoleCatalogEntry } from "@/lib/roles";
 import { routes } from "@/lib/routes";
 import type { HubFeatures, PrimaryOffice, User } from "@/types";
 
@@ -77,6 +78,31 @@ export interface HubNavItem {
   access: "authenticated" | "permission-protected";
   /** Effective permission requirements. Both `any` and `all` are supported. */
   permissions: PermissionCheck;
+  /**
+   * Role codes this destination is *relevant* to. Absent means everyone.
+   *
+   * This is presentation, not authorization, and the two must not be confused:
+   *
+   * - It can only ever **hide** an entry. It never reveals one, and a hidden
+   *   route is exactly as reachable as it was before.
+   * - It is legal only on items that require no permissions. Where a
+   *   permission exists it already expresses relevance, and adding a role
+   *   filter on top would hide a destination somebody was deliberately
+   *   granted. `validateHubNavRegistry` enforces this.
+   * - A superuser is never filtered by it.
+   *
+   * Authorization stays where it belongs: `permissions` here, and
+   * `enforce_policy` on the view.
+   */
+  roles?: readonly string[];
+  /**
+   * Copy-only relabeling for the roles the destination reads differently to.
+   * Like `roles`, this is presentation: it changes wording, never visibility,
+   * reachability, or authorization. Matching is on stable role codes, and a
+   * superuser is not special-cased — the label follows the roles a person
+   * actually holds.
+   */
+  labelForRoles?: { roles: readonly string[]; label: string };
   /** Missing keys hide; explicit false keys render a protected Soon route. */
   feature?: string;
   requiresOffice?: boolean;
@@ -159,6 +185,31 @@ export const HUB_NAV_SECTIONS: HubNavSectionDefinition[] = [
 ];
 
 /**
+ * Licensed roles that carry their own listings and their own brokerage
+ * agreement. "My contract" and "Agent transactions" describe a book of
+ * business; to a coordinator, an accountant, or IT they are two permanent
+ * dead ends in the rail.
+ *
+ * Someone who is both a manager and a producing agent holds both codes, so
+ * they keep the entries. Adjusting who counts is an edit to this array.
+ */
+const PRODUCING_ROLES = [
+  "realtor",
+  "branch_manager",
+  "regional_manager",
+  "principal_broker",
+  "broker_admin",
+] as const;
+
+/** Producers, plus the roles that prepare and hand out listing collateral. */
+const MARKETING_ROLES = [
+  ...PRODUCING_ROLES,
+  "marketing_team",
+  "branch_admin",
+  "regional_admin",
+] as const;
+
+/**
  * Version-controlled navigation configuration shared by the desktop rail and
  * mobile drawer. Ordering is data, not array position, and every destination
  * declares its authorization mode and active matching behavior.
@@ -177,13 +228,16 @@ export const HUB_NAV_REGISTRY: HubNavItem[] = [
   },
   {
     key: "agent-profile",
-    label: "Agent profile",
+    label: "Your profile",
     route: route("profile", routes.profile()),
     icon: Briefcase,
     group: "general",
     order: 20,
     access: "authenticated",
     permissions: {},
+    // Same page, same fields. A licensed producer reads it as their public
+    // agent record; everyone else reads it as their own staff profile.
+    labelForRoles: { roles: PRODUCING_ROLES, label: "Agent profile" },
     activeMatch: active(routes.profile()),
   },
   {
@@ -195,6 +249,7 @@ export const HUB_NAV_REGISTRY: HubNavItem[] = [
     order: 30,
     access: "authenticated",
     permissions: {},
+    roles: PRODUCING_ROLES,
     feature: "my-contract",
     activeMatch: active(routes.coming_soon("my-contract")),
   },
@@ -207,6 +262,7 @@ export const HUB_NAV_REGISTRY: HubNavItem[] = [
     order: 40,
     access: "authenticated",
     permissions: {},
+    roles: PRODUCING_ROLES,
     feature: "agent-transactions",
     activeMatch: active(routes.coming_soon("agent-transactions")),
   },
@@ -255,6 +311,7 @@ export const HUB_NAV_REGISTRY: HubNavItem[] = [
     order: 30,
     access: "authenticated",
     permissions: {},
+    roles: MARKETING_ROLES,
     feature: "marketing-resources",
     activeMatch: active(routes.coming_soon("marketing-resources")),
   },
@@ -581,6 +638,34 @@ function hasDeclaredPermissions(item: HubNavItem): boolean {
   return Boolean(item.permissions.all?.length || item.permissions.any?.length);
 }
 
+/**
+ * Whether a destination is worth showing this reader.
+ *
+ * Only ever narrows, and only for items that ask for no permission — see
+ * `HubNavItem.roles`. A superuser is exempt so a platform administrator can
+ * still reach every destination from the rail.
+ */
+function isRelevantToRoles(user: User, item: HubNavItem): boolean {
+  if (!item.roles || user.isSuperuser) {
+    return true;
+  }
+  if (!Array.isArray(user.roles)) {
+    return false;
+  }
+  return item.roles.some((code) => user.roles.includes(code));
+}
+
+/** Registry copy, swapped for the roles that read the destination differently. */
+function labelFor(user: User, item: HubNavItem): string {
+  const override = item.labelForRoles;
+  if (!override || !Array.isArray(user.roles)) {
+    return item.label;
+  }
+  return override.roles.some((code) => user.roles.includes(code))
+    ? override.label
+    : item.label;
+}
+
 /** Return human-readable contract violations without mutating the registry. */
 export function validateHubNavRegistry(
   registry: HubNavItem[] = HUB_NAV_REGISTRY,
@@ -653,6 +738,35 @@ export function validateHubNavRegistry(
     if (item.access === "permission-protected" && !hasDeclaredPermissions(item)) {
       errors.push(`protected item lacks permissions: ${item.key}`);
     }
+    if (item.roles) {
+      if (item.roles.length === 0) {
+        // An empty list would hide the entry from everyone, which is a
+        // deletion written as a filter.
+        errors.push(`item declares an empty role list: ${item.key}`);
+      }
+      if (hasDeclaredPermissions(item)) {
+        // Relevance may not double as authorization. See `HubNavItem.roles`.
+        errors.push(`permission-protected item declares roles: ${item.key}`);
+      }
+      for (const code of item.roles) {
+        if (!getRoleCatalogEntry(code)) {
+          errors.push(`unknown role for ${item.key}: ${code}`);
+        }
+      }
+    }
+    if (item.labelForRoles) {
+      if (item.labelForRoles.roles.length === 0) {
+        errors.push(`item declares an empty label role list: ${item.key}`);
+      }
+      if (!item.labelForRoles.label.trim()) {
+        errors.push(`item declares an empty role label: ${item.key}`);
+      }
+      for (const code of item.labelForRoles.roles) {
+        if (!getRoleCatalogEntry(code)) {
+          errors.push(`unknown label role for ${item.key}: ${code}`);
+        }
+      }
+    }
     if (item.activeMatch.prefixes.length === 0) {
       errors.push(`item lacks active match prefixes: ${item.key}`);
     }
@@ -694,6 +808,9 @@ export function resolveHubNav(
       if (!hasPermission(user, item.permissions)) {
         return false;
       }
+      if (!isRelevantToRoles(user, item)) {
+        return false;
+      }
       if (item.feature !== undefined && features[item.feature] === undefined) {
         return false;
       }
@@ -706,6 +823,7 @@ export function resolveHubNav(
     })
     .map((item) => ({
       ...item,
+      label: labelFor(user, item),
       availability:
         item.feature !== undefined && features[item.feature] === false
           ? ("coming-soon" as const)

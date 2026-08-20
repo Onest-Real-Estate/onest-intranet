@@ -2,8 +2,9 @@
 
 The authenticated shell has one version-controlled navigation registry:
 `frontend/lib/hub-nav.ts`. `HubLayout` resolves that registry once and renders the
-same result in the desktop rail and mobile drawer. Do not add role-name checks or a
-second menu array to a component.
+same result in the desktop rail and mobile drawer. Do not add a role check or a
+second menu array to a component: relevance is registry data (see
+[Role relevance](#role-relevance)) and authorization is permissions.
 
 ## Adding or changing a destination
 
@@ -29,11 +30,41 @@ collapsible sections in `HUB_NAV_SECTIONS`.
    requirement matching its backend route policy.
 
 `resolveHubNav` uses the effective permission union supplied on the authenticated
-user prop. It does not inspect role display names. It filters permission and
-feature requirements, removes items that lack required user context, deduplicates
-by stable key and destination, sorts by configured order, and removes empty
-groups. This makes overlapping Agent, Branch, Regional, and Brokerage assignments
-additive without rendering duplicate links.
+user prop. It never authorizes from a role, and it never reads a role display
+name. It filters permission and feature requirements, drops destinations the
+reader's roles make irrelevant, removes items that lack required user context,
+deduplicates by stable key and destination, sorts by configured order, and removes
+empty groups. This makes overlapping Agent, Branch, Regional, and Brokerage
+assignments additive without rendering duplicate links.
+
+## Role relevance
+
+Permissions decide what a reader *may* reach. They do not decide what is worth
+putting in front of them. "My contract" and "Agent transactions" describe a book
+of business; to an accountant, a coordinator, or IT support they are permanent
+dead ends in the rail, and no permission expresses that because the destinations
+are open to every signed-in colleague.
+
+An item may therefore declare `roles: [...]` — the stable role codes from
+`apps/user/roles.py` the destination is relevant to. Absent means everyone. Four
+rules keep it from becoming a second, weaker authorization system:
+
+1. **It only ever hides.** A role list never reveals an entry, and a hidden route
+   is exactly as reachable as it was before. Route policy is unchanged.
+2. **It is legal only on items that require no permissions.** Where a permission
+   exists it already expresses relevance; filtering on top of it would hide a
+   destination somebody was deliberately granted.
+   `validateHubNavRegistry` reports `permission-protected item declares roles`.
+3. **Codes must exist** in the role catalog, and an empty list is rejected — that
+   is a deletion written as a filter.
+4. **Superusers are exempt**, so a platform administrator can still reach every
+   destination from the rail.
+
+Someone holding several roles keeps the union, so a branch manager who also
+carries listings still sees the agent entries. Today three items use it:
+`my-contract` and `agent-transactions` (`PRODUCING_ROLES`) and
+`marketing-resources` (`MARKETING_ROLES`). Changing who counts is an edit to
+those two arrays.
 
 ## Availability, loading, and revocation
 

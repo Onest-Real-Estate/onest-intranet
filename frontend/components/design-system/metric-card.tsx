@@ -95,7 +95,11 @@ export function MetricGroup({
           <p className="text-muted-foreground text-xs">{description}</p>
         ) : null}
       </header>
-      <div className="grid gap-1.5 sm:grid-cols-2">{children}</div>
+      {/* Auto-fit rather than a fixed two-up: a group holding one figure
+          should fill its well, not sit in half of it. */}
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(11rem,1fr))] gap-1.5">
+        {children}
+      </div>
     </section>
   );
 }
