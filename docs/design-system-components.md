@@ -13,7 +13,7 @@ authorized data belong outside the component boundary.
 | Status badges | `StatusBadge`, `presentStatus` | Neutral, info, success, warning, destructive, safe unknown |
 | Empty states | `EmptyState` | Compact/full, description and action slots |
 | Dialogs | Dialog primitives, `DestructiveConfirmDialog` | Controlled/uncontrolled, Escape, overlay close, focus trap/restoration, loading confirmation |
-| Forms | Field/label/description/error/summary/read-only components, `fieldA11yProps` | Required, optional, invalid, disabled through native controls, read-only, form-level errors |
+| Forms | Field/label/description/error/summary/read-only components, `DateField` / `DatePicker`, `fieldA11yProps` | Required, optional, invalid, disabled through native controls, read-only, form-level errors, calendar date (and optional time) without the browser date picker |
 | Uploaders | `FileUploader`, `UploadHandler`, `UploadedFile` | Drag/drop, keyboard choice, progress, client hint failure, server failure, retry, preview, removal, disabled, read-only |
 | Page headers | `PageHeader` | Breadcrumb, eyebrow, description, metadata, responsive action slots |
 | Metric cards | `MetricCard`, `MetricGroup` | Neutral, success, warning, destructive, trend, loading |
@@ -67,7 +67,10 @@ rules. A successful UI state only follows a successful endpoint response.
 - Table sort buttons announce `aria-sort`; selection controls have row labels.
 - Dialogs require a title and description. Radix traps focus and restores it;
   pass `fallbackFocusRef` when navigation may remove the trigger.
-- Form summaries link to invalid controls and inline messages are announced.
+- `DateField` and `DatePicker` are the date controls. Do not use
+  `<input type="date">` or `datetime-local`; those render the OS picker.
+  Posted values stay ISO (`yyyy-MM-dd`, or `yyyy-MM-ddTHH:mm` when
+  `includeTime` is set).
 - Statuses use words and icons in addition to color.
 - Upload progress uses a named progressbar and errors use live status text.
 - Global reduced-motion rules shorten nonessential animation to effectively

@@ -12,6 +12,7 @@ import {
 import { useEffect, useRef, useState } from "react";
 
 import {
+  DateField,
   FormDescription,
   FormErrorSummary,
   FormField,
@@ -358,10 +359,9 @@ export default function OnboardingWorkspace() {
                         validation={validation}
                         description="A brief operational instruction—no sensitive details."
                       />
-                      <TextField
+                      <DateField
                         name="due_on"
                         label="Due date"
-                        type="date"
                         optional
                         validation={validation}
                       />

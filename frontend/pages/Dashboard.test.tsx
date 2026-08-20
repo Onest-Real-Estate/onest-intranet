@@ -28,6 +28,7 @@ const user: User = {
   id: 1,
   email: "avery@onest.realestate",
   name: "Avery Johnson",
+  headshotUrl: null,
   permissions: [],
   roles: ["Users"],
   roleLabel: "Agent",

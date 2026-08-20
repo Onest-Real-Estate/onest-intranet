@@ -18,7 +18,7 @@ import { type CSSProperties, type ReactNode, useEffect, useRef, useState } from 
 
 import { BrandMark } from "@/components/BrandMark";
 import { SearchControl } from "@/components/design-system/search-control";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -94,6 +94,19 @@ function initials(name: string): string {
 
 function firstName(name: string): string {
   return name.split(/\s+/).filter(Boolean)[0] ?? name;
+}
+
+function UserAvatar({ user, className }: { user: User; className?: string }) {
+  return (
+    <Avatar className={className}>
+      {user.headshotUrl ? (
+        <AvatarImage key={user.headshotUrl} src={user.headshotUrl} alt="" />
+      ) : null}
+      <AvatarFallback className="brand-surface text-xs font-semibold">
+        {initials(user.name)}
+      </AvatarFallback>
+    </Avatar>
+  );
 }
 
 function roleSummary(
@@ -295,11 +308,7 @@ function SidebarAccount({ user, onSignOut }: { user: User; onSignOut: () => void
         href={routes.profile()}
         className="hover:bg-sidebar-accent/50 focus-visible:ring-sidebar-ring flex min-w-0 flex-1 items-center gap-2.5 rounded-md px-1.5 py-1.5 transition-colors duration-(--motion-fast) focus-visible:ring-2 focus-visible:outline-none group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
       >
-        <Avatar className="size-8 shrink-0">
-          <AvatarFallback className="brand-surface text-xs font-semibold">
-            {initials(user.name)}
-          </AvatarFallback>
-        </Avatar>
+        <UserAvatar user={user} className="size-8 shrink-0" />
         <span className="min-w-0 flex-1 text-left leading-tight group-data-[collapsible=icon]:hidden">
           <span className="block truncate text-sm font-medium">{user.name}</span>
           <span className="text-muted-foreground block truncate text-xs">
@@ -492,7 +501,11 @@ function ShellWorkspace({
         navigationFocusPending.current = false;
       });
     });
-    const removeNetworkError = router.on("networkError", () => {
+    const removeNetworkError = router.on("networkError", (event) => {
+      const error = event.detail.error;
+      if (error instanceof Error && error.name === "AbortError") {
+        return;
+      }
       setNavigating(false);
       setFailure("network");
       return false;
@@ -591,11 +604,7 @@ function ShellWorkspace({
                   className="ml-1 h-10 max-w-52 gap-2 rounded-full px-1 lg:pr-3"
                   aria-label={`${firstName(user.name)} account menu`}
                 >
-                  <Avatar className="size-8">
-                    <AvatarFallback className="brand-surface text-xs font-semibold">
-                      {initials(user.name)}
-                    </AvatarFallback>
-                  </Avatar>
+                  <UserAvatar user={user} className="size-8" />
                   <span className="hidden min-w-0 text-left leading-tight lg:block">
                     <span className="block truncate text-sm font-medium">
                       {user.name}

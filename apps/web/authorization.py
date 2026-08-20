@@ -102,6 +102,15 @@ ROUTE_POLICIES: dict[str, AuthorizationPolicy] = {
         scope_rule="self_only",
         auth_behavior="json",
     ),
+    "headshot_display": AuthorizationPolicy(
+        key="headshot_display",
+        access="authenticated",
+        description="Stream the signed-in user's headshot for avatar display.",
+        methods=("GET",),
+        route_names=("headshot_display",),
+        allow_incomplete_profile=True,
+        scope_rule="self_only",
+    ),
     "profile": AuthorizationPolicy(
         key="profile",
         access="authenticated",

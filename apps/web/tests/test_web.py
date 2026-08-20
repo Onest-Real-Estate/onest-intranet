@@ -92,6 +92,7 @@ def test_dashboard_shares_user(client):
         "roleLabel": "Agent",
         "isStaff": False,
         "isSuperuser": False,
+        "headshotUrl": None,
     }
     assert data["props"]["shell"]["session"] == {"authenticated": True}
     assert data["props"]["shell"]["help"] == {"url": None}

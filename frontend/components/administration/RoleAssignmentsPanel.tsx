@@ -3,6 +3,7 @@ import { useId, useState } from "react";
 
 import {
   DataTable,
+  DateField,
   Dialog,
   DialogClose,
   DialogContent,
@@ -18,7 +19,7 @@ import {
   SurfaceCard,
   SurfaceCardContent,
 } from "@/components/design-system";
-import { SelectField, TextField } from "@/components/profile/profile-fields";
+import { SelectField } from "@/components/profile/profile-fields";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { routes } from "@/lib/routes";
@@ -244,18 +245,18 @@ export function RoleAssignmentsPanel({
                   validation={validation}
                 />
               ) : null}
-              <TextField
+              <DateField
                 name="starts_at"
                 label="Effective from"
-                type="datetime-local"
+                includeTime
                 optional
                 validation={validation}
                 description="Leave empty to start immediately."
               />
-              <TextField
+              <DateField
                 name="ends_at"
                 label="Effective until"
-                type="datetime-local"
+                includeTime
                 optional
                 validation={validation}
                 description="Leave empty for an open-ended assignment."

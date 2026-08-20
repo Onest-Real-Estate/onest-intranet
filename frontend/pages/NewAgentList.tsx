@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import {
   DataTable,
+  DatePicker,
   FilterControls,
   FilterField,
   PageHeader,
@@ -17,7 +18,6 @@ import {
 import { HubLayout } from "@/components/HubLayout";
 import { PermissionRequired } from "@/components/PermissionRequired";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import {
   Select,
@@ -191,19 +191,23 @@ export default function NewAgentList() {
                   onChange={(trainingStatus) => visit({ trainingStatus })}
                 />
                 <FilterField label="Start from">
-                  <Input
-                    type="date"
+                  <DatePicker
+                    id="start-from"
                     aria-label="Start date from"
                     value={filters.startFrom}
-                    onChange={(event) => visit({ startFrom: event.target.value })}
+                    onChange={(startFrom) => visit({ startFrom })}
+                    placeholder="Pick a start date"
+                    className="w-full sm:w-44"
                   />
                 </FilterField>
                 <FilterField label="Start through">
-                  <Input
-                    type="date"
+                  <DatePicker
+                    id="start-to"
                     aria-label="Start date through"
                     value={filters.startTo}
-                    onChange={(event) => visit({ startTo: event.target.value })}
+                    onChange={(startTo) => visit({ startTo })}
+                    placeholder="Pick an end date"
+                    className="w-full sm:w-44"
                   />
                 </FilterField>
               </div>

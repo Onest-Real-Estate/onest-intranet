@@ -8,6 +8,7 @@ import {
 } from "@/components/administration/AccessChangeDialog";
 import { RoleAssignmentsPanel } from "@/components/administration/RoleAssignmentsPanel";
 import {
+  DateField,
   FormDescription,
   FormErrorSummary,
   FormField,
@@ -255,10 +256,9 @@ export default function UserAdministration() {
                   validation={validation}
                   description={fieldSpec("agent_status")?.description}
                 />
-                <TextField
+                <DateField
                   name="start_date"
                   label="Start date"
-                  type="date"
                   optional
                   disabled={readOnly}
                   defaultValue={values.startDate}

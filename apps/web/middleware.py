@@ -6,6 +6,7 @@ from inertia import share
 
 from apps.audit.models import AuditEvent
 from apps.audit.service import AuditTarget, actor_from_user, log_event
+from apps.user.headshot import headshot_public_url
 from apps.user.roles import AGENT, ROLE_LABELS, SUPERADMIN_LABEL
 from apps.user.services.role_assignments import get_effective_access
 from apps.web.authorization import (
@@ -102,6 +103,7 @@ class InertiaShareMiddleware:
             "id": user.id,
             "email": user.email,
             "name": user.display_name or user.get_full_name() or user.email,
+            "headshotUrl": headshot_public_url(request, user),
             # Django auth permission codenames, e.g. "user.view_user".
             "permissions": sorted(access.permissions),
             # Role (Django group) names, highest-priority first.

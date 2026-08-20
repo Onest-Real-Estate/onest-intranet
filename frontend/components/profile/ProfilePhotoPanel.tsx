@@ -1,5 +1,6 @@
+import { router } from "@inertiajs/react";
 import { Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import {
   FileUploader,
@@ -41,6 +42,7 @@ export function ProfilePhotoPanel({
   limits: ProfileLimits;
 }) {
   const [photoUrl, setPhotoUrl] = useState(headshotUrl);
+  const [localPreview, setLocalPreview] = useState<string | null>(null);
   // Bumped only on removal, to clear the uploader's "complete" state. Keying on
   // the photo URL instead would remount away the feedback for a fresh upload.
   const [uploaderKey, setUploaderKey] = useState(0);
@@ -48,6 +50,50 @@ export function ProfilePhotoPanel({
   const [removeError, setRemoveError] = useState<string | null>(null);
   const [removing, setRemoving] = useState(false);
   const maxMb = Math.round(limits.headshotMaxBytes / 1024 / 1024);
+  const avatarSrc = localPreview ?? photoUrl;
+
+  useEffect(() => {
+    setPhotoUrl(headshotUrl);
+    if (headshotUrl) {
+      setLocalPreview((current) => {
+        if (current) {
+          URL.revokeObjectURL(current);
+        }
+        return null;
+      });
+    }
+  }, [headshotUrl]);
+
+  useEffect(() => {
+    return () => {
+      if (localPreview) {
+        URL.revokeObjectURL(localPreview);
+      }
+    };
+  }, [localPreview]);
+
+  function rememberLocalPreview(file: File) {
+    setLocalPreview((current) => {
+      if (current) {
+        URL.revokeObjectURL(current);
+      }
+      return URL.createObjectURL(file);
+    });
+  }
+
+  function clearLocalPreview() {
+    setLocalPreview((current) => {
+      if (current) {
+        URL.revokeObjectURL(current);
+      }
+      return null;
+    });
+  }
+
+  function syncShellPhoto(nextUrl: string | null) {
+    setPhotoUrl(nextUrl);
+    router.reload({ only: ["user", "initial"], showProgress: false });
+  }
 
   async function removePhoto() {
     setRemoving(true);
@@ -63,8 +109,9 @@ export function ProfilePhotoPanel({
       if (!response.ok) {
         throw new Error("The photo could not be removed. Try again.");
       }
-      setPhotoUrl(null);
+      clearLocalPreview();
       setUploaderKey((current) => current + 1);
+      syncShellPhoto(null);
       setStatus("Profile photo removed.");
     } catch (error) {
       setRemoveError(
@@ -84,20 +131,31 @@ export function ProfilePhotoPanel({
       <SurfaceCardContent className="grid gap-4">
         <div className="flex items-center gap-4">
           <Avatar className="size-16">
-            {photoUrl ? <AvatarImage src={photoUrl} alt="" /> : null}
+            {avatarSrc ? (
+              <AvatarImage
+                key={avatarSrc}
+                src={avatarSrc}
+                alt=""
+                onLoadingStatusChange={(status) => {
+                  if (status === "loaded" && photoUrl && localPreview) {
+                    clearLocalPreview();
+                  }
+                }}
+              />
+            ) : null}
             <AvatarFallback>{initials(displayName)}</AvatarFallback>
           </Avatar>
           <div className="min-w-0">
             <p className="text-sm font-medium">{displayName}</p>
             <p className="text-muted-foreground text-sm">
-              {photoUrl ? "Photo on file" : "No photo yet"}
+              {avatarSrc ? "Photo on file" : "No photo yet"}
             </p>
           </div>
         </div>
 
         <FileUploader
           key={uploaderKey}
-          label={photoUrl ? "Replace profile photo" : "Add profile photo"}
+          label={avatarSrc ? "Replace profile photo" : "Add profile photo"}
           description={`JPEG or PNG · at least ${limits.headshotMinDimension}×${limits.headshotMinDimension} px · max ${maxMb} MB`}
           accept="image/jpeg,image/png"
           maxSize={limits.headshotMaxBytes}
@@ -128,7 +186,8 @@ export function ProfilePhotoPanel({
               throw new Error("The server did not return an uploaded file URL.");
             }
             onProgress(100);
-            setPhotoUrl(payload.url);
+            rememberLocalPreview(file);
+            syncShellPhoto(payload.url);
             setStatus("Profile photo updated.");
             return {
               name: file.name,
@@ -139,7 +198,7 @@ export function ProfilePhotoPanel({
           }}
         />
 
-        {photoUrl ? (
+        {avatarSrc ? (
           <div className="flex justify-end">
             <Button
               type="button"

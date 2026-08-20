@@ -30,6 +30,7 @@ function setPage(overrides: Partial<UserAdministrationIndexPageProps> = {}) {
       id: 1,
       email: "ada@onest.realestate",
       name: "Ada Admin",
+      headshotUrl: null,
       permissions: ["user.view_user_administration"],
       roles: ["Branch Managers"],
       roleLabel: "Branch manager",

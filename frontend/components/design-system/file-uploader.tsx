@@ -135,7 +135,8 @@ export function FileUploader({
     }
   }
 
-  const previewUrl = uploaded?.url ?? localPreview;
+  const previewUrl =
+    lastFile?.type.startsWith("image/") && localPreview ? localPreview : uploaded?.url;
   const fileName = uploaded?.name ?? lastFile?.name;
   const fileSize = uploaded?.size ?? lastFile?.size;
 

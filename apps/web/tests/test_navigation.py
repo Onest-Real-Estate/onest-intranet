@@ -224,6 +224,26 @@ def test_hub_destinations_reject_anonymous_direct_access(client):
 
 
 @pytest.mark.django_db
+def test_shared_user_carries_headshot_url(client, settings, tmp_path):
+    from apps.user.tests.test_onboarding import make_image
+
+    settings.MEDIA_ROOT = str(tmp_path)
+    user = agent()
+    client.force_login(user)
+    assert shared_props(client)["user"]["headshotUrl"] is None
+
+    client.post(
+        reverse("headshot_upload"),
+        {"headshot": make_image("JPEG", (300, 300))},
+        format="multipart",
+    )
+    user.refresh_from_db()
+    assert shared_props(client)["user"]["headshotUrl"] == (
+        "http://testserver/account/headshot/file"
+    )
+
+
+@pytest.mark.django_db
 def test_effective_permissions_are_recomputed_each_request(client):
     """Access revoked mid-session must not survive in the shared props."""
     user = agent(office=branch_office())
