@@ -177,6 +177,10 @@ def get_effective_permissions(
 
 
 def has_effective_permission(user: User, permission: str, *, at=None) -> bool:
+    from apps.web.permission_catalog import is_cataloged_permission
+
+    if not permission or not is_cataloged_permission(permission):
+        return False
     if getattr(user, "is_superuser", False):
         return True
     return permission in get_effective_permissions(user, at=at)
@@ -187,14 +191,17 @@ def has_effective_permissions(
 ) -> bool:
     if not permissions:
         return True
-    effective_permissions = get_effective_permissions(user, at=at)
-    return all(permission in effective_permissions for permission in permissions)
+    return all(
+        has_effective_permission(user, permission, at=at) for permission in permissions
+    )
 
 
 def get_effective_access(user: User, *, at=None) -> EffectiveAccess:
+    from apps.web.permission_catalog import filter_to_catalog
+
     assignments = tuple(get_effective_assignments(user, at=at))
     role_keys = tuple(get_effective_role_keys(user, at=at, assignments=assignments))
-    permissions = frozenset(
+    permissions = filter_to_catalog(
         get_effective_permissions(user, at=at, assignments=assignments)
     )
     region_keys: set[str] = set()
