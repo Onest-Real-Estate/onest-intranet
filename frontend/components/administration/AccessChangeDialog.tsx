@@ -48,7 +48,7 @@ export function AccessChangeDialog({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="rounded-2xl">
+      <DialogContent>
         <DialogHeader>
           <span className="bg-warning/18 text-warning-ink grid size-10 place-items-center rounded-xl">
             <ShieldAlert className="size-5" aria-hidden />

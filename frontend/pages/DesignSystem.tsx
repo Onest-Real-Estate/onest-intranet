@@ -26,6 +26,7 @@ import {
   FileUploader,
   FilterControls,
   FilterField,
+  FormActionBar,
   FormDescription,
   FormErrorSummary,
   FormField,
@@ -220,6 +221,20 @@ export default function DesignSystem() {
           </SurfaceCard>
           <SurfaceCard>
             <PanelHeader
+              divided
+              title="Divided panel header"
+              description="Rule the header off when the body is a form or a table, so the header reads as a lid rather than the first row."
+              meta={<SurfaceCardMeta>12 fields</SurfaceCardMeta>}
+            />
+            <SurfaceCardContent className="text-sm">
+              A panel whose body is prose or a short list leaves `divided` off — the
+              spacing already separates them.
+            </SurfaceCardContent>
+          </SurfaceCard>
+        </div>
+        <div className="grid gap-4 lg:grid-cols-2">
+          <SurfaceCard>
+            <PanelHeader
               title="Panel with one action"
               description="Use `action` for a real control and `meta` for a fact — never both as chips."
               action={
@@ -325,7 +340,11 @@ export default function DesignSystem() {
             </FilterControls>
           </SurfaceCardHeader>
           <SurfaceCardContent className="grid gap-4">
+            {/* The recommended shape for a table inside a card: one frame, row
+                rules running to both card edges, outer columns still aligned
+                to the panel heading. */}
             <DataTable
+              frame="bleed"
               rows={contracts.items}
               columns={columns}
               rowKey={(row) => row.id}
@@ -399,7 +418,9 @@ export default function DesignSystem() {
                   <ReadOnlyValue label="Office">Charlottesville</ReadOnlyValue>
                   <ReadOnlyValue label="Role">Agent</ReadOnlyValue>
                 </dl>
-                <Button type="submit">Save changes</Button>
+                <FormActionBar status="You have unsaved changes.">
+                  <Button type="submit">Save changes</Button>
+                </FormActionBar>
               </form>
             </SurfaceCardContent>
           </SurfaceCard>

@@ -47,19 +47,18 @@ export default function UserAdministrationIndex() {
   }
 
   return (
-    <div className="grid gap-8">
+    <div className="grid gap-10">
       <Head title="User administration" />
       <PageHeader
-        eyebrow="Administration"
         title="User administration"
         description="Manage office placement, brokerage status, credentials, and role access for people in your scope."
       />
 
-      <SurfaceCard className="border-border/70 rounded-2xl shadow-card">
+      <SurfaceCard>
         <PanelHeader
+          divided
           title="People in your scope"
           description="Search by name, work email, or agent ID."
-          className="border-border/60 border-b pb-5"
           meta={
             <span className="text-muted-foreground text-xs font-medium tabular-nums">
               {users.pagination.totalItems}{" "}
@@ -67,7 +66,7 @@ export default function UserAdministrationIndex() {
             </span>
           }
         />
-        <SurfaceCardContent className="grid gap-5">
+        <SurfaceCardContent className="grid gap-4">
           <SearchControl
             label="Search people"
             value={query}
@@ -78,8 +77,7 @@ export default function UserAdministrationIndex() {
             className="max-w-xl"
           />
           <DataTable
-            frame="bare"
-            className="border-border/60 -mx-5 border-y [&_td]:px-2 [&_th]:px-2 sm:[&_td]:px-3 sm:[&_th]:px-3"
+            frame="bleed"
             caption="Users you may administer"
             rows={users.items}
             rowKey={(row) => String(row.id)}
@@ -170,11 +168,8 @@ export default function UserAdministrationIndex() {
       </SurfaceCard>
 
       {users.pagination.totalItems === 0 && !query ? (
-        <SurfaceCard
-          state="read-only"
-          className="border-border/60 rounded-2xl bg-muted/35"
-        >
-          <SurfaceCardContent className="pt-5">
+        <SurfaceCard state="read-only">
+          <SurfaceCardContent>
             <p className="text-muted-foreground flex items-center gap-2 text-sm">
               <Users className="size-4" aria-hidden />
               Your role does not scope you to anybody yet.

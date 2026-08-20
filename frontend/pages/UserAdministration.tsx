@@ -9,6 +9,7 @@ import {
 import { RoleAssignmentsPanel } from "@/components/administration/RoleAssignmentsPanel";
 import {
   DateField,
+  FormActionBar,
   FormDescription,
   FormErrorSummary,
   FormField,
@@ -28,8 +29,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { routes } from "@/lib/routes";
 import { hasValidationErrors } from "@/lib/validation";
 import type { UserAdministrationPageProps } from "@/types";
-
-const ADMIN_SURFACE_CLASS = "border-border/70 rounded-2xl shadow-card";
 
 function initials(name: string): string {
   return name
@@ -145,10 +144,9 @@ export default function UserAdministration() {
   const readOnly = !editable.administration;
 
   return (
-    <div className="grid gap-8">
+    <div className="grid gap-10">
       <Head title={`Administer ${subject.displayName}`} />
       <PageHeader
-        eyebrow="User administration"
         title={
           <span className="flex min-w-0 items-center gap-3">
             <Avatar className="ring-border size-11 ring-1" aria-hidden>
@@ -179,11 +177,8 @@ export default function UserAdministration() {
       />
 
       {subject.isSelf ? (
-        <SurfaceCard
-          state="read-only"
-          className="border-warning/25 rounded-2xl bg-warning/8"
-        >
-          <SurfaceCardContent className="flex items-start gap-3 pt-5">
+        <SurfaceCard state="read-only" className="border-warning/25 bg-warning/8">
+          <SurfaceCardContent className="flex items-start gap-3">
             <ShieldAlert
               className="text-warning-ink mt-0.5 size-5 shrink-0"
               aria-hidden
@@ -196,8 +191,8 @@ export default function UserAdministration() {
         </SurfaceCard>
       ) : null}
 
-      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_20rem] xl:gap-8">
-        <div className="grid gap-6">
+      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_20rem] xl:gap-x-8">
+        <div className="grid content-start gap-6">
           <form
             ref={formRef}
             method="post"
@@ -219,13 +214,13 @@ export default function UserAdministration() {
               <FormErrorSummary errors={validation} labels={ERROR_LABELS} />
             </div>
 
-            <SurfaceCard className={ADMIN_SURFACE_CLASS}>
+            <SurfaceCard>
               <PanelHeader
+                divided
                 title="Placement and status"
                 description="Changing either of these moves what this person can reach."
-                className="border-border/60 border-b pb-5"
               />
-              <SurfaceCardContent className="grid gap-5 sm:grid-cols-2">
+              <SurfaceCardContent className="grid gap-4 sm:grid-cols-2">
                 <SelectField
                   name="office"
                   label="Office"
@@ -277,14 +272,14 @@ export default function UserAdministration() {
               </SurfaceCardContent>
             </SurfaceCard>
 
-            <SurfaceCard className={ADMIN_SURFACE_CLASS}>
+            <SurfaceCard>
               <PanelHeader
+                divided
                 title="License verification"
                 description="What the agent recorded, and what the brokerage checked."
-                className="border-border/60 border-b pb-5"
               />
-              <SurfaceCardContent className="grid gap-5">
-                <dl className="bg-muted/35 grid gap-5 rounded-xl p-4 sm:grid-cols-3">
+              <SurfaceCardContent className="grid gap-4">
+                <dl className="bg-muted/40 border-border/60 grid gap-4 rounded-lg border p-4 sm:grid-cols-3">
                   <ReadOnlyValue label="License number">
                     {license.number || "Not recorded"}
                   </ReadOnlyValue>
@@ -293,7 +288,7 @@ export default function UserAdministration() {
                     {license.expiresOn ?? "—"}
                   </ReadOnlyValue>
                 </dl>
-                <div className="grid gap-5 sm:grid-cols-2">
+                <div className="grid gap-4 sm:grid-cols-2">
                   <SelectField
                     name="license_verification_state"
                     label="Verification"
@@ -328,11 +323,11 @@ export default function UserAdministration() {
               </SurfaceCardContent>
             </SurfaceCard>
 
-            <SurfaceCard className={ADMIN_SURFACE_CLASS}>
+            <SurfaceCard>
               <PanelHeader
+                divided
                 title="Operational notes"
                 description="Internal to administrators. Never shown to this person, and never written into the audit trail as text."
-                className="border-border/60 border-b pb-5"
                 meta={
                   <span className="text-muted-foreground flex items-center gap-1 text-xs font-medium">
                     <Lock className="size-3.5" aria-hidden />
@@ -362,24 +357,19 @@ export default function UserAdministration() {
               </SurfaceCardContent>
             </SurfaceCard>
 
-            <SurfaceCard className="border-border/70 rounded-2xl bg-muted/20 shadow-card">
-              <SurfaceCardContent className="flex flex-wrap items-center justify-between gap-3 pt-5">
-                <p className="text-muted-foreground text-sm" aria-live="polite">
-                  {readOnly
-                    ? "You may read this record but not change it."
-                    : pendingChanges.length > 0
-                      ? "Saving will ask you to confirm the access changes first."
-                      : "Changes are recorded in the audit trail."}
-                </p>
-                <Button
-                  type="submit"
-                  className="min-w-48"
-                  disabled={readOnly || submitting}
-                >
-                  {submitting ? "Saving…" : "Save administrative record"}
-                </Button>
-              </SurfaceCardContent>
-            </SurfaceCard>
+            <FormActionBar
+              status={
+                readOnly
+                  ? "You may read this record but not change it."
+                  : pendingChanges.length > 0
+                    ? "Saving will ask you to confirm the access changes first."
+                    : "Changes are recorded in the audit trail."
+              }
+            >
+              <Button type="submit" disabled={readOnly || submitting}>
+                {submitting ? "Saving…" : "Save administrative record"}
+              </Button>
+            </FormActionBar>
           </form>
 
           <RoleAssignmentsPanel
@@ -393,13 +383,13 @@ export default function UserAdministration() {
           />
         </div>
 
-        <aside className="grid gap-6 xl:sticky xl:top-6">
+        <aside className="grid content-start gap-6 xl:sticky xl:top-22">
           {administration.onboardingState ? (
-            <SurfaceCard className={ADMIN_SURFACE_CLASS}>
+            <SurfaceCard>
               <PanelHeader
+                divided
                 title="Onboarding"
                 description="Current source-derived activation state."
-                className="border-border/60 border-b pb-5"
                 meta={<StatusBadge status={administration.onboardingState.overall} />}
               />
               <SurfaceCardContent className="grid gap-4">
@@ -420,14 +410,14 @@ export default function UserAdministration() {
             </SurfaceCard>
           ) : null}
 
-          <SurfaceCard className={ADMIN_SURFACE_CLASS}>
+          <SurfaceCard>
             <PanelHeader
+              divided
               title="Effective access"
               description="What this record resolves to right now."
-              className="border-border/60 border-b pb-5"
             />
             <SurfaceCardContent>
-              <dl className="grid gap-5">
+              <dl className="grid gap-4">
                 <ReadOnlyValue label="Roles">
                   {effectiveAccess.roles.join(", ") || "None"}
                 </ReadOnlyValue>
@@ -451,10 +441,10 @@ export default function UserAdministration() {
             </SurfaceCardContent>
           </SurfaceCard>
 
-          <SurfaceCard className={ADMIN_SURFACE_CLASS}>
+          <SurfaceCard>
             <PanelHeader
+              divided
               title="Last change"
-              className="border-border/60 border-b pb-5"
               meta={
                 <span className="text-muted-foreground flex items-center gap-1 text-xs font-medium">
                   <History className="size-3.5" aria-hidden />
@@ -462,8 +452,8 @@ export default function UserAdministration() {
                 </span>
               }
             />
-            <SurfaceCardContent className="grid gap-5">
-              <dl className="grid gap-5">
+            <SurfaceCardContent className="grid gap-4">
+              <dl className="grid gap-4">
                 <ReadOnlyValue label="When">
                   {formatMoment(provenance.lastChangedAt)}
                 </ReadOnlyValue>

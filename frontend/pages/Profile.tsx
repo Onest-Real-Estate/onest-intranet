@@ -2,10 +2,9 @@ import { Head, usePage } from "@inertiajs/react";
 import { useEffect, useRef, useState } from "react";
 
 import {
+  FormActionBar,
   FormErrorSummary,
   PageHeader,
-  SurfaceCard,
-  SurfaceCardContent,
 } from "@/components/design-system";
 import { HubLayout } from "@/components/HubLayout";
 import { ProfileAdministrativePanel } from "@/components/profile/ProfileAdministrativePanel";
@@ -105,7 +104,7 @@ export default function Profile() {
   const sectionProps = { initial, validation, onDirty: () => setDirty(true) };
 
   return (
-    <div className="grid gap-6">
+    <div className="grid gap-10">
       <Head title="Your profile" />
       <PageHeader
         title="Your profile"
@@ -118,12 +117,12 @@ export default function Profile() {
         }
       />
 
-      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] lg:gap-8">
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] lg:gap-x-8">
         <form
           id="profile-form"
           method="post"
           action={routes.profile_submit()}
-          className="order-2 grid gap-6 lg:order-1"
+          className="order-2 grid content-start gap-6 lg:order-1"
           // Delegated: every uncontrolled text input in the sections below
           // reports through here, so no field has to thread a callback.
           onInput={() => setDirty(true)}
@@ -156,23 +155,22 @@ export default function Profile() {
           />
           <ProfileLinksSection {...sectionProps} socialPlatforms={socialPlatforms} />
 
-          <SurfaceCard>
-            <SurfaceCardContent className="flex flex-wrap items-center justify-between gap-3">
-              <p className="text-muted-foreground text-sm" aria-live="polite">
-                {submitting
-                  ? "Saving your changes…"
-                  : dirty
-                    ? "You have unsaved changes."
-                    : "All changes saved."}
-              </p>
-              <Button type="submit" disabled={submitting}>
-                {submitting ? "Saving…" : "Save changes"}
-              </Button>
-            </SurfaceCardContent>
-          </SurfaceCard>
+          <FormActionBar
+            status={
+              submitting
+                ? "Saving your changes…"
+                : dirty
+                  ? "You have unsaved changes."
+                  : "All changes saved."
+            }
+          >
+            <Button type="submit" disabled={submitting}>
+              {submitting ? "Saving…" : "Save changes"}
+            </Button>
+          </FormActionBar>
         </form>
 
-        <aside className="order-1 grid gap-6 lg:order-2">
+        <aside className="order-1 grid content-start gap-6 lg:order-2">
           <div id={SECTION_ANCHORS.photo}>
             <ProfilePhotoPanel
               headshotUrl={initial.headshotUrl}

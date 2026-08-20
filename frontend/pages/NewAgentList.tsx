@@ -1,5 +1,5 @@
 import { Head, router, usePage } from "@inertiajs/react";
-import { ArrowRight, CircleAlert, SlidersHorizontal } from "lucide-react";
+import { ArrowRight, ChevronDown, CircleAlert, SlidersHorizontal } from "lucide-react";
 import { useState } from "react";
 
 import {
@@ -96,10 +96,9 @@ export default function NewAgentList() {
 
   return (
     <PermissionRequired permission={{ all: ["web.view_new_agents"] }}>
-      <div className="grid gap-8">
+      <div className="grid gap-10">
         <Head title="New Agent List" />
         <PageHeader
-          eyebrow="People operations"
           title="New Agent List"
           description="Activation progress, ownership, blockers, and the next safe action—derived from each source of record."
           meta={
@@ -109,18 +108,18 @@ export default function NewAgentList() {
           }
         />
 
-        <SurfaceCard className="border-border/70 rounded-2xl shadow-card">
+        <SurfaceCard>
           <PanelHeader
+            divided
             title="Onboarding queue"
             description="Every result is scoped before search, counts, or source lookups run."
-            className="border-border/60 border-b pb-5"
             meta={
               <span className="text-muted-foreground text-xs font-medium tabular-nums">
                 {agents.pagination.totalItems} active records
               </span>
             }
           />
-          <SurfaceCardContent className="grid gap-5">
+          <SurfaceCardContent className="grid gap-4">
             <SearchControl
               label="Search new agents"
               value={filters.q}
@@ -172,12 +171,16 @@ export default function NewAgentList() {
               />
             </FilterControls>
 
-            <details className="group border-border/60 rounded-xl border px-4 py-3">
-              <summary className="focus-visible:ring-ring flex min-h-9 cursor-pointer list-none items-center gap-2 rounded-md text-sm font-semibold outline-none focus-visible:ring-2">
-                <SlidersHorizontal className="size-4" aria-hidden />
+            <details className="group">
+              <summary className="focus-visible:ring-ring text-muted-foreground hover:text-foreground inline-flex min-h-9 cursor-pointer list-none items-center gap-2 rounded-md text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-offset-2">
+                <SlidersHorizontal className="size-4 shrink-0" aria-hidden />
                 Contract, training, and start dates
+                <ChevronDown
+                  className="size-4 shrink-0 transition-transform group-open:rotate-180"
+                  aria-hidden
+                />
               </summary>
-              <div className="grid gap-3 pt-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="grid gap-4 pt-4 sm:grid-cols-2 lg:grid-cols-4">
                 <FilterSelect
                   label="Contract"
                   value={filters.contractStatus}
@@ -214,8 +217,7 @@ export default function NewAgentList() {
             </details>
 
             <DataTable
-              frame="bare"
-              className="border-border/60 -mx-5 border-y [&_td]:px-2 [&_th]:px-2 sm:[&_td]:px-3 sm:[&_th]:px-3"
+              frame="bleed"
               caption="New agents in your effective scope"
               rows={agents.items}
               rowKey={(row) => String(row.user.id)}
@@ -351,6 +353,6 @@ NewAgentList.layout = () =>
           { label: "New Agent List", href: routes.admin_new_agents() },
         ],
       },
-      variant: "wide",
+      variant: "standard",
     },
   ] as const;

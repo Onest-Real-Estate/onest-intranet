@@ -67,8 +67,13 @@ export function DataTable<Row>({
   /**
    * `bordered` is the standalone table. `bare` drops the frame for a table
    * that already sits inside a card, so the two borders do not double up.
+   * `bleed` is `bare` plus the geometry for a table filling the width of a
+   * `SurfaceCardContent`: it cancels the card's 20px inset so the row
+   * separators reach both edges, then hands that inset back to the outer
+   * columns — the first column keeps its left edge on the panel heading
+   * instead of sitting 8px inside it.
    */
-  frame?: "bordered" | "bare";
+  frame?: "bordered" | "bare" | "bleed";
   className?: string;
 }) {
   const selectable = Boolean(selectedKeys && onSelectionChange);
@@ -96,6 +101,8 @@ export function DataTable<Row>({
       className={cn(
         "overflow-hidden",
         frame === "bordered" && "rounded-xl border",
+        frame === "bleed" &&
+          "border-border/60 -mx-5 border-y [&_tr>*:first-child]:pl-5 [&_tr>*:last-child]:pr-5",
         className,
       )}
     >

@@ -51,7 +51,20 @@ Use sentence case. Reserve all caps for the compact ONEST wordmark. Keep paragra
 
 ## Spacing and layout
 
-Use Tailwind's 4 px spacing scale. The default gaps are 8 px for tightly related controls, 16 px for component content, 24 px between sections, and 40–64 px for page-level separation. The dashboard is the reference implementation: 40 px between bands, 24 px within a band, 12 px between a section heading and its content — the contrast between those intervals is what creates rhythm. `HubLayout` owns application-page width and responsive gutters through its `standard`, `wide`, and `focused` variants; pages must not add a second outer `page-shell`. See [`application-shell.md`](application-shell.md) for the layout contract.
+Use Tailwind's 4 px spacing scale. Every application page uses the same ladder, and the contrast between its steps is what creates rhythm:
+
+| Interval | Value | What it separates |
+| --- | --- | --- |
+| Page band | 40 px (`gap-10`) | The `PageHeader` from the body, and one band from the next |
+| Panel | 24 px (`gap-6`) | Sibling cards, and the columns of a two-column page |
+| Panel header → body | 20 px | Owned by `SurfaceCard`; pages do not restate it |
+| Component content | 16 px (`gap-4`) | Fields, list rows, and value groups inside a panel |
+| Section heading → content | 12 px (`gap-3`) | A bare `h2` and the thing it names |
+| Control cluster | 8 px (`gap-2`) | A label and its input, a button pair |
+
+A page grid that holds columns of unequal height needs `items-start` on the grid and `content-start` on each column. Grid's default `align-content: stretch` otherwise pours the taller column's surplus into the shorter one's rows, and every card in it grows a pocket of dead space at the bottom.
+
+`HubLayout` owns application-page width and responsive gutters through its `standard`, `wide`, and `focused` variants; pages must not add a second outer `page-shell`. Sibling screens use the same variant — a list page that jumps from `standard` to `wide` on navigation reads as a different application. `wide` is for a genuinely twelve-column screen such as the dashboard. See [`application-shell.md`](application-shell.md) for the layout contract.
 
 The workspace panel is flush: it runs to the top and right edges of the window with no margin, radius, or shadow of its own. The sidebar's right border is the only seam between navigation and content — a floating, rounded content card wastes edge space and reads as a demo rather than an application.
 
@@ -69,7 +82,7 @@ Forms should be one column by default. Data-heavy views can expand to a responsi
 - **Forms:** labels remain visible above fields. Place validation messages directly below the field with `text-destructive`. Do not use placeholder text as a label.
 - **Cards:** group one concept or task. Avoid nesting cards unless hierarchy would otherwise be ambiguous.
 - **Badges:** use for short states or categories, not sentences. Pair semantic colors with explicit words such as “Approved” or “Overdue.”
-- **Tables:** right-align numbers, keep headers concise, and use a muted header surface. Column headers render as 12 px micro-caps (`uppercase`, `tracking-[0.06em]`) so they read as labels rather than a first row of data. A table inside a card uses `frame="bare"` — one frame, not two. On narrow screens, prioritize or stack columns rather than shrinking text below 14 px.
+- **Tables:** right-align numbers, keep headers concise, and use a muted header surface. Column headers render as 12 px micro-caps (`uppercase`, `tracking-[0.06em]`) so they read as labels rather than a first row of data. A table inside a card uses `frame="bleed"` — one frame, not two, with the row rules running to the card edges and the outer columns still aligned to the panel heading. Which columns survive a narrow panel is a **container** query (`@container` + `@md:`/`@2xl:`), never a viewport breakpoint: a table in a 736 px column cannot see that the window is 1280 px wide. On narrow screens, prioritize or stack columns rather than shrinking text below 14 px.
 - **Navigation:** keep the primary nav stable. The active item uses the sidebar accent surface, semibold type, a `text-primary` icon, and the gold left rail, and it also exposes `aria-current="page"`. Desktop and mobile render the same filtered `HUB_NAV_REGISTRY`; the uppercase group label is the only top-level separation. Permission requirements use the effective permission union, never role labels. Explicitly registered disabled modules remain visible to authorized users with a quiet “Soon” marker; missing feature keys, unknown permissions, and office-scoped items without office context fail closed. Administrative subsections are keyboard-operable collapsibles; the active subsection remains exposed, and icon-only mode supplies a tooltip for every authorized destination. See [`navigation.md`](navigation.md) for the contributor contract.
 - **Sidebar footer:** the signed-in identity sits in one account card — avatar, name, email, and sign out. The name block links to the profile rather than opening a second menu, and the card collapses to the avatar alone on the icon rail.
 - **Icon tiles:** one tile vocabulary via `IconWell`. `tone="brand"` (gold) marks a small, countable set of brand moments — the quick-access launchers, the empty-state mark. `tone="muted"` is available for a one-off neutral tile. Panel headings carry **no** tile: the heading identifies the panel, and a tile repeated beside every title on a page competes with the data underneath it.

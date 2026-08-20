@@ -8,12 +8,12 @@ authorized data belong outside the component boundary.
 
 | Family | Public API | Supported states and composition |
 | --- | --- | --- |
-| Cards | `SurfaceCard`, header/content/footer/title/description, `PanelHeader`, `SurfaceCardMeta`, `CardStateMessage` | Default, interactive, loading, error, success, read-only |
-| Tables | `DataTable<Row>`, `DataTableColumn<Row>`, `Pagination` | Sort, selection, pagination, overflow, loading, empty, error, `frame="bordered" \| "bare"` |
+| Cards | `SurfaceCard`, header/content/footer/title/description, `PanelHeader`, `SurfaceCardMeta`, `CardStateMessage` | Default, interactive, loading, error, success, read-only, `PanelHeader divided` |
+| Tables | `DataTable<Row>`, `DataTableColumn<Row>`, `Pagination` | Sort, selection, pagination, overflow, loading, empty, error, `frame="bordered" \| "bare" \| "bleed"` |
 | Status badges | `StatusBadge`, `presentStatus` | Neutral, info, success, warning, destructive, safe unknown |
 | Empty states | `EmptyState` | Compact/full, description and action slots |
 | Dialogs | Dialog primitives, `DestructiveConfirmDialog` | Controlled/uncontrolled, Escape, overlay close, focus trap/restoration, loading confirmation |
-| Forms | Field/label/description/error/summary/read-only components, `DateField` / `DatePicker`, `fieldA11yProps` | Required, optional, invalid, disabled through native controls, read-only, form-level errors, calendar date (and optional time) without the browser date picker |
+| Forms | Field/label/description/error/summary/read-only components, `FormActionBar`, `DateField` / `DatePicker`, `fieldA11yProps` | Required, optional, invalid, disabled through native controls, read-only, form-level errors, calendar date (and optional time) without the browser date picker |
 | Uploaders | `FileUploader`, `UploadHandler`, `UploadedFile` | Drag/drop, keyboard choice, progress, client hint failure, server failure, retry, preview, removal, disabled, read-only |
 | Page headers | `PageHeader` | Breadcrumb, eyebrow, description, metadata, responsive action slots |
 | Metric cards | `MetricCard`, `MetricGroup` | Neutral, success, warning, destructive, trend, loading |
@@ -94,8 +94,22 @@ classes, or use color as the only state signal.
 - One panel heading per card, through `PanelHeader`. The right-hand slot takes
   either `meta` (a static fact) or `action` (a real control) — not both, and
   never a decorative icon tile.
-- A `DataTable` inside a `SurfaceCard` uses `frame="bare"`. The card already
-  draws the frame; two nested borders read as a bug.
+- A `DataTable` inside a `SurfaceCard` uses `frame="bleed"`. The card already
+  draws the frame, so two nested borders read as a bug; `bleed` additionally
+  runs the row rules to both card edges and hands the card's 20px inset back to
+  the outer columns, so the first column's left edge lands on the panel heading.
+  `frame="bare"` remains for a table that should stay inside the card padding.
+- `PanelHeader divided` rules the header off from the body. Earn it when the
+  body is a form or a table; leave it off when the body is prose or a short
+  list, where the spacing already separates them.
+- A long form closes with `FormActionBar` — a recessed bar carrying the save
+  status and the submit control. It is deliberately not another `SurfaceCard`:
+  giving the closing action the same white surface as the field panels above it
+  makes it read as one more group to fill in.
+- Column visibility inside a panel belongs to container queries (`@container`
+  plus `@md:`/`@2xl:`), not viewport breakpoints. A table in a 736px column has
+  no idea that the *window* is 1280px wide, and `xl:table-cell` there reveals
+  columns the panel cannot fit.
 - `SearchControl` defaults to `tone="outline"`. Use `tone="subtle"` only where
   the field sits among other chrome, such as the application header.
 - `Timeline` defaults to a dot marker. `icon` is opt-in per item and should
@@ -119,6 +133,19 @@ Changes made while the system was adopted by the shell and the dashboard:
   down from `clamp(1.75rem, 3vw, 2.25rem)` bold. No API change.
 - `Timeline` markers are dots rather than a check on every item; pass `icon` to
   restore a per-item mark.
+
+Changes made while the four core screens were brought onto one spacing system:
+
+- `PanelHeader` gained `divided` (default `false`) — additive. Pages that spelled
+  the rule out as `className="border-border/60 border-b pb-5"` should drop it.
+- `DataTable` gained `frame="bleed"` — additive; `bordered` and `bare` are
+  unchanged. Call sites that hand-rolled the bleed with
+  `-mx-5 border-y [&_td]:px-2 …` should drop those classes.
+- `FormActionBar` is new. It replaces the hand-rolled save bars on the profile
+  and user-administration forms, which had drifted to different tints and radii.
+- `SelectField` (in `components/profile/`) gained `className`, applied to the
+  field wrapper so a field can span grid columns. `controlClassName` still
+  targets only the trigger.
 
 ## Ownership and changes
 

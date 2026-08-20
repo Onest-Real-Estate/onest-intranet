@@ -87,6 +87,7 @@ export function SelectField({
   optional,
   required,
   disabled,
+  className,
   controlClassName,
   controlId = name,
 }: {
@@ -102,6 +103,8 @@ export function SelectField({
   optional?: boolean;
   required?: boolean;
   disabled?: boolean;
+  /** Placement of the whole field — a grid span, typically. */
+  className?: string;
   /** Visual treatment for the trigger; the field wrapper remains unchanged. */
   controlClassName?: string;
   /** Unique DOM id when several controls submit the same field name. */
@@ -109,7 +112,7 @@ export function SelectField({
 }) {
   const help = description ? descriptionId(controlId) : undefined;
   return (
-    <FormField>
+    <FormField className={className}>
       <FormLabel htmlFor={controlId} required={required} optional={optional}>
         {label}
       </FormLabel>
