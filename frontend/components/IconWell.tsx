@@ -1,4 +1,5 @@
 import type { LucideIcon } from "lucide-react";
+import type { ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
 
@@ -15,11 +16,18 @@ export function IconWell({
   tone = "brand",
   className,
   iconClassName,
+  children,
 }: {
-  icon: LucideIcon;
+  icon?: LucideIcon;
   tone?: keyof typeof TONES;
   className?: string;
   iconClassName?: string;
+  /**
+   * A non-Lucide mark to sit in the well — a vendor logo, for instance. Keeps
+   * third-party brands inside the one tile vocabulary instead of letting them
+   * introduce a second tile shape beside it. Ignored when `icon` is given.
+   */
+  children?: ReactNode;
 }) {
   return (
     <span
@@ -29,7 +37,11 @@ export function IconWell({
         className,
       )}
     >
-      <Icon className={cn("size-5", iconClassName)} strokeWidth={1.5} aria-hidden />
+      {Icon ? (
+        <Icon className={cn("size-5", iconClassName)} strokeWidth={1.5} aria-hidden />
+      ) : (
+        children
+      )}
     </span>
   );
 }

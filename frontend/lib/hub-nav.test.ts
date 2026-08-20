@@ -1,0 +1,415 @@
+import { describe, expect, it } from "vitest";
+
+import {
+  HUB_ADMIN_NAV,
+  HUB_FEATURE_KEYS,
+  HUB_NAV_GROUPS,
+  HUB_NAV_REGISTRY,
+  HUB_NAV_SECTIONS,
+  HUB_NAV_VERSION,
+  type HubNavItem,
+  isHubNavItemActive,
+  parseHubNavExpansion,
+  resolveHubNav,
+  resolveHubNavSections,
+  validateHubNavRegistry,
+} from "@/lib/hub-nav";
+import { routes } from "@/lib/routes";
+import type { HubFeatures, PrimaryOffice, User } from "@/types";
+
+function user(overrides: Partial<User> = {}): User {
+  return {
+    id: 1,
+    email: "agent@onest.realestate",
+    name: "Avery Johnson",
+    permissions: [],
+    roles: ["Users"],
+    roleLabel: "Agent",
+    isStaff: false,
+    isSuperuser: false,
+    ...overrides,
+  };
+}
+
+const office: PrimaryOffice = {
+  id: 7,
+  name: "Cedar Ridge branch",
+  regionName: "Midwest",
+};
+
+function features(enabled: string[] = HUB_FEATURE_KEYS): HubFeatures {
+  return Object.fromEntries(enabled.map((key) => [key, true]));
+}
+
+function labels(permissions: string[], enabled = HUB_FEATURE_KEYS): string[] {
+  return resolveHubNav(user({ permissions }), features(enabled), office).flatMap(
+    (group) => group.items.map((item) => item.label),
+  );
+}
+
+function adminPermissions(): string[] {
+  return HUB_ADMIN_NAV.flatMap((item) => [
+    ...(item.permissions.all ?? []),
+    ...(item.permissions.any ?? []),
+  ]);
+}
+
+function registryItem(key: string): HubNavItem {
+  const item = HUB_NAV_REGISTRY.find((candidate) => candidate.key === key);
+  if (!item) {
+    throw new Error(`missing registry item: ${key}`);
+  }
+  return item;
+}
+
+describe("navigation registry contract", () => {
+  it("is versioned and validates without errors", () => {
+    expect(HUB_NAV_VERSION).toBe(1);
+    expect(validateHubNavRegistry()).toEqual([]);
+  });
+
+  it("declares stable group and item ordering", () => {
+    expect(
+      HUB_NAV_GROUPS.map(({ key, label, order }) => ({ key, label, order })),
+    ).toEqual([
+      { key: "general", label: "General", order: 10 },
+      { key: "tools", label: "Tools", order: 20 },
+      { key: "my-office", label: "My office", order: 30 },
+      { key: "directory", label: "Directory", order: 40 },
+      { key: "administration", label: "Administration", order: 50 },
+    ]);
+    for (const item of HUB_NAV_REGISTRY) {
+      expect(item.label).not.toBe("");
+      expect(item.route.name).not.toBe("");
+      expect(item.route.href).toMatch(/^\/[\w/-]+$/);
+      expect(item.order).toBeGreaterThan(0);
+      expect(item.activeMatch.prefixes.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("declares permissions for every permission-protected destination", () => {
+    const protectedItems = HUB_NAV_REGISTRY.filter(
+      (item) => item.access === "permission-protected",
+    );
+    expect(protectedItems).toHaveLength(17);
+    for (const item of protectedItems) {
+      expect([
+        ...(item.permissions.all ?? []),
+        ...(item.permissions.any ?? []),
+      ]).not.toHaveLength(0);
+    }
+  });
+
+  it("matches the reviewed protected route and permission contract", () => {
+    expect(
+      Object.fromEntries(
+        HUB_ADMIN_NAV.map((item) => [item.route.name, item.permissions.all?.[0]]),
+      ),
+    ).toEqual({
+      admin_users: "web.view_users",
+      user_administration_index: "user.view_user_administration",
+      admin_new_agents: "web.view_new_agents",
+      admin_add_user: "web.add_users",
+      admin_assign_roles: "web.assign_user_roles",
+      admin_agent_contracts: "web.view_agent_contracts",
+      admin_transactions: "web.view_transactions",
+      admin_inventory: "web.view_inventory",
+      admin_reservations: "web.view_reservations",
+      admin_announcements: "web.manage_announcements",
+      admin_training: "web.manage_training",
+      admin_documents: "web.manage_documents",
+      admin_compliance: "web.view_compliance",
+      admin_feedback: "web.view_feedback",
+      admin_platform_tasks: "web.view_platform_tasks",
+      admin_offices: "web.manage_offices",
+      admin_it_support: "web.view_it_support",
+    });
+  });
+
+  it("detects malformed entries and duplicate destinations", () => {
+    const dashboard = registryItem("dashboard");
+    const invalid = {
+      ...dashboard,
+      key: "dashboard-copy",
+      access: "permission-protected" as const,
+      permissions: {},
+      order: -1,
+      activeMatch: { prefixes: [] },
+    };
+    expect(validateHubNavRegistry([dashboard, invalid])).toEqual(
+      expect.arrayContaining([
+        "duplicate destination: /dashboard",
+        "invalid order for dashboard-copy: -1",
+        "protected item lacks permissions: dashboard-copy",
+        "item lacks active match prefixes: dashboard-copy",
+      ]),
+    );
+  });
+
+  it("keeps the reviewed nested administrative structure", () => {
+    const resolved = resolveHubNav(
+      user({ permissions: adminPermissions() }),
+      features(),
+      office,
+    );
+    const administration = resolved.find((group) => group.key === "administration");
+    expect(administration).toBeDefined();
+    if (!administration) {
+      return;
+    }
+    expect(
+      resolveHubNavSections(administration).map((section) => section.label),
+    ).toEqual(["People", "Operations", "Content", "Governance & support"]);
+  });
+});
+
+describe("resolveHubNav", () => {
+  it("filters any/all permission requirements without reading role names", () => {
+    const dashboard = registryItem("dashboard");
+    const standIn: HubNavItem[] = [
+      {
+        ...dashboard,
+        key: "all-item",
+        label: "All item",
+        route: { ...dashboard.route, href: "/all-item" },
+        permissions: { all: ["web.alpha", "web.beta"] },
+        order: 10,
+        activeMatch: { prefixes: ["/all-item"] },
+      },
+      {
+        ...dashboard,
+        key: "any-item",
+        label: "Any item",
+        route: { ...dashboard.route, href: "/any-item" },
+        permissions: { any: ["web.gamma", "web.delta"] },
+        order: 20,
+        activeMatch: { prefixes: ["/any-item"] },
+      },
+    ];
+    const visible = resolveHubNav(
+      user({
+        roles: ["Completely Unknown Role"],
+        permissions: ["web.alpha", "web.beta", "web.delta"],
+      }),
+      {},
+      office,
+      standIn,
+    );
+    expect(visible[0].items.map((item) => item.key)).toEqual(["all-item", "any-item"]);
+    expect(
+      resolveHubNav(user({ permissions: ["web.alpha"] }), {}, office, standIn),
+    ).toEqual([]);
+  });
+
+  it("fails closed for signed-out or incomplete permission context", () => {
+    expect(resolveHubNav(null, features(), office)).toEqual([]);
+    expect(
+      resolveHubNav(
+        { ...user(), permissions: undefined } as unknown as User,
+        features(),
+        office,
+      ),
+    ).toEqual([]);
+  });
+
+  it("hides missing feature keys and exposes an enabled module", () => {
+    expect(labels([], [])).toEqual(["Dashboard", "Agent profile"]);
+    expect(labels([], ["my-contract"])).toEqual([
+      "Dashboard",
+      "Agent profile",
+      "My contract",
+    ]);
+  });
+
+  it("keeps an explicitly registered disabled module as a Soon destination", () => {
+    const groups = resolveHubNav(user(), { "my-contract": false }, office);
+    const contract = groups
+      .flatMap((group) => group.items)
+      .find((item) => item.key === "my-contract");
+    expect(contract).toMatchObject({
+      label: "My contract",
+      availability: "coming-soon",
+    });
+  });
+
+  it("hides an office module when the required context is absent", () => {
+    const groups = resolveHubNav(user(), features(["office-info"]), null);
+    expect(
+      groups.flatMap((group) => group.items.map((item) => item.key)),
+    ).not.toContain("office-info");
+    expect(groups.some((group) => group.key === "my-office")).toBe(false);
+  });
+
+  it("deduplicates overlapping multi-role results by key and destination", () => {
+    const dashboard = registryItem("dashboard");
+    const duplicateKey = { ...dashboard, label: "Duplicate key", order: 20 };
+    const duplicateDestination = {
+      ...dashboard,
+      key: "dashboard-alias",
+      label: "Duplicate destination",
+      order: 30,
+    };
+    const groups = resolveHubNav(
+      user({
+        roles: ["Branch Managers", "Users"],
+        permissions: adminPermissions(),
+      }),
+      features(),
+      office,
+      [dashboard, duplicateKey, duplicateDestination, ...HUB_ADMIN_NAV],
+    );
+    const destinations = groups.flatMap((group) =>
+      group.items.map((item) => item.route.href),
+    );
+    expect(destinations.filter((href) => href === routes.dashboard())).toHaveLength(1);
+    expect(new Set(destinations).size).toBe(destinations.length);
+  });
+
+  it("sorts groups and items from explicit order rather than source position", () => {
+    const groups = resolveHubNav(
+      user(),
+      {},
+      office,
+      [registryItem("agent-profile"), registryItem("dashboard")],
+      [...HUB_NAV_GROUPS].reverse(),
+    );
+    expect(groups.map((group) => group.key)).toEqual(["general"]);
+    expect(groups[0].items.map((item) => item.key)).toEqual([
+      "dashboard",
+      "agent-profile",
+    ]);
+  });
+
+  it("drops empty groups and unauthorized confidential labels", () => {
+    const groups = resolveHubNav(
+      user({ permissions: ["web.view_users"] }),
+      features(["admin-compliance"]),
+      office,
+    );
+    expect(groups.some((group) => group.key === "administration")).toBe(false);
+    expect(
+      groups.flatMap((group) => group.items.map((item) => item.label)),
+    ).not.toContain("Compliance");
+  });
+});
+
+describe("representative effective-permission matrix", () => {
+  const branch = [
+    "web.view_users",
+    "web.view_new_agents",
+    "web.view_inventory",
+    "web.view_reservations",
+    "web.manage_training",
+    "web.manage_documents",
+    "web.view_feedback",
+    "web.manage_offices",
+  ];
+  const regional = [...branch, "web.view_transactions"];
+
+  it.each([
+    ["Realtor", [], []],
+    [
+      "Branch",
+      branch,
+      [
+        "Users",
+        "New Agent List",
+        "Inventory",
+        "Reservations",
+        "Training",
+        "Documents",
+        "Feedback",
+        "Offices",
+      ],
+    ],
+    [
+      "Regional",
+      regional,
+      [
+        "Users",
+        "New Agent List",
+        "Transactions",
+        "Inventory",
+        "Reservations",
+        "Training",
+        "Documents",
+        "Feedback",
+        "Offices",
+      ],
+    ],
+    ["Brokerage", adminPermissions(), HUB_ADMIN_NAV.map((item) => item.label)],
+  ])("shows the %s permission union", (_persona, permissions, expected) => {
+    const administration = resolveHubNav(
+      user({ permissions }),
+      features(),
+      office,
+    ).find((group) => group.key === "administration");
+    expect(administration?.items.map((item) => item.label) ?? []).toEqual(expected);
+  });
+
+  it.each([
+    ["Realtor", [], 0],
+    ["Branch", branch, branch.length],
+    ["Regional", regional, regional.length],
+    ["Brokerage", adminPermissions(), HUB_ADMIN_NAV.length],
+  ])(
+    "shows registered Soon tabs for the %s permission union",
+    (_persona, permissions, adminCount) => {
+      const explicitDisabled = Object.fromEntries(
+        HUB_FEATURE_KEYS.map((key) => [key, false]),
+      );
+      const groups = resolveHubNav(user({ permissions }), explicitDisabled, office);
+      const items = groups.flatMap((group) => group.items);
+      expect(items.filter((item) => item.group === "administration")).toHaveLength(
+        adminCount,
+      );
+      expect(
+        items
+          .filter((item) => item.feature !== undefined)
+          .every((item) => item.availability === "coming-soon"),
+      ).toBe(true);
+    },
+  );
+});
+
+describe("active matching", () => {
+  it("matches index, detail, query, and trailing-slash routes", () => {
+    const users = registryItem("admin-users");
+    expect(isHubNavItemActive(users, "/operations/users")).toBe(true);
+    expect(isHubNavItemActive(users, "/operations/users/42?tab=roles")).toBe(true);
+    expect(isHubNavItemActive(users, "/operations/users/42/#roles")).toBe(true);
+  });
+
+  it("does not activate a prefix collision or an excluded sibling", () => {
+    const users = registryItem("admin-users");
+    expect(isHubNavItemActive(users, "/operations/users-archive")).toBe(false);
+    expect(isHubNavItemActive(users, "/operations/users/new/confirm")).toBe(false);
+    expect(
+      isHubNavItemActive(
+        registryItem("admin-add-user"),
+        "/operations/users/new/confirm",
+      ),
+    ).toBe(true);
+  });
+});
+
+describe("persisted expansion state", () => {
+  it("uses reviewed defaults when state is missing or corrupt", () => {
+    const defaults = HUB_NAV_SECTIONS.filter((section) => section.defaultExpanded).map(
+      (section) => section.key,
+    );
+    expect([...parseHubNavExpansion(null)]).toEqual(defaults);
+    expect([...parseHubNavExpansion("not-json")]).toEqual(defaults);
+    expect([...parseHubNavExpansion('{"unexpected":true}')]).toEqual(defaults);
+  });
+
+  it("honors only known, non-sensitive section keys", () => {
+    expect([...parseHubNavExpansion('["admin-people","secret-module",42]')]).toEqual(
+      HUB_NAV_SECTIONS.map((section) => section.key),
+    );
+    expect([...parseHubNavExpansion('["admin-people","secret-module"]')]).toEqual([
+      "admin-people",
+    ]);
+    expect([...parseHubNavExpansion("[]")]).toEqual([]);
+  });
+});

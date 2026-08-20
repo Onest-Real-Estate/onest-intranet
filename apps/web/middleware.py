@@ -6,12 +6,14 @@ from inertia import share
 
 from apps.audit.models import AuditEvent
 from apps.audit.service import AuditTarget, actor_from_user, log_event
-from apps.user.roles import ordered_role_names, primary_role_label
-from apps.user.services.role_assignments import get_effective_permissions
+from apps.user.roles import AGENT, ROLE_LABELS, SUPERADMIN_LABEL
+from apps.user.services.role_assignments import get_effective_access
 from apps.web.authorization import (
     get_authorization_policy,
     is_non_route_exempt_path,
 )
+from apps.web.navigation import hub_feature_states, primary_office_payload
+from apps.web.shell import authorization_version, help_configuration
 
 logger = logging.getLogger("apps.authorization")
 
@@ -70,22 +72,53 @@ class AuthorizationPolicyMiddleware:
 
 
 class InertiaShareMiddleware:
-    """Attach props shared with every Inertia page (user, csrf token)."""
+    """Attach the minimal, request-cached contract shared with Inertia pages."""
 
-    def serialize_user(self, user):
+    def access_context(self, request):
+        cached = getattr(request, "_inertia_access_context", None)
+        if cached is not None:
+            return cached
+        if not request.user.is_authenticated:
+            context = None
+        else:
+            context = get_effective_access(request.user)
+        request._inertia_access_context = context
+        return context
+
+    def serialize_user(self, request):
+        user = request.user
         if not user.is_authenticated:
             return None
+        access = self.access_context(request)
+        role_label = (
+            SUPERADMIN_LABEL
+            if user.is_superuser
+            else ROLE_LABELS.get(
+                access.role_keys[0] if access.role_keys else AGENT,
+                ROLE_LABELS[AGENT],
+            )
+        )
         return {
             "id": user.id,
             "email": user.email,
             "name": user.display_name or user.get_full_name() or user.email,
             # Django auth permission codenames, e.g. "user.view_user".
-            "permissions": sorted(get_effective_permissions(user)),
+            "permissions": sorted(access.permissions),
             # Role (Django group) names, highest-priority first.
-            "roles": ordered_role_names(user),
-            "roleLabel": primary_role_label(user),
+            "roles": list(access.role_keys),
+            "roleLabel": role_label,
             "isStaff": user.is_staff,
             "isSuperuser": user.is_superuser,
+        }
+
+    def shell_context(self, request):
+        access = self.access_context(request)
+        return {
+            "authorizationVersion": (
+                authorization_version(access) if access is not None else ""
+            ),
+            "help": help_configuration(),
+            "session": {"authenticated": request.user.is_authenticated},
         }
 
     def __init__(self, get_response):
@@ -94,8 +127,19 @@ class InertiaShareMiddleware:
     def __call__(self, request):
         share(
             request,
-            user=lambda: self.serialize_user(request.user),
+            user=lambda: self.serialize_user(request),
             csrfToken=lambda: get_token(request),
             requestId=lambda: getattr(request, "audit_request_id", ""),
+            # Nav feature state and office context — see web.navigation.
+            features=lambda: hub_feature_states(
+                request.user,
+                permissions=(
+                    self.access_context(request).permissions
+                    if self.access_context(request) is not None
+                    else None
+                ),
+            ),
+            primaryOffice=lambda: primary_office_payload(request.user),
+            shell=lambda: self.shell_context(request),
         )
         return self.get_response(request)

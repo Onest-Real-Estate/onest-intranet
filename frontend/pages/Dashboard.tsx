@@ -1,5 +1,4 @@
 import { Deferred, Head, usePage } from "@inertiajs/react";
-import type { ReactNode } from "react";
 import { ActionItems, ActionItemsSkeleton } from "@/components/dashboard/ActionItems";
 import {
   ActiveTransactions,
@@ -14,24 +13,27 @@ import {
   MarketSnapshot,
   MarketSnapshotSkeleton,
 } from "@/components/dashboard/MarketSnapshot";
+import { MetricCards, MetricCardsSkeleton } from "@/components/dashboard/MetricCards";
 import { MyDay, MyDaySkeleton } from "@/components/dashboard/MyDay";
 import { QuickApps, QuickAppsSkeleton } from "@/components/dashboard/QuickApps";
 import {
   QuickDocuments,
   QuickDocumentsSkeleton,
 } from "@/components/dashboard/QuickDocuments";
-import { StatCards, StatCardsSkeleton } from "@/components/dashboard/StatCards";
 import {
   TrainingResources,
   TrainingResourcesSkeleton,
 } from "@/components/dashboard/TrainingResources";
+import { WidgetPanel } from "@/components/dashboard/WidgetPanel";
 import { HubLayout } from "@/components/HubLayout";
+import { routes } from "@/lib/routes";
 import type { DashboardPageProps } from "@/types";
 
 export default function Dashboard() {
   const {
     user,
-    stats,
+    greeting,
+    metrics,
     quickApps,
     announcements,
     transactions,
@@ -50,19 +52,27 @@ export default function Dashboard() {
   // screen, but it still needs a ceiling so it does not sprawl on an ultrawide
   // display.
   return (
-    <div className="mx-auto flex w-full max-w-[1600px] flex-1 flex-col gap-10 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+    <div className="flex flex-1 flex-col gap-10">
       <Head title="Dashboard" />
-      <DashboardGreeting user={user} />
+      <DashboardGreeting greeting={greeting} user={user} />
 
       {/* Band: where the day stands, and the tools to act on it. Figures and
           launchers are one thought, so they sit a section apart (24px) rather
           than a page apart. */}
       <div className="flex flex-col gap-6">
-        <Deferred data="stats" fallback={<StatCardsSkeleton />}>
-          {stats ? <StatCards stats={stats} /> : null}
+        <Deferred data="metrics" fallback={<MetricCardsSkeleton />}>
+          {metrics ? (
+            <WidgetPanel title="Performance" propName="metrics" widget={metrics}>
+              {(data) => <MetricCards metrics={data} />}
+            </WidgetPanel>
+          ) : null}
         </Deferred>
         <Deferred data="quickApps" fallback={<QuickAppsSkeleton />}>
-          {quickApps ? <QuickApps apps={quickApps} /> : null}
+          {quickApps ? (
+            <WidgetPanel title="Quick access" propName="quickApps" widget={quickApps}>
+              {(data) => <QuickApps apps={data} />}
+            </WidgetPanel>
+          ) : null}
         </Deferred>
       </div>
 
@@ -75,27 +85,75 @@ export default function Dashboard() {
       <div className="grid gap-6 xl:grid-cols-12">
         <div className="grid gap-6 xl:order-2 xl:col-span-4">
           <Deferred data="schedule" fallback={<MyDaySkeleton />}>
-            {schedule ? <MyDay schedule={schedule} /> : null}
+            {schedule ? (
+              <WidgetPanel title="My day" propName="schedule" widget={schedule}>
+                {(data) => <MyDay schedule={data} />}
+              </WidgetPanel>
+            ) : null}
           </Deferred>
           <Deferred data="actionItems" fallback={<ActionItemsSkeleton />}>
-            {actionItems ? <ActionItems data={actionItems} /> : null}
+            {actionItems ? (
+              <WidgetPanel
+                title="Action items"
+                propName="actionItems"
+                widget={actionItems}
+              >
+                {(data) => <ActionItems data={data} />}
+              </WidgetPanel>
+            ) : null}
           </Deferred>
           <Deferred data="market" fallback={<MarketSnapshotSkeleton />}>
-            {market ? <MarketSnapshot market={market} /> : null}
+            {market ? (
+              <WidgetPanel title="Market snapshot" propName="market" widget={market}>
+                {(data) => <MarketSnapshot market={data} />}
+              </WidgetPanel>
+            ) : null}
           </Deferred>
           <Deferred data="documents" fallback={<QuickDocumentsSkeleton />}>
-            {documents ? <QuickDocuments documents={documents} /> : null}
+            {documents ? (
+              <WidgetPanel
+                title="Quick documents"
+                propName="documents"
+                widget={documents}
+              >
+                {(data) => <QuickDocuments documents={data} />}
+              </WidgetPanel>
+            ) : null}
           </Deferred>
         </div>
         <div className="grid gap-6 xl:order-1 xl:col-span-8">
           <Deferred data="announcements" fallback={<AnnouncementsSkeleton />}>
-            {announcements ? <Announcements data={announcements} /> : null}
+            {announcements ? (
+              <WidgetPanel
+                title="News & announcements"
+                propName="announcements"
+                widget={announcements}
+              >
+                {(data) => <Announcements data={data} />}
+              </WidgetPanel>
+            ) : null}
           </Deferred>
           <Deferred data="transactions" fallback={<ActiveTransactionsSkeleton />}>
-            {transactions ? <ActiveTransactions transactions={transactions} /> : null}
+            {transactions ? (
+              <WidgetPanel
+                title="Active transactions"
+                propName="transactions"
+                widget={transactions}
+              >
+                {(data) => <ActiveTransactions transactions={data} />}
+              </WidgetPanel>
+            ) : null}
           </Deferred>
           <Deferred data="training" fallback={<TrainingResourcesSkeleton />}>
-            {training ? <TrainingResources training={training} /> : null}
+            {training ? (
+              <WidgetPanel
+                title="Training & resources"
+                propName="training"
+                widget={training}
+              >
+                {(data) => <TrainingResources training={data} />}
+              </WidgetPanel>
+            ) : null}
           </Deferred>
         </div>
       </div>
@@ -103,4 +161,14 @@ export default function Dashboard() {
   );
 }
 
-Dashboard.layout = (page: ReactNode) => <HubLayout>{page}</HubLayout>;
+Dashboard.layout = () =>
+  [
+    HubLayout,
+    {
+      context: {
+        title: "Dashboard",
+        breadcrumbs: [{ label: "Dashboard", href: routes.dashboard() }],
+      },
+      variant: "wide",
+    },
+  ] as const;

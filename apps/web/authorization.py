@@ -9,6 +9,7 @@ from django.contrib.auth.views import redirect_to_login
 from django.core.exceptions import PermissionDenied
 from django.db.models import Q, QuerySet
 from django.http import HttpRequest, HttpResponse, JsonResponse
+from django.urls import reverse
 
 from apps.audit.models import AuditEvent
 from apps.audit.service import AuditTarget, actor_from_user, log_event
@@ -17,6 +18,7 @@ from apps.user.services.role_assignments import (
     has_effective_permission,
     has_effective_permissions,
 )
+from apps.web.operations import OPERATIONS_DESTINATIONS, operations_policy_key
 
 logger = logging.getLogger("apps.authorization")
 
@@ -89,8 +91,11 @@ ROUTE_POLICIES: dict[str, AuthorizationPolicy] = {
     ),
     "headshot_upload": AuthorizationPolicy(
         key="headshot_upload",
-        access="onboarding_only",
-        description="Upload the current user's headshot preview.",
+        access="authenticated",
+        description=(
+            "Replace or remove the current user's headshot, from onboarding "
+            "or the profile page."
+        ),
         methods=("POST",),
         route_names=("headshot_upload",),
         allow_incomplete_profile=True,
@@ -100,7 +105,7 @@ ROUTE_POLICIES: dict[str, AuthorizationPolicy] = {
     "profile": AuthorizationPolicy(
         key="profile",
         access="authenticated",
-        description="Render the signed-in user's profile editor.",
+        description="Render the signed-in user's own agent profile editor.",
         methods=("GET",),
         route_names=("profile",),
         scope_rule="self_only",
@@ -108,10 +113,107 @@ ROUTE_POLICIES: dict[str, AuthorizationPolicy] = {
     "profile_submit": AuthorizationPolicy(
         key="profile_submit",
         access="authenticated",
-        description="Persist the signed-in user's profile updates.",
+        description=(
+            "Persist the signed-in user's self-editable profile fields. "
+            "Never addresses a user identifier supplied by the client."
+        ),
         methods=("POST",),
         route_names=("profile_submit",),
         scope_rule="self_only",
+    ),
+    "user_administration_index": AuthorizationPolicy(
+        key="user_administration_index",
+        access="permission_protected",
+        description=(
+            "Find a user to administer. The listing is filtered to the "
+            "signed-in administrator's own office and region scope."
+        ),
+        methods=("GET",),
+        route_names=("user_administration_index",),
+        all_permissions=("user.view_user_administration",),
+        scope_rule="administered_user_scope",
+    ),
+    "user_administration": AuthorizationPolicy(
+        key="user_administration",
+        access="permission_protected",
+        description=(
+            "Render one user's broker-controlled profile record. The subject "
+            "is resolved through the actor's scoped queryset, so an "
+            "out-of-scope id is a 404."
+        ),
+        methods=("GET",),
+        route_names=("user_administration",),
+        all_permissions=("user.view_user_administration",),
+        scope_rule="administered_user_scope",
+    ),
+    "user_administration_submit": AuthorizationPolicy(
+        key="user_administration_submit",
+        access="permission_protected",
+        description=(
+            "Persist broker-controlled profile fields for one user. Never "
+            "accepts a role, permission, or account-status change."
+        ),
+        methods=("POST",),
+        route_names=("user_administration_submit",),
+        all_permissions=("user.change_user_administration",),
+        scope_rule="administered_user_delegation_scope",
+    ),
+    "user_administration_roles": AuthorizationPolicy(
+        key="user_administration_roles",
+        access="permission_protected",
+        description=(
+            "Grant or revoke one role assignment for a user, through the "
+            "role-assignment service and its own delegation rules."
+        ),
+        methods=("POST",),
+        route_names=("user_administration_roles",),
+        all_permissions=("user.change_user_administration",),
+        scope_rule="role_delegation_scope",
+    ),
+    "new_agent_onboarding": AuthorizationPolicy(
+        key="new_agent_onboarding",
+        access="permission_protected",
+        description="Render one source-derived onboarding record inside scope.",
+        methods=("GET",),
+        route_names=("new_agent_onboarding",),
+        all_permissions=("web.view_new_agents",),
+        scope_rule="administered_user_scope",
+    ),
+    "new_agent_onboarding_owner": AuthorizationPolicy(
+        key="new_agent_onboarding_owner",
+        access="permission_protected",
+        description="Assign the operational owner of one scoped onboarding case.",
+        methods=("POST",),
+        route_names=("new_agent_onboarding_owner",),
+        all_permissions=("web.manage_new_agent_onboarding",),
+        scope_rule="administered_user_scope",
+    ),
+    "new_agent_onboarding_tasks": AuthorizationPolicy(
+        key="new_agent_onboarding_tasks",
+        access="permission_protected",
+        description="Create or resolve an operational onboarding task.",
+        methods=("POST",),
+        route_names=("new_agent_onboarding_tasks",),
+        all_permissions=("web.manage_new_agent_onboarding",),
+        scope_rule="administered_user_scope",
+    ),
+    "new_agent_onboarding_tools": AuthorizationPolicy(
+        key="new_agent_onboarding_tools",
+        access="permission_protected",
+        description="Update one approved operational tool-setup state.",
+        methods=("POST",),
+        route_names=("new_agent_onboarding_tools",),
+        all_permissions=("web.manage_new_agent_onboarding",),
+        scope_rule="administered_user_scope",
+    ),
+    "new_agent_onboarding_notice": AuthorizationPolicy(
+        key="new_agent_onboarding_notice",
+        access="permission_protected",
+        description="Delegate an eligible notice resend to its source domain.",
+        methods=("POST",),
+        route_names=("new_agent_onboarding_notice",),
+        all_permissions=("web.manage_new_agent_onboarding",),
+        scope_rule="source_service_reauthorization",
     ),
     "dashboard": AuthorizationPolicy(
         key="dashboard",
@@ -119,6 +221,14 @@ ROUTE_POLICIES: dict[str, AuthorizationPolicy] = {
         description="Render the hub dashboard and deferred widgets.",
         methods=("GET",),
         route_names=("dashboard",),
+        scope_rule="self_only",
+    ),
+    "design_system": AuthorizationPolicy(
+        key="design_system",
+        access="authenticated",
+        description="Render the internal ONEST component catalog.",
+        methods=("GET",),
+        route_names=("design_system",),
         scope_rule="self_only",
     ),
     "coming_soon": AuthorizationPolicy(
@@ -130,6 +240,21 @@ ROUTE_POLICIES: dict[str, AuthorizationPolicy] = {
         scope_rule="self_only",
     ),
 }
+
+ROUTE_POLICIES.update(
+    {
+        operations_policy_key(destination): AuthorizationPolicy(
+            key=operations_policy_key(destination),
+            access="permission_protected",
+            description=f"Render the {destination.label} administrative destination.",
+            methods=("GET",),
+            route_names=(destination.route_name,),
+            all_permissions=(destination.permission,),
+            scope_rule=destination.scope_rule,
+        )
+        for destination in OPERATIONS_DESTINATIONS
+    }
+)
 
 NON_ROUTE_SURFACES: tuple[AuthorizationPolicy, ...] = (
     AuthorizationPolicy(
@@ -263,7 +388,18 @@ def _unauthenticated_response(
 ) -> HttpResponse:
     if policy.auth_behavior == "json":
         return _json_denial(401, "authentication_required", request)
-    return redirect_to_login(request.get_full_path())
+    return unauthenticated_redirect(request)
+
+
+def unauthenticated_redirect(
+    request: HttpRequest, *, login_url: str | None = None
+) -> HttpResponse:
+    """Redirect safely, marking only interrupted Inertia sessions as expired."""
+
+    destination = login_url
+    if destination is None and request.headers.get("X-Inertia") == "true":
+        destination = f"{reverse('login')}?reason=session-expired"
+    return redirect_to_login(request.get_full_path(), login_url=destination)
 
 
 def enforce_policy(policy_key: str):
@@ -308,8 +444,7 @@ def enforce_policy(policy_key: str):
     return decorator
 
 
-def scope_q_for_user_offices(user, *, field_name: str) -> Q:
-    access = get_effective_access(user)
+def _office_scope_q(access, *, field_name: str) -> Q:
     if access.company_wide:
         return Q()
     filters = Q()
@@ -322,15 +457,25 @@ def scope_q_for_user_offices(user, *, field_name: str) -> Q:
     return filters
 
 
+def scope_q_for_user_offices(user, *, field_name: str) -> Q:
+    return _office_scope_q(get_effective_access(user), field_name=field_name)
+
+
 def scope_queryset_for_user_office(
     user,
     queryset: QuerySet,
     *,
     field_name: str,
+    access=None,
 ) -> QuerySet:
     if getattr(user, "is_superuser", False):
         return queryset
-    filters = scope_q_for_user_offices(user, field_name=field_name)
+    effective = get_effective_access(user) if access is None else access
+    # Company-wide access yields an empty ``Q``, which is falsy — reading it as
+    # "no scope" would hand a brokerage-wide admin an empty queryset.
+    if effective.company_wide:
+        return queryset
+    filters = _office_scope_q(effective, field_name=field_name)
     if not filters:
         return queryset.none()
     return queryset.filter(filters)

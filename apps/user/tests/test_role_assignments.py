@@ -163,6 +163,25 @@ def test_effective_permissions_union_mixed_roles_and_scopes():
 
 
 @pytest.mark.django_db
+def test_office_assignment_does_not_promote_access_to_the_parent_region():
+    actor = User.objects.create_superuser(email="admin@example.com", password="x")
+    office = assignable_office()
+    manager = User.objects.create_user(email="branch@example.com", office=office)
+    create_role_assignment(
+        actor=actor,
+        target_user=manager,
+        role=BRANCH_MANAGER,
+        scope_type=ScopeType.OFFICE,
+        scope_office=office,
+    )
+
+    access = get_effective_access(manager)
+
+    assert access.office_keys == frozenset({office.stable_key})
+    assert access.region_keys == frozenset()
+
+
+@pytest.mark.django_db
 def test_self_revocation_of_last_management_role_is_blocked():
     office = assignable_office()
     actor = User.objects.create_user(email="manager@example.com", office=office)
@@ -265,3 +284,22 @@ def test_non_superuser_cannot_self_assign_protected_role():
             role=ADMIN,
             scope_type=ScopeType.COMPANY,
         )
+
+
+# ---------------------------------------------------------------------------
+# Row locking must be valid SQL on the database we actually deploy to
+# ---------------------------------------------------------------------------
+
+
+def test_assignment_lock_compiles_to_valid_postgresql(monkeypatch):
+    """PostgreSQL rejects ``FOR UPDATE`` over the nullable side of an outer join."""
+    from apps.user.services.role_assignments import locked_assignment_queryset
+    from apps.user.tests.pg_compile import compile_for_postgresql
+
+    sql = compile_for_postgresql(locked_assignment_queryset().filter(pk=1), monkeypatch)
+
+    # The outer join onto the nullable scope_office is what makes an
+    # unqualified FOR UPDATE illegal here.
+    assert "LEFT OUTER JOIN" in sql
+    assert 'FOR UPDATE OF "user_userroleassignment"' in sql
+    assert not sql.rstrip().endswith("FOR UPDATE")

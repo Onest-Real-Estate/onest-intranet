@@ -1,19 +1,21 @@
 import { Head, usePage } from "@inertiajs/react";
 import {
   Building2,
-  Camera,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
   IdCard,
-  Loader2,
   MapPin,
   User2,
 } from "lucide-react";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 
 import { AuthLayout } from "@/components/AuthLayout";
-import type { OfficeGroup, StateOption } from "@/components/ProfileFormFields";
+import {
+  FileUploader,
+  FormErrorSummary,
+  type UploadedFile,
+} from "@/components/design-system";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -38,43 +40,13 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { routes } from "@/lib/routes";
 import { validateUsPhone, validateUsZip } from "@/lib/us-validation";
-import type { PageProps } from "@/types";
+import type { OnboardingPageProps, OnboardingProfileValues } from "@/types";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-interface OnboardingPageProps extends PageProps {
-  initial: {
-    firstName: string;
-    lastName: string;
-    phoneNumber: string;
-    streetAddress: string;
-    city: string;
-    state: string;
-    zipCode: string;
-    officeId: string;
-    mlsNumber: string;
-    nrdsNumber: string;
-    headshotUrl: string | null;
-  };
-  errors: Record<string, string>;
-  offices: OfficeGroup[];
-  states: StateOption[];
-}
-
-interface FormValues {
-  firstName: string;
-  lastName: string;
-  phoneNumber: string;
-  streetAddress: string;
-  city: string;
-  state: string;
-  zipCode: string;
-  officeId: string;
-  mlsNumber: string;
-  nrdsNumber: string;
-}
+type FormValues = Omit<OnboardingProfileValues, "headshotUrl">;
 
 // ---------------------------------------------------------------------------
 // Steps
@@ -102,11 +74,13 @@ function FieldError({ id, message }: { id: string; message?: string }) {
   );
 }
 
-function describedBy(field: string, errors: Record<string, string>) {
+function describedBy(field: string, errors: Record<string, string | undefined>) {
   return errors[field] ? `${field}_error` : undefined;
 }
 
-function resolveStepFromErrors(errors: Record<string, string>): StepId | null {
+function resolveStepFromErrors(
+  errors: Record<string, string | undefined>,
+): StepId | null {
   if (errors.first_name || errors.last_name || errors.phone_number || errors.headshot) {
     return "personal";
   }
@@ -182,138 +156,61 @@ function HeadshotUploader({
 }: {
   initialUrl: string | null;
   csrfToken: string;
-  onUploaded: (serverUrl: string, previewUrl: string) => void;
+  onUploaded: (url: string) => void;
   error?: string;
 }) {
-  const [preview, setPreview] = useState<string | null>(initialUrl);
-  const [uploading, setUploading] = useState(false);
-  const [uploadError, setUploadError] = useState<string | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const localPreviewRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    return () => {
-      if (localPreviewRef.current) {
-        URL.revokeObjectURL(localPreviewRef.current);
-      }
-    };
-  }, []);
-
-  function clearLocalPreview() {
-    if (localPreviewRef.current) {
-      URL.revokeObjectURL(localPreviewRef.current);
-      localPreviewRef.current = null;
-    }
-  }
-
-  async function handleFile(file: File) {
-    setUploadError(null);
-    clearLocalPreview();
-    const localUrl = URL.createObjectURL(file);
-    localPreviewRef.current = localUrl;
-    setPreview(localUrl);
-    setUploading(true);
-    const fd = new FormData();
-    fd.append("headshot", file);
-    fd.append("csrfmiddlewaretoken", csrfToken);
-    try {
-      const res = await fetch(routes.headshot_upload(), {
-        method: "POST",
-        body: fd,
-        credentials: "same-origin",
-        headers: {
-          "X-XSRF-TOKEN": csrfToken,
-        },
-      });
-      const json = (await res.json()) as { url?: string; error?: string };
-      if (!res.ok || !json.url) {
-        clearLocalPreview();
-        setPreview(initialUrl);
-        setUploadError(json.error ?? "Upload failed. Please try again.");
-      } else {
-        // Keep the blob preview — it is reliable in-session. Persist the
-        // server URL separately for the review step and reloads.
-        onUploaded(json.url, localUrl);
-      }
-    } catch {
-      clearLocalPreview();
-      setPreview(initialUrl);
-      setUploadError("Network error. Please try again.");
-    } finally {
-      setUploading(false);
-    }
-  }
-
-  function handlePreviewError() {
-    if (preview?.startsWith("blob:")) {
-      return;
-    }
-    setPreview(null);
-  }
-
+  const initialFile: UploadedFile | null = initialUrl
+    ? { name: "Current profile photo", url: initialUrl, type: "image" }
+    : null;
   return (
-    <div className="flex flex-col items-center gap-4">
-      <button
-        type="button"
-        className="group relative size-32 cursor-pointer overflow-hidden rounded-full border-2 border-dashed border-muted-foreground/40 bg-muted transition hover:border-primary"
-        onClick={() => inputRef.current?.click()}
-        aria-label="Upload profile photo"
-      >
-        {preview ? (
-          <img
-            src={preview}
-            alt=""
-            className="size-full object-cover"
-            onError={handlePreviewError}
-          />
-        ) : (
-          <div className="flex size-full flex-col items-center justify-center gap-1 text-muted-foreground">
-            <Camera className="size-8" strokeWidth={1.5} aria-hidden />
-            <span className="text-xs">Add photo</span>
-          </div>
-        )}
-        {uploading && (
-          <div className="absolute inset-0 flex items-center justify-center bg-background/60">
-            <Loader2 className="size-6 animate-spin text-primary" aria-hidden />
-          </div>
-        )}
-        <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition group-hover:opacity-100">
-          <Camera className="size-6 text-white" strokeWidth={1.5} aria-hidden />
-        </div>
-      </button>
-
-      <input
-        ref={inputRef}
-        type="file"
+    <div className="grid gap-2">
+      <FileUploader
+        label="Add profile photo"
+        description="JPEG or PNG · at least 200×200 px · max 5 MB"
         accept="image/jpeg,image/png"
-        className="sr-only"
-        aria-label="Select profile photo"
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          if (file) handleFile(file);
+        maxSize={5 * 1024 * 1024}
+        value={initialFile}
+        removable={false}
+        validate={(file) =>
+          ["image/jpeg", "image/png"].includes(file.type)
+            ? null
+            : "Choose a JPEG or PNG image. The server will verify its contents."
+        }
+        upload={async (file, { signal, onProgress }) => {
+          const formData = new FormData();
+          formData.append("headshot", file);
+          formData.append("csrfmiddlewaretoken", csrfToken);
+          onProgress(20);
+          const response = await fetch(routes.headshot_upload(), {
+            method: "POST",
+            body: formData,
+            signal,
+          });
+          const payload = (await response.json()) as {
+            error?: string;
+            url?: string;
+          };
+          if (!response.ok) {
+            throw new Error(payload.error ?? "Upload failed. Please try again.");
+          }
+          if (!payload.url) {
+            throw new Error("The server did not return an uploaded file URL.");
+          }
+          onProgress(100);
+          onUploaded(payload.url);
+          return {
+            name: file.name,
+            url: payload.url,
+            size: file.size,
+            type: file.type,
+          };
         }}
       />
-
-      {(uploadError || error) && (
+      {error ? (
         <p className="text-destructive text-center text-sm" role="alert">
-          {uploadError ?? error}
+          {error}
         </p>
-      )}
-
-      {!uploading && (
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => inputRef.current?.click()}
-        >
-          {preview ? "Replace photo" : "Choose photo"}
-        </Button>
-      )}
-
-      <p className="text-muted-foreground text-center text-xs">
-        JPEG or PNG · at least 200×200 px · max 5 MB
-      </p>
+      ) : null}
     </div>
   );
 }
@@ -378,8 +275,11 @@ function StepProgress({ steps, current }: { steps: typeof STEPS; current: StepId
 // ---------------------------------------------------------------------------
 
 export default function Onboarding() {
-  const { csrfToken, initial, errors, offices, states } =
+  const { csrfToken, initial, validation, offices, states } =
     usePage<OnboardingPageProps>().props;
+  const errors = Object.fromEntries(
+    Object.entries(validation.fields).map(([field, messages]) => [field, messages[0]]),
+  ) as Record<string, string | undefined>;
 
   const [step, setStep] = useState<StepId>(resolveStepFromErrors(errors) ?? "personal");
 
@@ -396,9 +296,7 @@ export default function Onboarding() {
     nrdsNumber: initial.nrdsNumber,
   });
 
-  const [headshotPreviewUrl, setHeadshotPreviewUrl] = useState<string | null>(
-    initial.headshotUrl,
-  );
+  const [headshotUrl, setHeadshotUrl] = useState<string | null>(initial.headshotUrl);
   const [clientErrors, setClientErrors] = useState<Record<string, string>>({});
   const fieldErrors = { ...clientErrors, ...errors };
 
@@ -425,7 +323,7 @@ export default function Onboarding() {
       mlsNumber: initial.mlsNumber,
       nrdsNumber: initial.nrdsNumber,
     });
-    setHeadshotPreviewUrl(initial.headshotUrl);
+    setHeadshotUrl(initial.headshotUrl);
     setClientErrors({});
   }, [errors, initial]);
 
@@ -539,15 +437,14 @@ export default function Onboarding() {
             <input type="hidden" name="nrds_number" value={values.nrdsNumber} />
 
             <CardContent className="grid gap-6">
+              <FormErrorSummary errors={validation} />
               {/* ── Step 1: Personal ─────────────────────────────────── */}
               {step === "personal" && (
                 <div className="grid gap-6">
                   <HeadshotUploader
-                    initialUrl={initial.headshotUrl}
+                    initialUrl={headshotUrl}
                     csrfToken={csrfToken}
-                    onUploaded={(_serverUrl, previewUrl) => {
-                      setHeadshotPreviewUrl(previewUrl);
-                    }}
+                    onUploaded={setHeadshotUrl}
                     error={fieldErrors.headshot}
                   />
 
@@ -678,7 +575,7 @@ export default function Onboarding() {
                       </Select>
                       <FieldError id="state_error" message={fieldErrors.state} />
                     </div>
-                    <div className="grid gap-2 sm:col-span-2">
+                    <div className="grid gap-2 sm:col-span-1">
                       <Label htmlFor="zip_code_input">ZIP</Label>
                       <Input
                         id="zip_code_input"
@@ -690,9 +587,9 @@ export default function Onboarding() {
                         aria-describedby={describedBy("zip_code", fieldErrors)}
                         required
                       />
+                      <FieldError id="zip_code_error" message={fieldErrors.zip_code} />
                     </div>
                   </div>
-                  <FieldError id="zip_code_error" message={fieldErrors.zip_code} />
                 </div>
               )}
 
@@ -775,10 +672,10 @@ export default function Onboarding() {
               {/* ── Step 4: Review ────────────────────────────────────── */}
               {step === "review" && (
                 <div className="grid gap-4 text-sm">
-                  {headshotPreviewUrl && (
+                  {headshotUrl && (
                     <div className="flex justify-center">
                       <img
-                        src={headshotPreviewUrl}
+                        src={headshotUrl}
                         alt="Your headshot"
                         className="size-20 rounded-full object-cover ring-2 ring-primary/20"
                       />

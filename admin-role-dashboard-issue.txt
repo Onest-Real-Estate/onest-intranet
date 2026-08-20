@@ -1,0 +1,632 @@
+TITLE
+[P1] Build role-aware administrative dashboards and dashboard assignment
+
+LABELS / TAGS
+- P1
+- type:feature
+- module:dashboard
+- area:frontend
+- area:backend
+- area:ui-ux
+- area:data-model
+- area:admin
+- area:permissions
+- area:reporting
+- area:business-logic
+- area:security
+
+SUMMARY
+
+Build the administrative dashboard system for ONEST Hub and add a secure,
+deterministic way to assign dashboard profiles to roles, offices, regions, and
+specific users. Each dashboard must display widgets and metrics appropriate to
+the user's effective permissions and organizational scope.
+
+Dashboard assignment controls presentation and the user's default landing
+experience. It must never grant permission to underlying records. Every widget,
+metric, queue, drill-down page, and action remains protected by backend
+permissions and scope-aware querysets.
+
+CURRENT REPOSITORY BASELINE
+
+- The application already has a responsive React/Inertia dashboard shell.
+- Dashboard widgets currently use deferred Inertia props.
+- Existing dashboard data in apps/web/dashboard.py is placeholder data.
+- The application has an authorization-policy layer, effective role assignments,
+  office/region scope helpers, frontend permission guards, typed routes, and an
+  audit/event foundation.
+- The current role foundation includes agents, admins, region managers, and
+  branch managers. The broader product specification also defines brokerage,
+  transaction, compliance, marketing, accounting, and IT roles.
+
+PROBLEM
+
+One universal dashboard cannot give every ONEST user the correct operational
+view. Agents need their personal work, while branch administrators, managers,
+brokers, transaction coordinators, compliance staff, marketing staff,
+accountants, IT, and system administrators require different metrics, queues,
+actions, and scopes.
+
+Role-name checks embedded throughout the frontend would be difficult to audit,
+would not work correctly for users with multiple roles, and could accidentally
+expose company or cross-office aggregates. Dashboard selection and widget
+authorization need one shared, testable policy.
+
+GOALS
+
+- Provide a useful administrative dashboard backed by real, scoped data.
+- Define the supported dashboard profiles and their intended users.
+- Let authorized admins assign default dashboards by role and organizational
+  scope without a deployment.
+- Support users with multiple roles through a deterministic default and an
+  optional dashboard switcher.
+- Centralize widget registration, metric calculation, assignment resolution,
+  and permission enforcement.
+- Make it easy to add new dashboard profiles and widgets without creating a
+  large collection of duplicated page components.
+
+SUPPORTED DASHBOARD PROFILES
+
+The first release should support the following dashboard profiles. These are
+compositions of reusable widgets, not necessarily separate duplicated React
+pages.
+
+1. AGENT DASHBOARD
+
+Primary audience:
+- Realtor / Agent
+
+Recommended content:
+- Own active transactions
+- Own upcoming closings
+- Own pending tasks and follow-ups
+- Commission YTD when permitted
+- New leads and follow-ups due
+- My Day
+- Action Items
+- Quick Access
+- News and announcements targeted to the agent
+- Own room and inventory reservations
+- Contract awaiting signature
+- Required training and profile completion
+
+Default scope:
+- Self only
+- Assigned office resources
+
+2. BRANCH / OFFICE ADMIN DASHBOARD
+
+Primary audience:
+- Branch Admin
+- Office Admin
+
+Recommended content:
+- Active agents in the branch
+- New agents and incomplete onboarding
+- Contracts awaiting generation or signature
+- Upcoming contract expirations
+- Branch transaction workload
+- Open office tasks
+- Inventory reservations and overdue inventory
+- Today's room reservations
+- Room conflicts, closures, and utilization
+- Local announcements and scheduled notices
+- Office resources requiring review
+- Quick actions for new contract, announcement, inventory item, room block, and
+  user administration when permitted
+
+Default scope:
+- Assigned branch only
+
+3. BRANCH MANAGER DASHBOARD
+
+Primary audience:
+- Branch Manager
+
+Recommended content:
+- Office production summary
+- Active and closing-soon transactions
+- Transactions requiring manager attention
+- Compliance exceptions
+- Contract completion and signature status
+- Agent onboarding progress
+- Open agent or office action items
+- Inventory exceptions and overdue items
+- Room utilization
+- Training completion
+- Recent branch activity
+
+Default scope:
+- Assigned branch only
+
+4. REGIONAL ADMIN / REGIONAL MANAGER DASHBOARD
+
+Primary audience:
+- Regional Admin
+- Regional Manager
+
+Recommended content:
+- Office comparison cards
+- Agent counts and new-agent onboarding by office
+- Regional transaction pipeline
+- Production and closing trends
+- Contract completion by office
+- Compliance exceptions by branch
+- Inventory exceptions across assigned offices
+- Room utilization by office
+- Regional announcements
+- Branches requiring attention
+- Scoped drill-down to an individual office
+
+Default scope:
+- Assigned region and descendant offices only
+
+5. BROKER / PRINCIPAL BROKER DASHBOARD
+
+Primary audience:
+- Principal Broker
+- Broker Admin
+
+Recommended content:
+- Brokerage or jurisdiction production
+- Transaction volume and status
+- Compliance review queue and exceptions
+- Contracts awaiting approval, signature, activation, or expiration
+- Commission-term exceptions visible only with explicit permission
+- New agents and licensing/credential exceptions
+- Office comparisons
+- Policy acknowledgement and required training status
+- High-priority announcements
+- Recent sensitive operational activity where permitted
+
+Default scope:
+- Authorized brokerage, jurisdiction, region, or office scope
+
+6. TRANSACTION COORDINATOR DASHBOARD
+
+Primary audience:
+- Transaction Coordinator
+- Regional Transaction Coordinator
+
+Recommended content:
+- Assigned active transactions
+- Transactions requiring documents
+- Checklist items due or overdue
+- Upcoming inspections, appraisals, and closings
+- Compliance corrections awaiting action
+- Documents awaiting signature
+- Agent follow-up queue
+- Workload by status and closing week
+
+Default scope:
+- Assigned transactions and permitted offices/regions
+
+7. COMPLIANCE DASHBOARD
+
+Primary audience:
+- Compliance staff
+
+Recommended content:
+- Transactions awaiting compliance review
+- Open compliance exceptions
+- Aging corrections
+- Missing or replaced documents
+- Policy and training compliance
+- High-priority compliance announcements
+- Review throughput and turnaround time
+- Recent compliance decisions
+
+Default scope:
+- Explicit compliance assignment and office/region/company permissions
+
+8. MARKETING DASHBOARD
+
+Primary audience:
+- Marketing Team
+
+Recommended content:
+- Draft, scheduled, active, and expired announcements
+- Announcement audience reach when available
+- Marketing-resource status
+- Content requiring review
+- Upcoming events and campaigns
+- Office marketing requests
+- Recently uploaded marketing assets
+- Quick actions for announcement and marketing content creation
+
+Default scope:
+- Assigned company, region, or office publishing scope
+
+9. ACCOUNTING / FINANCE DASHBOARD
+
+Primary audience:
+- Accountant
+- Authorized finance users
+
+Recommended content:
+- Transactions approaching closing
+- Commission records requiring review
+- Contract fee/cap exceptions
+- Missing commission forms
+- Payment or reconciliation tasks when those modules exist
+- Scoped production and commission summaries
+- Accounting Action Items
+
+Default scope:
+- Explicit financial permissions and assigned organizational scope
+
+Security note:
+- Financial widgets require separate permissions. General admin-dashboard access
+  must not reveal commission or payment totals.
+
+10. IT SUPPORT DASHBOARD
+
+Primary audience:
+- IT Support
+
+Recommended content:
+- Users with incomplete Microsoft/tool setup
+- Access and permission requests
+- Failed background jobs or integrations approved for IT visibility
+- SSO/onboarding support queue
+- Third-party tool setup status
+- Internal support tickets
+- Integration health
+- Recent security/authorization failures only when explicitly permitted
+
+Default scope:
+- Assigned support scope; no contract, transaction, commission, or client details
+  unless separately authorized
+
+11. SYSTEM ADMIN DASHBOARD
+
+Primary audience:
+- System Admin / Superadmin
+
+Recommended content:
+- Brokerage-wide operational summary
+- Active users and office counts
+- New-agent onboarding state
+- Contract, transaction, compliance, inventory, and reservation exceptions
+- Announcement and scheduled-job status
+- Background-task/integration health
+- Failed notification deliveries
+- Recent security-sensitive audit activity
+- Configuration and administration shortcuts
+
+Default scope:
+- Company-wide, subject to explicit sensitive-data permissions
+
+Security note:
+- Superuser status does not justify placing secrets, document contents, or
+  unnecessary personal data on the dashboard.
+
+ADMIN DASHBOARD REQUIREMENTS
+
+Header and scope controls:
+- Personalized greeting, role label, current date, and active dashboard name.
+- Clearly display the currently selected organizational scope.
+- Permit office/region switching only among scopes in the actor's effective
+  access set.
+- Revalidate selected scope on every backend request.
+- Never trust a scope identifier stored only in local storage or query params.
+
+Performance cards:
+- Active agents
+- New agents / incomplete onboarding
+- Active transactions
+- Upcoming closings
+- Contracts awaiting signature
+- Compliance exceptions
+- Pending tasks
+- Overdue inventory
+- Room utilization
+- Other cards defined for the active dashboard profile
+
+Operational queues:
+- Items requiring the current user's action
+- Contracts awaiting workflow action
+- Onboarding exceptions
+- Compliance exceptions
+- Inventory and room exceptions
+- Recent activity within the selected scope
+
+Quick actions:
+- Actions must be permission-aware and use typed routes.
+- Examples include creating a contract, announcement, inventory item, room block,
+  office resource, or permitted user-management action.
+- Hiding a quick action is not authorization; the destination endpoint must
+  independently enforce permissions and scope.
+
+Loading and failure behavior:
+- Use deferred Inertia props so slow metrics do not block the dashboard shell.
+- One failed widget must not prevent other widgets from rendering.
+- Provide separate loading, zero, unavailable, permission-withheld, stale, and
+  error states.
+- Never replace unavailable metrics with fabricated sample values.
+
+DASHBOARD ASSIGNMENT DATA MODEL
+
+Add models or equivalent domain records with the following responsibilities.
+Exact model names may change while preserving these rules.
+
+DashboardProfile:
+- Stable key
+- Display name
+- Description
+- Dashboard category
+- Active state
+- Sort order
+- Default/fallback indicator
+- Optional valid-from and valid-until dates
+- Created/updated timestamps
+
+DashboardAssignment:
+- Dashboard profile
+- Assignment target type: role, user, office, region, or company
+- Target identity
+- Priority
+- Default-for-target flag
+- Optional valid-from and valid-until dates
+- Created by
+- Created/updated timestamps
+
+DashboardWidget registry:
+- Stable widget key
+- Display metadata
+- Backend data-provider key
+- Required permissions
+- Supported scope modes
+- Default size/order
+- Dashboard profiles that include the widget
+
+Implementation safety:
+- Do not store arbitrary Python import paths, SQL, React component names, HTML,
+  or executable expressions in administrator-editable database fields.
+- Widget implementations and data providers must come from an allowlisted code
+  registry.
+- Database configuration may select, order, enable, or disable registered
+  widgets but cannot execute arbitrary code.
+
+DASHBOARD RESOLUTION RULES
+
+The backend must resolve available and default dashboards deterministically.
+
+Recommended precedence for the default dashboard:
+
+1. Active explicit user assignment, if authorized and valid.
+2. Assignment for the user's designated primary role.
+3. Highest-priority valid assignment among the user's effective roles.
+4. Valid office or regional assignment when no role assignment exists.
+5. Agent/authenticated fallback dashboard.
+
+Multiple-role behavior:
+- A user may have access to more than one dashboard profile.
+- The resolved default opens after login.
+- A dashboard switcher may list other profiles the user is authorized to use.
+- Switching dashboards changes presentation, not permissions.
+- The selected profile may be remembered as a user preference only while the
+  assignment remains active and authorized.
+- Duplicate widgets from multiple roles must not be counted or rendered twice.
+- Removing a role or assignment must remove the dashboard on the next request
+  and invalidate any cached dashboard selection.
+
+Assignment does not grant access:
+- A dashboard assignment cannot add Django permissions.
+- A dashboard assignment cannot broaden office, region, record, or company
+  scope.
+- If a profile contains a widget the user cannot access, the backend must omit
+  it or return an explicitly permission-withheld state without sensitive data.
+- Direct widget and drill-down requests must enforce the same permission and
+  scope rules independently.
+
+DASHBOARD ASSIGNMENT ADMINISTRATION
+
+Authorized administrators must be able to:
+- View dashboard profiles and their registered widgets.
+- View assignments by role, user, office, region, and company.
+- Create, edit, activate, deactivate, schedule, and remove assignments.
+- Select one default dashboard per assignment context according to documented
+  uniqueness rules.
+- Preview a dashboard as a selected in-scope role and office without receiving
+  permissions the admin does not possess.
+- See assignment conflicts and understand which rule wins.
+- Review an effective-dashboard explanation for a selected user.
+- Reorder enabled widgets when the widget registry permits it.
+- Audit assignment changes.
+
+Grant boundaries:
+- System/company admins may manage company assignments when explicitly permitted.
+- Regional admins may assign only approved dashboards to users/roles/offices
+  inside their assigned region.
+- Branch admins may assign only approved dashboards inside their branch.
+- A scoped admin cannot create company-wide, parent-region, sibling-office, or
+  non-delegable role assignments.
+- An admin cannot use dashboard assignment to expose a widget they cannot grant.
+
+BACKEND REQUIREMENTS
+
+- Create a dashboard-profile resolver using the existing effective role and
+  organizational-scope services.
+- Create a registered widget/provider contract that accepts the current user and
+  selected authorized scope.
+- Apply scope before every aggregation, count, sum, or list query.
+- Define calculation rules and time windows for each metric.
+- Include the active dashboard key, available dashboards, selected scope, widget
+  payloads, and assignment explanation in typed Inertia props as appropriate.
+- Bound query counts and use select_related/prefetch_related.
+- Include user, assignment version, permissions, and effective scope in cache
+  keys. Never use a shared cache key for sensitive user-specific metrics.
+- Invalidate dashboard and navigation caches after role, scope, permission, or
+  dashboard-assignment changes.
+- Emit audit/domain events for dashboard-profile and assignment changes.
+
+FRONTEND / UI / UX REQUIREMENTS
+
+- Reuse the existing Dashboard page shell and design-system components.
+- Add an accessible dashboard switcher only when more than one profile is
+  available.
+- Add an accessible scope selector only when more than one scope is authorized.
+- Display the active dashboard and scope clearly.
+- Compose dashboards from registered widget presentation components.
+- Use semantic Tailwind tokens; no literal component colors.
+- Preserve logical mobile source order, putting Action Items and My Day before
+  lower-priority reporting widgets.
+- Support keyboard navigation, visible focus, screen-reader labels, reduced
+  motion, responsive layouts, long labels, and large metric values.
+- Provide useful empty states with next actions when permitted.
+- Use typed routes for all dashboard actions and drill-down links.
+- Guard restricted controls with PermissionRequired/hasPermission while keeping
+  backend enforcement authoritative.
+
+PERMISSIONS
+
+Define explicit permissions such as:
+- View own dashboard
+- View scoped administrative dashboard
+- View company-wide dashboard
+- View financial dashboard metrics
+- View compliance dashboard metrics
+- Manage dashboard profiles
+- Manage dashboard assignments
+- Assign dashboards company-wide
+- Assign dashboards regionally
+- Assign dashboards within an office
+- Preview dashboard assignments
+
+Permission names should follow the project's Django app.codename conventions.
+The final permission catalog must be documented in the authorization inventory.
+
+SECURITY AND PRIVACY REQUIREMENTS
+
+- Scope all dashboard data on the backend before serialization.
+- Do not expose hidden widget payloads and rely on CSS to conceal them.
+- Prevent cross-office aggregate leakage through counts, trends, tooltips, chart
+  data, exports, or drill-down URLs.
+- Protect user lookup in the assignment interface from out-of-scope enumeration.
+- Do not expose contract documents, client information, commission totals,
+  security events, or internal notes without explicit permissions.
+- Audit successful and denied assignment changes with actor, target, before/after
+  values, request ID, and scope.
+- Revalidate permissions when deferred widget requests execute.
+
+EDGE CASES
+
+- User has no dashboard assignment.
+- User has multiple active roles with equal-priority assignments.
+- User's primary role assignment expires.
+- User loses a role while a dashboard is open.
+- User changes office or region.
+- Assigned office becomes inactive.
+- Dashboard profile is deactivated while selected.
+- Widget is removed from the code registry but remains in stored configuration.
+- A widget provider fails or times out.
+- User may view the dashboard but not a sensitive metric within it.
+- Regional admin attempts to assign a company dashboard.
+- Two admins edit the same assignment concurrently.
+- A cached dashboard was generated before a role or scope change.
+- Empty scope, zero metrics, and genuinely unavailable source modules.
+
+ACCEPTANCE CRITERIA
+
+- [ ] The administrative dashboard uses real scoped data and contains no
+      hard-coded business records or placeholder metrics in production.
+- [ ] Every supported role receives the documented default dashboard or a safe
+      fallback.
+- [ ] Authorized multi-role users can access all permitted dashboard profiles
+      and receive one deterministic default.
+- [ ] Dashboard switching never grants additional permission or scope.
+- [ ] Agents cannot access administrative dashboard data by changing a dashboard
+      key, user ID, office ID, region ID, URL, or deferred-prop request.
+- [ ] Branch administrators see only their branch.
+- [ ] Regional administrators see only their assigned region and descendants.
+- [ ] Company-wide data requires an explicit company-wide permission.
+- [ ] Financial, compliance, and security widgets require their own permissions.
+- [ ] Authorized admins can create and manage dashboard assignments within their
+      grant boundary.
+- [ ] Scoped admins cannot assign dashboards outside their office/region or to
+      non-delegable roles.
+- [ ] Existing matching assignments cannot create ambiguous defaults; conflicts
+      are prevented or resolved deterministically.
+- [ ] Role, scope, permission, and assignment changes take effect on the next
+      request and invalidate stale cached selections.
+- [ ] Each deferred widget loads independently and has loading, empty, zero,
+      permission-withheld, unavailable, and error behavior.
+- [ ] Drill-down pages enforce the same scope as their dashboard aggregates.
+- [ ] Assignment changes and denied escalation attempts create audit events.
+- [ ] Dashboard and administration experiences meet responsive and accessibility
+      requirements.
+
+BACKEND TESTING
+
+- Table-driven dashboard resolution tests covering every role profile.
+- Multiple-role precedence and dashboard-switcher availability tests.
+- Explicit user, role, office, region, company, expired, inactive, and fallback
+  assignment tests.
+- Branch, region, company, self-only, and assigned-record scope tests.
+- Cross-office and cross-region aggregate-leakage tests.
+- Financial/compliance/security metric permission tests.
+- Crafted dashboard key, scope ID, target user, and role-assignment tests.
+- Assignment grant-boundary and privilege-escalation tests.
+- Concurrent assignment edit and unique-default constraint tests.
+- Cache-key isolation and invalidation tests.
+- Deferred-widget failure-isolation and query-count tests.
+- Audit/domain-event tests.
+
+FRONTEND TESTING
+
+- Dashboard profile rendering tests.
+- Dashboard and scope switcher tests.
+- Multi-role default and remembered-selection tests.
+- Permission guard and omitted-widget tests.
+- Metric zero, unavailable, stale, loading, and error-state tests.
+- Admin assignment table, filters, form, conflict explanation, preview, and
+  confirmation tests.
+- Keyboard navigation, focus management, screen-reader labeling, responsive
+  layout, and automated accessibility tests.
+
+DEPENDENCIES
+
+- P0 role, multiple-role, permission, office/region scope, backend enforcement,
+  frontend PermissionRequired, audit, event, navigation, application-shell, and
+  design-system issues.
+- P1-021 Personalized Agent Dashboard.
+- P1-022 Dashboard performance cards.
+- P1-023 Role-aware dashboard metrics.
+- P1-024/P1-025 Quick Access and its administration.
+- P1-026 My Day.
+- P1-027 Action Items.
+- Contract, transaction, CRM, announcements, training, inventory, and room
+  modules provide additional widget data as they are delivered.
+
+IMPLEMENTATION NOTES
+
+- Prefer one dashboard composition system over eleven duplicated page files.
+- Keep metric definitions and widget providers explicit and independently
+  testable.
+- Do not add arbitrary drag-and-drop dashboard building in the first release.
+  Admin configuration should select and order approved registered widgets.
+- Any urls.py changes require pnpm run routes:generate in the same change.
+- Any model change requires a migration in the same change.
+- Inertia props use camelCase and shared prop interfaces live in
+  frontend/types/index.ts.
+- Use pytest for backend behavior and Vitest/Testing Library for frontend
+  behavior.
+
+DEFINITION OF DONE
+
+- Administrative dashboard is available to authorized users with real scoped
+  data.
+- Dashboard profile and assignment models/services are migrated and documented.
+- All supported role dashboards are registered.
+- Multi-role resolution and switching are deterministic.
+- Dashboard assignment administration is permission- and scope-aware.
+- Every widget and drill-down has backend authorization.
+- Placeholder production dashboard data is removed.
+- Audit, cache invalidation, empty/error/loading states, and accessibility are
+  complete.
+- Backend and frontend tests pass.
+- Typed routes are regenerated when applicable.
+- The full repository quality gate documented in AGENTS.md passes.
+
+<!-- ONEST-P1-ROLE-BASED-ADMIN-DASHBOARDS -->

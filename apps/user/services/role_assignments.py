@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 from django.contrib.auth.models import Group
@@ -13,6 +14,7 @@ from apps.audit.service import AuditTarget, actor_from_user, log_event
 from apps.user.models import Office, User, UserRoleAssignment
 from apps.user.roles import (
     ADMIN,
+    AGENT,
     BRANCH_MANAGER,
     REGION_MANAGER,
     ROLE_BY_KEY,
@@ -78,11 +80,18 @@ def get_effective_assignments(user: User, *, at=None) -> list[UserRoleAssignment
     return list(active_assignment_queryset(user, at=at))
 
 
-def get_effective_role_keys(user: User, *, at=None) -> list[str]:
+def get_effective_role_keys(
+    user: User,
+    *,
+    at=None,
+    assignments: Sequence[UserRoleAssignment] | None = None,
+) -> list[str]:
     seen: set[str] = set()
     role_keys: list[str] = []
-    assignments = get_effective_assignments(user, at=at)
-    for assignment in assignments:
+    effective_assignments = (
+        get_effective_assignments(user, at=at) if assignments is None else assignments
+    )
+    for assignment in effective_assignments:
         if assignment.role not in seen:
             seen.add(assignment.role)
             role_keys.append(assignment.role)
@@ -107,14 +116,21 @@ def get_primary_role_key(user: User, *, at=None) -> str | None:
     return role_keys[0] if role_keys else None
 
 
-def get_effective_permissions(user: User, *, at=None) -> set[str]:
+def get_effective_permissions(
+    user: User,
+    *,
+    at=None,
+    assignments: Sequence[UserRoleAssignment] | None = None,
+) -> set[str]:
     if getattr(user, "is_anonymous", False):
         return set()
     if getattr(user, "is_superuser", False):
         return set(user.get_all_permissions())
 
-    assignments = get_effective_assignments(user, at=at)
-    if not assignments:
+    effective_assignments = (
+        get_effective_assignments(user, at=at) if assignments is None else assignments
+    )
+    if not effective_assignments:
         return set(user.get_all_permissions())
 
     permissions = set(
@@ -123,7 +139,7 @@ def get_effective_permissions(user: User, *, at=None) -> set[str]:
     normalized = {f"{app_label}.{codename}" for app_label, codename in permissions}
     role_keys = []
     seen: set[str] = set()
-    for assignment in assignments:
+    for assignment in effective_assignments:
         if assignment.role not in seen:
             seen.add(assignment.role)
             role_keys.append(assignment.role)
@@ -162,8 +178,10 @@ def has_effective_permissions(
 
 def get_effective_access(user: User, *, at=None) -> EffectiveAccess:
     assignments = tuple(get_effective_assignments(user, at=at))
-    role_keys = tuple(get_effective_role_keys(user, at=at))
-    permissions = frozenset(get_effective_permissions(user, at=at))
+    role_keys = tuple(get_effective_role_keys(user, at=at, assignments=assignments))
+    permissions = frozenset(
+        get_effective_permissions(user, at=at, assignments=assignments)
+    )
     region_keys: set[str] = set()
     office_keys: set[str] = set()
     company_wide = False
@@ -177,9 +195,6 @@ def get_effective_access(user: User, *, at=None) -> EffectiveAccess:
             region_keys.add(assignment.scope_office.stable_key)
         if assignment.scope_type == ScopeType.OFFICE:
             office_keys.add(assignment.scope_office.stable_key)
-            region = assignment.scope_office.region
-            if region is not None:
-                region_keys.add(region.stable_key)
     if not assignments:
         office = getattr(user, "office", None)
         if ADMIN in role_keys:
@@ -205,7 +220,14 @@ def actor_can_manage_assignments(
     role: str,
     target_scope_type: str,
     scope_office: Office | None,
+    access: EffectiveAccess | None = None,
 ) -> bool:
+    """Whether ``actor`` may grant or revoke this role at this scope.
+
+    ``access`` lets a caller asking about several assignments at once resolve
+    the actor's effective access a single time; recomputing it per row would
+    re-run ``sync_assignment_statuses`` for every one of them.
+    """
     if getattr(actor, "is_superuser", False):
         return True
     if actor.pk is None:
@@ -215,7 +237,7 @@ def actor_can_manage_assignments(
     if definition.protected:
         return False
 
-    access = get_effective_access(actor)
+    access = get_effective_access(actor) if access is None else access
     if ADMIN not in access.role_keys:
         return False
     if target_scope_type == ScopeType.COMPANY:
@@ -270,6 +292,21 @@ def _assignment_target(
             target_label=target_user.email,
         )
     return AuditTarget(target_type="user.role_assignment")
+
+
+def locked_assignment_queryset():
+    """The assignment row, locked for update, with its scope loaded.
+
+    ``of=("self",)`` is load-bearing: ``scope_office`` is nullable, so
+    ``select_related`` reaches it through a LEFT OUTER JOIN, and PostgreSQL
+    refuses a bare ``FOR UPDATE`` that spans the nullable side of an outer
+    join. SQLite drops row locking altogether, so nothing on a developer
+    machine reproduces it — ``test_role_assignments`` compiles this queryset
+    against the PostgreSQL backend to keep the guarantee testable.
+    """
+    return UserRoleAssignment.objects.select_for_update(of=("self",)).select_related(
+        "scope_office", "scope_office__region", "user"
+    )
 
 
 def create_role_assignment(
@@ -383,12 +420,26 @@ def revoke_role_assignment(
             }
         )
 
+    return _apply_revocation(
+        actor=actor, assignment=assignment, business_reason=business_reason
+    )
+
+
+def _apply_revocation(
+    *,
+    actor: User,
+    assignment: UserRoleAssignment,
+    business_reason: str = "",
+) -> UserRoleAssignment:
+    """Write the revocation. Authority is the caller's business, not this one's.
+
+    Split out so ``sync_default_agent_assignment`` can retire the assignment
+    that merely mirrors ``user.office``: the office change was the authorized
+    decision, and re-checking delegation for its own bookkeeping would fail for
+    every administrator who is not brokerage-wide.
+    """
     with transaction.atomic():
-        locked = (
-            UserRoleAssignment.objects.select_for_update()
-            .select_related("scope_office", "scope_office__region", "user")
-            .get(pk=assignment.pk)
-        )
+        locked = locked_assignment_queryset().get(pk=assignment.pk)
         before = {
             "status": locked.status,
             "revoked_at": locked.revoked_at.isoformat() if locked.revoked_at else None,
@@ -495,3 +546,70 @@ def would_remove_last_management_role(
         if item.role in MANAGEMENT_ROLES and item.pk != assignment.pk
     ]
     return len(assignments) == 0
+
+
+def sync_default_agent_assignment(
+    user: User,
+    *,
+    actor: User,
+    business_reason: str = "",
+) -> None:
+    """Keep exactly one office-scoped Agent assignment, on the current office.
+
+    Moving office used to leave the old assignment live, quietly widening the
+    user's scope to both offices; the stale one is retired here instead. The
+    assignment mirrors ``user.office`` rather than granting anything new, so it
+    follows whoever was authorized to move the office — the agent themselves
+    from ``/profile``, or an administrator from the administration page.
+    """
+    if user.office is None:
+        return
+
+    live = list(
+        UserRoleAssignment.objects.filter(
+            user=user,
+            role=AGENT,
+            scope_type=ScopeType.OFFICE,
+            status__in=[
+                UserRoleAssignment.Status.SCHEDULED,
+                UserRoleAssignment.Status.ACTIVE,
+            ],
+        ).select_related("scope_office", "scope_office__region", "user")
+    )
+
+    for assignment in live:
+        if assignment.scope_office != user.office:
+            _apply_revocation(
+                actor=actor,
+                assignment=assignment,
+                business_reason=business_reason,
+            )
+
+    if any(item.scope_office == user.office for item in live):
+        return
+
+    assignment = UserRoleAssignment(
+        user=user,
+        role=AGENT,
+        scope_type=ScopeType.OFFICE,
+        scope_office=user.office,
+        assigned_by=actor if actor.pk != user.pk else None,
+    )
+    assignment.refresh_status()
+    assignment.full_clean()
+    assignment.save()
+    log_event(
+        "user.role_assignment.created",
+        actor=actor_from_user(actor),
+        target=_assignment_target(assignment),
+        after={
+            "user_id": user.pk,
+            "role": AGENT,
+            "scope_type": ScopeType.OFFICE,
+            "scope_office_id": user.office.pk,
+            "status": assignment.status,
+        },
+        office_id=user.office.stable_key,
+        region_id=_region_scope_key(ScopeType.OFFICE, user.office),
+        metadata={"business_reason": business_reason, "default_assignment": True},
+    )

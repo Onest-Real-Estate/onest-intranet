@@ -35,15 +35,20 @@
   "devDependencies": {
     "@biomejs/biome": "^2.5.7",
     "@tailwindcss/vite": "^4.3.3",
+    "@testing-library/jest-dom": "7.0.1",
+    "@testing-library/react": "16.3.2",
+    "@testing-library/user-event": "14.6.4",
     "@types/node": "^26.2.0",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
     "@vitejs/plugin-react": "^6.0.5",
     "husky": "^9.1.7",
+    "jsdom": "30.0.1",
     "lint-staged": "^17.3.0",
     "tailwindcss": "^4.3.3",
     "typescript": "~5.9.3",
     "vite": "^8.2.1",
-    "vitest": "^4.1.0"
+    "vitest": "^4.1.0",
+    "vitest-axe": "0.1.0"
   }
 }

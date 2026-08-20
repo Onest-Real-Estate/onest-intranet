@@ -138,6 +138,17 @@ logout URLs are exempt.
 
 ## Permissions & roles
 
+The scoped operational onboarding queue, deterministic milestone rules, source
+adapter contract, action audit behavior, and task-title retention policy are
+documented in [`docs/onboarding-operations.md`](docs/onboarding-operations.md).
+
+The reviewed route-to-permission mapping for the shared administrative navigation
+is documented in [`docs/administrative-navigation.md`](docs/administrative-navigation.md).
+The contributor contract for the configuration-driven desktop/mobile registry is
+documented in [`docs/navigation.md`](docs/navigation.md).
+The authenticated layout, page-context, failure-state, and shared-prop contract is
+documented in [`docs/application-shell.md`](docs/application-shell.md).
+
 Roles are Django **Groups** (`auth.Group`), plus Django's built-in
 `is_superuser` flag for Superadmin. Permissions are Django's `app.codename`
 permissions, granted to groups — members inherit them automatically.

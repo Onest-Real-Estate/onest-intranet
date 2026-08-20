@@ -6,6 +6,40 @@ from django.db.models import Q
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
+from .administration_fields import (
+    ACTIVE as ACTIVE_AGENT_STATUS,
+)
+from .administration_fields import (
+    AGENT_IDENTIFIER_MAX_LENGTH,
+    AGENT_STATUS_CHOICES,
+    LICENSE_VERIFICATION_CHOICES,
+    VERIFICATION_NOTE_MAX_LENGTH,
+    normalize_agent_identifier,
+    normalize_agent_status,
+    normalize_internal_notes,
+    normalize_license_verification_state,
+)
+from .administration_fields import (
+    UNVERIFIED as UNVERIFIED_LICENSE_STATE,
+)
+from .administration_fields import (
+    VERIFIED as VERIFIED_LICENSE_STATE,
+)
+from .headshot import headshot_upload_path
+from .profile_fields import (
+    BIO_MAX_LENGTH,
+    LANGUAGE_CHOICES,
+    MAX_LICENSE_FUTURE_YEARS,
+    MAX_URL_LENGTH,
+    PREFERRED_CONTACT_CHOICES,
+    SOCIAL_PLATFORMS,
+    normalize_bio,
+    normalize_languages,
+    normalize_license_number,
+    normalize_name,
+    normalize_preferred_contact_method,
+    normalize_url,
+)
 from .roles import ROLE_BY_KEY, ScopeType, is_valid_scope_type
 from .us import (
     US_STATE_CHOICES,
@@ -427,6 +461,59 @@ class User(AbstractUser):
         blank=True,
         help_text=_("Optional 8- or 9-digit NRDS ID. Can be added later."),
     )
+    preferred_name = models.CharField(
+        _("preferred name"),
+        max_length=150,
+        blank=True,
+        help_text=_(
+            "What colleagues and clients should call you, if not your legal first name."
+        ),
+    )
+    license_number = models.CharField(
+        _("license number"),
+        max_length=32,
+        blank=True,
+        help_text=_("Real estate license number, as printed on the license."),
+    )
+    license_state = models.CharField(
+        _("license state"),
+        max_length=2,
+        choices=US_STATE_CHOICES,
+        blank=True,
+    )
+    license_expires_on = models.DateField(
+        _("license expires on"),
+        null=True,
+        blank=True,
+    )
+    website_url = models.URLField(_("website"), max_length=MAX_URL_LENGTH, blank=True)
+    linkedin_url = models.URLField(_("LinkedIn"), max_length=MAX_URL_LENGTH, blank=True)
+    facebook_url = models.URLField(_("Facebook"), max_length=MAX_URL_LENGTH, blank=True)
+    instagram_url = models.URLField(
+        _("Instagram"), max_length=MAX_URL_LENGTH, blank=True
+    )
+    x_url = models.URLField(_("X"), max_length=MAX_URL_LENGTH, blank=True)
+    bio = models.TextField(
+        _("professional bio"),
+        max_length=BIO_MAX_LENGTH,
+        blank=True,
+        help_text=_("A short introduction shown alongside your name in the hub."),
+    )
+    # A short, closed set of codes with no per-language reporting need: a JSON
+    # list keeps the value together instead of spreading it over a join table.
+    languages = models.JSONField(
+        _("languages"),
+        default=list,
+        blank=True,
+        help_text=_("Language codes from %(count)d supported options.")
+        % {"count": len(LANGUAGE_CHOICES)},
+    )
+    preferred_contact_method = models.CharField(
+        _("preferred contact method"),
+        max_length=16,
+        choices=PREFERRED_CONTACT_CHOICES,
+        blank=True,
+    )
     office = models.ForeignKey(
         Office,
         verbose_name=_("office"),
@@ -437,7 +524,10 @@ class User(AbstractUser):
     )
     headshot = models.ImageField(
         _("headshot"),
-        upload_to="apps.user.headshot.headshot_upload_path",
+        # The callable, not its dotted name: quoting it turned the path into a
+        # literal directory and stored the browser-supplied filename, which is
+        # exactly what ``headshot_upload_path`` exists to prevent.
+        upload_to=headshot_upload_path,
         null=True,
         blank=True,
         help_text=_("Profile photo. Must be JPEG/PNG, ≤5 MB, at least 200×200 px."),
@@ -465,10 +555,104 @@ class User(AbstractUser):
         ),
     )
 
+    # ------------------------------------------------------------------
+    # Broker-controlled administration. Never writable from /profile — see
+    # ``apps.user.services.agent_administration`` for the policy that owns
+    # every one of these, and ``docs/agent-administration.md`` for why.
+    # ------------------------------------------------------------------
+    agent_status = models.CharField(
+        _("agent status"),
+        max_length=16,
+        choices=AGENT_STATUS_CHOICES,
+        default=ACTIVE_AGENT_STATUS,
+        help_text=_("Where this person stands with the brokerage."),
+    )
+    start_date = models.DateField(
+        _("start date"),
+        null=True,
+        blank=True,
+        help_text=_("The date this person joined the brokerage."),
+    )
+    agent_identifier = models.CharField(
+        _("agent ID"),
+        max_length=AGENT_IDENTIFIER_MAX_LENGTH,
+        blank=True,
+        help_text=_("Internal identifier used by back-office systems."),
+    )
+    internal_notes = models.TextField(
+        _("operational notes"),
+        blank=True,
+        help_text=_(
+            "Administrative notes about this person. Visible only to "
+            "administrators with the change permission; never shown to the "
+            "person themselves and never written into audit values."
+        ),
+    )
+    license_verification_state = models.CharField(
+        _("license verification"),
+        max_length=16,
+        choices=LICENSE_VERIFICATION_CHOICES,
+        default=UNVERIFIED_LICENSE_STATE,
+        help_text=_("Set by the broker after checking the state license record."),
+    )
+    license_verified_at = models.DateTimeField(
+        _("license verified at"), null=True, blank=True
+    )
+    license_verified_by = models.ForeignKey(
+        "self",
+        verbose_name=_("license verified by"),
+        related_name="verified_licenses",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+    )
+    license_verification_note = models.CharField(
+        _("verification note"),
+        max_length=VERIFICATION_NOTE_MAX_LENGTH,
+        blank=True,
+    )
+    # Doubles as the optimistic-concurrency token for the administration
+    # form: two administrators editing the same record cannot silently
+    # overwrite each other because the second save no longer matches.
+    administration_updated_at = models.DateTimeField(
+        _("administration updated at"), null=True, blank=True
+    )
+    administration_updated_by = models.ForeignKey(
+        "self",
+        verbose_name=_("administration updated by"),
+        related_name="administered_users",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+    )
+
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = []
 
     objects = UserManager()
+
+    class Meta:
+        # Restated rather than inherited from ``AbstractUser.Meta`` so the
+        # static checker can see it; the values are identical.
+        verbose_name = _("user")
+        verbose_name_plural = _("users")
+        # Separate from Django's ``change_user``: holding the broad model
+        # permission through the admin site is not the same grant as editing
+        # the administrative half of somebody's profile in the hub.
+        permissions = (
+            ("view_user_administration", _("Can view administrative profile fields")),
+            (
+                "change_user_administration",
+                _("Can change administrative profile fields"),
+            ),
+        )
+        constraints = [
+            models.UniqueConstraint(
+                fields=["agent_identifier"],
+                condition=~Q(agent_identifier=""),
+                name="user_agent_identifier_unique_when_set",
+            ),
+        ]
 
     def __str__(self):
         return self.display_name or self.get_full_name() or self.email
@@ -492,9 +676,165 @@ class User(AbstractUser):
             except ValidationError as exc:
                 errors["nrds_number"] = exc
         if self.office and (not self.office.is_assignable or not self.office.is_active):
-            errors["office"] = _("Pick an active office from the locations we serve.")
+            # An office that closed under somebody already seated in it is a
+            # fact about the org, not a mistake in this submission. Only a
+            # *move* into a closed office is rejected — otherwise the record
+            # of someone leaving a closed branch could never be saved.
+            stored = (
+                type(self)
+                .objects.filter(pk=self.pk)
+                .values_list("office", flat=True)
+                .first()
+                if self.pk
+                else None
+            )
+            if stored != self.office.pk:
+                errors["office"] = _(
+                    "Pick an active office from the locations we serve."
+                )
+        # Verifying a license nobody recorded verifies nothing.
+        if self.license_verification_state == VERIFIED_LICENSE_STATE and not (
+            self.license_number
+        ):
+            errors["license_verification_state"] = _(
+                "Record the license number before marking it verified."
+            )
         if errors:
             raise ValidationError(errors)
+
+    def clean_fields(self, exclude=None):
+        """Normalize the professional fields before Django validates them.
+
+        ``full_clean`` runs ``clean_fields`` before ``clean``, so normalizing
+        any later would be too late: ``URLField``'s validator would reject a
+        perfectly good ``example.com`` before it was ever upgraded to
+        ``https://example.com``. A field we could not normalize is excluded
+        from the built-in pass so it is reported once, in our wording.
+        """
+        excluded = set(exclude or ())
+        errors = self._normalize_professional_profile()
+        errors.update(self._normalize_administration())
+        try:
+            super().clean_fields(exclude=excluded | set(errors))
+        except ValidationError as exc:
+            errors.update(exc.error_dict or {})
+        reportable = {
+            field: error for field, error in errors.items() if field not in excluded
+        }
+        if reportable:
+            raise ValidationError(reportable)
+
+    def _normalize_professional_profile(self) -> dict:
+        """Normalize the self-service professional fields in one pass.
+
+        Kept beside the onboarding normalization above so a value written by
+        onboarding and the same value written by the profile editor cannot end
+        up stored in two different shapes.
+        """
+        errors: dict = {}
+        self.preferred_name = normalize_name(self.preferred_name)
+        self.license_number = normalize_license_number(self.license_number)
+
+        if self.license_state and self.license_state not in US_STATE_CODES:
+            errors["license_state"] = _("Enter a valid US state code.")
+
+        if self.license_expires_on is not None:
+            latest = timezone.localdate().replace(
+                year=timezone.localdate().year + MAX_LICENSE_FUTURE_YEARS
+            )
+            if self.license_expires_on > latest:
+                errors["license_expires_on"] = _(
+                    "Enter the expiration date printed on your license."
+                )
+
+        # A state or an expiry with no number identifies nothing.
+        if not self.license_number and (self.license_state or self.license_expires_on):
+            errors["license_number"] = _(
+                "Add your license number alongside its state or expiration date."
+            )
+
+        for field, allowed_hosts, label in (
+            ("website_url", (), "website"),
+            *(
+                (platform.field, platform.hosts, platform.label)
+                for platform in SOCIAL_PLATFORMS
+            ),
+        ):
+            try:
+                setattr(
+                    self,
+                    field,
+                    normalize_url(
+                        getattr(self, field), allowed_hosts=allowed_hosts, label=label
+                    ),
+                )
+            except ValidationError as exc:
+                errors[field] = exc
+
+        try:
+            self.bio = normalize_bio(self.bio)
+        except ValidationError as exc:
+            errors["bio"] = exc
+
+        try:
+            self.languages = normalize_languages(self.languages)
+        except ValidationError as exc:
+            errors["languages"] = exc
+
+        try:
+            self.preferred_contact_method = normalize_preferred_contact_method(
+                self.preferred_contact_method
+            )
+        except ValidationError as exc:
+            errors["preferred_contact_method"] = exc
+
+        return errors
+
+    def _normalize_administration(self) -> dict:
+        """Normalize the broker-controlled fields in one pass.
+
+        Beside the self-service normalization above for the same reason: a
+        value written by the administration form and the same value written by
+        a management command cannot end up stored in two different shapes.
+        """
+        errors: dict = {}
+
+        try:
+            self.agent_status = normalize_agent_status(self.agent_status)
+        except ValidationError as exc:
+            errors["agent_status"] = exc
+
+        try:
+            self.license_verification_state = normalize_license_verification_state(
+                self.license_verification_state
+            )
+        except ValidationError as exc:
+            errors["license_verification_state"] = exc
+
+        try:
+            self.agent_identifier = normalize_agent_identifier(self.agent_identifier)
+        except ValidationError as exc:
+            errors["agent_identifier"] = exc
+
+        try:
+            self.internal_notes = normalize_internal_notes(self.internal_notes)
+        except ValidationError as exc:
+            errors["internal_notes"] = exc
+
+        self.license_verification_note = (self.license_verification_note or "").strip()[
+            :VERIFICATION_NOTE_MAX_LENGTH
+        ]
+
+        return errors
+
+    def preferred_display_name(self) -> str:
+        """The name to greet this person by — preferred first, then legal."""
+        return (
+            self.preferred_name
+            or self.first_name
+            or self.display_name
+            or self.email.split("@")[0]
+        )
 
 
 class UserRoleAssignment(models.Model):
@@ -686,3 +1026,153 @@ class UserRoleAssignmentMigrationConflict(models.Model):
 
     def __str__(self):
         return f"{self.user} / {self.legacy_role}"
+
+
+class UserOnboardingCase(models.Model):
+    """Operational coordination around source-owned onboarding milestones.
+
+    Profile, SSO, contract, and training completion deliberately do not live on
+    this model.  ``services.onboarding_state`` derives those facts from their
+    owning domains so an operations user cannot check them off by hand.
+    """
+
+    user = models.OneToOneField(
+        User,
+        verbose_name=_("user"),
+        related_name="onboarding_case",
+        on_delete=models.PROTECT,
+    )
+    owner = models.ForeignKey(
+        User,
+        verbose_name=_("onboarding owner"),
+        related_name="owned_onboarding_cases",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+    )
+    updated_by = models.ForeignKey(
+        User,
+        verbose_name=_("updated by"),
+        related_name="updated_onboarding_cases",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+    )
+    created_at = models.DateTimeField(_("created at"), default=timezone.now)
+    updated_at = models.DateTimeField(_("updated at"), auto_now=True)
+
+    class Meta:
+        ordering = ["user__first_name", "user__last_name", "user__email"]
+        verbose_name = _("user onboarding case")
+        verbose_name_plural = _("user onboarding cases")
+
+    def __str__(self):
+        return f"Onboarding / {self.user}"
+
+
+class OnboardingTask(models.Model):
+    class Status(models.TextChoices):
+        OPEN = "open", _("Open")
+        RESOLVED = "resolved", _("Resolved")
+
+    case = models.ForeignKey(
+        UserOnboardingCase,
+        verbose_name=_("onboarding case"),
+        related_name="tasks",
+        on_delete=models.CASCADE,
+    )
+    title = models.CharField(
+        _("task"),
+        max_length=200,
+        help_text=_("A brief operational instruction; do not include sensitive data."),
+    )
+    due_on = models.DateField(_("due on"), null=True, blank=True)
+    is_blocking = models.BooleanField(_("blocks activation"), default=False)
+    status = models.CharField(
+        _("status"),
+        max_length=16,
+        choices=Status.choices,
+        default=Status.OPEN,
+    )
+    created_by = models.ForeignKey(
+        User,
+        verbose_name=_("created by"),
+        related_name="created_onboarding_tasks",
+        on_delete=models.PROTECT,
+    )
+    resolved_by = models.ForeignKey(
+        User,
+        verbose_name=_("resolved by"),
+        related_name="resolved_onboarding_tasks",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+    )
+    resolved_at = models.DateTimeField(_("resolved at"), null=True, blank=True)
+    created_at = models.DateTimeField(_("created at"), default=timezone.now)
+    updated_at = models.DateTimeField(_("updated at"), auto_now=True)
+
+    class Meta:
+        ordering = ["status", "due_on", "created_at"]
+        verbose_name = _("onboarding task")
+        verbose_name_plural = _("onboarding tasks")
+        indexes = [
+            models.Index(
+                fields=["case", "status", "due_on"],
+                name="user_onboard_task_state",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.case.user} / {self.title}"
+
+
+class OnboardingToolSetup(models.Model):
+    class Tool(models.TextChoices):
+        LOFTY = "lofty", _("Lofty")
+        SKYSLOPE = "skyslope", _("SkySlope")
+        MICROSOFT_365 = "microsoft365", _("Microsoft 365")
+        DOTLOOP = "dotloop", _("Dotloop")
+
+    class State(models.TextChoices):
+        NOT_STARTED = "not_started", _("Not started")
+        IN_PROGRESS = "in_progress", _("In progress")
+        READY = "ready", _("Ready")
+        BLOCKED = "blocked", _("Blocked")
+        NOT_REQUIRED = "not_required", _("Not required")
+
+    case = models.ForeignKey(
+        UserOnboardingCase,
+        verbose_name=_("onboarding case"),
+        related_name="tool_setups",
+        on_delete=models.CASCADE,
+    )
+    tool = models.CharField(_("tool"), max_length=32, choices=Tool.choices)
+    state = models.CharField(
+        _("state"),
+        max_length=16,
+        choices=State.choices,
+        default=State.NOT_STARTED,
+    )
+    updated_by = models.ForeignKey(
+        User,
+        verbose_name=_("updated by"),
+        related_name="updated_onboarding_tools",
+        on_delete=models.PROTECT,
+    )
+    updated_at = models.DateTimeField(_("updated at"), auto_now=True)
+
+    class Meta:
+        ordering = ["tool"]
+        verbose_name = _("onboarding tool setup")
+        verbose_name_plural = _("onboarding tool setups")
+        constraints = [
+            models.UniqueConstraint(
+                fields=["case", "tool"],
+                name="user_onboard_tool_unique",
+            )
+        ]
+
+    def __str__(self):
+        tool_label = dict(self.Tool.choices).get(self.tool, self.tool)
+        return f"{self.case.user} / {tool_label} / {self.state}"

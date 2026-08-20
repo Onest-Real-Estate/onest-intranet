@@ -73,3 +73,33 @@ def test_not_found_handler_renders_inertia_page(client):
     assert response.status_code == 404
     payload = json.loads(response.content)
     assert payload["component"] == "NotFound"
+
+
+@pytest.mark.django_db
+def test_office_scope_helper_returns_everything_for_company_wide_access():
+    """Company-wide access builds an empty ``Q``, which is falsy.
+
+    Reading that as "no scope" handed a brokerage-wide admin an empty queryset;
+    only ``is_superuser`` escaped it.
+    """
+    from apps.user.models import Office
+    from apps.user.roles import ADMIN, ScopeType
+    from apps.user.services.role_assignments import create_role_assignment
+    from apps.web.authorization import scope_queryset_for_user_office
+
+    root = User.objects.create_superuser(email="root@example.com")
+    admin = User.objects.create_user(email="brokerage@example.com")
+    create_role_assignment(
+        actor=root,
+        target_user=admin,
+        role=ADMIN,
+        scope_type=ScopeType.COMPANY,
+    )
+    office = Office.assignable_queryset().filter(kind=Office.Kind.BRANCH).first()
+    assert office is not None
+    User.objects.create_user(email="somebody@example.com", office=office)
+
+    scoped = scope_queryset_for_user_office(
+        admin, User.objects.all(), field_name="office"
+    )
+    assert scoped.count() == User.objects.count()

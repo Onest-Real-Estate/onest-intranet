@@ -1,34 +1,31 @@
 from django.http import Http404
-from inertia import defer, inertia, render
+from inertia import inertia, render
+
+from apps.user.views.onboarding_administration_views import new_agent_list
 
 from .authorization import enforce_policy
-from .dashboard import (
-    HUB_SECTIONS,
-    dashboard_action_items,
-    dashboard_announcements,
-    dashboard_documents,
-    dashboard_market,
-    dashboard_quick_apps,
-    dashboard_schedule,
-    dashboard_stats,
-    dashboard_training,
-    dashboard_transactions,
+from .contracts import list_response
+from .dashboard import HUB_SECTIONS, deferred_widget_props, greeting_payload
+from .operations import (
+    OPERATIONS_DESTINATIONS,
+    OperationsDestination,
+    operations_policy_key,
+    operations_scope_payload,
 )
 
 
 @enforce_policy("dashboard")
 @inertia("Dashboard")
 def dashboard(request):
+    """Compose the page; every query lives behind a widget provider.
+
+    The greeting is the one prop that is not deferred — it is shell, and it is
+    computed server-side so the salutation and the date agree with the day
+    boundaries every provider uses.
+    """
     return {
-        "stats": defer(lambda: dashboard_stats(), group="stats"),
-        "quickApps": defer(lambda: dashboard_quick_apps(), group="pipeline"),
-        "announcements": defer(lambda: dashboard_announcements(), group="pipeline"),
-        "transactions": defer(lambda: dashboard_transactions(), group="pipeline"),
-        "training": defer(lambda: dashboard_training(), group="pipeline"),
-        "schedule": defer(lambda: dashboard_schedule(), group="widgets"),
-        "actionItems": defer(lambda: dashboard_action_items(), group="widgets"),
-        "market": defer(lambda: dashboard_market(), group="widgets"),
-        "documents": defer(lambda: dashboard_documents(), group="widgets"),
+        "greeting": greeting_payload(request.user),
+        **deferred_widget_props(request.user),
     }
 
 
@@ -39,6 +36,106 @@ def coming_soon(request, section: str):
     if title is None:
         raise Http404()
     return {"title": title, "section": section}
+
+
+def _operations_view(destination: OperationsDestination):
+    def operations_destination(request):
+        return {
+            "title": destination.label,
+            "section": destination.key,
+            "administrative": True,
+            "scope": operations_scope_payload(request.user),
+        }
+
+    operations_destination.__name__ = destination.route_name
+    page_view = inertia("ComingSoon")(operations_destination)
+    return enforce_policy(operations_policy_key(destination))(page_view)
+
+
+OPERATIONS_VIEWS = {
+    destination.route_name: _operations_view(destination)
+    for destination in OPERATIONS_DESTINATIONS
+}
+OPERATIONS_VIEWS["admin_new_agents"] = new_agent_list
+
+
+_CATALOG_CONTRACTS = (
+    {
+        "id": "ON-1048",
+        "client": "Avery Johnson",
+        "property": "1428 Grove Avenue",
+        "status": "pending_signature",
+        "updated": "Aug 19, 2026",
+    },
+    {
+        "id": "ON-1047",
+        "client": "Morgan Lee",
+        "property": "88 Franklin Street",
+        "status": "approved",
+        "updated": "Aug 18, 2026",
+    },
+    {
+        "id": "ON-1046",
+        "client": "Taylor Bennett",
+        "property": "9045 Cedar Ridge Drive",
+        "status": "incomplete",
+        "updated": "Aug 17, 2026",
+    },
+    {
+        "id": "ON-1045",
+        "client": "Jordan Williams",
+        "property": "16 Market Square",
+        "status": "pending_documents",
+        "updated": "Aug 16, 2026",
+    },
+    {
+        "id": "ON-1044",
+        "client": "Casey Thompson",
+        "property": "707 Lakeview Court",
+        "status": "settled",
+        "updated": "Aug 15, 2026",
+    },
+    {
+        "id": "ON-1043",
+        "client": "Riley Davis",
+        "property": "310 Goldfinch Lane",
+        "status": "archived",
+        "updated": "Aug 14, 2026",
+    },
+)
+
+
+@enforce_policy("design_system")
+@inertia("DesignSystem")
+def design_system(request):
+    """Living catalog plus a real URL-driven list contract example."""
+    query = request.GET.get("q", "").strip()
+    status = request.GET.get("status", "").strip()
+    try:
+        page = max(1, int(request.GET.get("page", "1")))
+    except ValueError:
+        page = 1
+    rows = [
+        row
+        for row in _CATALOG_CONTRACTS
+        if (not query or query.casefold() in " ".join(row.values()).casefold())
+        and (not status or row["status"] == status)
+    ]
+    page_size = 3
+    total_pages = max(1, (len(rows) + page_size - 1) // page_size)
+    page = min(page, total_pages)
+    start = (page - 1) * page_size
+    return {
+        "contracts": list_response(
+            rows[start : start + page_size],
+            page=page,
+            page_size=page_size,
+            total_items=len(rows),
+            filters={"q": query, "status": status},
+            sort_key="updated",
+            sort_direction="desc",
+        )
+    }
 
 
 def permission_denied(request, exception=None):
