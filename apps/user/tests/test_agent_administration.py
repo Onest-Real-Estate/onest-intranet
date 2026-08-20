@@ -824,3 +824,17 @@ def test_a_new_user_starts_active_and_unverified(client):
     assert user.agent_status == "active"
     assert user.license_verification_state == "unverified"
     assert user.administration_updated_at is None
+
+
+def test_administration_lock_compiles_to_valid_postgresql(monkeypatch):
+    """PostgreSQL rejects ``FOR UPDATE`` over the nullable side of an outer join."""
+    from apps.user.services.agent_administration import locked_user_queryset
+    from apps.user.tests.pg_compile import compile_for_postgresql
+
+    sql = compile_for_postgresql(locked_user_queryset().filter(pk=1), monkeypatch)
+
+    # The outer join onto the nullable office is what makes an unqualified
+    # FOR UPDATE illegal here.
+    assert "LEFT OUTER JOIN" in sql
+    assert 'FOR UPDATE OF "user_user"' in sql
+    assert not sql.rstrip().endswith("FOR UPDATE")

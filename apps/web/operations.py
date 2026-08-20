@@ -211,13 +211,20 @@ OPERATIONS_BY_ROUTE = {
 OPERATIONS_FEATURES: dict[str, bool] = {
     destination.feature: False for destination in OPERATIONS_DESTINATIONS
 }
+OPERATIONS_FEATURES["admin-new-agents"] = True
 
 ROLE_OPERATION_PERMISSIONS: dict[str, frozenset[str]] = {
-    ADMIN: frozenset(destination.permission for destination in OPERATIONS_DESTINATIONS),
+    ADMIN: frozenset(
+        {
+            *(destination.permission for destination in OPERATIONS_DESTINATIONS),
+            "web.manage_new_agent_onboarding",
+        }
+    ),
     REGION_MANAGER: frozenset(
         {
             "web.view_users",
             "web.view_new_agents",
+            "web.manage_new_agent_onboarding",
             "web.view_transactions",
             "web.view_inventory",
             "web.view_reservations",
@@ -231,6 +238,7 @@ ROLE_OPERATION_PERMISSIONS: dict[str, frozenset[str]] = {
         {
             "web.view_users",
             "web.view_new_agents",
+            "web.manage_new_agent_onboarding",
             "web.view_inventory",
             "web.view_reservations",
             "web.manage_training",

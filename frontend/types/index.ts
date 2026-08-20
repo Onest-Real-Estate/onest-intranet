@@ -559,6 +559,8 @@ export interface AdministrationPayload {
   editable: { administration: boolean; roleAssignments: boolean };
   /** Django field names whose change needs confirming before submission. */
   highImpactFields: string[];
+  /** Present only when the subject is in the scoped New Agent List. */
+  onboardingState?: OnboardingSummary & { href: string };
 }
 
 export interface UserAdministrationPageProps extends PageProps {
@@ -581,4 +583,124 @@ export interface AdministrationDirectoryRow {
 export interface UserAdministrationIndexPageProps extends PageProps {
   users: ListResponse<AdministrationDirectoryRow, { q: string }>;
   statusOptions: AdministrativeChoice[];
+}
+
+// ---------------------------------------------------------------------------
+// Operational onboarding
+// ---------------------------------------------------------------------------
+
+export interface OnboardingPresentation {
+  value: string;
+  label: string;
+  tone: StatusTone;
+}
+
+export interface OnboardingSummary {
+  user: {
+    id: number;
+    name: string;
+    email: string;
+    office: string | null;
+    region: string | null;
+    startDate: string | null;
+    isActive: boolean;
+  };
+  owner: { id: number; name: string } | null;
+  overallStatus: string;
+  overall: OnboardingPresentation;
+  blockers: { key: string; label: string }[];
+  progress: { complete: number; total: number };
+  contractStatus: string;
+  contract: OnboardingPresentation;
+  trainingStatus: string;
+  training: OnboardingPresentation;
+  openTaskCount: number;
+  version: string;
+  lastChangedAt: string | null;
+  lastChangedBy: string | null;
+}
+
+export interface OnboardingMilestone {
+  key: string;
+  label: string;
+  status: string;
+  statusLabel: string;
+  tone: StatusTone;
+  source: string;
+  detail: string;
+  updatedAt: string | null;
+  correction: { label: string; href: string } | null;
+}
+
+export interface OnboardingTool {
+  key: string;
+  label: string;
+  state: string;
+  status: string;
+  statusLabel: string;
+  tone: StatusTone;
+  updatedAt: string | null;
+  updatedBy: string | null;
+}
+
+export interface OnboardingOperationalTask {
+  id: number;
+  title: string;
+  dueOn: string | null;
+  isBlocking: boolean;
+  createdAt: string;
+  createdBy: string;
+}
+
+export interface OnboardingDetail extends OnboardingSummary {
+  milestones: OnboardingMilestone[];
+  tools: OnboardingTool[];
+  tasks: OnboardingOperationalTask[];
+  eligibleNotices: { source: string; key: string; label: string }[];
+  editable: boolean;
+}
+
+export interface NewAgentFilters {
+  [key: string]: string;
+  q: string;
+  office: string;
+  owner: string;
+  blocker: string;
+  overallStatus: string;
+  startFrom: string;
+  startTo: string;
+  contractStatus: string;
+  trainingStatus: string;
+}
+
+export interface FilterOption {
+  value: string;
+  label: string;
+}
+
+export interface NewAgentListPageProps extends PageProps {
+  agents: ListResponse<OnboardingSummary, NewAgentFilters>;
+  filterOptions: {
+    offices: FilterOption[];
+    owners: FilterOption[];
+    blockers: FilterOption[];
+    overallStatuses: FilterOption[];
+    sourceStatuses: FilterOption[];
+  };
+  scopeLabel: string;
+}
+
+export interface OnboardingWorkspacePageProps extends PageProps {
+  onboarding: OnboardingDetail;
+  ownerOptions: FilterOption[];
+  toolStateOptions: FilterOption[];
+  activity: {
+    id: string;
+    action: string;
+    actor: string;
+    occurredAt: string;
+    changes: string[];
+  }[];
+  validation: ValidationErrors;
+  privacy: { notesAllowed: boolean; taskPolicy: string };
 }
