@@ -8,6 +8,7 @@ import {
   SurfaceCardContent,
 } from "@/components/design-system";
 import { HubLayout } from "@/components/HubLayout";
+import { ProfileAdministrativePanel } from "@/components/profile/ProfileAdministrativePanel";
 import { ProfileCompletenessPanel } from "@/components/profile/ProfileCompletenessPanel";
 import {
   ProfileAddressSection,
@@ -185,6 +186,7 @@ export default function Profile() {
             sectionAnchors={SECTION_ANCHORS}
           />
           <ProfileIdentityPanel identity={identity} helpUrl={shell.help.url} />
+          <ProfileAdministrativePanel administrative={identity.administrative} />
         </aside>
       </div>
     </div>

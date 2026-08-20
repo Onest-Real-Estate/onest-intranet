@@ -1,4 +1,4 @@
-import type { StatusTone, ValidationErrors } from "@/types/design-system";
+import type { ListResponse, StatusTone, ValidationErrors } from "@/types/design-system";
 
 export interface User {
   id: number;
@@ -347,6 +347,8 @@ export interface ProfileIdentity {
   memberSince: string | null;
   onboardingCompletedAt: string | null;
   licenseStatus: ProfileLicenseStatus | null;
+  /** Broker-controlled values. Read-only here; POSTing one returns 403. */
+  administrative: ProfileAdministrativeSummary;
 }
 
 export interface ProfileCompletenessItem {
@@ -392,4 +394,191 @@ export interface ProfilePageProps extends PageProps {
   editable: { office: boolean };
   completeness: ProfileCompleteness;
   limits: ProfileLimits;
+}
+
+// ---------------------------------------------------------------------------
+// Broker-controlled administration
+// ---------------------------------------------------------------------------
+
+/** A closed-set value with the wording and tone the server chose for it. */
+export interface AdministrativeChoice {
+  value: string;
+  label: string;
+  tone: StatusTone;
+}
+
+export interface LicenseVerification {
+  state: string;
+  label: string;
+  tone: StatusTone;
+  verifiedAt: string | null;
+  verifiedBy: string | null;
+  note: string;
+}
+
+/**
+ * Contract standing, owned by the contract domain and never stored on the
+ * profile. `available: false` means the module is not connected — not that the
+ * agent has no contract.
+ */
+export interface ContractStatus {
+  status: string | null;
+  label: string;
+  tone: StatusTone;
+  source: string;
+  available: boolean;
+  reason: string;
+}
+
+/** What an agent may read about their own administrative record. */
+export interface ProfileAdministrativeSummary {
+  agentStatus: AdministrativeChoice;
+  startDate: string | null;
+  agentIdentifier: string;
+  licenseVerification: LicenseVerification;
+  contractStatus: ContractStatus;
+  lastReviewedAt: string | null;
+}
+
+export interface AdministrationFieldSpec {
+  key: string;
+  prop: string;
+  label: string;
+  description: string;
+  /** Who owns the value — rendered so nobody has to guess. */
+  source: string;
+  highImpact: boolean;
+  /** Withheld from the person the record is about. */
+  private: boolean;
+}
+
+export interface AdministrationSubject {
+  id: number;
+  email: string;
+  displayName: string;
+  legalName: string;
+  preferredDisplayName: string;
+  headshotUrl: string | null;
+  isActive: boolean;
+  isSelf: boolean;
+  office: AdministrationOffice | null;
+  profileCompleted: boolean;
+}
+
+export interface AdministrationOffice {
+  id: number;
+  name: string;
+  pathLabel: string;
+  regionName: string;
+  isActive: boolean;
+  isAssignable: boolean;
+}
+
+/** Keys mirror `forms.ADMINISTRATION_FIELD_MAP`. */
+export interface AdministrationValues {
+  officeId: string;
+  agentStatus: string;
+  startDate: string;
+  agentIdentifier: string;
+  licenseVerificationState: string;
+  licenseVerificationNote: string;
+  internalNotes: string;
+}
+
+export interface AdministrationAssignment {
+  id: number;
+  role: string;
+  roleLabel: string;
+  scopeType: string;
+  scopeLabel: string;
+  status: string;
+  startsAt: string | null;
+  endsAt: string | null;
+  assignedBy: string | null;
+  businessReason: string;
+  /** False when the actor may see the assignment but not undo it. */
+  canRevoke: boolean;
+}
+
+export interface AdministrationHistoryEntry {
+  id: string;
+  action: string;
+  occurredAt: string;
+  actor: string;
+  outcome: string;
+  fields: string[];
+  reason: string;
+}
+
+export interface AdministrationRoleScope {
+  value: string;
+  label: string;
+}
+
+export interface AdministrationRoleOption {
+  value: string;
+  label: string;
+  scopes: AdministrationRoleScope[];
+}
+
+export interface AdministrationOfficeOption {
+  id: number;
+  name: string;
+  pathLabel: string;
+  regionName: string;
+}
+
+export interface AdministrationPayload {
+  subject: AdministrationSubject;
+  values: AdministrationValues;
+  /** Optimistic-concurrency token; posted back as `expected_version`. */
+  version: string;
+  fields: AdministrationFieldSpec[];
+  license: {
+    number: string;
+    state: string;
+    expiresOn: string | null;
+    verification: LicenseVerification;
+  };
+  contractStatus: ContractStatus;
+  provenance: { lastChangedAt: string | null; lastChangedBy: string | null };
+  history: AdministrationHistoryEntry[];
+  assignments: AdministrationAssignment[];
+  effectiveAccess: {
+    roles: string[];
+    scopeLabel: string;
+    isSuperuser: boolean;
+    liveAssignments: number;
+  };
+  options: {
+    agentStatuses: AdministrativeChoice[];
+    licenseVerificationStates: AdministrativeChoice[];
+    offices: AdministrationOfficeOption[];
+    roles: AdministrationRoleOption[];
+  };
+  editable: { administration: boolean; roleAssignments: boolean };
+  /** Django field names whose change needs confirming before submission. */
+  highImpactFields: string[];
+}
+
+export interface UserAdministrationPageProps extends PageProps {
+  administration: AdministrationPayload;
+  validation: ValidationErrors;
+  statusOptions: AdministrativeChoice[];
+  verificationOptions: AdministrativeChoice[];
+}
+
+export interface AdministrationDirectoryRow {
+  id: number;
+  name: string;
+  email: string;
+  officeName: string | null;
+  agentStatus: string;
+  agentIdentifier: string;
+  isActive: boolean;
+}
+
+export interface UserAdministrationIndexPageProps extends PageProps {
+  users: ListResponse<AdministrationDirectoryRow, { q: string }>;
+  statusOptions: AdministrativeChoice[];
 }

@@ -1,6 +1,12 @@
 from django.urls import path
 from django.views.generic import RedirectView
 
+from .views.administration_views import (
+    user_administration,
+    user_administration_index,
+    user_administration_roles,
+    user_administration_submit,
+)
 from .views.auth_views import (
     headshot_upload,
     login_page,
@@ -20,4 +26,24 @@ urlpatterns = [
     path("account/headshot", headshot_upload, name="headshot_upload"),
     path("profile", profile, name="profile"),
     path("profile/submit", profile_submit, name="profile_submit"),
+    path(
+        "operations/users/administration",
+        user_administration_index,
+        name="user_administration_index",
+    ),
+    path(
+        "operations/users/<int:user_id>/administration",
+        user_administration,
+        name="user_administration",
+    ),
+    path(
+        "operations/users/<int:user_id>/administration/submit",
+        user_administration_submit,
+        name="user_administration_submit",
+    ),
+    path(
+        "operations/users/<int:user_id>/administration/roles",
+        user_administration_roles,
+        name="user_administration_roles",
+    ),
 ]

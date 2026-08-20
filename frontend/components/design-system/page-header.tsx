@@ -17,7 +17,7 @@ export function PageHeader({
   meta,
   className,
   ...props
-}: React.ComponentProps<"header"> & {
+}: Omit<React.ComponentProps<"header">, "title"> & {
   title: React.ReactNode;
   description?: React.ReactNode;
   eyebrow?: React.ReactNode;

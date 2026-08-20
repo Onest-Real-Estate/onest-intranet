@@ -12,6 +12,7 @@ from apps.user.services.role_assignments import create_role_assignment
 from apps.web.dashboard import HUB_SECTIONS
 from apps.web.navigation import (
     HUB_FEATURES,
+    LIVE_ADMIN_FEATURES,
     hub_feature_states,
     primary_office_payload,
 )
@@ -44,13 +45,21 @@ def branch_office():
 
 
 def test_every_hub_section_declares_its_availability():
-    assert set(HUB_FEATURES) == set(HUB_SECTIONS) | set(OPERATIONS_FEATURES)
+    assert set(HUB_FEATURES) == (
+        set(HUB_SECTIONS) | set(OPERATIONS_FEATURES) | set(LIVE_ADMIN_FEATURES)
+    )
 
 
-def test_no_hub_module_is_enabled_yet():
+def test_only_the_live_destinations_are_enabled():
     # Flip the section's entry in the commit that gives it a real route; this
     # assertion is the reminder to update the nav registry at the same time.
-    assert set(HUB_FEATURES.values()) == {False}
+    coming_soon = {
+        key: value
+        for key, value in HUB_FEATURES.items()
+        if key not in LIVE_ADMIN_FEATURES
+    }
+    assert set(coming_soon.values()) == {False}
+    assert all(HUB_FEATURES[key] is True for key in LIVE_ADMIN_FEATURES)
 
 
 def test_feature_states_are_a_copy_callers_cannot_corrupt():
@@ -230,3 +239,24 @@ def test_an_unknown_hub_section_is_a_404_not_a_placeholder(client):
     client.force_login(agent())
     response = client.get(reverse("coming_soon", args=["not-a-real-section"]))
     assert response.status_code == 404
+
+
+@pytest.mark.django_db
+def test_live_administrative_features_reach_only_their_permission_holders(client):
+    """A live destination is shared as available; an agent never learns of it."""
+    account = agent()
+    client.force_login(account)
+    assert "admin-user-administration" not in shared_props(client)["features"]
+
+    manager = User.objects.create_user(
+        email="branch@example.com", office=branch_office(), profile_completed=True
+    )
+    create_role_assignment(
+        actor=User.objects.create_superuser(email="root@example.com", password="x"),
+        target_user=manager,
+        role=BRANCH_MANAGER,
+        scope_type=ScopeType.OFFICE,
+        scope_office=branch_office(),
+    )
+    client.force_login(manager)
+    assert shared_props(client)["features"]["admin-user-administration"] is True

@@ -114,6 +114,30 @@ function setPage(overrides: Partial<ProfilePageProps> = {}) {
       memberSince: "2024-02-01T00:00:00+00:00",
       onboardingCompletedAt: "2024-02-02T00:00:00+00:00",
       licenseStatus: { state: "current", days: 400, tone: "success" },
+      administrative: {
+        // Deliberately not "Active": the account-status badge above already
+        // uses that word, and the assertions below rely on unique text.
+        agentStatus: { value: "on_leave", label: "On leave", tone: "warning" },
+        startDate: "2024-02-01",
+        agentIdentifier: "ON-4412",
+        licenseVerification: {
+          state: "verified",
+          label: "Verified",
+          tone: "success",
+          verifiedAt: "2024-03-01T00:00:00+00:00",
+          verifiedBy: "Ada Admin",
+          note: "Checked against the VA DPOR record.",
+        },
+        contractStatus: {
+          status: null,
+          label: "Not connected",
+          tone: "neutral",
+          source: "contract",
+          available: false,
+          reason: "Agent contracts are not connected to the hub yet.",
+        },
+        lastReviewedAt: "2024-03-01T00:00:00+00:00",
+      },
     },
     editable: { office: true },
     completeness: {
@@ -178,6 +202,27 @@ describe("Profile", () => {
     expect(screen.queryByLabelText(/work email/i)).toBeNull();
     expect(screen.queryByDisplayValue("bob@onest.realestate")).toBeNull();
     expect(screen.queryByDisplayValue("Agent")).toBeNull();
+  });
+
+  it("shows the brokerage record as read-only facts, never as controls", () => {
+    render(<Profile />);
+    expect(screen.getByRole("heading", { name: "Brokerage record" })).toBeVisible();
+    expect(screen.getByText("On leave")).toBeInTheDocument();
+    expect(screen.getByText("ON-4412")).toBeInTheDocument();
+    expect(screen.getByText("Verified")).toBeInTheDocument();
+    expect(screen.getByText("Not connected")).toBeInTheDocument();
+    // No control means the value cannot be submitted back; the server rejects
+    // the field names outright as well.
+    expect(screen.queryByLabelText(/agent status/i)).toBeNull();
+    expect(screen.queryByLabelText(/agent id/i)).toBeNull();
+    expect(screen.queryByDisplayValue("ON-4412")).toBeNull();
+  });
+
+  it("never renders the brokerage's operational notes", () => {
+    const { container } = render(<Profile />);
+    // The prop does not exist on the payload at all — assert on the rendered
+    // document so a future panel cannot start printing one.
+    expect(container.textContent).not.toMatch(/operational notes/i);
   });
 
   it("never offers a password or local login control", () => {
