@@ -24,7 +24,7 @@ function user(overrides: Partial<User> = {}): User {
     name: "Avery Johnson",
     headshotUrl: null,
     permissions: [],
-    roles: ["Realtor"],
+    roles: ["realtor"],
     roleLabel: "Realtor",
     isStaff: false,
     isSuperuser: false,
@@ -127,6 +127,33 @@ describe("navigation registry contract", () => {
     });
   });
 
+  it("rejects a role list that doubles as authorization or names an unknown role", () => {
+    const contract = registryItem("my-contract");
+    const users = registryItem("admin-users");
+
+    expect(validateHubNavRegistry([{ ...contract, roles: ["not_a_role"] }])).toContain(
+      "unknown role for my-contract: not_a_role",
+    );
+    expect(validateHubNavRegistry([{ ...contract, roles: [] }])).toContain(
+      "item declares an empty role list: my-contract",
+    );
+    // Where a permission already decides relevance, a role filter on top can
+    // only hide something somebody was deliberately granted.
+    expect(validateHubNavRegistry([{ ...users, roles: ["system_admin"] }])).toContain(
+      "permission-protected item declares roles: admin-users",
+    );
+  });
+
+  it("declares role relevance only on destinations that ask for no permission", () => {
+    for (const item of HUB_NAV_REGISTRY) {
+      if (item.roles) {
+        expect(item.permissions, `${item.key} mixes roles with permissions`).toEqual(
+          {},
+        );
+      }
+    }
+  });
+
   it("detects malformed entries and duplicate destinations", () => {
     const dashboard = registryItem("dashboard");
     const invalid = {
@@ -222,6 +249,30 @@ describe("resolveHubNav", () => {
     ]);
   });
 
+  it("labels the profile by role without changing its destination", () => {
+    const profileOf = (overrides: Partial<User>) => {
+      const item = resolveHubNav(user(overrides), features(), office)
+        .flatMap((group) => group.items)
+        .find((entry) => entry.key === "agent-profile");
+      return { label: item?.label, href: item?.route.href };
+    };
+
+    expect(profileOf({ roles: ["realtor"] })).toEqual({
+      label: "Agent profile",
+      href: routes.profile(),
+    });
+    expect(profileOf({ roles: ["transaction_coordinator"] })).toEqual({
+      label: "Your profile",
+      href: routes.profile(),
+    });
+    expect(
+      profileOf({ roles: ["transaction_coordinator"], isSuperuser: true }).label,
+    ).toBe("Your profile");
+    expect(
+      profileOf({ roles: ["transaction_coordinator", "branch_manager"] }).label,
+    ).toBe("Agent profile");
+  });
+
   it("keeps an explicitly registered disabled module as a Soon destination", () => {
     const groups = resolveHubNav(user(), { "my-contract": false }, office);
     const contract = groups
@@ -231,6 +282,68 @@ describe("resolveHubNav", () => {
       label: "My contract",
       availability: "coming-soon",
     });
+  });
+
+  it("hides agent-only destinations from roles that have no book of business", () => {
+    const accountant = resolveHubNav(
+      user({ roles: ["accountant"], permissions: [] }),
+      features(),
+      office,
+    ).flatMap((group) => group.items.map((item) => item.key));
+
+    expect(accountant).not.toContain("my-contract");
+    expect(accountant).not.toContain("agent-transactions");
+    expect(accountant).not.toContain("marketing-resources");
+    // Everything a non-producing colleague still needs stays put.
+    expect(accountant).toContain("my-reservations");
+    expect(accountant).toContain("policies-compliance");
+    expect(accountant).toContain("documents-forms");
+    expect(accountant).toContain("agent-directory");
+  });
+
+  it("keeps them for a manager who also carries listings", () => {
+    const keys = resolveHubNav(
+      user({ roles: ["branch_manager", "realtor"] }),
+      features(),
+      office,
+    ).flatMap((group) => group.items.map((item) => item.key));
+
+    expect(keys).toContain("my-contract");
+    expect(keys).toContain("agent-transactions");
+  });
+
+  it("keeps marketing collateral for the team that produces it", () => {
+    const keys = resolveHubNav(
+      user({ roles: ["marketing_team"] }),
+      features(),
+      office,
+    ).flatMap((group) => group.items.map((item) => item.key));
+
+    expect(keys).toContain("marketing-resources");
+    expect(keys).not.toContain("my-contract");
+  });
+
+  it("never filters a superuser by role relevance", () => {
+    const keys = resolveHubNav(
+      user({ roles: ["it_support"], isSuperuser: true }),
+      features(),
+      office,
+    ).flatMap((group) => group.items.map((item) => item.key));
+
+    expect(keys).toContain("my-contract");
+  });
+
+  it("treats role relevance as presentation, never as a grant", () => {
+    // A role list can only ever remove an entry. It cannot add one the
+    // reader's permissions do not already allow.
+    const withRoles = resolveHubNav(
+      user({ roles: ["realtor"], permissions: [] }),
+      features(),
+      office,
+    ).flatMap((group) => group.items.map((item) => item.key));
+
+    expect(withRoles).not.toContain("admin-users");
+    expect(withRoles).not.toContain("admin-compliance");
   });
 
   it("hides an office module when the required context is absent", () => {

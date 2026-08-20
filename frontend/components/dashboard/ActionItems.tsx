@@ -33,7 +33,7 @@ export function ActionItems({ data }: { data: DashboardActionItems }) {
           return (
             <div
               key={item.id}
-              className="hover:bg-muted/40 flex items-start gap-3 rounded-lg border px-3 py-2.5 transition-colors"
+              className="hover:bg-muted/40 flex items-start gap-3 rounded-lg border px-3 py-3 transition-colors"
               data-done={checked || undefined}
             >
               <Checkbox

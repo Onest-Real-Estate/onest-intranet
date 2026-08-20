@@ -29,7 +29,7 @@ export function SurfaceCard({
       data-state={state}
       aria-busy={state === "loading" || undefined}
       className={cn(
-        "shadow-card gap-5 overflow-hidden py-5",
+        "@container shadow-card gap-5 overflow-hidden py-5",
         interactive &&
           "hover:border-primary/30 hover:shadow-card-hover focus-within:border-ring transition-[transform,box-shadow,border-color] duration-(--motion-fast) hover:-translate-y-px",
         state === "error" && "border-destructive/40",
@@ -124,7 +124,7 @@ export function PanelHeader({
   return (
     <SurfaceCardHeader
       className={cn(
-        "flex flex-row items-start justify-between gap-3",
+        "flex flex-col items-stretch justify-between gap-3 @md:flex-row @md:items-start",
         divided && "border-border/60 border-b pb-5",
         className,
       )}
@@ -141,7 +141,7 @@ export function PanelHeader({
         ) : null}
       </div>
       {meta || action ? (
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex w-full items-center gap-2 @md:w-auto @md:shrink-0">
           {meta}
           {action}
         </div>

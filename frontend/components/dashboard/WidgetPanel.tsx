@@ -1,5 +1,5 @@
 import { Link, router } from "@inertiajs/react";
-import { Inbox, RefreshCw, Unplug } from "lucide-react";
+import { Clock, Inbox, Lock, RefreshCw, Unplug } from "lucide-react";
 import type { ReactNode } from "react";
 import { useState } from "react";
 
@@ -9,6 +9,7 @@ import {
   SurfaceCard,
   SurfaceCardContent,
 } from "@/components/design-system/surface-card";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { DashboardWidget, DashboardWidgetProp } from "@/types";
 
@@ -16,20 +17,52 @@ interface WidgetPanelProps<T> {
   title: string;
   propName: DashboardWidgetProp;
   widget: DashboardWidget<T>;
+  /**
+   * Effective access changed since this payload was computed. The figures are
+   * still shown — pulling them out from under a reader mid-read is worse — but
+   * they are marked and a refresh is offered.
+   */
+  stale?: boolean;
+  /**
+   * The payload is illustrative, not this brokerage's data. Set by the
+   * dashboard for widgets whose provider has not shipped; see
+   * `frontend/lib/dashboard/preview.ts`.
+   */
+  preview?: boolean;
   children: (data: T) => ReactNode;
 }
 
-/** Render the shared envelope states without obscuring each widget's ready UI. */
+/**
+ * The shared envelope every dashboard widget renders inside.
+ *
+ * Six outcomes are distinguishable, because conflating any two of them makes
+ * the dashboard lie: `ready`, `empty` (a genuine zero), `unavailable`
+ * (the module is not connected), an `error` (a provider that failed this
+ * request, which offers a retry of that prop alone), `stale` (shown but no
+ * longer trustworthy), and `withheld` (see `WithheldPanel`). Loading is the
+ * seventh, and belongs to Inertia's `<Deferred>` fallback.
+ */
 export function WidgetPanel<T>({
   title,
   propName,
   widget,
+  stale = false,
+  preview = false,
   children,
 }: WidgetPanelProps<T>) {
   const [reloading, setReloading] = useState(false);
 
   if (widget.status === "ready") {
-    return children(widget.data);
+    const content = children(widget.data);
+    if (!stale && !preview) {
+      return content;
+    }
+    return (
+      <div className="grid h-full grid-rows-[auto_1fr] gap-2">
+        <WidgetNotice stale={stale} />
+        {content}
+      </div>
+    );
   }
 
   if (widget.status === "empty") {
@@ -104,6 +137,65 @@ export function WidgetPanel<T>({
             </p>
           </div>
           {retry}
+        </section>
+      </SurfaceCardContent>
+    </SurfaceCard>
+  );
+}
+
+/**
+ * The mark above a widget whose data is illustrative or no longer current.
+ *
+ * Deliberately label-only. The page carries one stale banner with the refresh
+ * action; repeating that button above ten panels would make the fix look like
+ * ten separate jobs.
+ */
+function WidgetNotice({ stale }: { stale: boolean }) {
+  if (stale) {
+    return (
+      <p className="text-warning-ink flex items-center gap-1.5 text-xs font-medium">
+        <Clock className="size-3.5 shrink-0" aria-hidden />
+        Stale — loaded before your access changed
+      </p>
+    );
+  }
+
+  // Badge only. The page explains what preview data means once; repeating the
+  // sentence above ten panels turns a caveat into wallpaper.
+  return <Badge variant="warning">Preview data</Badge>;
+}
+
+/**
+ * A widget the active profile lays out but the reader has no permission for.
+ *
+ * Most such widgets are simply omitted — a wall of locked panels is noise. This
+ * placeholder is for the few where silence would misdescribe the page: a
+ * compliance dashboard missing its compliance panel reads as "nothing to
+ * review" rather than "not yours to see". It states the gap and names no
+ * figure, no count, and no permission codename.
+ */
+export function WithheldPanel({
+  title,
+  propName,
+}: {
+  title: string;
+  propName: DashboardWidgetProp;
+}) {
+  return (
+    <SurfaceCard className="arrive" state="read-only" data-widget={propName}>
+      <PanelHeader title={title} />
+      <SurfaceCardContent>
+        <section role="status" className="flex flex-col items-start gap-3 py-3">
+          <span className="bg-muted text-muted-foreground grid size-9 place-items-center rounded-lg">
+            <Lock className="size-4" aria-hidden />
+          </span>
+          <div className="max-w-md">
+            <h3 className="text-sm font-semibold">Restricted</h3>
+            <p className="text-muted-foreground mt-1 text-sm leading-5">
+              This panel is part of your dashboard, but your access does not cover it.
+              Ask an administrator if you need it.
+            </p>
+          </div>
         </section>
       </SurfaceCardContent>
     </SurfaceCard>

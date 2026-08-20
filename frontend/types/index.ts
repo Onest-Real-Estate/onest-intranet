@@ -7,7 +7,7 @@ export interface User {
   headshotUrl: string | null;
   /** Django auth permission codenames, e.g. "user.view_user". */
   permissions: string[];
-  /** Role (Django group) names, highest-priority first. */
+  /** Stable role codes (`apps/user/roles.py`), highest-priority first. */
   roles: string[];
   /** Display label: Superadmin, Admin, Region manager, Branch manager, Agent. */
   roleLabel: string;
@@ -139,6 +139,73 @@ export interface DashboardGreeting {
   timezone: string;
 }
 
+/**
+ * Shapes shared by the administrative widgets. Four presentations cover every
+ * administrative widget in the registry, so a new one is a registry row rather
+ * than another bespoke component: a staged funnel, a work queue, a utilization
+ * meter, and an activity feed.
+ */
+export interface DashboardStage {
+  key: string;
+  label: string;
+  /** Already formatted server-side; the page never rounds a figure. */
+  value: string;
+  hint?: string;
+  tone: StatusTone;
+}
+
+export interface DashboardStages {
+  stages: DashboardStage[];
+  /** What the funnel totals, e.g. "48 files in flight". */
+  caption: string;
+}
+
+export interface DashboardQueueRow {
+  id: string;
+  title: string;
+  subtitle?: string;
+  /** Right-aligned fact: a due date, an age, an amount. */
+  meta?: string;
+  /** Short status word; paired with `tone` so color is never the only signal. */
+  badge?: string;
+  tone: StatusTone;
+  /** Server-reversed destination, guarded by its own permission. */
+  href?: string;
+}
+
+export interface DashboardQueue {
+  /** Total matching records in scope, which may exceed `rows.length`. */
+  total: number;
+  rows: DashboardQueueRow[];
+}
+
+export interface DashboardMeterSeries {
+  label: string;
+  /** 0–1. Null means unmeasured — a window with no bookable minutes. */
+  ratio: number | null;
+  caption?: string;
+}
+
+export interface DashboardMeter {
+  headline: string;
+  caption: string;
+  series: DashboardMeterSeries[];
+}
+
+export interface DashboardActivityEntry {
+  id: string;
+  actor: string;
+  action: string;
+  target: string;
+  /** Already formatted in the brokerage timezone. */
+  at: string;
+  tone: StatusTone;
+}
+
+export interface DashboardActivity {
+  entries: DashboardActivityEntry[];
+}
+
 export interface DashboardWidgetEmptyState {
   title: string;
   description: string;
@@ -193,7 +260,20 @@ export type DashboardWidgetProp =
   | "schedule"
   | "actionItems"
   | "market"
-  | "documents";
+  | "documents"
+  // Administrative widgets. Registered here so `router.reload({ only: [...] })`
+  // stays typed; each is marked `backed: false` in the widget registry until
+  // its provider ships, and renders preview data in the meantime.
+  | "agentOnboarding"
+  | "closingPipeline"
+  | "contractsAwaitingSignature"
+  | "complianceExceptions"
+  | "teamTasks"
+  | "overdueInventory"
+  | "roomUtilization"
+  | "operationalActivity"
+  | "supportQueue"
+  | "feedbackSignals";
 
 /**
  * Props available on every Inertia page. `user` and `csrfToken` are shared by
@@ -236,9 +316,49 @@ export interface PageProps {
   [key: string]: unknown;
 }
 
+/**
+ * A breadth the reader may look at the administrative widgets through.
+ *
+ * The list is composed server-side from effective access, and the selected key
+ * is revalidated on every request. The client never invents a key, and holding
+ * one does not widen what the server will answer with.
+ */
+export interface DashboardScopeOption {
+  /** Opaque server-issued key; never an office or region primary key. */
+  key: string;
+  label: string;
+  level: MetricScopeLevel;
+}
+
+export interface DashboardScope {
+  /** Empty or single-entry means there is nothing to choose between. */
+  options: DashboardScopeOption[];
+  /** The key the arriving widgets were computed at. */
+  selectedKey: string | null;
+}
+
+/**
+ * Dashboard profile assignment, resolved server-side.
+ *
+ * Assignment is presentation only: it decides which widgets are laid out and
+ * in what order, never which records a provider will return or which Django
+ * permissions the reader holds.
+ */
+export interface DashboardAssignment {
+  /** Explicit, currently-valid user-targeted assignment. */
+  assignedProfileId: string | null;
+  /** The reader's designated primary role code. */
+  primaryRoleCode: string | null;
+  /** Office- or region-targeted assignment covering the reader. */
+  scopeProfileId: string | null;
+}
+
 /** Dashboard page props. Deferred widgets are undefined until Inertia loads them. */
 export interface DashboardPageProps extends PageProps {
   greeting: DashboardGreeting;
+  /** Absent until the assignment model ships; resolution falls back to roles. */
+  assignment?: DashboardAssignment;
+  scope?: DashboardScope;
   metrics?: DashboardWidget<DashboardMetrics>;
   quickApps?: DashboardWidget<DashboardQuickApp[]>;
   announcements?: DashboardWidget<DashboardAnnouncements>;
@@ -248,6 +368,17 @@ export interface DashboardPageProps extends PageProps {
   actionItems?: DashboardWidget<DashboardActionItems>;
   market?: DashboardWidget<DashboardMarket>;
   documents?: DashboardWidget<DashboardDocument[]>;
+  // Administrative widgets — providers land in P1-021..P1-027.
+  agentOnboarding?: DashboardWidget<DashboardStages>;
+  closingPipeline?: DashboardWidget<DashboardStages>;
+  contractsAwaitingSignature?: DashboardWidget<DashboardQueue>;
+  complianceExceptions?: DashboardWidget<DashboardQueue>;
+  teamTasks?: DashboardWidget<DashboardQueue>;
+  overdueInventory?: DashboardWidget<DashboardQueue>;
+  roomUtilization?: DashboardWidget<DashboardMeter>;
+  operationalActivity?: DashboardWidget<DashboardActivity>;
+  supportQueue?: DashboardWidget<DashboardQueue>;
+  feedbackSignals?: DashboardWidget<DashboardQueue>;
 }
 
 // ---------------------------------------------------------------------------

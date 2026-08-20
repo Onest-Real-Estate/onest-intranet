@@ -19,7 +19,7 @@ const columns: DataTableColumn<DashboardTransaction>[] = [
     id: "property",
     header: "Property",
     cell: (row) => (
-      <div className="flex min-w-64 items-center gap-3">
+      <div className="flex min-w-0 items-center gap-3">
         <img
           src={row.imageUrl}
           alt=""
@@ -40,7 +40,8 @@ const columns: DataTableColumn<DashboardTransaction>[] = [
     id: "closing",
     header: "Closing",
     cell: (row) => row.closing,
-    className: "text-muted-foreground",
+    className: "text-muted-foreground hidden @lg:table-cell",
+    headerClassName: "hidden @lg:table-cell",
   },
   {
     id: "status",
@@ -48,6 +49,8 @@ const columns: DataTableColumn<DashboardTransaction>[] = [
     cell: (row) => (
       <StatusBadge status={presentStatus(row.status, TRANSACTION_STATUS)} />
     ),
+    className: "hidden @2xl:table-cell",
+    headerClassName: "hidden @2xl:table-cell",
   },
 ];
 

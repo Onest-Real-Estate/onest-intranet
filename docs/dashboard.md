@@ -83,10 +83,10 @@ widget component and owns the other states:
 - transient failures use an alert and retry only their own prop through an
   Inertia partial reload.
 
-Skeletons remain the `Deferred` fallbacks. On mobile, source order puts My Day
-and Action Items ahead of announcements and transactions; the desktop grid
-repositions that rail visually without changing keyboard or screen-reader
-order.
+Skeletons remain the `Deferred` fallbacks. The role-defining workflow leads the
+working grid in both DOM and visual order, followed by the daily and utility
+rail. That keeps mobile, desktop, keyboard, and screen-reader reading order in
+agreement.
 
 The greeting and date are server props. `user_timezone()` currently returns the
 application timezone because no user or office timezone field exists. Add that
