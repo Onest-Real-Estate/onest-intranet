@@ -198,6 +198,7 @@ function setPage(overrides: Partial<AdministrationPayload> = {}, extra = {}) {
     primaryOffice: null,
     shell: {
       authorizationVersion: "v1",
+      capabilitySchemaVersion: "p0-permissions-v1",
       help: { url: null },
       session: { authenticated: true },
     },

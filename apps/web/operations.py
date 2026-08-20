@@ -6,8 +6,15 @@ from dataclasses import dataclass
 from typing import TypedDict
 
 from apps.user.models import Office
-from apps.user.roles import ADMIN, BRANCH_MANAGER, REGION_MANAGER
+from apps.user.roles import (
+    ADMIN,
+    BRANCH_MANAGER,
+    REGION_MANAGER,
+    ROLE_BY_KEY,
+    SYSTEM_ADMIN,
+)
 from apps.user.services.role_assignments import get_effective_access
+from apps.web.permission_catalog import permissions_for_role
 
 
 @dataclass(frozen=True)
@@ -213,40 +220,18 @@ OPERATIONS_FEATURES: dict[str, bool] = {
 }
 OPERATIONS_FEATURES["admin-new-agents"] = True
 
+_OPS_SURFACE_PERMISSIONS = frozenset(
+    destination.permission for destination in OPERATIONS_DESTINATIONS
+) | {"web.manage_new_agent_onboarding"}
+
 ROLE_OPERATION_PERMISSIONS: dict[str, frozenset[str]] = {
-    ADMIN: frozenset(
-        {
-            *(destination.permission for destination in OPERATIONS_DESTINATIONS),
-            "web.manage_new_agent_onboarding",
-        }
-    ),
-    REGION_MANAGER: frozenset(
-        {
-            "web.view_users",
-            "web.view_new_agents",
-            "web.manage_new_agent_onboarding",
-            "web.view_transactions",
-            "web.view_inventory",
-            "web.view_reservations",
-            "web.manage_training",
-            "web.manage_documents",
-            "web.view_feedback",
-            "web.manage_offices",
-        }
-    ),
-    BRANCH_MANAGER: frozenset(
-        {
-            "web.view_users",
-            "web.view_new_agents",
-            "web.manage_new_agent_onboarding",
-            "web.view_inventory",
-            "web.view_reservations",
-            "web.manage_training",
-            "web.manage_documents",
-            "web.view_feedback",
-            "web.manage_offices",
-        }
-    ),
+    # Aliases kept for existing callers; values are role defaults ∩ ops surfaces.
+    ADMIN: frozenset(ROLE_BY_KEY[SYSTEM_ADMIN].default_permissions)
+    & _OPS_SURFACE_PERMISSIONS,
+    REGION_MANAGER: frozenset(permissions_for_role(REGION_MANAGER))
+    & _OPS_SURFACE_PERMISSIONS,
+    BRANCH_MANAGER: frozenset(permissions_for_role(BRANCH_MANAGER))
+    & _OPS_SURFACE_PERMISSIONS,
 }
 
 

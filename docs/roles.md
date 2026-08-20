@@ -58,6 +58,7 @@ Superadmin remains Django `is_superuser`, not a catalog role.
 
 ## Related docs
 
+- `docs/permissions.md` — permission catalog, capability vs scope, frontend payload
 - `docs/authorization.md` — route policies and permission enforcement
 - `docs/agent-administration.md` — who may edit broker-controlled profile fields
 - `docs/hierarchy.md` — office tree and membership (when present)

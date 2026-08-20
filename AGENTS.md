@@ -67,6 +67,7 @@ frontend/components/ui/    shadcn/ui primitives — regenerate, don't hand-edit
 frontend/lib/      routes.ts, permissions.ts, hub-nav.ts, utils.ts
 frontend/types/    index.ts (hand-written props) · routes.ts (GENERATED)
 docs/design-system.md  Color/type/spacing contract for all UI work
+docs/permissions.md    Permission catalog, capability vs scope, frontend payload
 docs/dashboard-metrics.md  Metric registry: permissions, scope, calculations
 docs/profile.md    Self-service profile: editable allowlist, normalization, audit
 docs/agent-administration.md  Broker-controlled profile half: scope, delegation, audit
@@ -91,6 +92,7 @@ map to Django Groups for permissions. Assignments store stable codes; display
 names are presentation only. Scope follows the user's office tree and
 `UserRoleAssignment` scope. See `docs/roles.md`. Never authorize from a role
 label alone — use Django permissions on both sides of the stack.
+See `docs/permissions.md` for the reviewed catalog and capability helpers.
 
 **Tests.** Backend: `apps/<app>/tests/test_*.py`, pytest-django, `@pytest.mark.django_db`
 where the DB is needed; assert on the Inertia page JSON, not on HTML strings (see

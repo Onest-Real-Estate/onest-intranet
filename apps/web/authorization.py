@@ -13,11 +13,8 @@ from django.urls import reverse
 
 from apps.audit.models import AuditEvent
 from apps.audit.service import AuditTarget, actor_from_user, log_event
-from apps.user.services.role_assignments import (
-    get_effective_access,
-    has_effective_permission,
-    has_effective_permissions,
-)
+from apps.user.services.role_assignments import get_effective_access
+from apps.web.capability import matches_permission_check
 from apps.web.operations import OPERATIONS_DESTINATIONS, operations_policy_key
 
 logger = logging.getLogger("apps.authorization")
@@ -333,13 +330,12 @@ def get_authorization_policy(view_func) -> AuthorizationPolicy | None:
 
 
 def _has_permissions(user, any_permissions, all_permissions):
-    has_all = not all_permissions or has_effective_permissions(
-        user, tuple(all_permissions)
+    """Fail-closed capability check via the reviewed permission catalog."""
+    return matches_permission_check(
+        user,
+        any_permissions=tuple(any_permissions),
+        all_permissions=tuple(all_permissions),
     )
-    has_any = not any_permissions or any(
-        has_effective_permission(user, permission) for permission in any_permissions
-    )
-    return has_all and has_any
 
 
 def _log_denial(
@@ -537,7 +533,7 @@ def has_admin_permission(user, *permissions: str) -> bool:
         return True
     if not getattr(user, "is_staff", False):
         return False
-    return has_effective_permissions(user, tuple(permissions))
+    return matches_permission_check(user, all_permissions=tuple(permissions))
 
 
 def is_explicitly_public_path(path: str) -> bool:

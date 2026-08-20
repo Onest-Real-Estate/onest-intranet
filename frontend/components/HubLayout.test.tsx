@@ -71,6 +71,7 @@ function setPage(overrides: Partial<PageProps> = {}, url = "/dashboard") {
     primaryOffice: office,
     shell: {
       authorizationVersion: "access-v1",
+      capabilitySchemaVersion: "p0-permissions-v1",
       help: { url: null },
       session: { authenticated: true },
     },
@@ -519,6 +520,7 @@ describe("HubLayout lifecycle and entry points", () => {
     setPage({
       shell: {
         authorizationVersion: "access-v1",
+        capabilitySchemaVersion: "p0-permissions-v1",
         help: { url: "https://help.onest.realestate/hub" },
         session: { authenticated: true },
       },
