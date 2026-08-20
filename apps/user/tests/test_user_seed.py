@@ -56,6 +56,7 @@ def test_seed_users_region_and_branch_scopes():
         user=region_manager,
         role=REGION_MANAGER,
     )
+    assert region_assignment.scope_office is not None
     assert region_assignment.scope_office.slug == "region-mid-atlantic"
 
     branch_manager = User.objects.get(email="branch.charlottesville@onest.test")
@@ -63,6 +64,7 @@ def test_seed_users_region_and_branch_scopes():
         user=branch_manager,
         role=BRANCH_MANAGER,
     )
+    assert branch_assignment.scope_office is not None
     assert branch_assignment.scope_office.slug == "charlottesville-va"
 
 
