@@ -87,6 +87,7 @@ export function SelectField({
   optional,
   required,
   disabled,
+  controlClassName,
 }: {
   name: string;
   label: string;
@@ -100,6 +101,8 @@ export function SelectField({
   optional?: boolean;
   required?: boolean;
   disabled?: boolean;
+  /** Visual treatment for the trigger; the field wrapper remains unchanged. */
+  controlClassName?: string;
 }) {
   const help = description ? descriptionId(name) : undefined;
   return (
@@ -111,7 +114,7 @@ export function SelectField({
       <Select value={value || undefined} onValueChange={onChange} disabled={disabled}>
         <SelectTrigger
           id={name}
-          className="w-full"
+          className={controlClassName}
           {...fieldA11yProps(name, validation, help)}
         >
           <SelectValue placeholder={placeholder} />

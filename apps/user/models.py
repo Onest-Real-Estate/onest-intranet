@@ -6,6 +6,25 @@ from django.db.models import Q
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
+from .administration_fields import (
+    ACTIVE as ACTIVE_AGENT_STATUS,
+)
+from .administration_fields import (
+    AGENT_IDENTIFIER_MAX_LENGTH,
+    AGENT_STATUS_CHOICES,
+    LICENSE_VERIFICATION_CHOICES,
+    VERIFICATION_NOTE_MAX_LENGTH,
+    normalize_agent_identifier,
+    normalize_agent_status,
+    normalize_internal_notes,
+    normalize_license_verification_state,
+)
+from .administration_fields import (
+    UNVERIFIED as UNVERIFIED_LICENSE_STATE,
+)
+from .administration_fields import (
+    VERIFIED as VERIFIED_LICENSE_STATE,
+)
 from .headshot import headshot_upload_path
 from .profile_fields import (
     BIO_MAX_LENGTH,
@@ -536,10 +555,104 @@ class User(AbstractUser):
         ),
     )
 
+    # ------------------------------------------------------------------
+    # Broker-controlled administration. Never writable from /profile — see
+    # ``apps.user.services.agent_administration`` for the policy that owns
+    # every one of these, and ``docs/agent-administration.md`` for why.
+    # ------------------------------------------------------------------
+    agent_status = models.CharField(
+        _("agent status"),
+        max_length=16,
+        choices=AGENT_STATUS_CHOICES,
+        default=ACTIVE_AGENT_STATUS,
+        help_text=_("Where this person stands with the brokerage."),
+    )
+    start_date = models.DateField(
+        _("start date"),
+        null=True,
+        blank=True,
+        help_text=_("The date this person joined the brokerage."),
+    )
+    agent_identifier = models.CharField(
+        _("agent ID"),
+        max_length=AGENT_IDENTIFIER_MAX_LENGTH,
+        blank=True,
+        help_text=_("Internal identifier used by back-office systems."),
+    )
+    internal_notes = models.TextField(
+        _("operational notes"),
+        blank=True,
+        help_text=_(
+            "Administrative notes about this person. Visible only to "
+            "administrators with the change permission; never shown to the "
+            "person themselves and never written into audit values."
+        ),
+    )
+    license_verification_state = models.CharField(
+        _("license verification"),
+        max_length=16,
+        choices=LICENSE_VERIFICATION_CHOICES,
+        default=UNVERIFIED_LICENSE_STATE,
+        help_text=_("Set by the broker after checking the state license record."),
+    )
+    license_verified_at = models.DateTimeField(
+        _("license verified at"), null=True, blank=True
+    )
+    license_verified_by = models.ForeignKey(
+        "self",
+        verbose_name=_("license verified by"),
+        related_name="verified_licenses",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+    )
+    license_verification_note = models.CharField(
+        _("verification note"),
+        max_length=VERIFICATION_NOTE_MAX_LENGTH,
+        blank=True,
+    )
+    # Doubles as the optimistic-concurrency token for the administration
+    # form: two administrators editing the same record cannot silently
+    # overwrite each other because the second save no longer matches.
+    administration_updated_at = models.DateTimeField(
+        _("administration updated at"), null=True, blank=True
+    )
+    administration_updated_by = models.ForeignKey(
+        "self",
+        verbose_name=_("administration updated by"),
+        related_name="administered_users",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+    )
+
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = []
 
     objects = UserManager()
+
+    class Meta:
+        # Restated rather than inherited from ``AbstractUser.Meta`` so the
+        # static checker can see it; the values are identical.
+        verbose_name = _("user")
+        verbose_name_plural = _("users")
+        # Separate from Django's ``change_user``: holding the broad model
+        # permission through the admin site is not the same grant as editing
+        # the administrative half of somebody's profile in the hub.
+        permissions = (
+            ("view_user_administration", _("Can view administrative profile fields")),
+            (
+                "change_user_administration",
+                _("Can change administrative profile fields"),
+            ),
+        )
+        constraints = [
+            models.UniqueConstraint(
+                fields=["agent_identifier"],
+                condition=~Q(agent_identifier=""),
+                name="user_agent_identifier_unique_when_set",
+            ),
+        ]
 
     def __str__(self):
         return self.display_name or self.get_full_name() or self.email
@@ -563,7 +676,29 @@ class User(AbstractUser):
             except ValidationError as exc:
                 errors["nrds_number"] = exc
         if self.office and (not self.office.is_assignable or not self.office.is_active):
-            errors["office"] = _("Pick an active office from the locations we serve.")
+            # An office that closed under somebody already seated in it is a
+            # fact about the org, not a mistake in this submission. Only a
+            # *move* into a closed office is rejected — otherwise the record
+            # of someone leaving a closed branch could never be saved.
+            stored = (
+                type(self)
+                .objects.filter(pk=self.pk)
+                .values_list("office", flat=True)
+                .first()
+                if self.pk
+                else None
+            )
+            if stored != self.office.pk:
+                errors["office"] = _(
+                    "Pick an active office from the locations we serve."
+                )
+        # Verifying a license nobody recorded verifies nothing.
+        if self.license_verification_state == VERIFIED_LICENSE_STATE and not (
+            self.license_number
+        ):
+            errors["license_verification_state"] = _(
+                "Record the license number before marking it verified."
+            )
         if errors:
             raise ValidationError(errors)
 
@@ -578,6 +713,7 @@ class User(AbstractUser):
         """
         excluded = set(exclude or ())
         errors = self._normalize_professional_profile()
+        errors.update(self._normalize_administration())
         try:
             super().clean_fields(exclude=excluded | set(errors))
         except ValidationError as exc:
@@ -651,6 +787,43 @@ class User(AbstractUser):
             )
         except ValidationError as exc:
             errors["preferred_contact_method"] = exc
+
+        return errors
+
+    def _normalize_administration(self) -> dict:
+        """Normalize the broker-controlled fields in one pass.
+
+        Beside the self-service normalization above for the same reason: a
+        value written by the administration form and the same value written by
+        a management command cannot end up stored in two different shapes.
+        """
+        errors: dict = {}
+
+        try:
+            self.agent_status = normalize_agent_status(self.agent_status)
+        except ValidationError as exc:
+            errors["agent_status"] = exc
+
+        try:
+            self.license_verification_state = normalize_license_verification_state(
+                self.license_verification_state
+            )
+        except ValidationError as exc:
+            errors["license_verification_state"] = exc
+
+        try:
+            self.agent_identifier = normalize_agent_identifier(self.agent_identifier)
+        except ValidationError as exc:
+            errors["agent_identifier"] = exc
+
+        try:
+            self.internal_notes = normalize_internal_notes(self.internal_notes)
+        except ValidationError as exc:
+            errors["internal_notes"] = exc
+
+        self.license_verification_note = (self.license_verification_note or "").strip()[
+            :VERIFICATION_NOTE_MAX_LENGTH
+        ]
 
         return errors
 

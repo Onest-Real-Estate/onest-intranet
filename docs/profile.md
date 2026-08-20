@@ -26,14 +26,24 @@ through `profile_submit`.
 ## What a user may not change
 
 Email, roles, permissions, account status, staff flags, onboarding state, and
-internal identifiers are all read-only. Two independent guards enforce this:
+internal identifiers are all read-only. So is everything in
+`services.agent_administration.ADMINISTERED_FIELDS` — agent status, start date,
+agent ID, license verification, and operational notes — which the brokerage
+maintains from its own page; see [agent-administration.md](agent-administration.md).
+Two independent guards enforce this:
 
 1. They are absent from the form's `Meta.fields`, so `construct_instance`
    never writes them.
 2. `apps.user.views.auth_views._PROTECTED_FIELDS` rejects the whole request
    with **403** if any of those names appears in the POST at all, and records a
    `security.profile.protected_field_rejected` audit event carrying the
-   rejected field *names* and none of their values.
+   rejected field *names* and none of their values. It is built from
+   `ADMINISTERED_FIELDS`, so a new administrative field is protected here
+   without anyone having to remember to add it.
+
+The values an agent may *read* about their administrative record arrive as
+`identity.administrative` and render in `ProfileAdministrativePanel`.
+Operational notes are not part of that payload at all.
 
 `profile` and `profile_submit` only ever read `request.user`. There is no user
 identifier in the URL, the form, or the payload, so no request shape can read
@@ -50,9 +60,11 @@ across the hub, so moving it is an administrative act. For those users:
 - `offices` ships empty and the page renders the office read-only with an
   explanation of who to ask.
 
-When an agent *does* move office, `_sync_default_agent_assignment` revokes the
-stale office-scoped Agent assignment before creating the new one. Leaving both
-live would quietly widen that agent's scope to two offices.
+When an agent *does* move office,
+`services.role_assignments.sync_default_agent_assignment` revokes the stale
+office-scoped Agent assignment before creating the new one. Leaving both live
+would quietly widen that agent's scope to two offices. The same function runs
+when an administrator moves somebody from the administration page.
 
 ## Normalization
 
@@ -71,6 +83,11 @@ onboarding and the same value written here cannot drift:
 | Bio | CRLF normalized, blank-line runs capped, 1500-character limit |
 | Languages | Deduplicated, ordered, validated against `LANGUAGE_CHOICES`, max 10 |
 | Blank | Always the empty string (or `NULL` for the license date), never `None` in a `CharField` |
+
+Editing `license_number`, `license_state`, or `license_expires_on` resets the
+brokerage's `license_verification_state` to `unverified` and writes a
+`user.license_verification.reset` event: a verification belongs to the license
+that was checked, not to whatever number replaces it.
 
 Normalization happens in `clean_fields()` rather than `clean()` because
 `full_clean()` runs field validators first: normalizing any later would let

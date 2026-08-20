@@ -20,9 +20,13 @@ from ..forms import (
     profile_page_props,
     self_profile_page_props,
 )
-from ..models import User, UserRoleAssignment
-from ..roles import AGENT, ScopeType
+from ..models import User
+from ..services.agent_administration import (
+    ADMINISTERED_FIELDS,
+    reset_license_verification,
+)
 from ..services.profile import can_self_assign_office
+from ..services.role_assignments import sync_default_agent_assignment
 
 __all__ = [
     "login_page",
@@ -36,9 +40,20 @@ __all__ = [
 
 # Fields a user is never permitted to set through a form POST.
 # These are enforced both at the form level (excluded from Meta.fields)
-# and here as a secondary guard on the raw POST data.
+# and here as a secondary guard on the raw POST data. ``office`` is the one
+# conditional member — see ``profile_submit``.
+#
+# ``ADMINISTERED_FIELDS`` joins the set wholesale: every value the
+# administration page owns is, by definition, one an agent may read on their
+# profile and never submit back. Adding an administrative field there protects
+# it here without anyone having to remember to.
 _PROTECTED_FIELDS = frozenset(
     {
+        *(field for field in ADMINISTERED_FIELDS if field != "office"),
+        "license_verified_at",
+        "license_verified_by",
+        "administration_updated_at",
+        "administration_updated_by",
         "id",
         "pk",
         "is_staff",
@@ -85,6 +100,15 @@ _PROFILE_AUDIT_FIELDS = [
 ]
 
 
+_LICENSE_FIELDS = ("license_number", "license_state", "license_expires_on")
+
+
+def _license_details_changed(before: User, after: User) -> bool:
+    return any(
+        getattr(before, field) != getattr(after, field) for field in _LICENSE_FIELDS
+    )
+
+
 def _rejected_fields(
     request: HttpRequest, extra: frozenset[str] = frozenset()
 ) -> frozenset[str]:
@@ -111,47 +135,6 @@ def _log_protected_field_rejection(
         channel=request.method or "",
         reason="protected_field_in_payload",
     )
-
-
-def _sync_default_agent_assignment(user: User) -> None:
-    """Keep exactly one office-scoped Agent assignment, on the current office.
-
-    Moving office used to leave the old assignment live, quietly widening the
-    user's scope to both offices; the stale one is revoked here instead.
-    """
-    if user.office is None:
-        return
-
-    live = UserRoleAssignment.objects.filter(
-        user=user,
-        role=AGENT,
-        scope_type=ScopeType.OFFICE,
-        status__in=["scheduled", "active"],
-    ).select_related("scope_office", "scope_office__region", "user")
-
-    stale = [item for item in live if item.scope_office != user.office]
-    if stale:
-        from ..services.role_assignments import revoke_role_assignment
-
-        for assignment in stale:
-            revoke_role_assignment(
-                actor=user,
-                assignment=assignment,
-                business_reason="Office changed from the profile page.",
-            )
-
-    if any(item.scope_office == user.office for item in live):
-        return
-
-    assignment = UserRoleAssignment(
-        user=user,
-        role=AGENT,
-        scope_type=ScopeType.OFFICE,
-        scope_office=user.office,
-    )
-    assignment.refresh_status()
-    assignment.full_clean()
-    assignment.save()
 
 
 @enforce_policy("login_page")
@@ -236,7 +219,11 @@ def onboarding_submit(request: HttpRequest):
         saved_user.profile_completed = True
         saved_user.profile_completed_at = timezone.now()
         saved_user.save()
-        _sync_default_agent_assignment(saved_user)
+        sync_default_agent_assignment(
+            saved_user,
+            actor=saved_user,
+            business_reason="Office set during onboarding.",
+        )
         log_model_change(
             "user.onboarding.completed",
             actor=actor_from_user(user),
@@ -351,7 +338,15 @@ def profile_submit(request: HttpRequest):
 
         before_user = User.objects.get(pk=user.pk)
         saved_user = form.save()
-        _sync_default_agent_assignment(saved_user)
+        sync_default_agent_assignment(
+            saved_user,
+            actor=saved_user,
+            business_reason="Office changed from the profile page.",
+        )
+        if _license_details_changed(before_user, saved_user):
+            # An agent may correct their own license, but not carry a
+            # broker's verification of the old one onto the new number.
+            reset_license_verification(saved_user, reason="license_edited_by_agent")
         log_model_change(
             "user.profile.updated",
             actor=actor_from_user(saved_user),

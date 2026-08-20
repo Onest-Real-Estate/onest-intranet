@@ -121,6 +121,55 @@ ROUTE_POLICIES: dict[str, AuthorizationPolicy] = {
         route_names=("profile_submit",),
         scope_rule="self_only",
     ),
+    "user_administration_index": AuthorizationPolicy(
+        key="user_administration_index",
+        access="permission_protected",
+        description=(
+            "Find a user to administer. The listing is filtered to the "
+            "signed-in administrator's own office and region scope."
+        ),
+        methods=("GET",),
+        route_names=("user_administration_index",),
+        all_permissions=("user.view_user_administration",),
+        scope_rule="administered_user_scope",
+    ),
+    "user_administration": AuthorizationPolicy(
+        key="user_administration",
+        access="permission_protected",
+        description=(
+            "Render one user's broker-controlled profile record. The subject "
+            "is resolved through the actor's scoped queryset, so an "
+            "out-of-scope id is a 404."
+        ),
+        methods=("GET",),
+        route_names=("user_administration",),
+        all_permissions=("user.view_user_administration",),
+        scope_rule="administered_user_scope",
+    ),
+    "user_administration_submit": AuthorizationPolicy(
+        key="user_administration_submit",
+        access="permission_protected",
+        description=(
+            "Persist broker-controlled profile fields for one user. Never "
+            "accepts a role, permission, or account-status change."
+        ),
+        methods=("POST",),
+        route_names=("user_administration_submit",),
+        all_permissions=("user.change_user_administration",),
+        scope_rule="administered_user_delegation_scope",
+    ),
+    "user_administration_roles": AuthorizationPolicy(
+        key="user_administration_roles",
+        access="permission_protected",
+        description=(
+            "Grant or revoke one role assignment for a user, through the "
+            "role-assignment service and its own delegation rules."
+        ),
+        methods=("POST",),
+        route_names=("user_administration_roles",),
+        all_permissions=("user.change_user_administration",),
+        scope_rule="role_delegation_scope",
+    ),
     "dashboard": AuthorizationPolicy(
         key="dashboard",
         access="authenticated",

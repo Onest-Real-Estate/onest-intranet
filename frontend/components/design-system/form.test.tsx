@@ -9,6 +9,13 @@ import {
   FormLabel,
 } from "@/components/design-system/form";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 describe("form components", () => {
   it("renders untrusted server text without creating HTML", async () => {
@@ -30,5 +37,34 @@ describe("form components", () => {
     expect(container.querySelector("img")).toBeNull();
     expect(screen.getAllByText(unsafe)).toHaveLength(2);
     expect(await axe(container)).toHaveNoViolations();
+  });
+
+  it("contains long select values inside responsive form columns", () => {
+    const { container } = render(
+      <div className="grid grid-cols-2">
+        <FormField data-testid="field">
+          <FormLabel htmlFor="office">Office</FormLabel>
+          <Select defaultValue="fairfax">
+            <SelectTrigger id="office" aria-label="Office">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="fairfax">
+                Onest Real Estate / Mid-Atlantic / Virginia / Fairfax VA
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </FormField>
+      </div>,
+    );
+
+    expect(screen.getByTestId("field")).toHaveClass("min-w-0");
+    expect(screen.getByRole("combobox", { name: "Office" })).toHaveClass(
+      "min-w-0",
+      "overflow-hidden",
+    );
+    expect(
+      container.querySelector('[data-slot="select-trigger"]')?.className,
+    ).toContain("*:data-[slot=select-value]:truncate");
   });
 });

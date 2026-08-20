@@ -7,7 +7,7 @@ import { firstFieldError, validationEntries } from "@/lib/validation";
 import type { ValidationErrors } from "@/types/design-system";
 
 export function FormField({ className, ...props }: React.ComponentProps<"div">) {
-  return <div className={cn("grid gap-2", className)} {...props} />;
+  return <div className={cn("grid min-w-0 gap-2", className)} {...props} />;
 }
 
 export function FormLabel({
@@ -21,7 +21,10 @@ export function FormLabel({
   optional?: boolean;
 }) {
   return (
-    <Label className={cn("gap-1", className)} {...props}>
+    <Label
+      className={cn("gap-1 text-xs font-semibold tracking-[0.02em]", className)}
+      {...props}
+    >
       {children}
       {required ? (
         <span className="text-destructive" aria-hidden>
@@ -41,7 +44,10 @@ export function FormLabel({
 export function FormDescription({ className, ...props }: React.ComponentProps<"p">) {
   return (
     <p
-      className={cn("text-muted-foreground text-sm leading-5", className)}
+      className={cn(
+        "text-muted-foreground min-w-0 break-words text-sm leading-5",
+        className,
+      )}
       {...props}
     />
   );

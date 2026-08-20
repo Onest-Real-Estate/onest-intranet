@@ -21,6 +21,7 @@ permission succeeds.
 | Order | Section | Label | Named route | Minimum permission | Scope rule |
 | ---: | --- | --- | --- | --- | --- |
 | 10 | People | Users | `admin_users` | `web.view_users` | User/office scope |
+| 15 | People | User administration | `user_administration_index` | `user.view_user_administration` | Administered user scope |
 | 20 | People | New Agent List | `admin_new_agents` | `web.view_new_agents` | User/office scope |
 | 30 | People | Add New User | `admin_add_user` | `web.add_users` | Delegated user scope |
 | 40 | People | Assign User Roles | `admin_assign_roles` | `web.assign_user_roles` | Role delegation scope |
@@ -37,7 +38,14 @@ permission succeeds.
 | 150 | Governance & support | Offices | `admin_offices` | `web.manage_offices` | Office tree scope |
 | 160 | Governance & support | IT Support | `admin_it_support` | `web.view_it_support` | Support request scope |
 
-All modules are intentionally unavailable until their domain backend ships. Their
+**User administration is live.** It is the one entry above that is not part of
+`OPERATIONS_DESTINATIONS`: that registry generates a placeholder route for each
+of its entries, and this destination ships its own views
+([agent-administration.md](agent-administration.md)). Its feature key lives in
+`navigation.LIVE_ADMIN_FEATURES` and is `True`, shared only with users holding
+`user.view_user_administration`.
+
+The remaining modules are intentionally unavailable until their domain backend ships. Their
 explicit false feature keys show the protected destinations as “Soon” only to roles
 whose effective permissions allow them; missing keys still hide. An authorized
 direct visit can render the protected unavailable page, while an unauthorized visit
@@ -54,6 +62,7 @@ never implied by either scoped role.
 | Destination | Admin | Region manager | Branch manager |
 | --- | :---: | :---: | :---: |
 | Users | Yes | Yes | Yes |
+| User administration | Yes | Yes (own region) | Yes (own office) |
 | New Agent List | Yes | Yes | Yes |
 | Add New User | Yes | No | No |
 | Assign User Roles | Yes | No | No |

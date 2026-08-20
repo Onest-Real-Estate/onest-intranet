@@ -2,10 +2,28 @@ from collections.abc import Mapping
 from typing import Any, cast
 
 from django import forms
+from django.db.models import Q
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
-from apps.web.contracts import empty_validation_errors, validation_errors
+from apps.web.contracts import (
+    empty_validation_errors,
+    list_response,
+    validation_errors,
+)
 
+from .administration_fields import (
+    AGENT_IDENTIFIER_MAX_LENGTH,
+    AGENT_STATUS_CHOICES,
+    INTERNAL_NOTES_MAX_LENGTH,
+    LICENSE_VERIFICATION_CHOICES,
+    VERIFICATION_NOTE_MAX_LENGTH,
+    VERIFIED,
+    agent_status_options,
+    license_verification_options,
+    normalize_agent_identifier,
+    normalize_internal_notes,
+)
 from .headshot import MAX_BYTES, MIN_DIM, validate_headshot
 from .models import Office, User
 from .profile_fields import (
@@ -23,6 +41,15 @@ from .profile_fields import (
     normalize_preferred_contact_method,
     normalize_url,
     social_platform_options,
+)
+from .roles import ScopeType, is_valid_scope_type
+from .services.agent_administration import (
+    ADMINISTERED_FIELDS,
+    administration_page_payload,
+    administration_summary,
+    assignable_office_queryset,
+    delegable_role_options,
+    scope_target_queryset,
 )
 from .us import (
     US_STATE_CHOICES,
@@ -433,6 +460,10 @@ def profile_identity(user: User) -> dict:
             user.profile_completed_at.isoformat() if user.profile_completed_at else None
         ),
         "licenseStatus": license_status(user),
+        # Broker-controlled values, read-only here and rejected by
+        # ``profile_submit`` if they ever appear in a POST. Operational notes
+        # are never part of this payload.
+        "administrative": administration_summary(user),
     }
 
 
@@ -468,4 +499,307 @@ def self_profile_page_props(
             "bioMaxLength": BIO_MAX_LENGTH,
             "maxLanguages": MAX_LANGUAGES,
         },
+    }
+
+
+# ---------------------------------------------------------------------------
+# Administrative profile (broker-controlled)
+# ---------------------------------------------------------------------------
+
+
+class AgentAdministrationForm(forms.ModelForm):
+    """The broker-controlled half of a profile.
+
+    Mass-assignment guard
+    ---------------------
+    ``Meta.fields`` is exactly ``ADMINISTERED_FIELDS``. Roles, permissions,
+    staff flags, account status, email, and every self-service field are absent
+    and cannot be reached through this form — role assignments are granted
+    through their own service, which enforces its own delegation rules.
+
+    The office queryset is built from the *actor's* scope, never from the
+    submitted value, so an office id from outside their region fails here as
+    well as in the service.
+    """
+
+    expected_version = forms.CharField(required=False, widget=forms.HiddenInput)
+
+    office = forms.ModelChoiceField(
+        label=_("Office"),
+        queryset=Office.objects.none(),
+        required=True,
+        empty_label=_("Select an office"),
+    )
+    agent_status = forms.ChoiceField(
+        label=_("Agent status"),
+        choices=AGENT_STATUS_CHOICES,
+        required=True,
+    )
+    start_date = forms.DateField(
+        label=_("Start date"),
+        required=False,
+        widget=forms.DateInput(attrs={"type": "date"}),
+        input_formats=["%Y-%m-%d"],
+    )
+    agent_identifier = forms.CharField(
+        label=_("Agent ID"),
+        max_length=AGENT_IDENTIFIER_MAX_LENGTH,
+        required=False,
+    )
+    license_verification_state = forms.ChoiceField(
+        label=_("License verification"),
+        choices=LICENSE_VERIFICATION_CHOICES,
+        required=True,
+    )
+    license_verification_note = forms.CharField(
+        label=_("Verification note"),
+        max_length=VERIFICATION_NOTE_MAX_LENGTH,
+        required=False,
+    )
+    internal_notes = forms.CharField(
+        label=_("Operational notes"),
+        required=False,
+        max_length=INTERNAL_NOTES_MAX_LENGTH,
+        widget=forms.Textarea(attrs={"rows": 5}),
+    )
+
+    class Meta:
+        model = User
+        fields = tuple(ADMINISTERED_FIELDS)
+
+    def __init__(self, *args, actor: User, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.actor = actor
+        # Captured before ``_post_clean`` mutates the instance — see
+        # ``_get_validation_exclusions``.
+        self._original_office = getattr(self.instance, "office", None)
+        office_field = cast(forms.ModelChoiceField, self.fields["office"])
+        allowed = assignable_office_queryset(actor)
+        current = getattr(self.instance, "office_id", None)
+        if current:
+            # An office that has since been retired stays selectable so the
+            # record can be corrected without first being moved out of it.
+            allowed = Office.objects.filter(
+                Q(pk__in=allowed.values("pk")) | Q(pk=current)
+            ).select_related("region", "parent")
+        office_field.queryset = allowed.order_by("sort_order", "name")
+
+    def clean_office(self):
+        office = self.cleaned_data.get("office")
+        if office is None:
+            return office
+        unchanged = office == self._original_office
+        if not unchanged and (not office.is_active or not office.is_assignable):
+            raise forms.ValidationError(
+                _("That office is closed. Pick an office that is still open.")
+            )
+        return office
+
+    def clean_agent_identifier(self):
+        raw = self.cleaned_data.get("agent_identifier") or ""
+        value = normalize_agent_identifier(raw)
+        if not value:
+            return value
+        clash = User.objects.filter(agent_identifier=value)
+        if self.instance.pk:
+            clash = clash.exclude(pk=self.instance.pk)
+        if clash.exists():
+            raise forms.ValidationError(_("Another user already has that agent ID."))
+        return value
+
+    def clean_internal_notes(self):
+        return normalize_internal_notes(self.cleaned_data.get("internal_notes") or "")
+
+    def clean_start_date(self):
+        value = self.cleaned_data.get("start_date")
+        if value is None:
+            return value
+        today = timezone.localdate()
+        if value > today.replace(year=today.year + 1):
+            raise forms.ValidationError(
+                _("Start dates more than a year out are almost always a typo.")
+            )
+        if value.year < 1950:
+            raise forms.ValidationError(_("Enter a start date after 1950."))
+        return value
+
+    def clean(self):
+        cleaned = super().clean()
+        state = cleaned.get("license_verification_state")
+        if state == VERIFIED and not self.instance.license_number:
+            self.add_error(
+                "license_verification_state",
+                _(
+                    "This user has not recorded a license number yet, so there "
+                    "is nothing to verify."
+                ),
+            )
+        return cleaned
+
+
+class RoleAssignmentGrantForm(forms.Form):
+    """Grant one role at one scope, optionally dated.
+
+    The role and scope choices are rebuilt from the actor's own delegation
+    every time: a role that is not offered is a role the assignment service
+    would refuse anyway, and both checks run server-side.
+    """
+
+    role = forms.ChoiceField(label=_("Role"), choices=())
+    scope_type = forms.ChoiceField(label=_("Scope"), choices=ScopeType.CHOICES)
+    scope_office = forms.ModelChoiceField(
+        label=_("Office or region"),
+        queryset=Office.objects.none(),
+        required=False,
+    )
+    starts_at = forms.DateTimeField(
+        label=_("Effective from"),
+        required=False,
+        input_formats=["%Y-%m-%dT%H:%M", "%Y-%m-%d"],
+        widget=forms.DateTimeInput(attrs={"type": "datetime-local"}),
+    )
+    ends_at = forms.DateTimeField(
+        label=_("Effective until"),
+        required=False,
+        input_formats=["%Y-%m-%dT%H:%M", "%Y-%m-%d"],
+        widget=forms.DateTimeInput(attrs={"type": "datetime-local"}),
+    )
+    business_reason = forms.CharField(
+        label=_("Business reason"),
+        required=True,
+        max_length=500,
+        widget=forms.Textarea(attrs={"rows": 2}),
+    )
+
+    def __init__(self, *args, actor: User, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.actor = actor
+        options = delegable_role_options(actor)
+        cast(forms.ChoiceField, self.fields["role"]).choices = [
+            (option["value"], option["label"]) for option in options
+        ]
+        allowed_scopes = {
+            scope["value"] for option in options for scope in option["scopes"]
+        }
+        cast(forms.ChoiceField, self.fields["scope_type"]).choices = [
+            (value, label)
+            for value, label in ScopeType.CHOICES
+            if value in allowed_scopes
+        ]
+        cast(
+            forms.ModelChoiceField, self.fields["scope_office"]
+        ).queryset = scope_target_queryset(actor)
+
+    def clean(self):
+        cleaned = super().clean()
+        role = cleaned.get("role")
+        scope_type = cleaned.get("scope_type")
+        scope_office = cleaned.get("scope_office")
+        if role and scope_type and not is_valid_scope_type(role, scope_type):
+            self.add_error("scope_type", _("This role cannot use that scope."))
+        if scope_type == ScopeType.COMPANY and scope_office is not None:
+            self.add_error(
+                "scope_office", _("Company-wide roles do not target an office.")
+            )
+        if scope_type in {ScopeType.REGION, ScopeType.OFFICE} and scope_office is None:
+            self.add_error("scope_office", _("Choose the office or region to cover."))
+        starts_at = cleaned.get("starts_at")
+        ends_at = cleaned.get("ends_at")
+        if starts_at and ends_at and ends_at < starts_at:
+            self.add_error("ends_at", _("The end date comes before the start date."))
+        if ends_at and ends_at <= timezone.now():
+            self.add_error("ends_at", _("An end date in the past grants nothing."))
+        return cleaned
+
+
+class RoleAssignmentRevokeForm(forms.Form):
+    assignment = forms.IntegerField(widget=forms.HiddenInput)
+    business_reason = forms.CharField(required=True, max_length=500)
+
+
+ADMINISTRATION_FIELD_MAP: tuple[tuple[str, str], ...] = (
+    ("officeId", "office"),
+    ("agentStatus", "agent_status"),
+    ("startDate", "start_date"),
+    ("agentIdentifier", "agent_identifier"),
+    ("licenseVerificationState", "license_verification_state"),
+    ("licenseVerificationNote", "license_verification_note"),
+    ("internalNotes", "internal_notes"),
+)
+
+
+def administration_page_props(
+    actor: User,
+    target: User,
+    *,
+    errors: dict | None = None,
+    posted: Mapping[str, Any] | None = None,
+):
+    """Props for the administration page, already narrowed to the actor's scope.
+
+    Posted data wins over stored values so a 422 or a version conflict does not
+    wipe what the administrator typed.
+    """
+    payload = administration_page_payload(actor, target)
+    if posted is not None:
+        payload["values"] = {
+            prop: posted.get(field, "") for prop, field in ADMINISTRATION_FIELD_MAP
+        }
+    return {
+        "administration": payload,
+        "validation": errors or empty_validation_errors(),
+        "statusOptions": agent_status_options(),
+        "verificationOptions": license_verification_options(),
+    }
+
+
+def administration_index_props(
+    actor: User,
+    *,
+    query: str = "",
+    page: int = 1,
+    page_size: int = 25,
+):
+    """Props for the scoped user picker that leads into the editor.
+
+    Deliberately thin — a search box and a list. Full user management (filters,
+    bulk actions, creation) is its own module; this exists so an administrator
+    can reach a record without knowing its id.
+    """
+    from .services.agent_administration import administered_user_queryset
+
+    queryset = administered_user_queryset(actor)
+    if query:
+        queryset = queryset.filter(
+            Q(email__icontains=query)
+            | Q(first_name__icontains=query)
+            | Q(last_name__icontains=query)
+            | Q(display_name__icontains=query)
+            | Q(agent_identifier__icontains=query.upper())
+        )
+    total = queryset.count()
+    page = max(1, page)
+    start = (page - 1) * page_size
+    rows = [
+        {
+            "id": user.pk,
+            "name": str(user),
+            "email": user.email,
+            "officeName": user.office.name if user.office else None,
+            "agentStatus": user.agent_status,
+            "agentIdentifier": user.agent_identifier,
+            "isActive": user.is_active,
+        }
+        for user in queryset[start : start + page_size]
+    ]
+    return {
+        "users": list_response(
+            rows,
+            page=page,
+            page_size=page_size,
+            total_items=total,
+            filters={"q": query},
+            sort_key="name",
+        ),
+        "statusOptions": agent_status_options(),
     }
