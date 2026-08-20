@@ -34,6 +34,7 @@ function setPage(
       id: 1,
       email: "ada@onest.realestate",
       name: "Ada Admin",
+      headshotUrl: null,
       permissions: ["web.view_new_agents", "web.manage_new_agent_onboarding"],
       roles: ["Admins"],
       roleLabel: "Admin",

@@ -24,7 +24,7 @@ from .administration_fields import (
     normalize_agent_identifier,
     normalize_internal_notes,
 )
-from .headshot import MAX_BYTES, MIN_DIM, validate_headshot
+from .headshot import MAX_BYTES, MIN_DIM, headshot_public_url, validate_headshot
 from .models import Office, User
 from .profile_fields import (
     BIO_MAX_LENGTH,
@@ -389,6 +389,7 @@ def profile_initial(
     user: User,
     posted: Mapping[str, Any] | None = None,
     *,
+    request=None,
     field_map: tuple[tuple[str, str], ...] = ONBOARDING_FIELD_MAP,
     include_languages: bool = False,
 ) -> dict:
@@ -402,19 +403,24 @@ def profile_initial(
     }
     if include_languages:
         initial["languages"] = _posted_languages(user, posted)
-    initial["headshotUrl"] = user.headshot.url if user.headshot else None
+    initial["headshotUrl"] = (
+        headshot_public_url(request, user)
+        if request
+        else (user.headshot.url if user.headshot else None)
+    )
     return initial
 
 
 def profile_page_props(
     user: User,
     *,
+    request=None,
     errors: dict | None = None,
     posted: Mapping[str, Any] | None = None,
 ):
     """Props for the onboarding page — the essential fields only."""
     return {
-        "initial": profile_initial(user, posted),
+        "initial": profile_initial(user, posted, request=request),
         "validation": errors or empty_validation_errors(),
         "offices": Office.grouped_choices(),
         "states": [{"code": code, "name": name} for code, name in US_STATE_CHOICES],
@@ -470,6 +476,7 @@ def profile_identity(user: User) -> dict:
 def self_profile_page_props(
     user: User,
     *,
+    request=None,
     errors: dict | None = None,
     posted: Mapping[str, Any] | None = None,
 ):
@@ -481,6 +488,7 @@ def self_profile_page_props(
         "initial": profile_initial(
             user,
             posted,
+            request=request,
             field_map=SELF_PROFILE_FIELD_MAP,
             include_languages=True,
         ),

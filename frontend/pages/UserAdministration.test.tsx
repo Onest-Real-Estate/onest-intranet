@@ -182,6 +182,7 @@ function setPage(overrides: Partial<AdministrationPayload> = {}, extra = {}) {
       id: 1,
       email: "ada@onest.realestate",
       name: "Ada Admin",
+      headshotUrl: null,
       permissions: ["user.view_user_administration", "user.change_user_administration"],
       roles: ["Admins"],
       roleLabel: "Admin",

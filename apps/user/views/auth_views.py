@@ -1,10 +1,11 @@
+import mimetypes
 from collections.abc import Callable
 from typing import cast
 
 from django.contrib.auth import logout as auth_logout
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.http import HttpRequest, HttpResponse, JsonResponse
+from django.http import FileResponse, Http404, HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import redirect
 from django.utils import timezone
 from django.views.decorators.http import require_GET, require_POST
@@ -20,12 +21,17 @@ from ..forms import (
     profile_page_props,
     self_profile_page_props,
 )
+from ..headshot import headshot_public_url, validate_headshot
 from ..models import User
 from ..services.agent_administration import (
     ADMINISTERED_FIELDS,
     reset_license_verification,
 )
-from ..services.profile import can_self_assign_office
+from ..services.profile import (
+    can_self_assign_office,
+    remove_headshot,
+    replace_headshot,
+)
 from ..services.role_assignments import sync_default_agent_assignment
 
 __all__ = [
@@ -34,6 +40,7 @@ __all__ = [
     "onboarding",
     "onboarding_submit",
     "headshot_upload",
+    "headshot_display",
     "profile",
     "profile_submit",
 ]
@@ -167,7 +174,7 @@ def _render_profile_form(
     response = render(
         request,
         component,
-        props_builder(user, errors=errors, posted=posted),
+        props_builder(user, request=request, errors=errors, posted=posted),
     )
     response.status_code = status
     return response
@@ -181,7 +188,7 @@ def onboarding(request: HttpRequest):
     user = cast(User, request.user)
     if user.profile_completed:
         return redirect("dashboard")
-    return profile_page_props(user)
+    return profile_page_props(user, request=request)
 
 
 @enforce_policy("onboarding_submit")
@@ -275,9 +282,6 @@ def headshot_upload(request: HttpRequest) -> JsonResponse:
     ever reads ``request.user``; no user identifier is accepted from the client,
     so no cross-user upload or deletion is possible through it.
     """
-    from ..headshot import validate_headshot
-    from ..services.profile import remove_headshot, replace_headshot
-
     user = cast(User, request.user)
 
     if request.POST.get("remove") == "1":
@@ -293,7 +297,24 @@ def headshot_upload(request: HttpRequest) -> JsonResponse:
     except ValidationError as exc:
         return JsonResponse({"error": " ".join(exc.messages)}, status=422)
 
-    return JsonResponse({"url": replace_headshot(user, upload)})
+    replace_headshot(user, upload)
+    return JsonResponse({"url": headshot_public_url(request, user)})
+
+
+@enforce_policy("headshot_display")
+@require_GET
+def headshot_display(request: HttpRequest) -> FileResponse:
+    """Stream the signed-in user's headshot from storage on the app origin."""
+    user = cast(User, request.user)
+    if not user.headshot:
+        raise Http404
+    content_type, _ = mimetypes.guess_type(user.headshot.name)
+    response = FileResponse(
+        user.headshot.open("rb"),
+        content_type=content_type or "application/octet-stream",
+    )
+    response["Cache-Control"] = "private, max-age=300"
+    return response
 
 
 @enforce_policy("profile")
@@ -301,7 +322,7 @@ def headshot_upload(request: HttpRequest) -> JsonResponse:
 @inertia("Profile")
 def profile(request: HttpRequest):
     """The signed-in user's own profile — always their own record."""
-    return self_profile_page_props(cast(User, request.user))
+    return self_profile_page_props(cast(User, request.user), request=request)
 
 
 @enforce_policy("profile_submit")

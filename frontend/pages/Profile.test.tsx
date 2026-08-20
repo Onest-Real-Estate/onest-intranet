@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { axe } from "vitest-axe";
 
+import { formatFormDate } from "@/lib/dates";
 import Profile from "@/pages/Profile";
 import type { ProfilePageProps, SelfProfileValues } from "@/types";
 import type { ValidationErrors } from "@/types/design-system";
@@ -53,6 +54,7 @@ function setPage(overrides: Partial<ProfilePageProps> = {}) {
       id: 1,
       email: "bob@onest.realestate",
       name: "Bob Lee",
+      headshotUrl: null,
       permissions: [],
       roles: ["Users"],
       roleLabel: "Agent",
@@ -185,7 +187,12 @@ describe("Profile", () => {
     expect(screen.getByLabelText(/^First name/)).toHaveValue("Bob");
     expect(screen.getByLabelText(/^Preferred name/)).toHaveValue("Bobby");
     expect(screen.getByLabelText(/^License number/)).toHaveValue("VA-9911");
-    expect(screen.getByLabelText(/^License expiration/)).toHaveValue("2030-06-30");
+    expect(document.querySelector("input[name='license_expires_on']")).toHaveValue(
+      "2030-06-30",
+    );
+    expect(screen.getByLabelText(/^License expiration/)).toHaveTextContent(
+      formatFormDate("2030-06-30"),
+    );
     expect(screen.getByLabelText(/^Professional bio/)).toHaveValue("Hello");
     expect(screen.getByLabelText(/^Website/)).toHaveValue(
       "https://bobsells.example.com",

@@ -22,6 +22,7 @@ function user(overrides: Partial<User> = {}): User {
     id: 1,
     email: "agent@onest.realestate",
     name: "Avery Johnson",
+    headshotUrl: null,
     permissions: [],
     roles: ["Users"],
     roleLabel: "Agent",

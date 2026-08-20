@@ -465,6 +465,22 @@ def test_completeness_rises_as_fields_are_filled_in(client):
 
 
 @pytest.mark.django_db
+def test_headshot_display_streams_the_signed_in_users_photo(client, settings, tmp_path):
+    settings.MEDIA_ROOT = str(tmp_path)
+    user = completed_user()
+    client.force_login(user)
+    client.post(
+        reverse("headshot_upload"),
+        {"headshot": make_image("PNG", (400, 400))},
+        format="multipart",
+    )
+    response = client.get(reverse("headshot_display"))
+    assert response.status_code == 200
+    assert response["Content-Type"] == "image/png"
+    assert b"".join(response.streaming_content)
+
+
+@pytest.mark.django_db
 def test_headshot_can_be_replaced_from_the_profile_page(client, settings, tmp_path):
     settings.MEDIA_ROOT = str(tmp_path)
     user = completed_user()

@@ -4,6 +4,7 @@ export interface User {
   id: number;
   email: string;
   name: string;
+  headshotUrl: string | null;
   /** Django auth permission codenames, e.g. "user.view_user". */
   permissions: string[];
   /** Role (Django group) names, highest-priority first. */
@@ -300,7 +301,7 @@ export interface SelfProfileValues extends OnboardingProfileValues {
   preferredName: string;
   preferredContactMethod: string;
   licenseNumber: string;
-  /** ISO 8601 calendar date, or "" — the shape an `<input type="date">` wants. */
+  /** ISO 8601 calendar date (`yyyy-MM-dd`), or "". */
   licenseExpiresOn: string;
   licenseState: string;
   bio: string;

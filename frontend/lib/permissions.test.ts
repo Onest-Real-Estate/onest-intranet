@@ -8,6 +8,7 @@ function user(permissions: string[]): User {
     id: 1,
     email: "alice@example.com",
     name: "Alice",
+    headshotUrl: null,
     permissions,
     roles: [],
     roleLabel: "Agent",

@@ -8,6 +8,7 @@ from .views.administration_views import (
     user_administration_submit,
 )
 from .views.auth_views import (
+    headshot_display,
     headshot_upload,
     login_page,
     logout,
@@ -31,6 +32,7 @@ urlpatterns = [
     path("onboarding", onboarding, name="onboarding"),
     path("onboarding/submit", onboarding_submit, name="onboarding_submit"),
     path("account/headshot", headshot_upload, name="headshot_upload"),
+    path("account/headshot/file", headshot_display, name="headshot_display"),
     path("profile", profile, name="profile"),
     path("profile/submit", profile_submit, name="profile_submit"),
     path(

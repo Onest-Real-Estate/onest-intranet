@@ -29,6 +29,7 @@ const URLS = {
     'user_administration_index': () => `/operations/users/administration`,
     'profile_submit': () => `/profile/submit`,
     'profile': () => `/profile`,
+    'headshot_display': () => `/account/headshot/file`,
     'headshot_upload': () => `/account/headshot`,
     'onboarding_submit': () => `/onboarding/submit`,
     'onboarding': () => `/onboarding`,

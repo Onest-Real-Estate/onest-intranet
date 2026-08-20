@@ -1,6 +1,7 @@
 import { useId, useState } from "react";
 
 import {
+  DateField,
   FormDescription,
   FormField,
   FormFieldError,
@@ -324,13 +325,13 @@ export function ProfileCredentialsSection({
           validation={validation}
           optional
         />
-        <TextField
+        <DateField
           name="license_expires_on"
           label="License expiration"
-          type="date"
           validation={validation}
           defaultValue={initial.licenseExpiresOn}
           optional
+          onChange={onDirty}
         />
       </div>
 

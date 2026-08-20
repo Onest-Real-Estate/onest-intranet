@@ -5,6 +5,14 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { ProfilePhotoPanel } from "@/components/profile/ProfilePhotoPanel";
 import type { ProfileLimits } from "@/types";
 
+const routerReload = vi.fn();
+
+vi.mock("@inertiajs/react", () => ({
+  router: {
+    reload: (...args: unknown[]) => routerReload(...args),
+  },
+}));
+
 const limits: ProfileLimits = {
   headshotMaxBytes: 5 * 1024 * 1024,
   headshotMinDimension: 200,
@@ -37,6 +45,7 @@ function pngFile() {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  routerReload.mockClear();
 });
 
 describe("ProfilePhotoPanel", () => {
@@ -70,6 +79,10 @@ describe("ProfilePhotoPanel", () => {
 
     expect(await screen.findByText("Upload complete")).toBeInTheDocument();
     expect(screen.getByText("Profile photo updated.")).toBeInTheDocument();
+    expect(routerReload).toHaveBeenCalledWith({
+      only: ["user", "initial"],
+      showProgress: false,
+    });
     expect(screen.getByRole("button", { name: /remove photo/i })).toBeVisible();
   });
 

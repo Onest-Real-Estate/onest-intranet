@@ -1,4 +1,5 @@
 export * from "./data-table";
+export * from "./date-field";
 export * from "./dialog";
 export * from "./empty-state";
 export * from "./file-uploader";

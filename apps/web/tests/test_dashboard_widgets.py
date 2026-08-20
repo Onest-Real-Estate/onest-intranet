@@ -81,15 +81,23 @@ PRODUCTION_MIDDLEWARE = [
 
 
 @contextmanager
-def assert_application_queries(expected: int):
-    """Count app SQL without Silk's order-dependent EXPLAIN statements."""
+def assert_application_queries(expected: int, *, ignore_tables: tuple[str, ...] = ()):
+    """Count app SQL without Silk's order-dependent EXPLAIN statements.
+
+    ``ignore_tables`` drops backend noise that varies by settings (e.g.
+    ``django_session`` is skipped under ``cached_db`` after a warm request,
+    but always counted under the plain ``db`` session engine).
+    """
     with CaptureQueriesContext(connection) as captured:
         yield
-    queries = [
-        query["sql"]
-        for query in captured.captured_queries
-        if not query["sql"].lstrip().upper().startswith("EXPLAIN")
-    ]
+    queries = []
+    for query in captured.captured_queries:
+        sql = query["sql"]
+        if sql.lstrip().upper().startswith("EXPLAIN"):
+            continue
+        if any(f'"{table}"' in sql for table in ignore_tables):
+            continue
+        queries.append(sql)
     assert len(queries) == expected, "\n\n".join(queries)
 
 
@@ -618,7 +626,7 @@ def test_the_dashboard_shell_query_count_is_bounded(client):
     # Warm the session/user lookups so the assertion measures the page itself.
     client.get(reverse("dashboard"), HTTP_X_INERTIA="true")
 
-    with assert_application_queries(8):
+    with assert_application_queries(7, ignore_tables=("django_session",)):
         client.get(reverse("dashboard"), HTTP_X_INERTIA="true")
 
 

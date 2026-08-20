@@ -381,7 +381,7 @@ def test_headshot_upload_accepts_valid_jpeg(client, settings, tmp_path):
     )
     assert response.status_code == 200
     data = json.loads(response.content)
-    assert "url" in data
+    assert data["url"] == "http://testserver/account/headshot/file"
 
 
 @pytest.mark.django_db

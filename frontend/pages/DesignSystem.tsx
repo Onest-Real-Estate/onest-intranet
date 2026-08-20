@@ -12,6 +12,7 @@ import {
   CardStateMessage,
   DataTable,
   type DataTableColumn,
+  DateField,
   DestructiveConfirmDialog,
   Dialog,
   DialogClose,
@@ -141,6 +142,7 @@ export default function DesignSystem() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [sort, setSort] = useState(contracts.sort);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [catalogDate, setCatalogDate] = useState("2026-08-20");
 
   const [pathname, search = ""] = page.url.split("?");
   function visit(patch: Parameters<typeof buildListUrl>[2]) {
@@ -386,6 +388,13 @@ export default function DesignSystem() {
                   <Input id="email" value={'<img src=x onerror="alert(1)">'} readOnly />
                   <FormFieldError messages={exampleValidation.fields.email} />
                 </FormField>
+                <DateField
+                  name="agreement_date"
+                  label="Agreement date"
+                  value={catalogDate}
+                  onChange={setCatalogDate}
+                  optional
+                />
                 <dl className="bg-muted/40 grid gap-4 rounded-lg p-4 sm:grid-cols-2">
                   <ReadOnlyValue label="Office">Charlottesville</ReadOnlyValue>
                   <ReadOnlyValue label="Role">Agent</ReadOnlyValue>
