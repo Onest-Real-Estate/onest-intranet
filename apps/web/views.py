@@ -2,6 +2,7 @@ from django.http import Http404
 from inertia import inertia, render
 
 from apps.user.views.onboarding_administration_views import new_agent_list
+from apps.web.quick_access.views import quick_access_index
 
 from .authorization import enforce_policy
 from .contracts import list_response
@@ -57,6 +58,7 @@ OPERATIONS_VIEWS = {
     for destination in OPERATIONS_DESTINATIONS
 }
 OPERATIONS_VIEWS["admin_new_agents"] = new_agent_list
+OPERATIONS_VIEWS["admin_quick_access"] = quick_access_index
 
 
 _CATALOG_CONTRACTS = (

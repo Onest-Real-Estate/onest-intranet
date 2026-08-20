@@ -36,6 +36,17 @@ from apps.web.shell import authorization_version
 logger = logging.getLogger("apps.dashboard")
 
 
+def quick_access_configuration_version() -> str:
+    """Stamp of the administered Quick Access configuration.
+
+    Imported lazily: the resolution module reads ``web.models``, which this
+    package is itself imported from.
+    """
+    from apps.web.quick_access.resolution import configuration_version
+
+    return configuration_version()
+
+
 class CacheScope:
     #: Recomputed every request. The default, and the only safe answer for
     #: anything derived from a user's records or effective scope.
@@ -70,6 +81,11 @@ class WidgetDefinition:
     cache: CachePolicy = CachePolicy()
     #: Cap for list-shaped payloads. 0 means the payload is not a feed.
     feed_limit: int = 0
+    #: Optional stamp of the *configuration* a payload was computed from, mixed
+    #: into the cache key. It lets a widget whose source is administered data
+    #: retire every cached entry with one write, instead of deleting an
+    #: unbounded set of per-user keys after each save.
+    cache_version: Callable[[], str] | None = None
 
 
 WIDGET_DEFINITIONS: tuple[WidgetDefinition, ...] = (
@@ -93,16 +109,20 @@ WIDGET_DEFINITIONS: tuple[WidgetDefinition, ...] = (
         group="pipeline",
         contract_version=1,
         provider=providers.quick_access,
-        user_specific=False,
+        user_specific=True,
         cache=CachePolicy(
-            scope=CacheScope.SHARED,
+            scope=CacheScope.PER_USER,
             ttl_seconds=300,
             rationale=(
-                "Reviewed vendor configuration, identical for every user and "
-                "changed only by deploy. Five minutes bounds a rollback."
+                "Administered configuration resolved against the reader's own "
+                "role and office, so the payload differs per account and can "
+                "never be shared. The key carries the configuration stamp, so "
+                "a save retires every reader's entry at once and the ttl only "
+                "bounds a stale role grant."
             ),
         ),
         feed_limit=8,
+        cache_version=quick_access_configuration_version,
     ),
     WidgetDefinition(
         key="announcements",
@@ -240,6 +260,8 @@ def widget_cache_key(definition: WidgetDefinition, context: DashboardContext) ->
     parts = ["dashboard", definition.key, str(definition.contract_version)]
     if definition.cache.scope == CacheScope.PER_USER:
         parts += [str(context.user.pk), authorization_version(context.access)]
+    if definition.cache_version is not None:
+        parts.append(definition.cache_version())
     return ":".join(parts)
 
 

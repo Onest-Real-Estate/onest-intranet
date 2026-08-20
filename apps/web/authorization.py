@@ -221,6 +221,77 @@ ROUTE_POLICIES: dict[str, AuthorizationPolicy] = {
         all_permissions=("web.manage_new_agent_onboarding",),
         scope_rule="source_service_reauthorization",
     ),
+    "quick_access_new": AuthorizationPolicy(
+        key="quick_access_new",
+        access="permission_protected",
+        description=(
+            "Render the blank Quick Access link form. Audience choices are "
+            "built from the actor's own office scope."
+        ),
+        methods=("GET",),
+        route_names=("quick_access_new",),
+        all_permissions=("web.manage_quick_access",),
+        scope_rule="quick_access_audience_scope",
+    ),
+    "quick_access_edit": AuthorizationPolicy(
+        key="quick_access_edit",
+        access="permission_protected",
+        description=(
+            "Render one Quick Access link. The link is resolved through the "
+            "actor's manageable queryset, so an out-of-scope id is a 404."
+        ),
+        methods=("GET",),
+        route_names=("quick_access_edit",),
+        all_permissions=("web.manage_quick_access",),
+        scope_rule="quick_access_link_scope",
+    ),
+    "quick_access_create": AuthorizationPolicy(
+        key="quick_access_create",
+        access="permission_protected",
+        description=(
+            "Create a Quick Access link. Company-wide audiences additionally "
+            "require web.manage_company_quick_access."
+        ),
+        methods=("POST",),
+        route_names=("quick_access_create",),
+        all_permissions=("web.manage_quick_access",),
+        scope_rule="quick_access_audience_scope",
+    ),
+    "quick_access_update": AuthorizationPolicy(
+        key="quick_access_update",
+        access="permission_protected",
+        description=(
+            "Update one Quick Access link, its audience, and its destination."
+        ),
+        methods=("POST",),
+        route_names=("quick_access_update",),
+        all_permissions=("web.manage_quick_access",),
+        scope_rule="quick_access_link_scope",
+    ),
+    "quick_access_state": AuthorizationPolicy(
+        key="quick_access_state",
+        access="permission_protected",
+        description=(
+            "Activate, deactivate, archive, or restore one Quick Access link. "
+            "Records are never deleted."
+        ),
+        methods=("POST",),
+        route_names=("quick_access_state",),
+        all_permissions=("web.manage_quick_access",),
+        scope_rule="quick_access_link_scope",
+    ),
+    "quick_access_reorder": AuthorizationPolicy(
+        key="quick_access_reorder",
+        access="permission_protected",
+        description=(
+            "Rewrite the Quick Access panel order. Every submitted link must "
+            "be manageable by the actor; unmanaged links keep their position."
+        ),
+        methods=("POST",),
+        route_names=("quick_access_reorder",),
+        all_permissions=("web.manage_quick_access",),
+        scope_rule="quick_access_link_scope",
+    ),
     "dashboard": AuthorizationPolicy(
         key="dashboard",
         access="authenticated",

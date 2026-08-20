@@ -94,6 +94,8 @@ class RoleDefinition:
 # Permission bundles use ``app_label.codename``. Granular catalog growth lands
 # here via reviewed changes — not ad-hoc admin edits for system roles.
 _OPS_ALL = (
+    "web.manage_quick_access",
+    "web.manage_company_quick_access",
     "web.view_users",
     "web.view_new_agents",
     "web.manage_new_agent_onboarding",
@@ -120,6 +122,7 @@ _OPS_ALL = (
     "web.view_office_tasks",
 )
 _OPS_REGIONAL = (
+    "web.manage_quick_access",
     "web.view_users",
     "web.view_new_agents",
     "web.manage_new_agent_onboarding",
@@ -139,6 +142,7 @@ _OPS_REGIONAL = (
     "web.view_office_tasks",
 )
 _OPS_BRANCH = (
+    "web.manage_quick_access",
     "web.view_users",
     "web.view_new_agents",
     "web.manage_new_agent_onboarding",
@@ -165,6 +169,7 @@ _OPS_TC = (
     "web.view_own_tasks",
 )
 _OPS_OFFICE_ADMIN = (
+    "web.manage_quick_access",
     "web.view_users",
     "web.view_new_agents",
     "web.view_reservations",
@@ -325,6 +330,7 @@ ROLE_DEFINITIONS: tuple[RoleDefinition, ...] = (
             "web.manage_announcements",
             "web.view_feedback",
             "web.manage_documents",
+            "web.manage_quick_access",
         ),
     ),
     RoleDefinition(

@@ -33,7 +33,6 @@ from apps.web.dashboard import (
     widget_cache_key,
     widget_payload,
 )
-from apps.web.dashboard.providers import QUICK_ACCESS_TOOLS
 from apps.web.dashboard.registry import _validate_registry
 from apps.web.dashboard.timeframes import (
     end_of_local_day,
@@ -41,6 +40,8 @@ from apps.web.dashboard.timeframes import (
     salutation,
     start_of_local_day,
 )
+from apps.web.models import QuickAccessLink
+from apps.web.quick_access.resolution import invalidate_configuration_cache
 from apps.web.tests.test_dashboard_metrics import (
     assign,
     branch,
@@ -236,13 +237,18 @@ def test_modules_without_a_backing_source_report_unavailable_not_empty():
 
 
 @pytest.mark.django_db
-def test_quick_access_serves_reviewed_vendor_configuration():
+def test_quick_access_serves_administered_configuration():
+    """The panel is data now — the migration's seed rows, not a code tuple."""
     user = make_user("tools@example.com")
     payload = widget_payload(WIDGET_BY_KEY["quick_access"], build_context(user))
     assert payload["status"] == WidgetStatus.READY
-    assert [tool["id"] for tool in payload["data"]] == [
-        tool["id"] for tool in QUICK_ACCESS_TOOLS if tool["enabled"]
-    ]
+    assert [tool["id"] for tool in payload["data"]] == list(
+        QuickAccessLink.objects.filter(
+            is_active=True, is_archived=False, company_wide=True
+        )
+        .order_by("sort_order", "name", "pk")
+        .values_list("stable_key", flat=True)
+    )
     for tool in payload["data"]:
         assert tool["href"].startswith("https://")
 
@@ -409,9 +415,32 @@ def test_a_transient_failure_is_never_cached(monkeypatch):
 
 @pytest.mark.django_db
 def test_a_shared_cache_key_carries_no_user_identity():
+    from apps.web.dashboard.registry import CachePolicy as Policy
+
     user = make_user("shared-key@example.com")
-    key = widget_cache_key(WIDGET_BY_KEY["quick_access"], build_context(user))
-    assert key == "dashboard:quick_access:1"
+    shared = replace(
+        WIDGET_BY_KEY["market"],
+        cache=Policy(scope=CacheScope.SHARED, ttl_seconds=60, rationale="test"),
+    )
+    key = widget_cache_key(shared, build_context(user))
+    assert key == "dashboard:market:1"
+
+
+@pytest.mark.django_db
+def test_the_quick_access_key_changes_when_configuration_changes():
+    """A save must reach readers who already hold a cached panel."""
+    user = make_user("config-key@example.com")
+    definition = WIDGET_BY_KEY["quick_access"]
+    before = widget_cache_key(definition, build_context(user))
+
+    link = QuickAccessLink.objects.order_by("sort_order").first()
+    assert link is not None
+    link.name = f"{link.name} (renamed)"
+    link.save()
+    invalidate_configuration_cache()
+
+    after = widget_cache_key(definition, build_context(user))
+    assert before != after
 
 
 @pytest.mark.django_db
@@ -489,6 +518,7 @@ def test_a_payload_inside_the_cap_is_not_marked_truncated():
         WIDGET_BY_KEY["quick_access"], build_context(make_user("small@example.com"))
     )
     assert "truncated" not in payload["meta"]
+    assert payload["status"] == WidgetStatus.READY
 
 
 # --------------------------------------------------------------------------- #
@@ -696,6 +726,13 @@ def test_widget_providers_are_bounded_in_queries():
     for key in ("announcements", "active_transactions", "market", "my_day"):
         with assert_application_queries(0):
             widget_payload(WIDGET_BY_KEY[key], context)
+
+    # Quick access resolves the whole audience in one statement — the office
+    # ancestor chain comes off the already-loaded user, and the configuration
+    # stamp is cached — plus the read of the reader's own office row.
+    cache.clear()
+    with assert_application_queries(4):
+        widget_payload(WIDGET_BY_KEY["quick_access"], context)
 
 
 @pytest.mark.django_db

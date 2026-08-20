@@ -153,13 +153,24 @@ OPERATIONS_DESTINATIONS: tuple[OperationsDestination, ...] = (
         scope_rule="publication_scope",
     ),
     OperationsDestination(
+        key="admin-quick-access",
+        label="Quick Access",
+        section="Content",
+        route_name="admin_quick_access",
+        path="operations/quick-access",
+        permission="web.manage_quick_access",
+        order=120,
+        feature="admin-quick-access",
+        scope_rule="quick_access_audience_scope",
+    ),
+    OperationsDestination(
         key="admin-compliance",
         label="Compliance",
         section="Governance & support",
         route_name="admin_compliance",
         path="operations/compliance",
         permission="web.view_compliance",
-        order=120,
+        order=130,
         feature="admin-compliance",
         scope_rule="compliance_office_scope",
     ),
@@ -170,7 +181,7 @@ OPERATIONS_DESTINATIONS: tuple[OperationsDestination, ...] = (
         route_name="admin_feedback",
         path="operations/feedback",
         permission="web.view_feedback",
-        order=130,
+        order=140,
         feature="admin-feedback",
         scope_rule="feedback_office_scope",
     ),
@@ -181,7 +192,7 @@ OPERATIONS_DESTINATIONS: tuple[OperationsDestination, ...] = (
         route_name="admin_platform_tasks",
         path="operations/platform-tasks",
         permission="web.view_platform_tasks",
-        order=140,
+        order=150,
         feature="admin-platform-tasks",
         scope_rule="sanitized_status_only",
     ),
@@ -192,7 +203,7 @@ OPERATIONS_DESTINATIONS: tuple[OperationsDestination, ...] = (
         route_name="admin_offices",
         path="operations/offices",
         permission="web.manage_offices",
-        order=150,
+        order=160,
         feature="admin-offices",
         scope_rule="office_tree_scope",
     ),
@@ -203,7 +214,7 @@ OPERATIONS_DESTINATIONS: tuple[OperationsDestination, ...] = (
         route_name="admin_it_support",
         path="operations/it-support",
         permission="web.view_it_support",
-        order=160,
+        order=170,
         feature="admin-it-support",
         scope_rule="support_request_scope",
     ),
@@ -219,10 +230,11 @@ OPERATIONS_FEATURES: dict[str, bool] = {
     destination.feature: False for destination in OPERATIONS_DESTINATIONS
 }
 OPERATIONS_FEATURES["admin-new-agents"] = True
+OPERATIONS_FEATURES["admin-quick-access"] = True
 
 _OPS_SURFACE_PERMISSIONS = frozenset(
     destination.permission for destination in OPERATIONS_DESTINATIONS
-) | {"web.manage_new_agent_onboarding"}
+) | {"web.manage_new_agent_onboarding", "web.manage_company_quick_access"}
 
 ROLE_OPERATION_PERMISSIONS: dict[str, frozenset[str]] = {
     # Aliases kept for existing callers; values are role defaults ∩ ops surfaces.

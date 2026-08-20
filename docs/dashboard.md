@@ -56,7 +56,7 @@ where available so authorization is not recalculated inside a feed.
 | Widget | Prop | Group | Feed cap | Cache policy |
 | --- | --- | --- | ---: | --- |
 | Performance | `metrics` | `metrics` | — | None; sensitive, scope-derived totals |
-| Quick access | `quickApps` | `pipeline` | 8 | Shared for 300 seconds; reviewed deploy-time vendor configuration |
+| Quick access | `quickApps` | `pipeline` | 8 | Per user for 300 seconds, keyed by the administered configuration stamp — see `docs/quick-access.md` |
 | Announcements | `announcements` | `pipeline` | — | None; future audience targeting is user-specific |
 | Active transactions | `transactions` | `pipeline` | 5 | None; owned records must reflect the last write |
 | Training | `training` | `pipeline` | — | None; per-user completion |
@@ -68,7 +68,10 @@ where available so authorization is not recalculated inside a feed.
 Registry validation fails at import for duplicate keys/props, invalid versions
 or feed limits, cache policies without a rationale, and any shared cache on a
 user-specific widget. Per-user cache keys include user id and effective-access
-version. Retryable failures are never cached. List feed caps are applied by the
+version. A widget whose source is administered data may also declare a
+`cache_version` callable; its stamp joins the key, so one write retires every
+cached entry instead of leaving an unbounded set of per-user keys to delete.
+Retryable failures are never cached. List feed caps are applied by the
 composer and set `meta.truncated` when rows are removed.
 
 ## Frontend behavior

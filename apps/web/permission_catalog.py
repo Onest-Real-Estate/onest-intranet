@@ -261,6 +261,33 @@ PERMISSION_DEFINITIONS: tuple[PermissionDefinition, ...] = (
     ),
     # --- Governance ---
     PermissionDefinition(
+        codename="web.manage_quick_access",
+        name="Can manage scoped Quick Access links",
+        domain="content",
+        action="manage",
+        description=(
+            "Create, edit, reorder, and archive dashboard Quick Access links "
+            "for offices within effective scope."
+        ),
+        default_roles=(*_MANAGERS, REGIONAL_ADMIN, BRANCH_ADMIN, MARKETING_TEAM),
+        risk="medium",
+    ),
+    PermissionDefinition(
+        codename="web.manage_company_quick_access",
+        name="Can manage company-wide Quick Access links",
+        domain="content",
+        action="manage",
+        description=(
+            "Publish a Quick Access link to the whole brokerage and edit "
+            "company-owned link definitions. Strictly wider than the scoped "
+            "grant, so it is held separately."
+        ),
+        default_roles=_BROKERAGE_ADMINS,
+        risk="high",
+        scoped=False,
+        sensitive=True,
+    ),
+    PermissionDefinition(
         codename="web.view_compliance",
         name="Can view scoped compliance items",
         domain="governance",
