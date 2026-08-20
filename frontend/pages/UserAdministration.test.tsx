@@ -110,8 +110,9 @@ const administration: AdministrationPayload = {
   assignments: [
     {
       id: 21,
-      role: "Users",
-      roleLabel: "Agent",
+      role: "realtor",
+      roleLabel: "Realtor",
+      roleDescription: "Licensed agent. Default role for new signups.",
       scopeType: "office",
       scopeLabel: "Fairfax VA",
       status: "active",
@@ -123,8 +124,9 @@ const administration: AdministrationPayload = {
     },
     {
       id: 22,
-      role: "Branch Managers",
-      roleLabel: "Branch manager",
+      role: "branch_manager",
+      roleLabel: "Branch Manager",
+      roleDescription: "Owns a branch or regional office.",
       scopeType: "office",
       scopeLabel: "Charlottesville VA",
       status: "active",
@@ -136,7 +138,7 @@ const administration: AdministrationPayload = {
     },
   ],
   effectiveAccess: {
-    roles: ["Agent"],
+    roles: ["Realtor"],
     scopeLabel: "Fairfax VA",
     isSuperuser: false,
     liveAssignments: 2,
@@ -166,8 +168,9 @@ const administration: AdministrationPayload = {
     ],
     roles: [
       {
-        value: "Branch Managers",
-        label: "Branch manager",
+        value: "branch_manager",
+        label: "Branch Manager",
+        description: "Owns a branch or regional office.",
         scopes: [{ value: "office", label: "Office" }],
       },
     ],
@@ -184,8 +187,8 @@ function setPage(overrides: Partial<AdministrationPayload> = {}, extra = {}) {
       name: "Ada Admin",
       headshotUrl: null,
       permissions: ["user.view_user_administration", "user.change_user_administration"],
-      roles: ["Admins"],
-      roleLabel: "Admin",
+      roles: ["System Admin"],
+      roleLabel: "System Admin",
       isStaff: false,
       isSuperuser: false,
     },
@@ -279,7 +282,7 @@ describe("UserAdministration", () => {
   it("does not offer revoke for an assignment outside the actor's delegation", () => {
     render(<UserAdministration />);
     const rows = screen.getAllByRole("row");
-    const branchRow = rows.find((row) => row.textContent?.includes("Branch manager"));
+    const branchRow = rows.find((row) => row.textContent?.includes("Branch Manager"));
     expect(branchRow).toBeDefined();
     expect(
       within(branchRow as HTMLElement).queryByRole("button", { name: /revoke/i }),

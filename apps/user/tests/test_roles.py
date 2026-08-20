@@ -10,6 +10,7 @@ from apps.user.roles import (
     REGION_MANAGER,
     SEEDED_GROUPS,
     primary_role_label,
+    role_group_name,
     seed_role_groups,
 )
 
@@ -88,7 +89,7 @@ def test_seed_role_groups_creates_management_roles():
 @pytest.mark.django_db
 def test_primary_role_label_prefers_superuser():
     user = User.objects.create_superuser(email="root@example.com", password="x")
-    group, _ = Group.objects.get_or_create(name=AGENT)
+    group, _ = Group.objects.get_or_create(name=role_group_name(AGENT))
     user.groups.add(group)
     assert primary_role_label(user) == "Superadmin"
 
@@ -96,20 +97,20 @@ def test_primary_role_label_prefers_superuser():
 @pytest.mark.django_db
 def test_primary_role_label_uses_highest_priority_group():
     user = User.objects.create_user(email="mgr@example.com")
-    admin, _ = Group.objects.get_or_create(name=ADMIN)
-    branch, _ = Group.objects.get_or_create(name=BRANCH_MANAGER)
+    admin, _ = Group.objects.get_or_create(name=role_group_name(ADMIN))
+    branch, _ = Group.objects.get_or_create(name=role_group_name(BRANCH_MANAGER))
     user.groups.add(admin, branch)
-    assert primary_role_label(user) == "Admin"
+    assert primary_role_label(user) == "System Admin"
 
 
 @pytest.mark.django_db
 def test_primary_role_label_for_region_and_branch_managers():
     region_user = User.objects.create_user(email="region@example.com")
-    region_group, _ = Group.objects.get_or_create(name=REGION_MANAGER)
+    region_group, _ = Group.objects.get_or_create(name=role_group_name(REGION_MANAGER))
     region_user.groups.add(region_group)
-    assert primary_role_label(region_user) == "Region manager"
+    assert primary_role_label(region_user) == "Regional Manager"
 
     branch_user = User.objects.create_user(email="branch@example.com")
-    branch_group, _ = Group.objects.get_or_create(name=BRANCH_MANAGER)
+    branch_group, _ = Group.objects.get_or_create(name=role_group_name(BRANCH_MANAGER))
     branch_user.groups.add(branch_group)
-    assert primary_role_label(branch_user) == "Branch manager"
+    assert primary_role_label(branch_user) == "Branch Manager"

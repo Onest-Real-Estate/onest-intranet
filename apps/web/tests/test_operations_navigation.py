@@ -5,7 +5,14 @@ from django.contrib.auth.models import Group, Permission
 from django.urls import reverse
 
 from apps.user.models import Office, User
-from apps.user.roles import ADMIN, AGENT, BRANCH_MANAGER, REGION_MANAGER, ScopeType
+from apps.user.roles import (
+    ADMIN,
+    AGENT,
+    BRANCH_MANAGER,
+    REGION_MANAGER,
+    ScopeType,
+    role_group_name,
+)
 from apps.user.services.role_assignments import (
     create_role_assignment,
     get_effective_permissions,
@@ -97,7 +104,7 @@ def test_every_destination_policy_matches_its_minimum_permission_and_scope():
 
 @pytest.mark.django_db
 def test_admin_group_receives_all_operations_permissions():
-    group = Group.objects.get(name=ADMIN)
+    group = Group.objects.get(name=role_group_name(ADMIN))
     actual = {
         f"{app_label}.{codename}"
         for app_label, codename in group.permissions.values_list(

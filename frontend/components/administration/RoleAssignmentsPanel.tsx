@@ -1,4 +1,4 @@
-import { ShieldCheck, ShieldOff } from "lucide-react";
+import { ShieldOff } from "lucide-react";
 import { useId, useState } from "react";
 
 import {
@@ -15,6 +15,7 @@ import {
   FormField,
   FormLabel,
   PanelHeader,
+  RoleBadge,
   StatusBadge,
   SurfaceCard,
   SurfaceCardContent,
@@ -107,14 +108,13 @@ export function RoleAssignmentsPanel({
               header: "Role",
               cell: (row) => (
                 <span className="grid gap-0.5">
-                  <span className="flex items-center gap-1.5 font-medium">
-                    <ShieldCheck
-                      className="text-muted-foreground size-3.5"
-                      aria-hidden
-                    />
-                    {row.roleLabel}
-                  </span>
-                  <span className="text-muted-foreground pl-5 text-xs sm:hidden">
+                  <RoleBadge
+                    code={row.role}
+                    label={row.roleLabel}
+                    scopeLabel={row.scopeLabel}
+                    title={row.roleDescription || undefined}
+                  />
+                  <span className="text-muted-foreground text-xs sm:hidden">
                     {row.scopeLabel}
                   </span>
                 </span>
@@ -220,6 +220,9 @@ export function RoleAssignmentsPanel({
                 }))}
                 validation={validation}
               />
+              {selectedRole?.description ? (
+                <FormDescription>{selectedRole.description}</FormDescription>
+              ) : null}
               <SelectField
                 name="scope_type"
                 label="Scope"

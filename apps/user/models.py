@@ -40,7 +40,7 @@ from .profile_fields import (
     normalize_preferred_contact_method,
     normalize_url,
 )
-from .roles import ROLE_BY_KEY, ScopeType, is_valid_scope_type
+from .roles import ScopeType, is_valid_scope_type, normalize_role_code
 from .us import (
     US_STATE_CHOICES,
     US_STATE_CODES,
@@ -945,6 +945,56 @@ class UserOfficeMembership(models.Model):
             raise ValidationError(errors)
 
 
+class BrokerageRole(models.Model):
+    """Persisted mirror of the code-owned brokerage role catalog.
+
+    System roles are seeded from ``apps.user.roles.ROLE_DEFINITIONS``. Rows are
+    never hard-deleted while historical assignments reference the code;
+    deactivate with ``is_active`` / ``is_assignable`` instead.
+    """
+
+    code = models.SlugField(_("code"), max_length=64, unique=True)
+    display_name = models.CharField(_("display name"), max_length=128)
+    description = models.TextField(_("description"), blank=True)
+    group_name = models.CharField(_("django group name"), max_length=150)
+    is_active = models.BooleanField(_("active"), default=True)
+    is_assignable = models.BooleanField(_("assignable"), default=True)
+    is_system = models.BooleanField(_("system managed"), default=True)
+    is_protected = models.BooleanField(_("protected"), default=False)
+    valid_scope_types = models.JSONField(_("valid scope types"), default=list)
+    priority = models.PositiveSmallIntegerField(_("priority"), default=100)
+    created_at = models.DateTimeField(_("created at"), default=timezone.now)
+    updated_at = models.DateTimeField(_("updated at"), auto_now=True)
+
+    class Meta:
+        ordering = ["priority", "code"]
+        verbose_name = _("brokerage role")
+        verbose_name_plural = _("brokerage roles")
+        indexes = [
+            models.Index(
+                fields=["is_active", "is_assignable"], name="brokerage_role_assign"
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.display_name} ({self.code})"
+
+    def delete(self, *args, **kwargs):
+        from django.apps import apps as django_apps
+
+        Assignment = django_apps.get_model("user", "UserRoleAssignment")
+        if Assignment.objects.filter(role=self.code).exists():
+            raise ValidationError(
+                _(
+                    "This role is referenced by historical assignments. "
+                    "Deactivate it instead of deleting."
+                )
+            )
+        if self.is_system:
+            raise ValidationError(_("System roles cannot be deleted."))
+        return super().delete(*args, **kwargs)
+
+
 class UserRoleAssignment(models.Model):
     class Status(models.TextChoices):
         SCHEDULED = "scheduled", _("Scheduled")
@@ -958,7 +1008,7 @@ class UserRoleAssignment(models.Model):
         related_name="role_assignments",
         on_delete=models.PROTECT,
     )
-    role = models.CharField(_("role"), max_length=64)
+    role = models.CharField(_("role"), max_length=64, db_index=True)
     scope_type = models.CharField(
         _("scope type"), max_length=32, choices=ScopeType.CHOICES
     )
@@ -1051,10 +1101,16 @@ class UserRoleAssignment(models.Model):
     def clean(self):
         super().clean()
         errors = {}
-        if self.role not in ROLE_BY_KEY:
+        normalized = normalize_role_code(self.role) if self.role else None
+        if normalized is None:
             errors["role"] = _("Pick a supported role.")
-        elif not is_valid_scope_type(self.role, self.scope_type):
-            errors["scope_type"] = _("This role cannot be assigned with that scope.")
+        else:
+            if self.role != normalized:
+                self.role = normalized
+            if not is_valid_scope_type(self.role, self.scope_type):
+                errors["scope_type"] = _(
+                    "This role cannot be assigned with that scope."
+                )
 
         if self.scope_type == ScopeType.COMPANY and self.scope_office is not None:
             errors["scope_office"] = _("Company-scoped roles cannot target an office.")

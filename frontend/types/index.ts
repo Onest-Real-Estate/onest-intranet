@@ -488,8 +488,10 @@ export interface AdministrationValues {
 
 export interface AdministrationAssignment {
   id: number;
+  /** Stable role code — never use as an authorization check in the UI. */
   role: string;
   roleLabel: string;
+  roleDescription: string;
   scopeType: string;
   scopeLabel: string;
   status: string;
@@ -519,6 +521,8 @@ export interface AdministrationRoleScope {
 export interface AdministrationRoleOption {
   value: string;
   label: string;
+  description?: string;
+  protected?: boolean;
   scopes: AdministrationRoleScope[];
 }
 

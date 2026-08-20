@@ -12,7 +12,14 @@ from django.urls import reverse
 from django.utils import timezone
 
 from apps.user.models import Office, User, UserRoleAssignment
-from apps.user.roles import ADMIN, AGENT, BRANCH_MANAGER, REGION_MANAGER, ScopeType
+from apps.user.roles import (
+    ADMIN,
+    AGENT,
+    BRANCH_MANAGER,
+    REGION_MANAGER,
+    ScopeType,
+    role_group_name,
+)
 from apps.user.services.role_assignments import (
     create_role_assignment,
     get_effective_access,
@@ -136,7 +143,7 @@ def agent(email: str, office: Office | None = None) -> User:
     if office is not None:
         assign(user, AGENT, ScopeType.OFFICE, office)
     else:
-        user.groups.add(Group.objects.get(name=AGENT))
+        user.groups.add(Group.objects.get(name=role_group_name(AGENT)))
     return user
 
 
@@ -363,7 +370,7 @@ def test_losing_a_permission_removes_both_the_card_and_its_drill_down(client):
     client.force_login(manager)
     assert client.get(reverse("admin_new_agents")).status_code == 200
 
-    group = Group.objects.get(name=BRANCH_MANAGER)
+    group = Group.objects.get(name=role_group_name(BRANCH_MANAGER))
     group.permissions.remove(
         Permission.objects.get(
             content_type__app_label="web",

@@ -16,7 +16,14 @@ from apps.user.models import (
     UserRoleAssignmentMigrationConflict,
 )
 from apps.user.office_seed import seed_offices
-from apps.user.roles import ADMIN, AGENT, BRANCH_MANAGER, REGION_MANAGER, ScopeType
+from apps.user.roles import (
+    ADMIN,
+    AGENT,
+    BRANCH_MANAGER,
+    REGION_MANAGER,
+    ScopeType,
+    role_group_name,
+)
 from apps.user.services.role_assignments import (
     create_role_assignment,
     get_effective_access,
@@ -29,6 +36,9 @@ from apps.user.tests.test_onboarding import assignable_office
 backfill_role_assignments = import_module(
     "apps.user.migrations.0009_user_role_assignments"
 ).backfill_role_assignments
+seed_and_remap_roles = import_module(
+    "apps.user.migrations.0017_brokerage_role_catalog"
+).seed_and_remap_roles
 
 
 @pytest.mark.django_db
@@ -123,8 +133,8 @@ def test_effective_permissions_union_mixed_roles_and_scopes():
     region = office.region
     assert region is not None
 
-    admin_group = Group.objects.get_or_create(name=ADMIN)[0]
-    branch_group = Group.objects.get_or_create(name=BRANCH_MANAGER)[0]
+    admin_group = Group.objects.get_or_create(name=role_group_name(ADMIN))[0]
+    branch_group = Group.objects.get_or_create(name=role_group_name(BRANCH_MANAGER))[0]
     admin_group.permissions.add(Permission.objects.get(codename="view_user"))
     branch_group.permissions.add(
         Permission.objects.get(codename="can_view_audit_events")
@@ -250,8 +260,8 @@ def test_assignment_scope_drives_audit_union_queries():
 
 @pytest.mark.django_db
 def test_backfill_creates_assignments_and_conflicts_for_invalid_legacy_scopes():
-    agent_group = Group.objects.get_or_create(name=AGENT)[0]
-    region_group = Group.objects.get_or_create(name=REGION_MANAGER)[0]
+    agent_group = Group.objects.get_or_create(name=role_group_name(AGENT))[0]
+    region_group = Group.objects.get_or_create(name=role_group_name(REGION_MANAGER))[0]
     office = assignable_office()
     valid_user = User.objects.create_user(email="valid@example.com", office=office)
     invalid_user = User.objects.create_user(email="invalid@example.com")
@@ -260,15 +270,24 @@ def test_backfill_creates_assignments_and_conflicts_for_invalid_legacy_scopes():
 
     backfill_role_assignments(apps=django_apps, schema_editor=None)
 
+    # Migration 0009 wrote legacy group names; 0017 remaps them to stable codes.
     assert UserRoleAssignment.objects.filter(
         user=valid_user,
-        role=AGENT,
+        role=role_group_name(AGENT),
         scope_type=ScopeType.OFFICE,
         scope_office=office,
     ).exists()
     assert UserRoleAssignmentMigrationConflict.objects.filter(
         user=invalid_user,
-        legacy_role=REGION_MANAGER,
+        legacy_role=role_group_name(REGION_MANAGER),
+    ).exists()
+
+    seed_and_remap_roles(django_apps, None)
+    assert UserRoleAssignment.objects.filter(
+        user=valid_user,
+        role=AGENT,
+        scope_type=ScopeType.OFFICE,
+        scope_office=office,
     ).exists()
 
 

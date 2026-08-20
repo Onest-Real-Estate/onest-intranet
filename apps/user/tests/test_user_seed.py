@@ -2,7 +2,14 @@ import pytest
 
 from apps.user.models import User, UserRoleAssignment
 from apps.user.office_seed import seed_offices
-from apps.user.roles import ADMIN, AGENT, BRANCH_MANAGER, REGION_MANAGER, ScopeType
+from apps.user.roles import (
+    ADMIN,
+    AGENT,
+    BRANCH_MANAGER,
+    REGION_MANAGER,
+    ScopeType,
+    role_group_name,
+)
 from apps.user.user_seed import (
     DEV_USER_SPECS,
     DEV_USER_TEMPLATES,
@@ -111,7 +118,7 @@ def test_seed_users_with_existing_offices():
 def test_seed_users_agent_has_group_membership():
     seed_users(password="test-seed-password")
     agent = User.objects.get(email="agent.charlottesville@onest.test")
-    assert list(agent.groups.values_list("name", flat=True)) == [AGENT]
+    assert list(agent.groups.values_list("name", flat=True)) == [role_group_name(AGENT)]
 
 
 def test_dev_user_specs_matches_default_seed():

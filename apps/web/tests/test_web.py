@@ -8,7 +8,7 @@ from django.contrib.auth.models import Group, Permission
 from django.urls import reverse
 
 from apps.user.models import User
-from apps.user.roles import AGENT
+from apps.user.roles import AGENT, role_group_name
 from apps.user.services.role_assignments import get_effective_access
 
 
@@ -89,7 +89,7 @@ def test_dashboard_shares_user(client):
         "name": "Alice Smith",
         "permissions": [],
         "roles": [],
-        "roleLabel": "Agent",
+        "roleLabel": "Realtor",
         "isStaff": False,
         "isSuperuser": False,
         "headshotUrl": None,
@@ -134,7 +134,7 @@ def test_dashboard_shares_group_roles_and_permissions(client):
     response = client.get(reverse("dashboard"), HTTP_X_INERTIA="true")
     data = json.loads(response.content)
     assert data["props"]["user"]["roles"] == ["Editors"]
-    assert data["props"]["user"]["roleLabel"] == "Agent"
+    assert data["props"]["user"]["roleLabel"] == "Realtor"
     assert data["props"]["user"]["permissions"] == ["user.view_user"]
 
 
@@ -154,7 +154,7 @@ def test_dashboard_defers_widget_payloads_on_first_load(client):
 @pytest.mark.django_db
 def test_dashboard_partial_reload_returns_deferred_metrics(client):
     user = User.objects.create_user(email="alice@example.com", profile_completed=True)
-    user.groups.add(Group.objects.get(name=AGENT))
+    user.groups.add(Group.objects.get(name=role_group_name(AGENT)))
     client.force_login(user)
     response = client.get(
         reverse("dashboard"),

@@ -284,6 +284,8 @@ def delegable_role_options(actor: User) -> list[dict[str, Any]]:
     scope_labels = dict(ScopeType.CHOICES)
     options: list[dict[str, Any]] = []
     for definition in ROLE_DEFINITIONS:
+        if definition.protected:
+            continue
         scopes: list[dict[str, str]] = []
         for scope_type in definition.valid_scope_types:
             probe = (
@@ -305,7 +307,9 @@ def delegable_role_options(actor: User) -> list[dict[str, Any]]:
                 {
                     "value": definition.key,
                     "label": definition.label,
+                    "description": definition.description,
                     "scopes": scopes,
+                    "protected": definition.protected,
                 }
             )
     return options
@@ -602,10 +606,14 @@ def administration_history(user: User, *, limit: int = 5) -> list[dict]:
 
 
 def _assignment_payload(assignment: UserRoleAssignment, *, can_revoke: bool) -> dict:
+    from apps.user.roles import ROLE_DESCRIPTIONS, normalize_role_code
+
+    code = normalize_role_code(assignment.role) or assignment.role
     return {
         "id": assignment.pk,
-        "role": assignment.role,
-        "roleLabel": ROLE_LABELS.get(assignment.role, assignment.role),
+        "role": code,
+        "roleLabel": ROLE_LABELS.get(code, assignment.role),
+        "roleDescription": ROLE_DESCRIPTIONS.get(code, ""),
         "scopeType": assignment.scope_type,
         "scopeLabel": assignment.scope_label(),
         "status": assignment.status,

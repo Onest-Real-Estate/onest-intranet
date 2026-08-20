@@ -11,7 +11,7 @@ function user(permissions: string[]): User {
     headshotUrl: null,
     permissions,
     roles: [],
-    roleLabel: "Agent",
+    roleLabel: "Realtor",
     isStaff: false,
     isSuperuser: false,
   };

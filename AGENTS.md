@@ -70,6 +70,7 @@ docs/design-system.md  Color/type/spacing contract for all UI work
 docs/dashboard-metrics.md  Metric registry: permissions, scope, calculations
 docs/profile.md    Self-service profile: editable allowlist, normalization, audit
 docs/agent-administration.md  Broker-controlled profile half: scope, delegation, audit
+docs/roles.md      Brokerage role catalog: stable codes, scopes, permission bundles
 DESIGN.md          Raw design tokens (Material-style palette export)
 ```
 
@@ -85,10 +86,11 @@ so the shell paints first. Page: default-exported component, props read via
 **URLs.** Reverse with the typed map, never string literals:
 `routes.dashboard()`, `routes.coming_soon("my-contract")`.
 
-**Roles.** Django Groups: `Admins`, `Region Managers`, `Branch Managers`, `Users`
-(default on signup), plus `is_superuser`. Scope follows the user's `office` and
-its parents in the head office → region → regional office → branch tree. See
-`apps/user/roles.py`, `apps/web/permissions.py`, `frontend/lib/permissions.ts`.
+**Roles.** Catalog codes in `apps/user/roles.py` (`system_admin`, `realtor`, …)
+map to Django Groups for permissions. Assignments store stable codes; display
+names are presentation only. Scope follows the user's office tree and
+`UserRoleAssignment` scope. See `docs/roles.md`. Never authorize from a role
+label alone — use Django permissions on both sides of the stack.
 
 **Tests.** Backend: `apps/<app>/tests/test_*.py`, pytest-django, `@pytest.mark.django_db`
 where the DB is needed; assert on the Inertia page JSON, not on HTML strings (see
