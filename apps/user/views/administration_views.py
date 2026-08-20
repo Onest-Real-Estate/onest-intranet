@@ -18,14 +18,15 @@ from inertia import inertia, render
 from apps.web.authorization import enforce_policy
 
 from ..forms import (
+    AccountStateForm,
     AgentAdministrationForm,
     RoleAssignmentGrantForm,
     RoleAssignmentRevokeForm,
-    administration_index_props,
     administration_page_props,
     form_errors,
 )
 from ..models import User, UserRoleAssignment
+from ..services.account_state import set_account_state
 from ..services.agent_administration import (
     StaleAdministrationVersion,
     administered_user_queryset,
@@ -37,10 +38,10 @@ from ..services.agent_administration import (
 )
 
 __all__ = [
-    "user_administration_index",
     "user_administration",
     "user_administration_submit",
     "user_administration_roles",
+    "user_account_state",
 ]
 
 
@@ -70,21 +71,6 @@ def _render_administration(
     )
     response.status_code = status
     return response
-
-
-@enforce_policy("user_administration_index")
-@require_GET
-@inertia("UserAdministrationIndex")
-def user_administration_index(request: HttpRequest):
-    """Find a user inside the signed-in administrator's own scope."""
-    actor = cast(User, request.user)
-    try:
-        page = max(1, int(request.GET.get("page", "1")))
-    except ValueError:
-        page = 1
-    return administration_index_props(
-        actor, query=request.GET.get("q", "").strip(), page=page
-    )
 
 
 @enforce_policy("user_administration")
@@ -215,4 +201,50 @@ def _revoke_assignment(request: HttpRequest, actor: User, target: User):
             errors={"fields": {}, "form": list(exc.messages)},
             status=422,
         )
+    return redirect("user_administration", user_id=target.pk)
+
+
+@enforce_policy("user_account_state")
+@require_POST
+def user_account_state(request: HttpRequest, user_id: int):
+    """Disable or reactivate one account, once, with a reason on the record.
+
+    Separate from ``user_administration_submit`` all the way down: its own
+    policy, its own permission, its own form, and its own service. Nothing
+    about somebody's access can ride along on a record edit, and nothing about
+    their record can ride along on a lockout.
+    """
+    actor = cast(User, request.user)
+    target = _target(request, user_id)
+    ensure_view_authority(actor, target)
+
+    form = AccountStateForm(request.POST)
+    if not form.is_valid():
+        return _render_administration(
+            request, target, errors=form_errors(form), status=422
+        )
+
+    try:
+        set_account_state(
+            actor=actor,
+            target=target,
+            enabled=form.enabled,
+            business_reason=form.cleaned_data["business_reason"],
+            expected_version=form.cleaned_data.get("expected_version", ""),
+        )
+    except StaleAdministrationVersion as exc:
+        return _render_administration(
+            request,
+            User.objects.get(pk=target.pk),
+            errors={"fields": {}, "form": [exc.message]},
+            status=409,
+        )
+    except ValidationError as exc:
+        return _render_administration(
+            request,
+            target,
+            errors={"fields": {}, "form": list(exc.messages)},
+            status=422,
+        )
+
     return redirect("user_administration", user_id=target.pk)

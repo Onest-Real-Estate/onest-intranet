@@ -647,6 +647,14 @@ class User(AbstractUser):
                 "change_user_administration",
                 _("Can change administrative profile fields"),
             ),
+            # Disabling somebody is not "changing a field": it ends their
+            # sessions and their access. It carries its own grant so an
+            # administrator who maintains records is not, by that fact, an
+            # administrator who can lock people out.
+            (
+                "manage_account_state",
+                _("Can disable or reactivate user accounts"),
+            ),
         )
         constraints = [
             models.UniqueConstraint(

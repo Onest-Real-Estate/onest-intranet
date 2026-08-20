@@ -127,18 +127,6 @@ ROUTE_POLICIES: dict[str, AuthorizationPolicy] = {
         route_names=("profile_submit",),
         scope_rule="self_only",
     ),
-    "user_administration_index": AuthorizationPolicy(
-        key="user_administration_index",
-        access="permission_protected",
-        description=(
-            "Find a user to administer. The listing is filtered to the "
-            "signed-in administrator's own office and region scope."
-        ),
-        methods=("GET",),
-        route_names=("user_administration_index",),
-        all_permissions=("user.view_user_administration",),
-        scope_rule="administered_user_scope",
-    ),
     "user_administration": AuthorizationPolicy(
         key="user_administration",
         access="permission_protected",
@@ -175,6 +163,22 @@ ROUTE_POLICIES: dict[str, AuthorizationPolicy] = {
         route_names=("user_administration_roles",),
         all_permissions=("user.change_user_administration",),
         scope_rule="role_delegation_scope",
+    ),
+    "user_account_state": AuthorizationPolicy(
+        key="user_account_state",
+        access="permission_protected",
+        description=(
+            "Disable or reactivate one account in scope. Carries its own "
+            "permission: maintaining somebody's record is not the same grant "
+            "as ending their sessions."
+        ),
+        methods=("POST",),
+        route_names=("user_account_state",),
+        all_permissions=(
+            "user.view_user_administration",
+            "user.manage_account_state",
+        ),
+        scope_rule="administered_user_delegation_scope",
     ),
     "new_agent_onboarding": AuthorizationPolicy(
         key="new_agent_onboarding",

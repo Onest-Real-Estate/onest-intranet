@@ -771,42 +771,89 @@ def test_contract_status_is_derived_and_cannot_be_typed_in(client):
 
 
 # ---------------------------------------------------------------------------
-# The scoped picker
+# Field-level permissions inside the record
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.django_db
-def test_the_index_lists_only_users_in_scope(client):
-    agent_in(FAIRFAX, email="inscope@example.com")
-    agent_in(CONNECTICUT, email="outofscope@example.com")
-    client.force_login(branch_manager(FAIRFAX))
-    listing = props(
-        client.get(reverse("user_administration_index"), HTTP_X_INERTIA="true")
-    )["users"]
-    emails = {row["email"] for row in listing["items"]}
-    assert "inscope@example.com" in emails
-    assert "outofscope@example.com" not in emails
+def _view_only_administrator(email: str = "reader@example.com") -> User:
+    """Holds the view grant and nothing else — no change, no contracts."""
+    from django.contrib.auth.models import Permission
 
-
-@pytest.mark.django_db
-def test_the_index_search_cannot_widen_scope(client):
-    agent_in(CONNECTICUT, email="outofscope@example.com")
-    client.force_login(branch_manager(FAIRFAX))
-    listing = props(
-        client.get(
-            reverse("user_administration_index"),
-            {"q": "outofscope"},
-            HTTP_X_INERTIA="true",
+    user = completed_user(email=email, office=office(FAIRFAX))
+    # An office-scoped assignment supplies the *scope*; the bare Django
+    # permission supplies the *capability*. Keeping them separate is what
+    # lets this fixture name one grant without dragging a role bundle in.
+    assign(user, AGENT, ScopeType.OFFICE, office(FAIRFAX))
+    user.user_permissions.add(
+        Permission.objects.get(
+            content_type__app_label="user", codename="view_user_administration"
         )
-    )["users"]
-    assert listing["items"] == []
+    )
+    return user
 
 
 @pytest.mark.django_db
-def test_an_agent_cannot_open_the_index(client):
-    client.force_login(agent_in(FAIRFAX))
-    response = client.get(reverse("user_administration_index"))
-    assert response.status_code == 403
+def test_operational_notes_are_omitted_from_a_read_only_record(client):
+    target = agent_in(FAIRFAX, email="target@example.com")
+    target.internal_notes = "Escalated compensation dispute."
+    target.save(update_fields=["internal_notes"])
+    client.force_login(_view_only_administrator())
+    payload = page(client, target)
+    # Omitted, not blanked: an empty key would still confirm the field exists.
+    assert "internalNotes" not in payload["values"]
+    assert all(field["key"] != "internal_notes" for field in payload["fields"])
+
+
+@pytest.mark.django_db
+def test_contract_standing_needs_its_own_permission(client):
+    target = agent_in(FAIRFAX, email="target@example.com")
+    client.force_login(_view_only_administrator())
+    assert "contractStatus" not in page(client, target)
+
+    client.logout()
+    client.force_login(company_admin())
+    assert "contractStatus" in page(client, target)
+
+
+@pytest.mark.django_db
+def test_the_onboarding_summary_drops_its_contract_milestone_without_the_grant(
+    client,
+):
+    """The milestone is contract-domain data wherever it is rendered."""
+    from django.contrib.auth.models import Permission
+
+    target = agent_in(FAIRFAX, email="target@example.com")
+    target.start_date = timezone.localdate()
+    target.save(update_fields=["start_date"])
+
+    reader = _view_only_administrator()
+    reader.user_permissions.add(
+        Permission.objects.get(
+            content_type__app_label="web", codename="view_new_agents"
+        )
+    )
+    client.force_login(reader)
+    onboarding = page(client, target).get("onboardingState")
+    assert onboarding is not None
+    assert "contract" not in onboarding
+    assert "contractStatus" not in onboarding
+    assert onboarding["training"]["value"]
+
+    client.logout()
+    client.force_login(company_admin())
+    assert "contract" in page(client, target)["onboardingState"]
+
+
+@pytest.mark.django_db
+def test_a_change_administrator_still_reads_the_notes(client):
+    target = agent_in(FAIRFAX, email="target@example.com")
+    target.internal_notes = "Escalated compensation dispute."
+    target.save(update_fields=["internal_notes"])
+    client.force_login(company_admin())
+    assert (
+        page(client, target)["values"]["internalNotes"]
+        == "Escalated compensation dispute."
+    )
 
 
 # ---------------------------------------------------------------------------

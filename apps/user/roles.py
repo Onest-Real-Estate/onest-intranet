@@ -115,6 +115,7 @@ _OPS_ALL = (
     "web.view_it_support",
     "user.view_user_administration",
     "user.change_user_administration",
+    "user.manage_account_state",
     "web.view_own_transactions",
     "web.view_own_tasks",
     "web.view_own_commission",

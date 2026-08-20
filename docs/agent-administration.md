@@ -13,17 +13,18 @@ The code is `apps/user/administration_fields.py`,
 
 | Route | Name | Permission | Purpose |
 | --- | --- | --- | --- |
-| `GET /operations/users/administration` | `user_administration_index` | `user.view_user_administration` | Scoped picker: find a user to administer |
 | `GET /operations/users/<id>/administration` | `user_administration` | `user.view_user_administration` | One user's administrative record |
 | `POST /operations/users/<id>/administration/submit` | `user_administration_submit` | `user.change_user_administration` | Persist the administered fields |
 | `POST /operations/users/<id>/administration/roles` | `user_administration_roles` | `user.change_user_administration` | Grant or revoke one role assignment |
+| `POST /operations/users/<id>/account-state` | `user_account_state` | `user.manage_account_state` | Disable or reactivate the account |
 
 These are a separate POST contract from `profile_submit` on purpose. Mixing
 privileged inputs into the self-service form would mean one endpoint carrying
-two very different grants.
+two very different grants. Account access is separate again — see below.
 
-The picker is deliberately thin — a search box and a list. Full user management
-(filters, bulk actions, creation) is its own module and will replace it.
+The record is reached from the people directory at `/operations/users`
+([user-directory.md](user-directory.md)), which owns search, filters, and
+scoped counts.
 
 ## What an administrator may change
 
@@ -63,13 +64,16 @@ closes for roles.
 
 ## Permissions and scope
 
-Two permissions, declared on `User.Meta` and granted by
-`0014_agent_administration_permissions`:
+Three permissions, declared on `User.Meta`:
 
-- `user.view_user_administration` — read the record.
-- `user.change_user_administration` — write it.
+- `user.view_user_administration` — read the record
+  (`0014_agent_administration_permissions`).
+- `user.change_user_administration` — write it (same migration).
+- `user.manage_account_state` — disable or reactivate the account
+  (`0018` / `0019`), granted to **Admins**, **Principal Broker**, and **Broker
+  Admin** only.
 
-Both go to **Admins**, **Region Managers**, and **Branch Managers**. The
+The first two go to **Admins**, **Region Managers**, and **Branch Managers**. The
 permission is the gate; **scope** decides which users it opens:
 
 - Superusers and company-wide Admins: everyone.
@@ -89,6 +93,29 @@ Delegation is checked separately from reach:
 - `delegable_role_options` offers only roles the assignment service would
   accept, so a Branch Manager sees no grant form at all and the `Admins` role
   is never delegable by anybody.
+
+## Field-level reads inside the record
+
+Reaching the page is one grant; two blocks on it need another, and are
+**omitted** from the payload rather than blanked:
+
+| Block | Needs | Why |
+| --- | --- | --- |
+| `values.internalNotes` and its field spec | `user.change_user_administration` | Reading somebody's operational note is not implied by being allowed to look them up |
+| `contractStatus` | `web.view_agent_contracts` | Contract standing belongs to the contract domain; administering a record is not reading their contract |
+
+A key that is present but empty would still confirm the field exists, so the
+key is absent and the page renders no card at all.
+
+## Account access
+
+Disabling and reactivating live in `services/account_state.py`, not here.
+`is_active` is not an administered field, does not appear in
+`AgentAdministrationForm`, and cannot ride along on a record save. The service
+is explicit, idempotent, session-invalidating, and audited; the policy is
+documented in [user-directory.md](user-directory.md#account-access). The record
+page renders it as its own panel with its own confirmation and a required
+business reason.
 
 ## Confirmation and access impact
 
@@ -143,7 +170,14 @@ cache filled before the move.
 | `user.administration.updated` | A successful save, with a before/after diff over `AUDIT_VALUE_FIELDS` |
 | `security.user_administration.denied` | A denied view, change, self-administration attempt, or out-of-delegation office |
 | `user.license_verification.reset` | An agent edited their own license, invalidating a broker verification |
+| `user.account.disabled` / `.reactivated` | An account was closed or reopened, with the reason and the session count |
+| `security.account_state.denied` | A denied or self-directed account-access attempt |
 | `user.role_assignment.created` / `.revoked` | From the assignment service, unchanged |
+
+The first four actions are what the record's **recent activity** panel renders;
+`administration_history` filters on exactly that closed list, and on events
+whose audit target is the user row itself. Role assignments are their own
+target type with their own panel.
 
 Denial events are written **outside** the transaction that would roll them
 back. That is load-bearing, not incidental: a denial recorded inside the atomic

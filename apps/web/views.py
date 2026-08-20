@@ -1,6 +1,7 @@
 from django.http import Http404
 from inertia import inertia, render
 
+from apps.user.views.directory_views import user_directory
 from apps.user.views.onboarding_administration_views import new_agent_list
 from apps.web.quick_access.views import quick_access_index
 
@@ -57,6 +58,7 @@ OPERATIONS_VIEWS = {
     destination.route_name: _operations_view(destination)
     for destination in OPERATIONS_DESTINATIONS
 }
+OPERATIONS_VIEWS["admin_users"] = user_directory
 OPERATIONS_VIEWS["admin_new_agents"] = new_agent_list
 OPERATIONS_VIEWS["admin_quick_access"] = quick_access_index
 

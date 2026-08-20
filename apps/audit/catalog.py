@@ -36,6 +36,17 @@ registry.register(
 )
 
 registry.register(
+    name="user.account.state_changed",
+    version=1,
+    required_payload_keys={"user_id", "is_active"},
+    description=(
+        "A user account was disabled or reactivated by an administrator. "
+        "Disabling also revokes every live session; the count is reported as "
+        "sessions_revoked."
+    ),
+)
+
+registry.register(
     name="user.onboarding.owner_assigned",
     version=1,
     required_payload_keys={"user_id", "owner_id"},

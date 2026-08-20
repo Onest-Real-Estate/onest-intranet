@@ -626,7 +626,8 @@ export interface AdministrationValues {
   agentIdentifier: string;
   licenseVerificationState: string;
   licenseVerificationNote: string;
-  internalNotes: string;
+  /** Omitted without `user.change_user_administration`. */
+  internalNotes?: string;
 }
 
 export interface AdministrationAssignment {
@@ -649,6 +650,8 @@ export interface AdministrationAssignment {
 export interface AdministrationHistoryEntry {
   id: string;
   action: string;
+  /** Human wording for `action`, resolved server-side. */
+  label: string;
   occurredAt: string;
   actor: string;
   outcome: string;
@@ -676,6 +679,20 @@ export interface AdministrationOfficeOption {
   regionName: string;
 }
 
+/** The account-access half of a record: who is signed in, and who may end it. */
+export interface AccountStatePayload {
+  isActive: boolean;
+  label: string;
+  tone: StatusTone;
+  lastLoginAt: string | null;
+  joinedAt: string | null;
+  /** False for your own record, out of scope, or without the grant. */
+  canManage: boolean;
+  /** Why `canManage` is false, in the words the page renders. */
+  reason: string;
+  sessionPolicy: string;
+}
+
 export interface AdministrationPayload {
   subject: AdministrationSubject;
   values: AdministrationValues;
@@ -688,7 +705,9 @@ export interface AdministrationPayload {
     expiresOn: string | null;
     verification: LicenseVerification;
   };
-  contractStatus: ContractStatus;
+  /** Omitted without `web.view_agent_contracts` — never sent as null. */
+  contractStatus?: ContractStatus;
+  accountState: AccountStatePayload;
   provenance: { lastChangedAt: string | null; lastChangedBy: string | null };
   history: AdministrationHistoryEntry[];
   assignments: AdministrationAssignment[];
@@ -707,8 +726,16 @@ export interface AdministrationPayload {
   editable: { administration: boolean; roleAssignments: boolean };
   /** Django field names whose change needs confirming before submission. */
   highImpactFields: string[];
-  /** Present only when the subject is in the scoped New Agent List. */
-  onboardingState?: OnboardingSummary & { href: string };
+  /**
+   * Present only when the subject is in the scoped New Agent List. Its
+   * contract milestone is contract-domain data, so it is omitted without
+   * `web.view_agent_contracts` even when the onboarding block itself is sent.
+   */
+  onboardingState?: Omit<OnboardingSummary, "contract" | "contractStatus"> & {
+    href: string;
+    contract?: OnboardingPresentation;
+    contractStatus?: string;
+  };
 }
 
 export interface UserAdministrationPageProps extends PageProps {
@@ -718,19 +745,84 @@ export interface UserAdministrationPageProps extends PageProps {
   verificationOptions: AdministrativeChoice[];
 }
 
-export interface AdministrationDirectoryRow {
+// ---------------------------------------------------------------------------
+// People directory (Operations → Users)
+// ---------------------------------------------------------------------------
+
+export interface DirectoryStateBadge {
+  value: string;
+  label: string;
+  tone: StatusTone;
+}
+
+/**
+ * One row of the directory.
+ *
+ * The optional members are not "sometimes empty" — they are **absent** unless
+ * the reader holds the permission behind them, so `"agentStatus" in row` is a
+ * meaningful question. Never render a placeholder for a missing key; the
+ * column itself should not exist.
+ */
+export interface DirectoryRow {
   id: number;
   name: string;
   email: string;
   officeName: string | null;
-  agentStatus: string;
-  agentIdentifier: string;
+  officePathLabel: string | null;
+  regionName: string | null;
   isActive: boolean;
+  accountState: DirectoryStateBadge;
+  lastLoginAt: string | null;
+  onboarding: DirectoryStateBadge;
+  /** Needs `user.view_user_administration`. */
+  agentStatus?: DirectoryStateBadge;
+  agentIdentifier?: string;
+  startDate?: string | null;
+  /** Needs `web.view_agent_contracts`. */
+  contract?: DirectoryStateBadge & { available: boolean };
 }
 
-export interface UserAdministrationIndexPageProps extends PageProps {
-  users: ListResponse<AdministrationDirectoryRow, { q: string }>;
-  statusOptions: AdministrativeChoice[];
+export interface DirectoryFilters {
+  [key: string]: string;
+  q: string;
+  office: string;
+  region: string;
+  role: string;
+  status: string;
+  account: string;
+  onboarding: string;
+  contract: string;
+  lastLogin: string;
+}
+
+export interface DirectorySummary {
+  total: number;
+  active: number;
+  disabled: number;
+  pendingOnboarding: number;
+}
+
+export interface DirectoryFilterOptions {
+  offices: FilterOption[];
+  regions: FilterOption[];
+  roles: FilterOption[];
+  accountStates: FilterOption[];
+  onboardingStates: FilterOption[];
+  lastLoginWindows: FilterOption[];
+  contract: { available: boolean; reason: string; options: FilterOption[] };
+  /** Present only with `user.view_user_administration`. */
+  agentStatuses?: AdministrativeChoice[];
+}
+
+export interface UserDirectoryPageProps extends PageProps {
+  users: ListResponse<DirectoryRow, DirectoryFilters>;
+  summary: DirectorySummary;
+  filterOptions: DirectoryFilterOptions;
+  scope: { level: string; label: string };
+  /** Which permission-gated column groups this reader may render. */
+  visible: { administration: boolean; contract: boolean; onboarding: boolean };
+  /** Whether rows may link into the administrative record. */
+  canOpenRecord: boolean;
 }
 
 // ---------------------------------------------------------------------------

@@ -91,7 +91,8 @@ def test_registry_has_exact_destinations_order_routes_and_permissions():
         # Only destinations with a real page behind them are enabled; the
         # rest still render the placeholder.
         assert OPERATIONS_FEATURES[destination.feature] is (
-            destination.route_name in {"admin_new_agents", "admin_quick_access"}
+            destination.route_name
+            in {"admin_users", "admin_new_agents", "admin_quick_access"}
         )
 
 
@@ -182,6 +183,11 @@ def test_brokerage_admin_can_reach_every_registered_destination(client):
         )
         assert response.status_code == 200
         props = inertia_props(response)
+        if destination.route_name == "admin_users":
+            assert "users" in props
+            assert "summary" in props
+            assert "filterOptions" in props
+            continue
         if destination.route_name == "admin_new_agents":
             assert "agents" in props
             assert "filterOptions" in props
