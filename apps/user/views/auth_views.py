@@ -9,9 +9,12 @@ from django.views.decorators.http import require_GET, require_POST
 from inertia import inertia, render
 from inertia.http import clear_history
 
+from apps.audit.events import publish
+from apps.audit.service import actor_from_user, log_model_change
 from apps.web.authorization import enforce_policy
 
 from ..forms import ProfileForm, form_errors, profile_page_props
+from ..headshot import validate_headshot
 from ..models import User, UserRoleAssignment
 from ..roles import AGENT, ScopeType
 
@@ -101,7 +104,7 @@ def _render_profile_form(
     response = render(
         request,
         component,
-        profile_page_props(user, errors=errors, posted=posted),
+        profile_page_props(user, errors=errors, posted=posted, request=request),
     )
     response.status_code = status
     return response
@@ -115,7 +118,7 @@ def onboarding(request: HttpRequest):
     user = cast(User, request.user)
     if user.profile_completed:
         return redirect("dashboard")
-    return profile_page_props(user)
+    return profile_page_props(user, request=request)
 
 
 @enforce_policy("onboarding_submit")
@@ -140,8 +143,6 @@ def onboarding_submit(request: HttpRequest):
         )
 
     with transaction.atomic():
-        from apps.audit.service import actor_from_user, log_model_change
-
         before_user = User.objects.get(pk=user.pk)
         saved_user = form.save(commit=False)
         saved_user.profile_completed = True
@@ -169,22 +170,16 @@ def onboarding_submit(request: HttpRequest):
             ],
             metadata={"path": request.path},
         )
-        try:
-            from apps.audit.events import publish
-
-            publish(
-                "user.onboarded",
-                actor_id=str(saved_user.pk),
-                subject=f"user:{saved_user.pk}",
-                payload={
-                    "user_id": saved_user.pk,
-                    "email": saved_user.email,
-                    "office_id": saved_user.office_id,
-                },
-            )
-        except ImportError:
-            # audit app not yet merged into this branch.
-            pass
+        publish(
+            "user.onboarded",
+            actor_id=str(saved_user.pk),
+            subject=f"user:{saved_user.pk}",
+            payload={
+                "user_id": saved_user.pk,
+                "email": saved_user.email,
+                "office_id": saved_user.office_id,
+            },
+        )
 
     return redirect("dashboard")
 
@@ -199,7 +194,6 @@ def headshot_upload(request: HttpRequest) -> JsonResponse:
     Only the owning user's upload is accepted; no cross-user upload is possible
     through this endpoint.
     """
-    from ..headshot import validate_headshot
 
     upload = request.FILES.get("headshot")
     if not upload:
@@ -216,7 +210,7 @@ def headshot_upload(request: HttpRequest) -> JsonResponse:
     user.headshot = upload  # ty: ignore[invalid-assignment]
     user.save(update_fields=["headshot"])
 
-    return JsonResponse({"url": user.headshot.url})
+    return JsonResponse({"url": request.build_absolute_uri(user.headshot.url)})
 
 
 @enforce_policy("profile")
@@ -224,7 +218,7 @@ def headshot_upload(request: HttpRequest) -> JsonResponse:
 @inertia("Profile")
 def profile(request: HttpRequest):
     """Edit-profile page (including optional MLS / NRDS)."""
-    return profile_page_props(cast(User, request.user))
+    return profile_page_props(cast(User, request.user), request=request)
 
 
 @enforce_policy("profile_submit")

@@ -152,7 +152,12 @@ def form_errors(form: forms.BaseForm) -> dict[str, str]:
     }
 
 
-def profile_initial(user: User, posted: Mapping[str, Any] | None = None) -> dict:
+def profile_initial(
+    user: User,
+    posted: Mapping[str, Any] | None = None,
+    *,
+    request=None,
+) -> dict:
     """Values for the React form. Posted data wins so a 422 doesn't wipe the form."""
 
     def value(name: str, attr: str | None = None):
@@ -162,6 +167,11 @@ def profile_initial(user: User, posted: Mapping[str, Any] | None = None) -> dict
         if name == "office":
             return str(raw.pk) if raw else ""
         return raw or ""
+
+    headshot_url = None
+    if user.headshot:
+        url = user.headshot.url
+        headshot_url = request.build_absolute_uri(url) if request is not None else url
 
     return {
         "firstName": value("first_name"),
@@ -174,7 +184,7 @@ def profile_initial(user: User, posted: Mapping[str, Any] | None = None) -> dict
         "officeId": value("office"),
         "mlsNumber": value("mls_number"),
         "nrdsNumber": value("nrds_number"),
-        "headshotUrl": user.headshot.url if user.headshot else None,
+        "headshotUrl": headshot_url,
     }
 
 
@@ -183,9 +193,10 @@ def profile_page_props(
     *,
     errors: dict | None = None,
     posted: Mapping[str, Any] | None = None,
+    request=None,
 ):
     return {
-        "initial": profile_initial(user, posted),
+        "initial": profile_initial(user, posted, request=request),
         "errors": errors or {},
         "offices": Office.grouped_choices(),
         "states": [{"code": code, "name": name} for code, name in US_STATE_CHOICES],

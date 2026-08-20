@@ -46,7 +46,7 @@ function FieldError({ id, message }: { id: string; message?: string }) {
     return null;
   }
   return (
-    <p id={id} className="text-destructive text-sm">
+    <p id={id} className="text-destructive text-sm" role="alert">
       {message}
     </p>
   );
@@ -173,7 +173,7 @@ export function ProfileFormFields({
           </Select>
           <FieldError id="state_error" message={errors.state} />
         </div>
-        <div className="grid gap-2 sm:col-span-1">
+        <div className="grid gap-2 sm:col-span-2">
           <Label htmlFor="zip_code">ZIP</Label>
           <Input
             id="zip_code"
@@ -185,9 +185,9 @@ export function ProfileFormFields({
             aria-describedby={describedBy("zip_code", errors)}
             required
           />
-          <FieldError id="zip_code_error" message={errors.zip_code} />
         </div>
       </div>
+      <FieldError id="zip_code_error" message={errors.zip_code} />
 
       <div className="grid gap-2">
         <Label htmlFor="office">Office location</Label>
