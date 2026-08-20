@@ -679,7 +679,7 @@ def administration_page_payload(actor: User, target: User) -> dict:
     can_change = can_change_administration(actor, target)
     offices = assignable_office_queryset(actor)
     delegable_roles = delegable_role_options(actor)
-    return {
+    payload = {
         "subject": {
             "id": target.pk,
             "email": target.email,
@@ -760,6 +760,25 @@ def administration_page_payload(actor: User, target: User) -> dict:
         },
         "highImpactFields": sorted(HIGH_IMPACT_FIELDS),
     }
+    if has_effective_permission(actor, "web.view_new_agents"):
+        from django.urls import reverse
+
+        from apps.user.services.onboarding_state import (
+            build_onboarding_states,
+            new_agent_queryset,
+            state_payload,
+        )
+
+        if new_agent_queryset(actor).filter(pk=target.pk).exists():
+            payload["onboardingState"] = {
+                **state_payload(
+                    actor,
+                    build_onboarding_states([target])[0],
+                    detail=False,
+                ),
+                "href": reverse("new_agent_onboarding", args=[target.pk]),
+            }
+    return payload
 
 
 # ---------------------------------------------------------------------------
@@ -828,6 +847,21 @@ def update_administration(
     )
 
 
+def locked_user_queryset():
+    """The target user row, locked for update, with its office loaded.
+
+    ``of=("self",)`` is load-bearing: ``office`` is nullable, so
+    ``select_related`` reaches it through a LEFT OUTER JOIN, and PostgreSQL
+    refuses a bare ``FOR UPDATE`` that spans the nullable side of an outer
+    join. SQLite drops row locking altogether, so nothing on a developer
+    machine reproduces it — ``test_agent_administration`` compiles this
+    queryset against the PostgreSQL backend to keep the guarantee testable.
+    """
+    return User.objects.select_for_update(of=("self",)).select_related(
+        "office", "office__region"
+    )
+
+
 @transaction.atomic
 def _write_administration(
     *,
@@ -836,11 +870,7 @@ def _write_administration(
     cleaned: dict[str, Any],
     expected_version: str,
 ) -> User:
-    locked = (
-        User.objects.select_for_update()
-        .select_related("office", "office__region")
-        .get(pk=target.pk)
-    )
+    locked = locked_user_queryset().get(pk=target.pk)
     if administration_version(locked) != (expected_version or ""):
         raise StaleAdministrationVersion()
 

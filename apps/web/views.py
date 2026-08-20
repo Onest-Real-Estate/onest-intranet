@@ -1,6 +1,8 @@
 from django.http import Http404
 from inertia import inertia, render
 
+from apps.user.views.onboarding_administration_views import new_agent_list
+
 from .authorization import enforce_policy
 from .contracts import list_response
 from .dashboard import HUB_SECTIONS, deferred_widget_props, greeting_payload
@@ -54,6 +56,7 @@ OPERATIONS_VIEWS = {
     destination.route_name: _operations_view(destination)
     for destination in OPERATIONS_DESTINATIONS
 }
+OPERATIONS_VIEWS["admin_new_agents"] = new_agent_list
 
 
 _CATALOG_CONTRACTS = (

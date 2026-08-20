@@ -82,9 +82,10 @@ export function fieldA11yProps(
   field: string,
   errors: ValidationErrors | undefined,
   descriptionId?: string,
+  controlId: string = field,
 ) {
   const error = firstFieldError(errors, field);
-  const errorId = error ? `${field}_error` : undefined;
+  const errorId = error ? `${controlId}_error` : undefined;
   return {
     "aria-invalid": Boolean(error) || undefined,
     "aria-describedby": [descriptionId, errorId].filter(Boolean).join(" ") || undefined,

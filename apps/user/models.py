@@ -1026,3 +1026,153 @@ class UserRoleAssignmentMigrationConflict(models.Model):
 
     def __str__(self):
         return f"{self.user} / {self.legacy_role}"
+
+
+class UserOnboardingCase(models.Model):
+    """Operational coordination around source-owned onboarding milestones.
+
+    Profile, SSO, contract, and training completion deliberately do not live on
+    this model.  ``services.onboarding_state`` derives those facts from their
+    owning domains so an operations user cannot check them off by hand.
+    """
+
+    user = models.OneToOneField(
+        User,
+        verbose_name=_("user"),
+        related_name="onboarding_case",
+        on_delete=models.PROTECT,
+    )
+    owner = models.ForeignKey(
+        User,
+        verbose_name=_("onboarding owner"),
+        related_name="owned_onboarding_cases",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+    )
+    updated_by = models.ForeignKey(
+        User,
+        verbose_name=_("updated by"),
+        related_name="updated_onboarding_cases",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+    )
+    created_at = models.DateTimeField(_("created at"), default=timezone.now)
+    updated_at = models.DateTimeField(_("updated at"), auto_now=True)
+
+    class Meta:
+        ordering = ["user__first_name", "user__last_name", "user__email"]
+        verbose_name = _("user onboarding case")
+        verbose_name_plural = _("user onboarding cases")
+
+    def __str__(self):
+        return f"Onboarding / {self.user}"
+
+
+class OnboardingTask(models.Model):
+    class Status(models.TextChoices):
+        OPEN = "open", _("Open")
+        RESOLVED = "resolved", _("Resolved")
+
+    case = models.ForeignKey(
+        UserOnboardingCase,
+        verbose_name=_("onboarding case"),
+        related_name="tasks",
+        on_delete=models.CASCADE,
+    )
+    title = models.CharField(
+        _("task"),
+        max_length=200,
+        help_text=_("A brief operational instruction; do not include sensitive data."),
+    )
+    due_on = models.DateField(_("due on"), null=True, blank=True)
+    is_blocking = models.BooleanField(_("blocks activation"), default=False)
+    status = models.CharField(
+        _("status"),
+        max_length=16,
+        choices=Status.choices,
+        default=Status.OPEN,
+    )
+    created_by = models.ForeignKey(
+        User,
+        verbose_name=_("created by"),
+        related_name="created_onboarding_tasks",
+        on_delete=models.PROTECT,
+    )
+    resolved_by = models.ForeignKey(
+        User,
+        verbose_name=_("resolved by"),
+        related_name="resolved_onboarding_tasks",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+    )
+    resolved_at = models.DateTimeField(_("resolved at"), null=True, blank=True)
+    created_at = models.DateTimeField(_("created at"), default=timezone.now)
+    updated_at = models.DateTimeField(_("updated at"), auto_now=True)
+
+    class Meta:
+        ordering = ["status", "due_on", "created_at"]
+        verbose_name = _("onboarding task")
+        verbose_name_plural = _("onboarding tasks")
+        indexes = [
+            models.Index(
+                fields=["case", "status", "due_on"],
+                name="user_onboard_task_state",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.case.user} / {self.title}"
+
+
+class OnboardingToolSetup(models.Model):
+    class Tool(models.TextChoices):
+        LOFTY = "lofty", _("Lofty")
+        SKYSLOPE = "skyslope", _("SkySlope")
+        MICROSOFT_365 = "microsoft365", _("Microsoft 365")
+        DOTLOOP = "dotloop", _("Dotloop")
+
+    class State(models.TextChoices):
+        NOT_STARTED = "not_started", _("Not started")
+        IN_PROGRESS = "in_progress", _("In progress")
+        READY = "ready", _("Ready")
+        BLOCKED = "blocked", _("Blocked")
+        NOT_REQUIRED = "not_required", _("Not required")
+
+    case = models.ForeignKey(
+        UserOnboardingCase,
+        verbose_name=_("onboarding case"),
+        related_name="tool_setups",
+        on_delete=models.CASCADE,
+    )
+    tool = models.CharField(_("tool"), max_length=32, choices=Tool.choices)
+    state = models.CharField(
+        _("state"),
+        max_length=16,
+        choices=State.choices,
+        default=State.NOT_STARTED,
+    )
+    updated_by = models.ForeignKey(
+        User,
+        verbose_name=_("updated by"),
+        related_name="updated_onboarding_tools",
+        on_delete=models.PROTECT,
+    )
+    updated_at = models.DateTimeField(_("updated at"), auto_now=True)
+
+    class Meta:
+        ordering = ["tool"]
+        verbose_name = _("onboarding tool setup")
+        verbose_name_plural = _("onboarding tool setups")
+        constraints = [
+            models.UniqueConstraint(
+                fields=["case", "tool"],
+                name="user_onboard_tool_unique",
+            )
+        ]
+
+    def __str__(self):
+        tool_label = dict(self.Tool.choices).get(self.tool, self.tool)
+        return f"{self.case.user} / {tool_label} / {self.state}"

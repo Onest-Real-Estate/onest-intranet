@@ -35,6 +35,34 @@ registry.register(
     ),
 )
 
+registry.register(
+    name="user.onboarding.owner_assigned",
+    version=1,
+    required_payload_keys={"user_id", "owner_id"},
+    description="Operational onboarding ownership changed for a user.",
+)
+
+registry.register(
+    name="user.onboarding.task_changed",
+    version=1,
+    required_payload_keys={"user_id", "task_id", "status"},
+    description="An operational onboarding task was created or resolved.",
+)
+
+registry.register(
+    name="user.onboarding.tool_setup_changed",
+    version=1,
+    required_payload_keys={"user_id", "tool", "state"},
+    description="An approved operational tool-setup state changed.",
+)
+
+registry.register(
+    name="user.onboarding.notice_resent",
+    version=1,
+    required_payload_keys={"user_id", "source", "notice"},
+    description="A source-owned onboarding notice resend was requested.",
+)
+
 # ---------------------------------------------------------------------------
 # contract domain  (publisher: apps.contract — future)
 # ---------------------------------------------------------------------------

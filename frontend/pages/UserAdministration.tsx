@@ -1,5 +1,5 @@
 import { Head, usePage } from "@inertiajs/react";
-import { History, Lock, ShieldAlert } from "lucide-react";
+import { ArrowRight, History, Lock, ShieldAlert } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import {
@@ -394,6 +394,32 @@ export default function UserAdministration() {
         </div>
 
         <aside className="grid gap-6 xl:sticky xl:top-6">
+          {administration.onboardingState ? (
+            <SurfaceCard className={ADMIN_SURFACE_CLASS}>
+              <PanelHeader
+                title="Onboarding"
+                description="Current source-derived activation state."
+                className="border-border/60 border-b pb-5"
+                meta={<StatusBadge status={administration.onboardingState.overall} />}
+              />
+              <SurfaceCardContent className="grid gap-4">
+                <p className="text-muted-foreground text-sm">
+                  {administration.onboardingState.progress.complete} of{" "}
+                  {administration.onboardingState.progress.total} milestones complete
+                  {administration.onboardingState.blockers.length
+                    ? ` · ${administration.onboardingState.blockers.length} blockers`
+                    : ""}
+                </p>
+                <Button variant="outline" size="sm" asChild>
+                  <a href={administration.onboardingState.href}>
+                    Open onboarding workspace
+                    <ArrowRight className="size-3.5" aria-hidden />
+                  </a>
+                </Button>
+              </SurfaceCardContent>
+            </SurfaceCard>
+          ) : null}
+
           <SurfaceCard className={ADMIN_SURFACE_CLASS}>
             <PanelHeader
               title="Effective access"

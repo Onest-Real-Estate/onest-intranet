@@ -88,6 +88,7 @@ export function SelectField({
   required,
   disabled,
   controlClassName,
+  controlId = name,
 }: {
   name: string;
   label: string;
@@ -103,19 +104,21 @@ export function SelectField({
   disabled?: boolean;
   /** Visual treatment for the trigger; the field wrapper remains unchanged. */
   controlClassName?: string;
+  /** Unique DOM id when several controls submit the same field name. */
+  controlId?: string;
 }) {
-  const help = description ? descriptionId(name) : undefined;
+  const help = description ? descriptionId(controlId) : undefined;
   return (
     <FormField>
-      <FormLabel htmlFor={name} required={required} optional={optional}>
+      <FormLabel htmlFor={controlId} required={required} optional={optional}>
         {label}
       </FormLabel>
       <input type="hidden" name={name} value={value} />
       <Select value={value || undefined} onValueChange={onChange} disabled={disabled}>
         <SelectTrigger
-          id={name}
+          id={controlId}
           className={controlClassName}
-          {...fieldA11yProps(name, validation, help)}
+          {...fieldA11yProps(name, validation, help, controlId)}
         >
           <SelectValue placeholder={placeholder} />
         </SelectTrigger>
@@ -139,7 +142,7 @@ export function SelectField({
       </Select>
       {description ? <FormDescription id={help}>{description}</FormDescription> : null}
       <FormFieldError
-        id={`${name}_error`}
+        id={`${controlId}_error`}
         message={firstFieldError(validation, name)}
       />
     </FormField>

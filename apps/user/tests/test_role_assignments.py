@@ -1,5 +1,4 @@
 from importlib import import_module
-from typing import Any
 
 import pytest
 from django.apps import apps as django_apps
@@ -293,41 +292,11 @@ def test_non_superuser_cannot_self_assign_protected_role():
 
 
 def test_assignment_lock_compiles_to_valid_postgresql(monkeypatch):
-    """PostgreSQL rejects ``FOR UPDATE`` over the nullable side of an outer join.
-
-    Local pytest and CI both run on SQLite, which drops row locking entirely,
-    so this compiles the real production queryset with the PostgreSQL compiler
-    rather than waiting for a deployed request to fail. Building the wrapper
-    directly never opens a socket — ``as_sql()`` only reads the backend's
-    operations and feature flags.
-    """
-    from django.db.backends.postgresql.base import DatabaseWrapper
-
+    """PostgreSQL rejects ``FOR UPDATE`` over the nullable side of an outer join."""
     from apps.user.services.role_assignments import locked_assignment_queryset
+    from apps.user.tests.pg_compile import compile_for_postgresql
 
-    # django-stubs types settings_dict too narrowly for a literal like this.
-    settings_dict: Any = {
-        "ENGINE": "django.db.backends.postgresql",
-        "NAME": "compile-only",
-        "USER": "",
-        "PASSWORD": "",
-        "HOST": "",
-        "PORT": "",
-        "OPTIONS": {},
-        "CONN_MAX_AGE": 0,
-        "CONN_HEALTH_CHECKS": False,
-        "AUTOCOMMIT": True,
-        "ATOMIC_REQUESTS": False,
-        "TIME_ZONE": None,
-        "TEST": {},
-    }
-    postgres = DatabaseWrapper(settings_dict, alias="pg_compile_only")
-    # The compiler refuses to emit FOR UPDATE outside a transaction, and
-    # answering that question is the one thing here that would need a socket.
-    monkeypatch.setattr(postgres, "get_autocommit", lambda: False)
-
-    queryset = locked_assignment_queryset().filter(pk=1)
-    sql, _params = queryset.query.get_compiler(connection=postgres).as_sql()
+    sql = compile_for_postgresql(locked_assignment_queryset().filter(pk=1), monkeypatch)
 
     # The outer join onto the nullable scope_office is what makes an
     # unqualified FOR UPDATE illegal here.

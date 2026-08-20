@@ -11,6 +11,10 @@ class OperationsPermission(models.Model):
         permissions = (
             ("view_users", _("Can view scoped users")),
             ("view_new_agents", _("Can view scoped new agents")),
+            (
+                "manage_new_agent_onboarding",
+                _("Can manage scoped new-agent onboarding"),
+            ),
             ("add_users", _("Can add users")),
             ("assign_user_roles", _("Can assign user roles")),
             ("view_agent_contracts", _("Can view scoped agent contracts")),

@@ -53,12 +53,14 @@ def test_every_hub_section_declares_its_availability():
 def test_only_the_live_destinations_are_enabled():
     # Flip the section's entry in the commit that gives it a real route; this
     # assertion is the reminder to update the nav registry at the same time.
+    live_features = set(LIVE_ADMIN_FEATURES) | {
+        key for key, enabled in OPERATIONS_FEATURES.items() if enabled
+    }
     coming_soon = {
-        key: value
-        for key, value in HUB_FEATURES.items()
-        if key not in LIVE_ADMIN_FEATURES
+        key: value for key, value in HUB_FEATURES.items() if key not in live_features
     }
     assert set(coming_soon.values()) == {False}
+    assert HUB_FEATURES["admin-new-agents"] is True
     assert all(HUB_FEATURES[key] is True for key in LIVE_ADMIN_FEATURES)
 
 

@@ -138,6 +138,10 @@ logout URLs are exempt.
 
 ## Permissions & roles
 
+The scoped operational onboarding queue, deterministic milestone rules, source
+adapter contract, action audit behavior, and task-title retention policy are
+documented in [`docs/onboarding-operations.md`](docs/onboarding-operations.md).
+
 The reviewed route-to-permission mapping for the shared administrative navigation
 is documented in [`docs/administrative-navigation.md`](docs/administrative-navigation.md).
 The contributor contract for the configuration-driven desktop/mobile registry is

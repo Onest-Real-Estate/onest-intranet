@@ -36,6 +36,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from apps.user.models import Office, User
+from apps.user.services.onboarding_state import dashboard_new_agent_queryset
 from apps.user.services.role_assignments import EffectiveAccess, get_effective_access
 from apps.web.authorization import ROUTE_POLICIES, scope_queryset_for_user_office
 
@@ -353,10 +354,14 @@ def pending_source(context: MetricContext) -> MetricValue:
 
 def calculate_new_agents(context: MetricContext) -> MetricValue:
     """Agents who joined the caller's scope inside the trailing window."""
-    window_start = trailing_window_start(context.now, days=NEW_AGENT_WINDOW_DAYS)
     count = (
-        scoped_user_queryset(context)
-        .filter(date_joined__gte=window_start, date_joined__lte=context.now)
+        dashboard_new_agent_queryset(
+            context.user,
+            at=context.now,
+            days=NEW_AGENT_WINDOW_DAYS,
+            access=context.access,
+        )
+        .filter(date_joined__lte=context.now)
         .count()
     )
     return MetricValue(

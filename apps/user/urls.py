@@ -16,6 +16,13 @@ from .views.auth_views import (
     profile,
     profile_submit,
 )
+from .views.onboarding_administration_views import (
+    onboarding_notice,
+    onboarding_owner,
+    onboarding_tasks,
+    onboarding_tools,
+    onboarding_workspace,
+)
 
 urlpatterns = [
     path("", login_page, name="login"),
@@ -45,5 +52,30 @@ urlpatterns = [
         "operations/users/<int:user_id>/administration/roles",
         user_administration_roles,
         name="user_administration_roles",
+    ),
+    path(
+        "operations/new-agents/<int:user_id>",
+        onboarding_workspace,
+        name="new_agent_onboarding",
+    ),
+    path(
+        "operations/new-agents/<int:user_id>/owner",
+        onboarding_owner,
+        name="new_agent_onboarding_owner",
+    ),
+    path(
+        "operations/new-agents/<int:user_id>/tasks",
+        onboarding_tasks,
+        name="new_agent_onboarding_tasks",
+    ),
+    path(
+        "operations/new-agents/<int:user_id>/tools",
+        onboarding_tools,
+        name="new_agent_onboarding_tools",
+    ),
+    path(
+        "operations/new-agents/<int:user_id>/notices",
+        onboarding_notice,
+        name="new_agent_onboarding_notice",
     ),
 ]

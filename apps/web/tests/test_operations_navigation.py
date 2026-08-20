@@ -80,7 +80,9 @@ def test_registry_has_exact_destinations_order_routes_and_permissions():
     for destination in OPERATIONS_DESTINATIONS:
         assert reverse(destination.route_name) == f"/{destination.path}"
         assert destination.feature in OPERATIONS_FEATURES
-        assert OPERATIONS_FEATURES[destination.feature] is False
+        assert OPERATIONS_FEATURES[destination.feature] is (
+            destination.route_name == "admin_new_agents"
+        )
 
 
 @pytest.mark.django_db
@@ -168,6 +170,10 @@ def test_brokerage_admin_can_reach_every_registered_destination(client):
         )
         assert response.status_code == 200
         props = inertia_props(response)
+        if destination.route_name == "admin_new_agents":
+            assert "agents" in props
+            assert "filterOptions" in props
+            continue
         assert props["title"] == destination.label
         assert props["administrative"] is True
         assert props["scope"] == {
