@@ -56,9 +56,19 @@ export interface DashboardMetrics {
 }
 
 export interface DashboardQuickApp {
+  /** The link's stable key — also the icon lookup and the React key. */
   id: string;
   name: string;
+  description: string;
+  /** Server-resolved: an https URL, or a reversed in-app path. */
   href: string;
+  /** Key from the approved icon set (`frontend/lib/quick-access-icons.ts`). */
+  icon: string;
+  /** External links open in a new tab; internal ones navigate in place. */
+  external: boolean;
+  sso: QuickAccessSsoCapability;
+  health: QuickAccessIntegrationHealth;
+  setup: QuickAccessSetupBehavior;
 }
 
 export interface DashboardAnnouncement {
@@ -841,4 +851,134 @@ export interface OnboardingWorkspacePageProps extends PageProps {
   }[];
   validation: ValidationErrors;
   privacy: { notesAllowed: boolean; taskPolicy: string };
+}
+
+// ---------------------------------------------------------------------------
+// Quick Access administration
+// ---------------------------------------------------------------------------
+
+export type QuickAccessDestinationType = "external_url" | "internal_route";
+export type QuickAccessSsoCapability = "none" | "microsoft_entra" | "saml" | "oidc";
+export type QuickAccessIntegrationHealth =
+  | "unknown"
+  | "healthy"
+  | "degraded"
+  | "offline";
+export type QuickAccessSetupBehavior =
+  | "none"
+  | "self_service"
+  | "request_access"
+  | "provisioned";
+export type QuickAccessOwnerScope = "company" | "scoped";
+
+export interface QuickAccessChoice {
+  value: string;
+  label: string;
+}
+
+export interface QuickAccessOfficeChoice {
+  value: number;
+  label: string;
+}
+
+export interface QuickAccessAudience {
+  companyWide: boolean;
+  roles: { code: string; label: string }[];
+  offices: {
+    id: number;
+    name: string;
+    stableKey: string;
+    includeDescendants: boolean;
+  }[];
+}
+
+/**
+ * One row of the administration list.
+ *
+ * `status` is a derived badge, not a raw field: a link can be active and still
+ * be invisible because its publish window has not opened.
+ */
+export interface QuickAccessLinkRow {
+  id: number;
+  stableKey: string;
+  name: string;
+  description: string;
+  destinationType: QuickAccessDestinationType;
+  destinationValue: string;
+  href: string;
+  icon: string;
+  sortOrder: number;
+  isActive: boolean;
+  isArchived: boolean;
+  status: { value: string; label: string; tone: StatusTone };
+  publishStartAt: string | null;
+  publishEndAt: string | null;
+  ssoCapability: QuickAccessSsoCapability;
+  integrationHealth: QuickAccessIntegrationHealth;
+  setupBehavior: QuickAccessSetupBehavior;
+  ownerScope: QuickAccessOwnerScope;
+  ownerOffice: string | null;
+  audience: QuickAccessAudience;
+  /** Server's answer, mirrored in the UI. Never the basis for authorization. */
+  canManage: boolean;
+  updatedAt: string | null;
+  /** Optimistic-concurrency token echoed back on submit. */
+  version: string;
+}
+
+export interface QuickAccessPreviewLink {
+  id: number;
+  name: string;
+  stableKey: string;
+  visible: boolean;
+  /** Every reason it stays hidden, not just the first. */
+  reasons: string[];
+}
+
+export interface QuickAccessPreview {
+  roleCode: string;
+  officeId: number | null;
+  officeName: string | null;
+  /** The chosen office is outside the administrator's scope. */
+  outOfScope: boolean;
+  links: QuickAccessPreviewLink[];
+}
+
+export interface QuickAccessCapabilities {
+  companyWide: boolean;
+  scopeLevel: "brokerage" | "scoped";
+}
+
+export interface QuickAccessAdministrationPageProps extends PageProps {
+  links: ListResponse<QuickAccessLinkRow, { q: string; status: string }>;
+  statusOptions: QuickAccessChoice[];
+  roleOptions: QuickAccessChoice[];
+  officeOptions: QuickAccessOfficeChoice[];
+  preview: QuickAccessPreview | null;
+  capabilities: QuickAccessCapabilities;
+  errors?: ValidationErrors;
+}
+
+/** One widening change the administrator has to confirm before it is saved. */
+export interface QuickAccessExposureChange {
+  label: string;
+  from: string;
+  to: string;
+  impact: string;
+}
+
+export interface QuickAccessLinkFormPageProps extends PageProps {
+  link: QuickAccessLinkRow | null;
+  errors: ValidationErrors;
+  posted: Record<string, string[]> | null;
+  pendingConfirmation: QuickAccessExposureChange[];
+  iconOptions: QuickAccessChoice[];
+  internalDestinations: QuickAccessChoice[];
+  destinationTypeOptions: QuickAccessChoice[];
+  ssoOptions: QuickAccessChoice[];
+  healthOptions: QuickAccessChoice[];
+  setupOptions: QuickAccessChoice[];
+  roleOptions: QuickAccessChoice[];
+  officeOptions: QuickAccessOfficeChoice[];
+  capabilities: QuickAccessCapabilities;
 }

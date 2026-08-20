@@ -65,6 +65,16 @@ applied to Django groups via `seed_roles` / migrations. Catalog
 `default_roles` document the intended recipients for reviews and docs; CI tests
 assert every role default permission is catalogued.
 
+### Paired scoped / company grants
+
+Where a capability has a strictly wider variant, the two are separate codenames
+rather than one grant with a scope flag: `web.manage_quick_access` covers links
+inside the actor's own office scope, and `web.manage_company_quick_access`
+additionally allows a brokerage-wide publish and editing company-owned
+definitions. Revoking the wider one then never depends on reading a scope
+field, and a scoped administrator cannot be widened by accident. See
+`docs/quick-access.md`.
+
 Direct user permission exceptions are not a product feature in P0. If added
 later they must record grant/deny, reason, actor, effective dates, and scope,
 and remain auditable.
@@ -94,3 +104,4 @@ Helpers: `hasPermission`, `isAuthorizationStale`, `isAccessRevoked`, and
 - `docs/authorization.md` — route policies and scope helpers
 - `docs/roles.md` — brokerage role catalog
 - `docs/dashboard-metrics.md` — metric-level permissions
+- `docs/quick-access.md` — administered dashboard launchers and their grants

@@ -68,38 +68,35 @@ def performance(context: DashboardContext) -> ProviderResult:
     return ready(payload)
 
 
-#: Vendor tools every agent signs into. Reviewed configuration, not sample
-#: data: these are the brokerage's actual systems, and the list changes by
-#: commit rather than by request. ``enabled`` flips a launcher off without
-#: removing the row, so a retired tool leaves an audit trail in the diff.
-QUICK_ACCESS_TOOLS: tuple[dict[str, object], ...] = (
-    {"id": "lofty", "name": "Lofty", "href": "https://www.lofty.com", "enabled": True},
-    {
-        "id": "skyslope",
-        "name": "SkySlope",
-        "href": "https://www.skyslope.com",
-        "enabled": True,
-    },
-    {
-        "id": "microsoft365",
-        "name": "Microsoft 365",
-        "href": "https://www.microsoft365.com",
-        "enabled": True,
-    },
-    {
-        "id": "dotloop",
-        "name": "Dotloop",
-        "href": "https://www.dotloop.com",
-        "enabled": True,
-    },
-)
-
-
 def quick_access(context: DashboardContext) -> ProviderResult:
+    """Launchers this reader may open, resolved from configuration.
+
+    The panel used to be a tuple in this module, so retiring a vendor took a
+    deploy. It is administered data now (``P1-025``): the audience rules live
+    in :mod:`apps.web.quick_access.resolution`, and this provider only asks
+    that module what the signed-in user may see. The office comes from the
+    user record — never from a query parameter.
+
+    A link whose internal destination has since left the allowlist resolves to
+    an empty href and is dropped rather than rendered as a dead tile.
+    """
+    from apps.web.quick_access.resolution import visible_links_for
+
+    links = list(visible_links_for(context.user, access=context.access, at=context.now))
     tools = [
-        {"id": tool["id"], "name": tool["name"], "href": tool["href"]}
-        for tool in QUICK_ACCESS_TOOLS
-        if tool["enabled"]
+        {
+            "id": link.stable_key,
+            "name": link.name,
+            "description": link.description,
+            "href": href,
+            "icon": link.icon,
+            "external": link.is_external,
+            "sso": link.sso_capability,
+            "health": link.integration_health,
+            "setup": link.setup_behavior,
+        }
+        for link in links
+        if (href := link.href())
     ]
     if not tools:
         return empty(

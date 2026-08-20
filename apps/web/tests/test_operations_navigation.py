@@ -62,6 +62,7 @@ def test_registry_has_exact_destinations_order_routes_and_permissions():
         "Announcements",
         "Training",
         "Documents",
+        "Quick Access",
         "Compliance",
         "Feedback",
         "Platform Tasks",
@@ -69,26 +70,28 @@ def test_registry_has_exact_destinations_order_routes_and_permissions():
         "IT Support",
     ]
     assert [destination.order for destination in OPERATIONS_DESTINATIONS] == list(
-        range(10, 170, 10)
+        range(10, 180, 10)
     )
     assert [destination.section for destination in OPERATIONS_DESTINATIONS] == [
         *("People" for _ in range(5)),
         *("Operations" for _ in range(3)),
-        *("Content" for _ in range(3)),
+        *("Content" for _ in range(4)),
         *("Governance & support" for _ in range(5)),
     ]
-    assert len({destination.key for destination in OPERATIONS_DESTINATIONS}) == 16
+    assert len({destination.key for destination in OPERATIONS_DESTINATIONS}) == 17
     assert (
-        len({destination.route_name for destination in OPERATIONS_DESTINATIONS}) == 16
+        len({destination.route_name for destination in OPERATIONS_DESTINATIONS}) == 17
     )
     assert (
-        len({destination.permission for destination in OPERATIONS_DESTINATIONS}) == 16
+        len({destination.permission for destination in OPERATIONS_DESTINATIONS}) == 17
     )
     for destination in OPERATIONS_DESTINATIONS:
         assert reverse(destination.route_name) == f"/{destination.path}"
         assert destination.feature in OPERATIONS_FEATURES
+        # Only destinations with a real page behind them are enabled; the
+        # rest still render the placeholder.
         assert OPERATIONS_FEATURES[destination.feature] is (
-            destination.route_name == "admin_new_agents"
+            destination.route_name in {"admin_new_agents", "admin_quick_access"}
         )
 
 
@@ -126,6 +129,7 @@ def test_scoped_management_role_permission_matrix():
             "Reservations",
             "Training",
             "Documents",
+            "Quick Access",
             "Feedback",
             "Offices",
         },
@@ -136,6 +140,7 @@ def test_scoped_management_role_permission_matrix():
             "Reservations",
             "Training",
             "Documents",
+            "Quick Access",
             "Feedback",
             "Offices",
         },
@@ -180,6 +185,10 @@ def test_brokerage_admin_can_reach_every_registered_destination(client):
         if destination.route_name == "admin_new_agents":
             assert "agents" in props
             assert "filterOptions" in props
+            continue
+        if destination.route_name == "admin_quick_access":
+            assert "links" in props
+            assert "capabilities" in props
             continue
         assert props["title"] == destination.label
         assert props["administrative"] is True
