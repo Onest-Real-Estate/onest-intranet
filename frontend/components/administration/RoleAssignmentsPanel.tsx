@@ -82,21 +82,20 @@ export function RoleAssignmentsPanel({
   const needsOffice = scopeType !== "company";
 
   return (
-    <SurfaceCard className="border-border/70 rounded-2xl shadow-card">
+    <SurfaceCard>
       <PanelHeader
+        divided
         title="Roles and scope"
         description="What this person may reach across the hub, and until when."
-        className="border-border/60 border-b pb-5"
         meta={
           <span className="text-muted-foreground text-xs font-medium tabular-nums">
             {assignments.length} live
           </span>
         }
       />
-      <SurfaceCardContent className="grid gap-6">
+      <SurfaceCardContent className="@container grid gap-4">
         <DataTable
-          frame="bare"
-          className="border-border/60 -mx-5 border-y [&_td]:px-2 [&_th]:px-2 sm:[&_td]:px-3 sm:[&_th]:px-3"
+          frame="bleed"
           caption="Live and scheduled role assignments"
           rows={assignments}
           rowKey={(row) => String(row.id)}
@@ -114,7 +113,7 @@ export function RoleAssignmentsPanel({
                     scopeLabel={row.scopeLabel}
                     title={row.roleDescription || undefined}
                   />
-                  <span className="text-muted-foreground text-xs sm:hidden">
+                  <span className="text-muted-foreground text-xs @md:hidden">
                     {row.scopeLabel}
                   </span>
                 </span>
@@ -124,8 +123,8 @@ export function RoleAssignmentsPanel({
               id: "scope",
               header: "Scope",
               cell: (row) => row.scopeLabel,
-              className: "hidden sm:table-cell",
-              headerClassName: "hidden sm:table-cell",
+              className: "hidden @md:table-cell",
+              headerClassName: "hidden @md:table-cell",
             },
             {
               id: "status",
@@ -147,15 +146,15 @@ export function RoleAssignmentsPanel({
                   {formatMoment(row.startsAt)} → {formatMoment(row.endsAt)}
                 </span>
               ),
-              className: "hidden lg:table-cell",
-              headerClassName: "hidden lg:table-cell",
+              className: "hidden @2xl:table-cell",
+              headerClassName: "hidden @2xl:table-cell",
             },
             {
               id: "granted",
               header: "Granted by",
               cell: (row) => row.assignedBy ?? "System",
-              className: "hidden xl:table-cell",
-              headerClassName: "hidden xl:table-cell",
+              className: "hidden @5xl:table-cell",
+              headerClassName: "hidden @5xl:table-cell",
             },
             {
               id: "actions",
@@ -166,7 +165,7 @@ export function RoleAssignmentsPanel({
                     type="button"
                     variant="outline"
                     size="sm"
-                    className="size-8 px-0 sm:h-8 sm:w-auto sm:px-3"
+                    className="size-8 px-0 @md:h-8 @md:w-auto @md:px-3"
                     onClick={() => {
                       setRevoking(row);
                       setRevokeReason("");
@@ -174,14 +173,14 @@ export function RoleAssignmentsPanel({
                   >
                     <ShieldOff className="size-3.5" aria-hidden />
                     <span className="sr-only">Revoke {row.roleLabel}</span>
-                    <span className="hidden sm:inline" aria-hidden>
+                    <span className="hidden @md:inline" aria-hidden>
                       Revoke
                     </span>
                   </Button>
                 ) : (
                   <span className="text-muted-foreground text-xs">
-                    <span className="sm:hidden">Out of scope</span>
-                    <span className="hidden sm:inline">Outside your delegation</span>
+                    <span className="@md:hidden">Out of scope</span>
+                    <span className="hidden @md:inline">Outside your delegation</span>
                   </span>
                 ),
             },
@@ -192,7 +191,7 @@ export function RoleAssignmentsPanel({
           <form
             method="post"
             action={routes.user_administration_roles(userId)}
-            className="border-border/60 bg-muted/25 -mx-5 -mb-5 grid gap-5 border-t px-5 py-5"
+            className="border-border/60 bg-muted/25 -mx-5 -mb-5 grid gap-4 border-t px-5 py-5"
           >
             <input type="hidden" name="csrfmiddlewaretoken" value={csrfToken} />
             <input type="hidden" name="action" value="grant" />
@@ -203,26 +202,28 @@ export function RoleAssignmentsPanel({
               </p>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
-              <SelectField
-                name="role"
-                label="Role"
-                required
-                value={role}
-                onChange={(next) => {
-                  setRole(next);
-                  const option = roleOptions.find((item) => item.value === next);
-                  setScopeType(option?.scopes[0]?.value ?? "office");
-                }}
-                placeholder="Select a role"
-                options={roleOptions.map((option) => ({
-                  value: option.value,
-                  label: option.label,
-                }))}
-                validation={validation}
-              />
-              {selectedRole?.description ? (
-                <FormDescription>{selectedRole.description}</FormDescription>
-              ) : null}
+              <div className="grid gap-2">
+                <SelectField
+                  name="role"
+                  label="Role"
+                  required
+                  value={role}
+                  onChange={(next) => {
+                    setRole(next);
+                    const option = roleOptions.find((item) => item.value === next);
+                    setScopeType(option?.scopes[0]?.value ?? "office");
+                  }}
+                  placeholder="Select a role"
+                  options={roleOptions.map((option) => ({
+                    value: option.value,
+                    label: option.label,
+                  }))}
+                  validation={validation}
+                />
+                {selectedRole?.description ? (
+                  <FormDescription>{selectedRole.description}</FormDescription>
+                ) : null}
+              </div>
               <SelectField
                 name="scope_type"
                 label="Scope"
@@ -246,6 +247,7 @@ export function RoleAssignmentsPanel({
                     label: office.pathLabel,
                   }))}
                   validation={validation}
+                  className="sm:col-span-2"
                 />
               ) : null}
               <DateField

@@ -104,6 +104,7 @@ export function PanelHeader({
   description,
   meta,
   action,
+  divided = false,
   className,
   ...props
 }: Omit<React.ComponentProps<typeof CardHeader>, "title"> & {
@@ -113,10 +114,20 @@ export function PanelHeader({
   description?: React.ReactNode;
   meta?: React.ReactNode;
   action?: React.ReactNode;
+  /**
+   * Rule the header off from the body. Earned when the panel below is a form or
+   * a table — a dense field grid needs the header to read as a lid rather than
+   * as the first row. A panel whose body is prose or a short list does not.
+   */
+  divided?: boolean;
 }) {
   return (
     <SurfaceCardHeader
-      className={cn("flex flex-row items-start justify-between gap-3", className)}
+      className={cn(
+        "flex flex-row items-start justify-between gap-3",
+        divided && "border-border/60 border-b pb-5",
+        className,
+      )}
       {...props}
     >
       <div className="min-w-0">

@@ -160,3 +160,38 @@ export function ReadOnlyValue({
     </div>
   );
 }
+
+/**
+ * Where a long form ends: what saving will do on the left, the one control that
+ * does it on the right.
+ *
+ * Deliberately not another `SurfaceCard`. Every panel above it is a group of
+ * fields, and giving the closing action the same white surface and border makes
+ * it read as one more group to fill in. The recessed tint and the absence of a
+ * heading say the form is over.
+ */
+export function FormActionBar({
+  status,
+  children,
+  className,
+  ...props
+}: Omit<React.ComponentProps<"div">, "children"> & {
+  /** What saving does right now — announced, so a submit is not silent. */
+  status: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      className={cn(
+        "bg-muted/40 border-border/60 flex flex-wrap items-center justify-between gap-4 rounded-xl border px-5 py-4",
+        className,
+      )}
+      {...props}
+    >
+      <p className="text-muted-foreground min-w-0 text-sm" aria-live="polite">
+        {status}
+      </p>
+      <div className="flex shrink-0 items-center gap-2">{children}</div>
+    </div>
+  );
+}

@@ -48,8 +48,8 @@ export function ProfileAdministrativePanel({
           </span>
         }
       />
-      <SurfaceCardContent className="grid gap-5">
-        <dl className="grid gap-5 sm:grid-cols-2">
+      <SurfaceCardContent className="grid gap-4">
+        <dl className="grid gap-4">
           <ReadOnlyValue label="Agent status">
             <StatusBadge
               status={{ label: agentStatus.label, tone: agentStatus.tone }}
@@ -75,7 +75,7 @@ export function ProfileAdministrativePanel({
               </p>
             ) : null}
           </ReadOnlyValue>
-          <ReadOnlyValue label="Contract status" className="sm:col-span-2">
+          <ReadOnlyValue label="Contract status">
             <StatusBadge
               status={{ label: contractStatus.label, tone: contractStatus.tone }}
             />

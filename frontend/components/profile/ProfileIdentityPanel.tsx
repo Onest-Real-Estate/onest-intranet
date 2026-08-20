@@ -49,8 +49,8 @@ export function ProfileIdentityPanel({
           </span>
         }
       />
-      <SurfaceCardContent className="grid gap-5">
-        <dl className="grid gap-5 sm:grid-cols-2">
+      <SurfaceCardContent className="grid gap-4">
+        <dl className="grid gap-4">
           <ReadOnlyValue label="Work email">
             <span className="break-all">{identity.email}</span>
             <p className="text-muted-foreground mt-1 text-xs">

@@ -82,8 +82,8 @@ export default function Dashboard() {
         instead of scrolling past news to reach them; `xl:order` puts it back
         on the right once there are two columns to read side by side.
       */}
-      <div className="grid gap-6 xl:grid-cols-12">
-        <div className="grid gap-6 xl:order-2 xl:col-span-4">
+      <div className="grid items-start gap-6 xl:grid-cols-12">
+        <div className="grid content-start gap-6 xl:order-2 xl:col-span-4">
           <Deferred data="schedule" fallback={<MyDaySkeleton />}>
             {schedule ? (
               <WidgetPanel title="My day" propName="schedule" widget={schedule}>
@@ -121,7 +121,7 @@ export default function Dashboard() {
             ) : null}
           </Deferred>
         </div>
-        <div className="grid gap-6 xl:order-1 xl:col-span-8">
+        <div className="grid content-start gap-6 xl:order-1 xl:col-span-8">
           <Deferred data="announcements" fallback={<AnnouncementsSkeleton />}>
             {announcements ? (
               <WidgetPanel
