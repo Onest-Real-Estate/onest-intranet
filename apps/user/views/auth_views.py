@@ -220,12 +220,18 @@ def onboarding_submit(request: HttpRequest):
 
     with transaction.atomic():
         from apps.audit.service import actor_from_user, log_model_change
+        from apps.user.services.hierarchy import sync_primary_membership
 
         before_user = User.objects.get(pk=user.pk)
         saved_user = form.save(commit=False)
         saved_user.profile_completed = True
         saved_user.profile_completed_at = timezone.now()
         saved_user.save()
+        sync_primary_membership(
+            saved_user,
+            actor=saved_user,
+            business_reason="Office set during onboarding.",
+        )
         sync_default_agent_assignment(
             saved_user,
             actor=saved_user,
@@ -356,9 +362,16 @@ def profile_submit(request: HttpRequest):
 
     with transaction.atomic():
         from apps.audit.service import actor_from_user, log_model_change
+        from apps.user.services.hierarchy import sync_primary_membership
 
         before_user = User.objects.get(pk=user.pk)
         saved_user = form.save()
+        if before_user.office_id != saved_user.office_id:
+            sync_primary_membership(
+                saved_user,
+                actor=saved_user,
+                business_reason="Office changed from the profile page.",
+            )
         sync_default_agent_assignment(
             saved_user,
             actor=saved_user,

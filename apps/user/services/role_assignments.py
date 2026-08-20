@@ -65,7 +65,11 @@ def active_assignment_queryset(user: User, *, at=None):
     at = _coerce_now(at)
     return (
         UserRoleAssignment.objects.filter(user=user)
-        .select_related("scope_office", "scope_office__region")
+        .select_related(
+            "scope_office",
+            "scope_office__region",
+            "scope_office__parent",
+        )
         .filter(status=UserRoleAssignment.Status.ACTIVE)
         .filter(Q(starts_at__isnull=True) | Q(starts_at__lte=at))
         .filter(Q(ends_at__isnull=True) | Q(ends_at__gt=at))
@@ -185,11 +189,19 @@ def get_effective_access(user: User, *, at=None) -> EffectiveAccess:
     region_keys: set[str] = set()
     office_keys: set[str] = set()
     company_wide = False
+    # Imported lazily: hierarchy imports audit/models and must not cycle with
+    # role assignment resolution at module import time.
+    from apps.user.services.hierarchy import is_hierarchy_consistent
+
     for assignment in assignments:
         if assignment.scope_type == ScopeType.COMPANY:
             company_wide = True
             continue
         if assignment.scope_office is None:
+            # Fail closed: an office/region grant without a scope office grants
+            # nothing rather than expanding to an ambiguous set.
+            continue
+        if not is_hierarchy_consistent(assignment.scope_office):
             continue
         if assignment.scope_type == ScopeType.REGION:
             region_keys.add(assignment.scope_office.stable_key)
@@ -199,7 +211,7 @@ def get_effective_access(user: User, *, at=None) -> EffectiveAccess:
         office = getattr(user, "office", None)
         if ADMIN in role_keys:
             company_wide = True
-        if office is not None:
+        if office is not None and is_hierarchy_consistent(office):
             if BRANCH_MANAGER in role_keys:
                 office_keys.add(office.stable_key)
             if REGION_MANAGER in role_keys and office.region is not None:
