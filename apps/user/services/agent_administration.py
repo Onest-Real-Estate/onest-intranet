@@ -52,6 +52,9 @@ from apps.user.services.role_assignments import (
 
 VIEW_PERMISSION = "user.view_user_administration"
 CHANGE_PERMISSION = "user.change_user_administration"
+# Contract standing belongs to the contract domain, not to this record. Being
+# allowed to administer somebody is not being allowed to read their contract.
+CONTRACT_PERMISSION = "web.view_agent_contracts"
 
 # Django field names the administration form owns. Nothing outside this set is
 # writable through it, and nothing inside it is writable through /profile.
@@ -149,6 +152,18 @@ def administered_user_queryset(actor: User) -> QuerySet[User]:
             office__stable_key__in=keys
         )
     return queryset.filter(filters)
+
+
+def is_user_in_scope(actor: User, target: User) -> bool:
+    """Whether ``target`` sits inside ``actor``'s administrative scope.
+
+    Capability is a separate question — this answers only "may this actor's
+    grant reach that person at all", which every people surface needs before
+    it decides what the grant lets them do.
+    """
+    if getattr(actor, "is_superuser", False):
+        return True
+    return _office_in_scope(target.office, administration_scope(actor))
 
 
 def assignable_office_queryset(actor: User) -> QuerySet[Office]:
@@ -320,6 +335,21 @@ def delegable_role_options(actor: User) -> list[dict[str, Any]]:
 # ---------------------------------------------------------------------------
 
 
+CONTRACT_UNAVAILABLE_REASON = "Agent contracts are not connected to the hub yet."
+
+
+def contract_domain():
+    """The contract services module, or ``None`` while it does not exist.
+
+    One import in one place: every caller that needs to know whether contract
+    data is reachable asks this rather than growing its own try/except.
+    """
+    try:
+        return import_module("apps.contract.services")
+    except ModuleNotFoundError:
+        return None
+
+
 def contract_status(user: User) -> dict[str, Any]:
     """Agent contract standing, read from the contract domain.
 
@@ -328,16 +358,15 @@ def contract_status(user: User) -> dict[str, Any]:
     describe. Until the contract app lands, this reports "not connected"
     rather than inventing a value.
     """
-    try:  # pragma: no cover - exercised once the contract app exists
-        module = import_module("apps.contract.services")
-    except ModuleNotFoundError:
+    module = contract_domain()
+    if module is None:
         return {
             "status": None,
             "label": "Not connected",
             "tone": "neutral",
             "source": "contract",
             "available": False,
-            "reason": "Agent contracts are not connected to the hub yet.",
+            "reason": CONTRACT_UNAVAILABLE_REASON,
         }
     return module.agent_contract_status(user)  # pragma: no cover
 
@@ -576,25 +605,44 @@ def administration_summary(user: User) -> dict:
     }
 
 
-def administration_history(user: User, *, limit: int = 5) -> list[dict]:
-    """Recent administrative events for this record, newest first.
+# Actions that describe something an administrator did *to this record*.
+# Deliberately a closed list, and deliberately only the events whose audit
+# target is the user row itself: role assignments are their own target type
+# with their own panel, and the trail here is "what was authorized on this
+# record", not a window onto the target's activity elsewhere in the hub.
+HISTORY_ACTIONS: tuple[str, ...] = (
+    "user.administration.updated",
+    "user.license_verification.reset",
+    "user.account.disabled",
+    "user.account.reactivated",
+)
+
+HISTORY_LABELS: dict[str, str] = {
+    "user.administration.updated": "Administrative record updated",
+    "user.license_verification.reset": "License verification reset",
+    "user.account.disabled": "Account disabled",
+    "user.account.reactivated": "Account reactivated",
+}
+
+
+def administration_history(user: User, *, limit: int = 8) -> list[dict]:
+    """Recent authorized activity on this record, newest first.
 
     Scoped by the target rather than by the reader's audit permission: an
     administrator authorized to change this record is authorized to see what
-    was changed on it.
+    was changed on it. Reasons are carried through because "who and when"
+    without "why" is not an answer anybody can act on.
     """
     events = AuditEvent.objects.filter(
         target_type=User._meta.label_lower,
         target_id=str(user.pk),
-        action__in=[
-            "user.administration.updated",
-            "user.license_verification.reset",
-        ],
+        action__in=HISTORY_ACTIONS,
     ).order_by("-occurred_at")[:limit]
     return [
         {
             "id": str(event.id),
             "action": event.action,
+            "label": HISTORY_LABELS.get(event.action, event.action),
             "occurredAt": event.occurred_at.isoformat(),
             "actor": event.actor_label,
             "outcome": event.outcome,
@@ -683,8 +731,20 @@ def effective_access_payload(user: User) -> dict:
 
 
 def administration_page_payload(actor: User, target: User) -> dict:
-    """Everything the administration page renders, already scoped to the actor."""
+    """Everything the administration page renders, already scoped to the actor.
+
+    Two permission layers apply. Reaching the page at all needs
+    ``user.view_user_administration`` plus the target inside the actor's scope.
+    Inside it, three things are gated again and *omitted* rather than nulled:
+    operational notes (``change`` grant), contract standing
+    (``web.view_agent_contracts``), and onboarding (``web.view_new_agents``).
+    Sending a key with an empty value would still confirm the field exists.
+    """
+    from apps.user.services.account_state import account_state_payload
+
     can_change = can_change_administration(actor, target)
+    can_read_notes = can_change
+    can_read_contract = has_effective_permission(actor, CONTRACT_PERMISSION)
     offices = assignable_office_queryset(actor)
     delegable_roles = delegable_role_options(actor)
     payload = {
@@ -707,7 +767,7 @@ def administration_page_payload(actor: User, target: User) -> dict:
             "agentIdentifier": target.agent_identifier,
             "licenseVerificationState": target.license_verification_state,
             "licenseVerificationNote": target.license_verification_note,
-            "internalNotes": target.internal_notes,
+            **({"internalNotes": target.internal_notes} if can_read_notes else {}),
         },
         "version": administration_version(target),
         "fields": [
@@ -721,6 +781,7 @@ def administration_page_payload(actor: User, target: User) -> dict:
                 "private": spec.private,
             }
             for spec in ADMIN_FIELD_SPECS
+            if can_read_notes or not spec.private
         ],
         "license": {
             "number": target.license_number,
@@ -732,7 +793,7 @@ def administration_page_payload(actor: User, target: User) -> dict:
             ),
             "verification": _verification_payload(target),
         },
-        "contractStatus": contract_status(target),
+        "accountState": account_state_payload(actor, target),
         "provenance": {
             "lastChangedAt": (
                 target.administration_updated_at.isoformat()
@@ -768,6 +829,8 @@ def administration_page_payload(actor: User, target: User) -> dict:
         },
         "highImpactFields": sorted(HIGH_IMPACT_FIELDS),
     }
+    if can_read_contract:
+        payload["contractStatus"] = contract_status(target)
     if has_effective_permission(actor, "web.view_new_agents"):
         from django.urls import reverse
 
@@ -778,7 +841,7 @@ def administration_page_payload(actor: User, target: User) -> dict:
         )
 
         if new_agent_queryset(actor).filter(pk=target.pk).exists():
-            payload["onboardingState"] = {
+            onboarding = {
                 **state_payload(
                     actor,
                     build_onboarding_states([target])[0],
@@ -786,6 +849,13 @@ def administration_page_payload(actor: User, target: User) -> dict:
                 ),
                 "href": reverse("new_agent_onboarding", args=[target.pk]),
             }
+            if not can_read_contract:
+                # The onboarding summary carries a contract milestone. It is
+                # contract-domain data wherever it is rendered, so it answers
+                # to the contract permission here too.
+                onboarding.pop("contract", None)
+                onboarding.pop("contractStatus", None)
+            payload["onboardingState"] = onboarding
     return payload
 
 

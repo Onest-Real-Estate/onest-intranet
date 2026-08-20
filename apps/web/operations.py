@@ -229,6 +229,7 @@ OPERATIONS_BY_ROUTE = {
 OPERATIONS_FEATURES: dict[str, bool] = {
     destination.feature: False for destination in OPERATIONS_DESTINATIONS
 }
+OPERATIONS_FEATURES["admin-users"] = True
 OPERATIONS_FEATURES["admin-new-agents"] = True
 OPERATIONS_FEATURES["admin-quick-access"] = True
 

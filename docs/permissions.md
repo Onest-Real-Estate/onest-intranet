@@ -23,7 +23,8 @@ Never treat a role label, badge, or client-supplied permission list as a grant.
 Use stable `domain.action` style Django codenames, for example:
 
 - `web.view_users`, `web.add_users`, `web.assign_user_roles`
-- `user.view_user_administration`, `user.change_user_administration`
+- `user.view_user_administration`, `user.change_user_administration`,
+  `user.manage_account_state`
 - `audit.can_view_audit_events`, `audit.can_export_audit_events`
 
 Sensitive actions split read / export / approve / manage rather than bundling
@@ -74,6 +75,24 @@ additionally allows a brokerage-wide publish and editing company-owned
 definitions. Revoking the wider one then never depends on reading a scope
 field, and a scoped administrator cannot be widened by accident. See
 `docs/quick-access.md`.
+
+### Reading a record vs ending its access
+
+`user.change_user_administration` maintains somebody's record;
+`user.manage_account_state` disables or reactivates their account, which ends
+every live session. They are separate codenames for the same reason: an
+administrator who corrects agent IDs is not, by that fact, an administrator who
+can lock people out. The account grant defaults to the brokerage admin roles
+only. See `docs/user-directory.md`.
+
+### Field-level reads
+
+A permission can gate a *column* as well as a route. The people directory and
+the administrative record omit keys the reader may not have — `agentStatus`,
+`agentIdentifier`, and `startDate` behind `user.view_user_administration`;
+`contractStatus` behind `web.view_agent_contracts`; operational notes behind
+`user.change_user_administration`. Keys are absent rather than null: a key
+present but empty still discloses that the field exists.
 
 Direct user permission exceptions are not a product feature in P0. If added
 later they must record grant/deny, reason, actor, effective dates, and scope,

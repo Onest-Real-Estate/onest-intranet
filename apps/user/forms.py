@@ -8,7 +8,6 @@ from django.utils.translation import gettext_lazy as _
 
 from apps.web.contracts import (
     empty_validation_errors,
-    list_response,
     validation_errors,
 )
 
@@ -43,6 +42,9 @@ from .profile_fields import (
     social_platform_options,
 )
 from .roles import ScopeType, is_valid_scope_type
+from .services.account_state import (
+    BUSINESS_REASON_MAX_LENGTH as ACCOUNT_STATE_REASON_MAX_LENGTH,
+)
 from .services.agent_administration import (
     ADMINISTERED_FIELDS,
     administration_page_payload,
@@ -750,8 +752,12 @@ def administration_page_props(
     """
     payload = administration_page_payload(actor, target)
     if posted is not None:
+        # Only echo back the props the payload already carries: a field the
+        # actor may not read must not reappear because they posted it.
         payload["values"] = {
-            prop: posted.get(field, "") for prop, field in ADMINISTRATION_FIELD_MAP
+            prop: posted.get(field, "")
+            for prop, field in ADMINISTRATION_FIELD_MAP
+            if prop in payload["values"]
         }
     return {
         "administration": payload,
@@ -761,53 +767,34 @@ def administration_page_props(
     }
 
 
-def administration_index_props(
-    actor: User,
-    *,
-    query: str = "",
-    page: int = 1,
-    page_size: int = 25,
-):
-    """Props for the scoped user picker that leads into the editor.
+class AccountStateForm(forms.Form):
+    """Disable or reactivate one account. Nothing else travels on this POST.
 
-    Deliberately thin — a search box and a list. Full user management (filters,
-    bulk actions, creation) is its own module; this exists so an administrator
-    can reach a record without knowing its id.
+    Deliberately not a ``ModelForm``: ``is_active`` reached through a generic
+    model form is one crafted field away from ``is_staff``. The intent arrives
+    as a verb, the freshness token arrives beside it, and the service re-checks
+    both.
     """
-    from .services.agent_administration import administered_user_queryset
 
-    queryset = administered_user_queryset(actor)
-    if query:
-        queryset = queryset.filter(
-            Q(email__icontains=query)
-            | Q(first_name__icontains=query)
-            | Q(last_name__icontains=query)
-            | Q(display_name__icontains=query)
-            | Q(agent_identifier__icontains=query.upper())
-        )
-    total = queryset.count()
-    page = max(1, page)
-    start = (page - 1) * page_size
-    rows = [
-        {
-            "id": user.pk,
-            "name": str(user),
-            "email": user.email,
-            "officeName": user.office.name if user.office else None,
-            "agentStatus": user.agent_status,
-            "agentIdentifier": user.agent_identifier,
-            "isActive": user.is_active,
-        }
-        for user in queryset[start : start + page_size]
-    ]
-    return {
-        "users": list_response(
-            rows,
-            page=page,
-            page_size=page_size,
-            total_items=total,
-            filters={"q": query},
-            sort_key="name",
-        ),
-        "statusOptions": agent_status_options(),
-    }
+    action = forms.ChoiceField(
+        choices=(("disable", _("Disable")), ("reactivate", _("Reactivate"))),
+        error_messages={"invalid_choice": _("Choose disable or reactivate.")},
+    )
+    business_reason = forms.CharField(
+        label=_("Business reason"),
+        required=True,
+        max_length=ACCOUNT_STATE_REASON_MAX_LENGTH,
+        widget=forms.Textarea(attrs={"rows": 3}),
+        error_messages={"required": _("Say why this account is changing hands.")},
+    )
+    expected_version = forms.CharField(required=False, widget=forms.HiddenInput)
+
+    @property
+    def enabled(self) -> bool:
+        return self.cleaned_data["action"] == "reactivate"
+
+    def clean_business_reason(self):
+        value = " ".join((self.cleaned_data.get("business_reason") or "").split())
+        if not value:
+            raise forms.ValidationError(_("Say why this account is changing hands."))
+        return value

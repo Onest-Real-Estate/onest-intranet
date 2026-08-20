@@ -165,6 +165,19 @@ PERMISSION_DEFINITIONS: tuple[PermissionDefinition, ...] = (
         sensitive=True,
     ),
     PermissionDefinition(
+        codename="user.manage_account_state",
+        name="Can disable or reactivate accounts",
+        domain="people",
+        action="manage",
+        description=(
+            "Disable or reactivate a user account in scope. Disabling ends "
+            "every live session and blocks the next request."
+        ),
+        default_roles=_BROKERAGE_ADMINS,
+        risk="high",
+        sensitive=True,
+    ),
+    PermissionDefinition(
         codename="user.view_user",
         name="Can view user",
         domain="people",

@@ -6,6 +6,7 @@ import {
   type AccessChange,
   AccessChangeDialog,
 } from "@/components/administration/AccessChangeDialog";
+import { AccountAccessPanel } from "@/components/administration/AccountAccessPanel";
 import { RoleAssignmentsPanel } from "@/components/administration/RoleAssignmentsPanel";
 import {
   DateField,
@@ -80,6 +81,7 @@ export default function UserAdministration() {
     fields,
     license,
     contractStatus,
+    accountState,
     provenance,
     history,
     assignments,
@@ -323,39 +325,41 @@ export default function UserAdministration() {
               </SurfaceCardContent>
             </SurfaceCard>
 
-            <SurfaceCard>
-              <PanelHeader
-                divided
-                title="Operational notes"
-                description="Internal to administrators. Never shown to this person, and never written into the audit trail as text."
-                meta={
-                  <span className="text-muted-foreground flex items-center gap-1 text-xs font-medium">
-                    <Lock className="size-3.5" aria-hidden />
-                    Private
-                  </span>
-                }
-              />
-              <SurfaceCardContent>
-                <FormField>
-                  <FormLabel htmlFor="internal_notes" optional>
-                    Notes
-                  </FormLabel>
-                  <Textarea
-                    id="internal_notes"
-                    name="internal_notes"
-                    rows={5}
-                    disabled={readOnly}
-                    defaultValue={values.internalNotes}
-                    maxLength={4000}
-                    className="min-h-32 resize-y"
-                  />
-                  <FormDescription>
-                    Keep these factual and operational. The audit trail records only
-                    that they changed.
-                  </FormDescription>
-                </FormField>
-              </SurfaceCardContent>
-            </SurfaceCard>
+            {values.internalNotes === undefined ? null : (
+              <SurfaceCard>
+                <PanelHeader
+                  divided
+                  title="Operational notes"
+                  description="Internal to administrators. Never shown to this person, and never written into the audit trail as text."
+                  meta={
+                    <span className="text-muted-foreground flex items-center gap-1 text-xs font-medium">
+                      <Lock className="size-3.5" aria-hidden />
+                      Private
+                    </span>
+                  }
+                />
+                <SurfaceCardContent>
+                  <FormField>
+                    <FormLabel htmlFor="internal_notes" optional>
+                      Notes
+                    </FormLabel>
+                    <Textarea
+                      id="internal_notes"
+                      name="internal_notes"
+                      rows={5}
+                      disabled={readOnly}
+                      defaultValue={values.internalNotes}
+                      maxLength={4000}
+                      className="min-h-32 resize-y"
+                    />
+                    <FormDescription>
+                      Keep these factual and operational. The audit trail records only
+                      that they changed.
+                    </FormDescription>
+                  </FormField>
+                </SurfaceCardContent>
+              </SurfaceCard>
+            )}
 
             <FormActionBar
               status={
@@ -384,6 +388,14 @@ export default function UserAdministration() {
         </div>
 
         <aside className="grid content-start gap-6 xl:sticky xl:top-22">
+          <AccountAccessPanel
+            userId={subject.id}
+            userName={subject.preferredDisplayName || subject.displayName}
+            csrfToken={csrfToken}
+            version={version}
+            state={accountState}
+          />
+
           {administration.onboardingState ? (
             <SurfaceCard>
               <PanelHeader
@@ -400,6 +412,16 @@ export default function UserAdministration() {
                     ? ` · ${administration.onboardingState.blockers.length} blockers`
                     : ""}
                 </p>
+                <dl className="grid gap-4 sm:grid-cols-2">
+                  <ReadOnlyValue label="Training">
+                    <StatusBadge status={administration.onboardingState.training} />
+                  </ReadOnlyValue>
+                  {administration.onboardingState.contract ? (
+                    <ReadOnlyValue label="Contract">
+                      <StatusBadge status={administration.onboardingState.contract} />
+                    </ReadOnlyValue>
+                  ) : null}
+                </dl>
                 <Button variant="outline" size="sm" asChild>
                   <a href={administration.onboardingState.href}>
                     Open onboarding workspace
@@ -427,16 +449,21 @@ export default function UserAdministration() {
                 <ReadOnlyValue label="Live assignments">
                   {effectiveAccess.liveAssignments}
                 </ReadOnlyValue>
-                <ReadOnlyValue label="Contract status">
-                  <StatusBadge
-                    status={{ label: contractStatus.label, tone: contractStatus.tone }}
-                  />
-                  <p className="text-muted-foreground mt-1 text-xs">
-                    {contractStatus.available
-                      ? `Owned by the ${contractStatus.source} module.`
-                      : contractStatus.reason}
-                  </p>
-                </ReadOnlyValue>
+                {contractStatus ? (
+                  <ReadOnlyValue label="Contract status">
+                    <StatusBadge
+                      status={{
+                        label: contractStatus.label,
+                        tone: contractStatus.tone,
+                      }}
+                    />
+                    <p className="text-muted-foreground mt-1 text-xs">
+                      {contractStatus.available
+                        ? `Owned by the ${contractStatus.source} module.`
+                        : contractStatus.reason}
+                    </p>
+                  </ReadOnlyValue>
+                ) : null}
               </dl>
             </SurfaceCardContent>
           </SurfaceCard>
@@ -444,7 +471,7 @@ export default function UserAdministration() {
           <SurfaceCard>
             <PanelHeader
               divided
-              title="Last change"
+              title="Recent activity"
               meta={
                 <span className="text-muted-foreground flex items-center gap-1 text-xs font-medium">
                   <History className="size-3.5" aria-hidden />
@@ -471,9 +498,14 @@ export default function UserAdministration() {
                       />
                       <div className="min-w-0">
                         <p className="font-medium">{formatMoment(entry.occurredAt)}</p>
+                        <p className="mt-0.5 text-xs leading-5">{entry.label}</p>
                         <p className="text-muted-foreground mt-0.5 text-xs leading-5">
-                          {entry.actor} ·{" "}
-                          {entry.fields.join(", ") || "no field changes"}
+                          {entry.actor}
+                          {entry.reason
+                            ? ` · ${entry.reason}`
+                            : entry.fields.length
+                              ? ` · ${entry.fields.join(", ")}`
+                              : ""}
                         </p>
                       </div>
                     </li>
@@ -515,7 +547,7 @@ UserAdministration.layout = (props: UserAdministrationPageProps) =>
         title: "User administration",
         breadcrumbs: [
           { label: "Dashboard", href: routes.dashboard() },
-          { label: "Users", href: routes.user_administration_index() },
+          { label: "Users", href: routes.admin_users() },
           {
             label: props.administration.subject.displayName,
             href: routes.user_administration(props.administration.subject.id),

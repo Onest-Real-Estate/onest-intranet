@@ -92,6 +92,17 @@ const administration: AdministrationPayload = {
     available: false,
     reason: "Agent contracts are not connected to the hub yet.",
   },
+  accountState: {
+    isActive: true,
+    label: "Active",
+    tone: "success",
+    lastLoginAt: "2026-08-19T08:15:00+00:00",
+    joinedAt: "2024-02-01T09:00:00+00:00",
+    canManage: true,
+    reason: "",
+    sessionPolicy:
+      "Disabling ends every signed-in session immediately and blocks the next request.",
+  },
   provenance: {
     lastChangedAt: "2026-08-01T10:00:00+00:00",
     lastChangedBy: "Ada Admin",
@@ -100,6 +111,7 @@ const administration: AdministrationPayload = {
     {
       id: "evt-1",
       action: "user.administration.updated",
+      label: "Administrative record updated",
       occurredAt: "2026-08-01T10:00:00+00:00",
       actor: "ada@onest.realestate",
       outcome: "success",
@@ -323,6 +335,84 @@ describe("UserAdministration", () => {
     );
     render(<UserAdministration />);
     expect(screen.getByText(/Somebody else changed this record/)).toBeInTheDocument();
+  });
+
+  it("omits operational notes and contract standing without their grants", () => {
+    const { internalNotes, ...values } = administration.values;
+    setPage({
+      values,
+      contractStatus: undefined,
+      fields: administration.fields.filter((field) => !field.private),
+    });
+    render(<UserAdministration />);
+    expect(screen.queryByLabelText(/^notes$/i)).toBeNull();
+    expect(screen.queryByText("Operational notes")).toBeNull();
+    expect(screen.queryByText(/Agent contracts are not connected/)).toBeNull();
+  });
+
+  it("confirms a disable, naming the session consequence and demanding a reason", async () => {
+    const user = userEvent.setup();
+    render(<UserAdministration />);
+    await user.click(screen.getByRole("button", { name: /disable account/i }));
+
+    const dialog = await screen.findByRole("dialog");
+    expect(
+      within(dialog).getByText(/signed out of every device immediately/i),
+    ).toBeInTheDocument();
+    const confirm = within(dialog).getByRole("button", { name: /disable account/i });
+    expect(confirm).toBeDisabled();
+
+    await user.type(
+      within(dialog).getByLabelText(/business reason/i),
+      "Left the brokerage on 14 March.",
+    );
+    expect(confirm).toBeEnabled();
+  });
+
+  it("posts the account change to its own endpoint with the version token", async () => {
+    const user = userEvent.setup();
+    render(<UserAdministration />);
+    await user.click(screen.getByRole("button", { name: /disable account/i }));
+    const dialog = await screen.findByRole("dialog");
+    const form = within(dialog)
+      .getByRole("button", { name: /disable account/i })
+      .closest("form");
+    expect(form).toHaveAttribute("action", "/operations/users/9/account-state");
+    expect(form?.querySelector('input[name="action"]')).toHaveValue("disable");
+    expect(form?.querySelector('input[name="expected_version"]')).toHaveValue(
+      administration.version,
+    );
+  });
+
+  it("offers reactivation, not disabling, for a disabled account", () => {
+    setPage({
+      accountState: {
+        ...administration.accountState,
+        isActive: false,
+        label: "Disabled",
+        tone: "destructive",
+      },
+    });
+    render(<UserAdministration />);
+    expect(
+      screen.getByRole("button", { name: /reactivate account/i }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /disable account/i })).toBeNull();
+  });
+
+  it("explains why account access is read-only rather than hiding the panel", () => {
+    setPage({
+      accountState: {
+        ...administration.accountState,
+        canManage: false,
+        reason: "Nobody changes their own account access.",
+      },
+    });
+    render(<UserAdministration />);
+    expect(screen.queryByRole("button", { name: /disable account/i })).toBeNull();
+    expect(
+      screen.getByText("Nobody changes their own account access."),
+    ).toBeInTheDocument();
   });
 
   it("has no detectable accessibility violations", async () => {

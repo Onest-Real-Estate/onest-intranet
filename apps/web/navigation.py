@@ -25,18 +25,9 @@ from apps.web.operations import OPERATIONS_DESTINATIONS, OPERATIONS_FEATURES
 # operations registry. Flip an entry to True only in the commit that ships its
 # live destination. Missing entries fail closed; explicit false entries expose
 # only the protected Soon route. Availability never changes its permission policy.
-# Administrative destinations that already ship a real view. They sit outside
-# ``OPERATIONS_DESTINATIONS`` because that registry generates a placeholder
-# route for every entry it holds; these own their own. The value is the
-# permission that makes the key visible at all.
-LIVE_ADMIN_FEATURES: dict[str, str] = {
-    "admin-user-administration": "user.view_user_administration",
-}
-
 HUB_FEATURES: dict[str, bool] = {
     **dict.fromkeys(HUB_SECTIONS, False),
     **OPERATIONS_FEATURES,
-    **dict.fromkeys(LIVE_ADMIN_FEATURES, True),
 }
 
 
@@ -61,13 +52,6 @@ def hub_feature_states(user=None, *, permissions=None) -> dict[str, bool]:
             destination.feature: HUB_FEATURES[destination.feature]
             for destination in OPERATIONS_DESTINATIONS
             if destination.permission in effective_permissions
-        }
-    )
-    states.update(
-        {
-            feature: HUB_FEATURES[feature]
-            for feature, permission in LIVE_ADMIN_FEATURES.items()
-            if permission in effective_permissions
         }
     )
     return states

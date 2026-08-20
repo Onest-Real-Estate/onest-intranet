@@ -12,7 +12,6 @@ from apps.user.services.role_assignments import create_role_assignment
 from apps.web.dashboard import HUB_SECTIONS
 from apps.web.navigation import (
     HUB_FEATURES,
-    LIVE_ADMIN_FEATURES,
     hub_feature_states,
     primary_office_payload,
 )
@@ -45,23 +44,19 @@ def branch_office():
 
 
 def test_every_hub_section_declares_its_availability():
-    assert set(HUB_FEATURES) == (
-        set(HUB_SECTIONS) | set(OPERATIONS_FEATURES) | set(LIVE_ADMIN_FEATURES)
-    )
+    assert set(HUB_FEATURES) == set(HUB_SECTIONS) | set(OPERATIONS_FEATURES)
 
 
 def test_only_the_live_destinations_are_enabled():
     # Flip the section's entry in the commit that gives it a real route; this
     # assertion is the reminder to update the nav registry at the same time.
-    live_features = set(LIVE_ADMIN_FEATURES) | {
-        key for key, enabled in OPERATIONS_FEATURES.items() if enabled
-    }
+    live_features = {key for key, enabled in OPERATIONS_FEATURES.items() if enabled}
     coming_soon = {
         key: value for key, value in HUB_FEATURES.items() if key not in live_features
     }
     assert set(coming_soon.values()) == {False}
     assert HUB_FEATURES["admin-new-agents"] is True
-    assert all(HUB_FEATURES[key] is True for key in LIVE_ADMIN_FEATURES)
+    assert HUB_FEATURES["admin-users"] is True
 
 
 def test_feature_states_are_a_copy_callers_cannot_corrupt():
@@ -268,7 +263,7 @@ def test_live_administrative_features_reach_only_their_permission_holders(client
     """A live destination is shared as available; an agent never learns of it."""
     account = agent()
     client.force_login(account)
-    assert "admin-user-administration" not in shared_props(client)["features"]
+    assert "admin-users" not in shared_props(client)["features"]
 
     manager = User.objects.create_user(
         email="branch@example.com", office=branch_office(), profile_completed=True
@@ -281,4 +276,4 @@ def test_live_administrative_features_reach_only_their_permission_holders(client
         scope_office=branch_office(),
     )
     client.force_login(manager)
-    assert shared_props(client)["features"]["admin-user-administration"] is True
+    assert shared_props(client)["features"]["admin-users"] is True
