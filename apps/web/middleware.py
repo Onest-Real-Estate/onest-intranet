@@ -14,6 +14,7 @@ from apps.web.authorization import (
     is_non_route_exempt_path,
 )
 from apps.web.navigation import hub_feature_states, primary_office_payload
+from apps.web.permission_catalog import CATALOG_VERSION
 from apps.web.shell import authorization_version, help_configuration
 
 logger = logging.getLogger("apps.authorization")
@@ -104,9 +105,9 @@ class InertiaShareMiddleware:
             "email": user.email,
             "name": user.display_name or user.get_full_name() or user.email,
             "headshotUrl": headshot_public_url(request, user),
-            # Django auth permission codenames, e.g. "user.view_user".
+            # Catalogued Django auth permission codenames only.
             "permissions": sorted(access.permissions),
-            # Role (Django group) names, highest-priority first.
+            # Role codes (stable), highest-priority first.
             "roles": list(access.role_keys),
             "roleLabel": role_label,
             "isStaff": user.is_staff,
@@ -119,6 +120,7 @@ class InertiaShareMiddleware:
             "authorizationVersion": (
                 authorization_version(access) if access is not None else ""
             ),
+            "capabilitySchemaVersion": CATALOG_VERSION,
             "help": help_configuration(),
             "session": {"authenticated": request.user.is_authenticated},
         }

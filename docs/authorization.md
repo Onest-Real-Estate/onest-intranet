@@ -52,6 +52,15 @@ object.
 
 ## Background work
 
-Sensitive tasks must carry explicit initiator context and revalidate it when the worker
-starts. See `apps.audit.replay.request_replay_event()` and
-`apps.audit.tasks.replay_event()`.
+Sensitive tasks must carry explicit initiator context and revalidate it when the
+worker starts. Use `system_actor` / `service_actor` for non-user work. See
+`apps.audit.replay.request_replay_event()` and `apps.audit.tasks.replay_event()`.
+
+## Permission catalog
+
+Protected capabilities are inventoried in `apps/web/permission_catalog.py` and
+evaluated through `apps.web.capability` (fail closed on unknown codenames).
+Capability and organizational scope are separate layers; see
+`docs/permissions.md`.
+
+Frontend `user.permissions` / `PermissionRequired` are presentation only.

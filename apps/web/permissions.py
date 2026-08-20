@@ -1,9 +1,10 @@
 """Server-side permission guards matching the frontend ``PermissionRequired``.
 
 The frontend component only *shows* content conditionally — these guards are
-the real enforcement. Permissions are Django auth codenames (e.g.
-``"user.view_user"``), the same strings exposed to the client as
-``user.permissions`` by ``web.middleware.InertiaShareMiddleware``.
+the real enforcement. Permissions are reviewed catalog codenames (e.g.
+``"web.view_users"``), the same strings exposed to the client as
+``user.permissions`` by ``web.middleware.InertiaShareMiddleware``. Unknown
+codenames fail closed via ``apps.web.capability``.
 """
 
 from django.core.exceptions import PermissionDenied

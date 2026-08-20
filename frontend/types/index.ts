@@ -215,6 +215,8 @@ export type HubFeatures = Record<string, boolean>;
 export interface ShellSharedProps {
   /** Changes whenever roles, permissions, or authorization scope changes. */
   authorizationVersion: string;
+  /** Reviewed permission-catalog version (not a grant matrix). */
+  capabilitySchemaVersion: string;
   help: {
     /** Backend-validated HTTPS destination; null keeps the entry point disabled. */
     url: string | null;

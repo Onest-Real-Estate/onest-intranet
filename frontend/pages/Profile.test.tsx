@@ -67,6 +67,7 @@ function setPage(overrides: Partial<ProfilePageProps> = {}) {
     primaryOffice: null,
     shell: {
       authorizationVersion: "v1",
+      capabilitySchemaVersion: "p0-permissions-v1",
       help: { url: "https://help.example.com" },
       session: { authenticated: true },
     },
@@ -264,6 +265,7 @@ describe("Profile", () => {
     setPage({
       shell: {
         authorizationVersion: "v1",
+        capabilitySchemaVersion: "p0-permissions-v1",
         help: { url: null },
         session: { authenticated: true },
       },
