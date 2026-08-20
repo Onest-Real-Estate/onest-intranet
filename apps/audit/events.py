@@ -215,11 +215,22 @@ def publish(
 
     event_id = str(event.id)
 
-    def _dispatch():
+    def _dispatch() -> None:
         from apps.audit.tasks import dispatch_event
 
-        dispatch_event.delay(event_id)
-        logger.info("event.queued name=%s id=%s", name, event_id)
+        try:
+            dispatch_event.delay(event_id)
+        except Exception:
+            # Outbox pattern: the DomainEvent row is already committed as PENDING.
+            # A broker outage must not fail the originating HTTP request — ops can
+            # replay once Redis/Celery is available again.
+            logger.exception(
+                "event.queue_failed name=%s id=%s — dispatch deferred",
+                name,
+                event_id,
+            )
+        else:
+            logger.info("event.queued name=%s id=%s", name, event_id)
 
     transaction.on_commit(_dispatch)
 

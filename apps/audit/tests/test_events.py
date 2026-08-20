@@ -442,12 +442,9 @@ def test_old_version_schema_preserved_when_new_version_registered():
 @pytest.mark.django_db(transaction=True)
 def test_event_survives_broker_outage():
     """If the broker is unavailable at publish time the DB row still exists."""
-    with (
-        patch(
-            "apps.audit.tasks.dispatch_event.delay",
-            side_effect=Exception("broker down"),
-        ),
-        contextlib.suppress(Exception),
+    with patch(
+        "apps.audit.tasks.dispatch_event.delay",
+        side_effect=Exception("broker down"),
     ):
         publish(
             "user.onboarded",

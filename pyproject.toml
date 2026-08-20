@@ -29,6 +29,7 @@ dependencies = [
 dev = [
     "django-silk>=5.5.0",  # SQL profiling (N+1 detection); dev only, see config/settings.py
     "django-types>=0.24.0",
+    "faker>=40.36.0",
     "pytest>=8.3.0",
     "pytest-django>=4.9.0",
     "ruff>=0.16.3",

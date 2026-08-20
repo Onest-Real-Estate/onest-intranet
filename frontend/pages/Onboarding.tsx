@@ -39,6 +39,7 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { routes } from "@/lib/routes";
+import { validateUsPhone, validateUsZip } from "@/lib/us-validation";
 import type { OnboardingPageProps, OnboardingProfileValues } from "@/types";
 
 // ---------------------------------------------------------------------------
@@ -76,6 +77,72 @@ function FieldError({ id, message }: { id: string; message?: string }) {
 function describedBy(field: string, errors: Record<string, string | undefined>) {
   return errors[field] ? `${field}_error` : undefined;
 }
+
+function resolveStepFromErrors(
+  errors: Record<string, string | undefined>,
+): StepId | null {
+  if (errors.first_name || errors.last_name || errors.phone_number || errors.headshot) {
+    return "personal";
+  }
+  if (errors.street_address || errors.city || errors.state || errors.zip_code) {
+    return "address";
+  }
+  if (errors.office) {
+    return "office";
+  }
+  return null;
+}
+
+function validatePersonalStep(values: FormValues): Record<string, string> {
+  const next: Record<string, string> = {};
+  if (!values.firstName.trim()) {
+    next.first_name = "Enter a first name.";
+  }
+  if (!values.lastName.trim()) {
+    next.last_name = "Enter a last name.";
+  }
+  const phoneError = validateUsPhone(values.phoneNumber);
+  if (phoneError) {
+    next.phone_number = phoneError;
+  }
+  return next;
+}
+
+function validateAddressStep(values: FormValues): Record<string, string> {
+  const next: Record<string, string> = {};
+  if (!values.streetAddress.trim()) {
+    next.street_address = "Enter a street address.";
+  }
+  if (!values.city.trim()) {
+    next.city = "Enter a city.";
+  }
+  if (!values.state) {
+    next.state = "Select a state.";
+  }
+  const zipError = validateUsZip(values.zipCode);
+  if (zipError) {
+    next.zip_code = zipError;
+  }
+  return next;
+}
+
+function validateOfficeStep(values: FormValues): Record<string, string> {
+  if (!values.officeId) {
+    return { office: "Select your office." };
+  }
+  return {};
+}
+
+const CLIENT_ERROR_FIELDS: Partial<Record<keyof FormValues, string>> = {
+  firstName: "first_name",
+  lastName: "last_name",
+  phoneNumber: "phone_number",
+  streetAddress: "street_address",
+  city: "city",
+  state: "state",
+  zipCode: "zip_code",
+  officeId: "office",
+};
 
 // ---------------------------------------------------------------------------
 // Headshot uploader
@@ -214,16 +281,7 @@ export default function Onboarding() {
     Object.entries(validation.fields).map(([field, messages]) => [field, messages[0]]),
   ) as Record<string, string | undefined>;
 
-  const [step, setStep] = useState<StepId>(
-    // If there are server-side errors, jump to the relevant step.
-    errors.first_name || errors.last_name || errors.phone_number || errors.headshot
-      ? "personal"
-      : errors.street_address || errors.city || errors.state || errors.zip_code
-        ? "address"
-        : errors.office
-          ? "office"
-          : "personal",
-  );
+  const [step, setStep] = useState<StepId>(resolveStepFromErrors(errors) ?? "personal");
 
   const [values, setValues] = useState<FormValues>({
     firstName: initial.firstName,
@@ -239,6 +297,35 @@ export default function Onboarding() {
   });
 
   const [headshotUrl, setHeadshotUrl] = useState<string | null>(initial.headshotUrl);
+  const [clientErrors, setClientErrors] = useState<Record<string, string>>({});
+  const fieldErrors = { ...clientErrors, ...errors };
+
+  useEffect(() => {
+    const stepFromErrors = resolveStepFromErrors(errors);
+    if (stepFromErrors) {
+      setStep(stepFromErrors);
+    }
+  }, [errors]);
+
+  useEffect(() => {
+    if (Object.keys(errors).length === 0) {
+      return;
+    }
+    setValues({
+      firstName: initial.firstName,
+      lastName: initial.lastName,
+      phoneNumber: initial.phoneNumber,
+      streetAddress: initial.streetAddress,
+      city: initial.city,
+      state: initial.state,
+      zipCode: initial.zipCode,
+      officeId: initial.officeId,
+      mlsNumber: initial.mlsNumber,
+      nrdsNumber: initial.nrdsNumber,
+    });
+    setHeadshotUrl(initial.headshotUrl);
+    setClientErrors({});
+  }, [errors, initial]);
 
   // Warn before abandoning form if any field is touched.
   const [dirty, setDirty] = useState(false);
@@ -255,17 +342,45 @@ export default function Onboarding() {
   function set(field: keyof FormValues, value: string) {
     setValues((prev) => ({ ...prev, [field]: value }));
     setDirty(true);
+    const errorField = CLIENT_ERROR_FIELDS[field];
+    if (!errorField) {
+      return;
+    }
+    setClientErrors((prev) => {
+      if (!prev[errorField]) {
+        return prev;
+      }
+      const next = { ...prev };
+      delete next[errorField];
+      return next;
+    });
   }
 
   const currentIdx = STEPS.findIndex((s) => s.id === step);
 
   function goBack() {
     if (currentIdx > 0) {
+      setClientErrors({});
       setStep(STEPS[currentIdx - 1].id);
     }
   }
 
   function goNext() {
+    let stepErrors: Record<string, string> = {};
+    if (step === "personal") {
+      stepErrors = validatePersonalStep(values);
+    } else if (step === "address") {
+      stepErrors = validateAddressStep(values);
+    } else if (step === "office") {
+      stepErrors = validateOfficeStep(values);
+    }
+
+    if (Object.keys(stepErrors).length > 0) {
+      setClientErrors(stepErrors);
+      return;
+    }
+
+    setClientErrors({});
     if (currentIdx < STEPS.length - 1) {
       setStep(STEPS[currentIdx + 1].id);
     }
@@ -330,7 +445,7 @@ export default function Onboarding() {
                     initialUrl={headshotUrl}
                     csrfToken={csrfToken}
                     onUploaded={setHeadshotUrl}
-                    error={errors.headshot}
+                    error={fieldErrors.headshot}
                   />
 
                   <div className="grid gap-4 sm:grid-cols-2">
@@ -348,11 +463,14 @@ export default function Onboarding() {
                         value={values.firstName}
                         onChange={(e) => set("firstName", e.target.value)}
                         autoComplete="given-name"
-                        aria-invalid={Boolean(errors.first_name) || undefined}
-                        aria-describedby={describedBy("first_name", errors)}
+                        aria-invalid={Boolean(fieldErrors.first_name) || undefined}
+                        aria-describedby={describedBy("first_name", fieldErrors)}
                         required
                       />
-                      <FieldError id="first_name_error" message={errors.first_name} />
+                      <FieldError
+                        id="first_name_error"
+                        message={fieldErrors.first_name}
+                      />
                     </div>
                     <div className="grid gap-2">
                       <Label htmlFor="last_name_input">
@@ -368,11 +486,14 @@ export default function Onboarding() {
                         value={values.lastName}
                         onChange={(e) => set("lastName", e.target.value)}
                         autoComplete="family-name"
-                        aria-invalid={Boolean(errors.last_name) || undefined}
-                        aria-describedby={describedBy("last_name", errors)}
+                        aria-invalid={Boolean(fieldErrors.last_name) || undefined}
+                        aria-describedby={describedBy("last_name", fieldErrors)}
                         required
                       />
-                      <FieldError id="last_name_error" message={errors.last_name} />
+                      <FieldError
+                        id="last_name_error"
+                        message={fieldErrors.last_name}
+                      />
                     </div>
                   </div>
 
@@ -385,11 +506,14 @@ export default function Onboarding() {
                       onChange={(e) => set("phoneNumber", e.target.value)}
                       autoComplete="tel"
                       placeholder="(202) 555-0100"
-                      aria-invalid={Boolean(errors.phone_number) || undefined}
-                      aria-describedby={describedBy("phone_number", errors)}
+                      aria-invalid={Boolean(fieldErrors.phone_number) || undefined}
+                      aria-describedby={describedBy("phone_number", fieldErrors)}
                       required
                     />
-                    <FieldError id="phone_number_error" message={errors.phone_number} />
+                    <FieldError
+                      id="phone_number_error"
+                      message={fieldErrors.phone_number}
+                    />
                   </div>
                 </div>
               )}
@@ -404,13 +528,13 @@ export default function Onboarding() {
                       value={values.streetAddress}
                       onChange={(e) => set("streetAddress", e.target.value)}
                       autoComplete="street-address"
-                      aria-invalid={Boolean(errors.street_address) || undefined}
-                      aria-describedby={describedBy("street_address", errors)}
+                      aria-invalid={Boolean(fieldErrors.street_address) || undefined}
+                      aria-describedby={describedBy("street_address", fieldErrors)}
                       required
                     />
                     <FieldError
                       id="street_address_error"
-                      message={errors.street_address}
+                      message={fieldErrors.street_address}
                     />
                   </div>
 
@@ -422,11 +546,11 @@ export default function Onboarding() {
                         value={values.city}
                         onChange={(e) => set("city", e.target.value)}
                         autoComplete="address-level2"
-                        aria-invalid={Boolean(errors.city) || undefined}
-                        aria-describedby={describedBy("city", errors)}
+                        aria-invalid={Boolean(fieldErrors.city) || undefined}
+                        aria-describedby={describedBy("city", fieldErrors)}
                         required
                       />
-                      <FieldError id="city_error" message={errors.city} />
+                      <FieldError id="city_error" message={fieldErrors.city} />
                     </div>
                     <div className="grid gap-2 sm:col-span-2">
                       <Label htmlFor="state_trigger">State</Label>
@@ -436,8 +560,8 @@ export default function Onboarding() {
                       >
                         <SelectTrigger
                           id="state_trigger"
-                          aria-invalid={Boolean(errors.state) || undefined}
-                          aria-describedby={describedBy("state", errors)}
+                          aria-invalid={Boolean(fieldErrors.state) || undefined}
+                          aria-describedby={describedBy("state", fieldErrors)}
                         >
                           <SelectValue placeholder="State" />
                         </SelectTrigger>
@@ -449,7 +573,7 @@ export default function Onboarding() {
                           ))}
                         </SelectContent>
                       </Select>
-                      <FieldError id="state_error" message={errors.state} />
+                      <FieldError id="state_error" message={fieldErrors.state} />
                     </div>
                     <div className="grid gap-2 sm:col-span-1">
                       <Label htmlFor="zip_code_input">ZIP</Label>
@@ -459,11 +583,11 @@ export default function Onboarding() {
                         onChange={(e) => set("zipCode", e.target.value)}
                         autoComplete="postal-code"
                         placeholder="12345"
-                        aria-invalid={Boolean(errors.zip_code) || undefined}
-                        aria-describedby={describedBy("zip_code", errors)}
+                        aria-invalid={Boolean(fieldErrors.zip_code) || undefined}
+                        aria-describedby={describedBy("zip_code", fieldErrors)}
                         required
                       />
-                      <FieldError id="zip_code_error" message={errors.zip_code} />
+                      <FieldError id="zip_code_error" message={fieldErrors.zip_code} />
                     </div>
                   </div>
                 </div>
@@ -486,8 +610,8 @@ export default function Onboarding() {
                       >
                         <SelectTrigger
                           id="office_trigger"
-                          aria-invalid={Boolean(errors.office) || undefined}
-                          aria-describedby={describedBy("office", errors)}
+                          aria-invalid={Boolean(fieldErrors.office) || undefined}
+                          aria-describedby={describedBy("office", fieldErrors)}
                         >
                           <SelectValue placeholder="Select your office" />
                         </SelectTrigger>
@@ -505,7 +629,7 @@ export default function Onboarding() {
                         </SelectContent>
                       </Select>
                     )}
-                    <FieldError id="office_error" message={errors.office} />
+                    <FieldError id="office_error" message={fieldErrors.office} />
                   </div>
 
                   <Separator />

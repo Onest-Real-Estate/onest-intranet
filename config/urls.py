@@ -1,8 +1,8 @@
 from django.conf import settings
 from django.contrib import admin
-from django.urls import include, path
+from django.urls import URLPattern, URLResolver, include, path
 
-urlpatterns = [
+urlpatterns: list[URLPattern | URLResolver] = [
     path("admin/", admin.site.urls),
     path("accounts/", include("allauth.urls")),
     path("", include("apps.user.urls")),
@@ -11,7 +11,10 @@ urlpatterns = [
 
 # Silk (SQL profiling) is dev-only — see config/settings.py. Web UI: /silk/.
 if settings.DEBUG:
+    from django.conf.urls.static import static
+
     urlpatterns += [path("silk/", include("silk.urls", namespace="silk"))]
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 
 # Custom 403 page (PermissionDenied Inertia page) — see
 # apps/web/views.permission_denied.
