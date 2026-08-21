@@ -74,6 +74,7 @@ docs/design-system.md  Color/type/spacing contract for all UI work
 docs/permissions.md    Permission catalog, capability vs scope, frontend payload
 docs/dashboard-metrics.md  Metric registry: permissions, scope, calculations
 docs/dashboard-profiles.md  Per-role dashboard profiles, widget registry, resolution
+docs/dashboard-action-items.md  Action-item contract, sources, ordering, CTAs
 docs/quick-access.md   Administered dashboard launchers: audience, grants, ordering
 docs/user-directory.md Scoped people directory: filters, field permissions, account state
 docs/profile.md    Self-service profile: editable allowlist, normalization, audit

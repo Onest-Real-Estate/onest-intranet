@@ -65,6 +65,11 @@ where available so authorization is not recalculated inside a feed.
 | Market | `market` | `widgets` | 4 | None until a real feed defines its freshness contract |
 | Quick documents | `documents` | `widgets` | 5 | None; visibility is role- and office-scoped |
 
+Action Items is live via `apps.web.action_items` (contract version 2). See
+`docs/dashboard-action-items.md` for the source registry, ordering, and CTA
+rules. Profile-backed items ship today; other domains register collectors as
+their modules land.
+
 Registry validation fails at import for duplicate keys/props, invalid versions
 or feed limits, cache policies without a rationale, and any shared cache on a
 user-specific widget. Per-user cache keys include user id and effective-access

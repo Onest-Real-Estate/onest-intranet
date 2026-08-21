@@ -156,7 +156,7 @@ def test_contract_versions_are_pinned():
         "active_transactions": 1,
         "training": 1,
         "my_day": 1,
-        "action_items": 1,
+        "action_items": 2,
         "market": 1,
         "quick_documents": 1,
     }
@@ -226,7 +226,6 @@ def test_modules_without_a_backing_source_report_unavailable_not_empty():
         "active_transactions",
         "training",
         "my_day",
-        "action_items",
         "market",
         "quick_documents",
     ):

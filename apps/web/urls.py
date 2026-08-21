@@ -5,6 +5,11 @@ from .quick_access import views as quick_access_views
 
 urlpatterns = [
     path("dashboard", views.dashboard, name="dashboard"),
+    path(
+        "dashboard/action-items",
+        views.action_items_queue,
+        name="action_items_queue",
+    ),
     path("design-system", views.design_system, name="design_system"),
     path("hub/<slug:section>", views.coming_soon, name="coming_soon"),
     # The dashboard panel's fire-and-forget click beacon. Not administrative:

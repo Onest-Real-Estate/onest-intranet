@@ -25,6 +25,7 @@ const URLS = {
     'quick_access_click': () => `/dashboard/quick-access/click`,
     'coming_soon': (section: string) => `/hub/${section}`,
     'design_system': () => `/design-system`,
+    'action_items_queue': () => `/dashboard/action-items`,
     'dashboard': () => `/dashboard`,
     'new_agent_onboarding_notice': (user_id: number) => `/operations/new-agents/${user_id}/notices`,
     'new_agent_onboarding_tools': (user_id: number) => `/operations/new-agents/${user_id}/tools`,

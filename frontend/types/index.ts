@@ -120,15 +120,31 @@ export interface DashboardSchedule {
 
 export interface DashboardActionItem {
   id: string;
+  dedupeKey: string;
   title: string;
-  property: string;
-  due: string;
-  late: boolean;
+  type: string;
+  priority: "critical" | "high" | "normal" | "low";
+  /** Always paired with colour — never colour alone. */
+  priorityLabel: string;
+  dueAt: string | null;
+  dueLabel: string;
+  overdue: boolean;
+  state: "open";
+  source: {
+    module: string;
+    recordType: string;
+    recordId: string;
+  };
+  context: string;
+  ctaLabel: string;
+  ctaHref: string;
+  assigneeId: number;
 }
 
 export interface DashboardActionItems {
   total: number;
   items: DashboardActionItem[];
+  viewAllHref: string;
 }
 
 export interface DashboardMarketRate {
@@ -395,6 +411,24 @@ export interface DashboardPageProps extends PageProps {
   operationalActivity?: DashboardWidget<DashboardActivity>;
   supportQueue?: DashboardWidget<DashboardQueue>;
   feedbackSignals?: DashboardWidget<DashboardQueue>;
+}
+
+/** Full action-item queue page — same rows as the dashboard widget, uncapped. */
+export interface ActionItemsQueuePageProps extends PageProps {
+  queue: DashboardActionItems | null;
+  emptyState: {
+    title: string;
+    description: string;
+    actionLabel?: string;
+    actionHref?: string;
+  } | null;
+  unavailable: {
+    reason: string;
+    retryable: boolean;
+    actionLabel?: string;
+    actionHref?: string;
+  } | null;
+  partialFailure: boolean;
 }
 
 // ---------------------------------------------------------------------------

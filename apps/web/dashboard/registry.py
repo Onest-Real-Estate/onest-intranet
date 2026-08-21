@@ -175,7 +175,7 @@ WIDGET_DEFINITIONS: tuple[WidgetDefinition, ...] = (
         key="action_items",
         prop="actionItems",
         group="widgets",
-        contract_version=1,
+        contract_version=2,
         provider=providers.action_items,
         user_specific=True,
         cache=CachePolicy(rationale="Assigned work; must reflect the last write."),
@@ -271,16 +271,32 @@ def widget_cache_key(definition: WidgetDefinition, context: DashboardContext) ->
 def _apply_feed_limit(
     definition: WidgetDefinition, result: ProviderResult
 ) -> ProviderResult:
-    """Cap list payloads centrally, so no provider can ship an unbounded feed."""
-    if not definition.feed_limit or not isinstance(result.data, list):
+    """Cap list payloads centrally, so no provider can ship an unbounded feed.
+
+    Bare lists (Quick Access) and feed-shaped dicts with an ``items`` key
+    (Action Items) both pass through here. ``total`` on a dict stays the
+    uncapped count so the panel can say how many remain.
+    """
+    if not definition.feed_limit or result.data is None:
         return result
-    if len(result.data) <= definition.feed_limit:
-        return result
-    return replace(
-        result,
-        data=result.data[: definition.feed_limit],
-        meta={**result.meta, "truncated": True},
-    )
+    if isinstance(result.data, list):
+        if len(result.data) <= definition.feed_limit:
+            return result
+        return replace(
+            result,
+            data=result.data[: definition.feed_limit],
+            meta={**result.meta, "truncated": True},
+        )
+    if isinstance(result.data, dict):
+        items = result.data.get("items")
+        if not isinstance(items, list) or len(items) <= definition.feed_limit:
+            return result
+        return replace(
+            result,
+            data={**result.data, "items": items[: definition.feed_limit]},
+            meta={**result.meta, "truncated": True},
+        )
+    return result
 
 
 def load_widget(definition: WidgetDefinition, context: DashboardContext) -> Widget:
