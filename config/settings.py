@@ -295,6 +295,11 @@ EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD", default="")
 EMAIL_USE_TLS = config("EMAIL_USE_TLS", default=False, cast=bool)
 DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default="Onest <noreply@onest.local>")
 
+# Absolute base for links in outbound mail. Notification email carries no record
+# detail — only a link back into the hub, which re-authenticates on arrival — so
+# this must point at the hub itself and never at a storage or document host.
+SITE_BASE_URL = config("SITE_BASE_URL", default="http://localhost:8000").rstrip("/")
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # ---------------------------------------------------------------------------
@@ -316,7 +321,7 @@ DJANGO_VITE = {
 # ---------------------------------------------------------------------------
 INERTIA_LAYOUT = "layout.html"
 # Bump whenever the frontend bundle changes so stale clients get a full reload.
-INERTIA_VERSION = "15"
+INERTIA_VERSION = "16"
 
 # Optional external help centre. The shell exposes it only when it is an
 # absolute, credential-free HTTPS URL; an empty or unsafe value leaves the

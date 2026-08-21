@@ -76,3 +76,59 @@ def purge_expired_notifications() -> int:
     deleted = purge_expired()
     logger.info("notifications.purged expired=%d", deleted)
     return deleted
+
+
+@shared_task(ignore_result=True)
+def dispatch_notification_emails(delivery_ids: list[str]) -> int:
+    """Hand one chunk of queued deliveries to the queue, then the tail.
+
+    Same shape as :func:`fan_out_notifications`: bounded work per task, the
+    remainder passed on rather than looped, so an announcement to the whole
+    company cannot monopolise a worker.
+    """
+    from apps.notifications.delivery import DISPATCH_CHUNK_SIZE
+
+    head = list(delivery_ids)[:DISPATCH_CHUNK_SIZE]
+    tail = list(delivery_ids)[DISPATCH_CHUNK_SIZE:]
+    for delivery_id in head:
+        send_notification_email.delay(delivery_id)
+    if tail:
+        dispatch_notification_emails.delay(tail)
+    logger.info(
+        "notifications.email_dispatch queued=%d remaining=%d", len(head), len(tail)
+    )
+    return len(head)
+
+
+@shared_task(ignore_result=True)
+def send_notification_email(delivery_id: str) -> str:
+    """Send one notification email.
+
+    Deliberately does **not** use Celery's retry: the attempt count, the
+    backoff, and the terminal state all live on the delivery row, and
+    :func:`sweep_notification_emails` re-queues from there. One retry ledger is
+    auditable; two that can disagree is not.
+    """
+    from apps.notifications.delivery import attempt_delivery
+
+    return str(attempt_delivery(delivery_id))
+
+
+@shared_task(ignore_result=True)
+def sweep_notification_emails() -> int:
+    """Rebuild the email queue from the database. Schedule with celery beat.
+
+    This is what makes the pipeline survive the broker rather than depend on
+    it: rows whose dispatch was lost, whose backoff has come due, or whose
+    worker died mid-send are all found here and queued again.
+    """
+    from apps.notifications.delivery import due_delivery_ids, reclaim_stalled
+
+    reclaimed = reclaim_stalled()
+    due = due_delivery_ids()
+    for delivery_id in due:
+        send_notification_email.delay(delivery_id)
+    logger.info(
+        "notifications.email_sweep reclaimed=%d requeued=%d", reclaimed, len(due)
+    )
+    return len(due)

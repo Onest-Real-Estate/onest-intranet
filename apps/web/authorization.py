@@ -401,6 +401,29 @@ ROUTE_POLICIES: dict[str, AuthorizationPolicy] = {
         route_names=("notification_read_all",),
         scope_rule="self_only",
     ),
+    "notification_preferences": AuthorizationPolicy(
+        key="notification_preferences",
+        access="authenticated",
+        description=(
+            "Render the signed-in reader's own notification settings. Reads "
+            "and writes one row, keyed by request.user, and offers no control "
+            "over mandatory legal, compliance, or security notices."
+        ),
+        methods=("GET",),
+        route_names=("notification_preferences",),
+        scope_rule="self_only",
+    ),
+    "notification_preferences_submit": AuthorizationPolicy(
+        key="notification_preferences_submit",
+        access="authenticated",
+        description=(
+            "Persist the signed-in reader's own channel choices. Mandatory "
+            "categories have no form field, so no request can switch them off."
+        ),
+        methods=("POST",),
+        route_names=("notification_preferences_submit",),
+        scope_rule="self_only",
+    ),
     "notification_summary": AuthorizationPolicy(
         key="notification_summary",
         access="authenticated",

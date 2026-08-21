@@ -143,6 +143,8 @@ Every endpoint is self-scoped; none accepts a recipient identifier.
 | `notification_state` | POST | Mark one read / unread / archived |
 | `notification_read_all` | POST | Sweep unread, except mandatory |
 | `notification_summary` | GET | JSON badge counts for the caller |
+| `notification_preferences` | GET | The reader's own channel settings |
+| `notification_preferences_submit` | POST | Save them |
 
 Mutations are **idempotent**: repeating an applied action succeeds. Read state
 changes with a filtered `UPDATE`, never a read-modify-write, so two tabs
@@ -154,6 +156,134 @@ exist — confirming that a notification exists is itself a disclosure.
 **Mandatory policy.** A mandatory notification is excluded from mark-all-read
 and cannot be archived while unread. A sweep that can clear a compliance
 acknowledgement is not an acknowledgement.
+
+## Preferences
+
+Code: `apps/notifications/categories.py` (the catalog),
+`apps/notifications/preferences.py` (resolution and saving),
+`frontend/pages/NotificationPreferences.tsx`.
+
+**Categories are notification types.** One vocabulary, not two:
+`categories.py` asserts at import that the category registry and
+`NotificationType` are the same set, so a type with no reviewed category — or
+a category governing nothing — fails at startup rather than at send time.
+
+**Channels.** `in_app` is the record of what was delivered and is *not*
+configurable; a reader who could switch it off would have compliance
+acknowledgements land nowhere. `email` is the channel this feature exists to
+let people turn down. The model is a `{channel: {category: bool}}` map, so
+adding a channel is a registry entry rather than a migration.
+
+**Three rules decide every send**, applied in this order:
+
+1. A notification with `is_mandatory` sends, in every category, whatever the
+   reader stored. Legal, compliance, and security acknowledgements are not
+   preferences.
+2. A category marked `mandatory` sends. `account` is one — security notices
+   about somebody's own access.
+3. Everything else follows the stored choice, and an absent entry follows the
+   category's `default_email`.
+
+**Only decisions are stored.** `NotificationPreference.channels` holds what the
+reader explicitly chose and nothing else. A stored full matrix would freeze
+today's catalog into every row: "never chose" would be indistinguishable from
+"chose off", and changing a default would silently not apply to anybody.
+
+**A new category therefore starts at its registry default for everyone** until
+each reader decides otherwise. Nothing migrates, nothing is reinterpreted. Add
+the type to `contract.py`, add a `NotificationCategory`, and bump
+`PREFERENCE_POLICY_VERSION` — the settings page then tells readers whose saved
+version is behind that the list is longer than it was, without resetting
+anything. The house default for a new category is `default_email=True`; a
+high-volume stream ships `False` so it is opt-in (`inventory`, `room`, `lead`).
+
+**Mandatory cannot be turned off by any request.** `NotificationPreferencesForm`
+builds its fields from the registry, so a locked cell has no field — a crafted
+post naming one is not rejected, it simply changes nothing. `normalize_stored`
+drops locked cells on read too, so a hand-edited or restored row cannot switch
+off a legal notice either. Unknown channels and categories are dropped rather
+than raising: a settings page that 500s on an old row is one nobody can use to
+fix the row.
+
+The page sends the whole matrix, locked cells included, each arriving on,
+disabled, and carrying the sentence that says why. A switch that is simply
+absent reads as a channel that does not exist.
+
+## Email delivery
+
+Code: `apps/notifications/delivery.py` (the pipeline),
+`apps/notifications/emails.py` (rendering), `templates/notifications/email/`,
+`apps/notifications/tasks.py` (the three tasks).
+
+The in-app notification is the domain fact. `NotificationEmail` is a *ledger*
+for pushing a copy of it out, deliberately separate so nothing about a
+deferred, bounced, or abandoned email touches the notification. A dead delivery
+leaves the reader's inbox exactly as it was.
+
+| Status | Meaning |
+| --- | --- |
+| `pending` | Queued; `next_attempt_at` says when it is due |
+| `sending` | Claimed by a worker |
+| `sent` | Delivered to the SMTP relay; `to_email` records where |
+| `suppressed` | Deliberately not sent; `suppression_reason` says why |
+| `failed` | Transport error, backing off for another attempt |
+| `dead` | Attempt budget exhausted; audited and alerted |
+
+`sent`, `suppressed`, and `dead` are terminal. Suppression is terminal on
+purpose: "you unsubscribed", "you already read it", "the source withdrew
+access" do not become untrue in a way that should resurrect the message.
+
+**At most one send per recipient per channel per key.**
+`(recipient, channel, delivery_key)` is unique and `delivery_key` *is* the
+notification's `dedupe_key`, so a replayed event, a re-run fan-out chunk, and a
+duplicated task all converge on one row. The row is then claimed with a
+compare-and-set `UPDATE … WHERE status IN (pending, failed)` before the SMTP
+call, so two workers racing produce one send and one no-op — without holding a
+row lock across a mail conversation.
+
+**After commit.** Rows are written inside the producing transaction; the worker
+is only told from `transaction.on_commit`. A rolled-back workflow mails nobody,
+and a broker outage logs rather than failing the originating request.
+
+**Revalidated immediately before send** (`delivery.send_reason`) — account
+state, the address itself, the notification's lifecycle, the preference, and
+the source domain's willingness to vouch for the reader are all re-read, never
+trusted from queue time. A reminder about something already read, archived, or
+expired in the hub is suppressed rather than sent: by the time a retry lands,
+that is usually exactly what it is.
+
+**Retries are bounded and on the row**, not in Celery: five attempts with
+60s / 5m / 15m / 1h / 3h backoff, then `dead` with an error log and a
+`notification.email.failed` audit event carrying counts and keys only.
+`send_notification_email` deliberately does not use Celery retry — one retry
+ledger is auditable, two that can disagree is not.
+
+**Recovery does not depend on the broker.** `sweep_notification_emails`
+(schedule with celery beat) returns rows stuck in `sending` past 15 minutes to
+the queue, then re-queues everything due from the database. A lost task, a
+dropped queue, or a restarted worker costs a delay rather than a message.
+`NotificationEmail` is registered read-only in the Django admin: recovery is a
+queue operation, not a hand edit.
+
+### What the message may contain
+
+The body is the **fixed producer title**, its category, and a link back into
+the hub. It is not a copy of the notification:
+
+* **No source detail.** What the notification is about is resolved for a
+  signed-in reader whose access is checked at that moment. Mail leaves the
+  perimeter and is readable by whoever holds the mailbox.
+* **No file links.** Sensitive files live behind short-lived authorized access;
+  a URL in an email outlives the authorization that produced it. Mail links
+  only ever point at an in-app path, which re-authenticates on arrival.
+* **No off-site destinations.** `emails.absolute_url` accepts only a
+  single-slash-rooted path on this deployment — `//host/x` and absolute URLs
+  are refused — and joins it to `SITE_BASE_URL`. An action that no longer
+  reverses degrades to the notification centre.
+* The subject is whitespace-collapsed, so producer copy cannot inject a header.
+
+Optional messages carry a link to the settings page; required ones say plainly
+that they cannot be turned off.
 
 ## Frontend
 
@@ -178,6 +308,15 @@ disabled controls).
 `apps/notifications/tests/` covers idempotency, self-only access, concurrent
 read state, pagination and counts, source revocation, safe actions, fan-out
 chunking and replay, and the page's query budget.
-`frontend/pages/Notifications.test.tsx` and
+`test_notification_preferences.py` covers the default matrix, the mandatory
+override from both the form and a hand-edited row, unknown categories, and a
+category added after a reader last saved.
+`test_notification_email_delivery.py` covers after-commit queueing, one row per
+recipient/channel/key, the claim under a concurrent worker, every suppression
+reason, an address changed between queue and send, backoff to `dead` with its
+audit event, stalled-claim recovery, and what the rendered message is allowed
+to contain.
+`frontend/pages/Notifications.test.tsx`,
+`frontend/pages/NotificationPreferences.test.tsx`, and
 `frontend/components/notifications/NotificationBell.test.tsx` cover the reader
-states, the mutation payloads, polling, and accessibility.
+states, the mutation payloads, polling, locked controls, and accessibility.

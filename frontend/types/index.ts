@@ -432,6 +432,66 @@ export interface NotificationsPageProps extends PageProps {
 }
 
 /**
+ * Notification preferences.
+ *
+ * The server sends the whole matrix, locked cells included. A switch that is
+ * simply absent reads as a channel that does not exist, so a cell the reader
+ * may not change arrives on, disabled, and carrying the sentence that says
+ * why. `locked` is presentation of a decision the server has already made and
+ * re-makes on write: the submit form has no field for a locked cell at all.
+ */
+export interface NotificationChannelDefinition {
+  key: string;
+  label: string;
+  description: string;
+  /** False for channels the reader cannot switch off, e.g. the hub itself. */
+  configurable: boolean;
+  lockedReason: string;
+}
+
+export interface NotificationCategoryChannel {
+  key: string;
+  /** Field name the submit form expects for this cell. */
+  field: string;
+  enabled: boolean;
+  locked: boolean;
+  lockedReason: string;
+  /** What applies to a reader who has never chosen. */
+  defaultEnabled: boolean;
+}
+
+export interface NotificationCategoryPreference {
+  key: string;
+  label: string;
+  description: string;
+  mandatory: boolean;
+  mandatoryReason: string;
+  channels: NotificationCategoryChannel[];
+}
+
+export interface NotificationPreferencePolicy {
+  version: number;
+  savedVersion: number;
+  /** Categories were added, or a default changed, since this reader saved. */
+  outdated: boolean;
+  updatedAt: string | null;
+  configurableChannels: string[];
+}
+
+export interface NotificationPreferencePayload {
+  channels: NotificationChannelDefinition[];
+  categories: NotificationCategoryPreference[];
+  policy: NotificationPreferencePolicy;
+}
+
+export interface NotificationPreferencesPageProps extends PageProps {
+  preferences: NotificationPreferencePayload;
+  /** Server-reversed path back to the notification centre. */
+  notificationsHref: string;
+  errors: ValidationErrors;
+}
+
+/**
  * A breadth the reader may look at the administrative widgets through.
  *
  * The list is composed server-side from effective access, and the selected key

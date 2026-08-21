@@ -61,7 +61,7 @@ def resolve_onboarding_cases(
             continue
         resolutions[public_id] = SourceResolution(
             available=True,
-            detail=f"Onboarding for {subject.preferred_display_name}",
+            detail=f"Onboarding for {subject.preferred_display_name()}",
             action_available=True,
         )
     return resolutions

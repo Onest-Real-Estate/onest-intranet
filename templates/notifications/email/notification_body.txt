@@ -1,0 +1,13 @@
+{{ greeting }}
+
+{{ title }}
+
+Category: {{ category_label }}{% if mandatory %}
+This is a required notice.{% endif %}
+
+The details stay in oNEST HUB. Sign in to read them:
+{{ action_url }}
+
+{% if action_url != centre_url %}All of your notifications: {{ centre_url }}
+{% endif %}--
+{% if can_unsubscribe %}Choose which notifications reach your inbox: {{ preferences_url }}{% else %}You are receiving this because it is a required notice that cannot be turned off. Your other notification settings: {{ preferences_url }}{% endif %}

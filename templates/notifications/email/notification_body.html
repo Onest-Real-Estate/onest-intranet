@@ -1,0 +1,21 @@
+<div style="font-family:system-ui,-apple-system,'Segoe UI',sans-serif;font-size:15px;line-height:1.6;color:#1c1b1f;">
+  <p>{{ greeting }}</p>
+  <p style="font-size:17px;font-weight:600;margin:0 0 4px;">{{ title }}</p>
+  <p style="margin:0 0 16px;color:#49454f;">
+    {{ category_label }}{% if mandatory %} &middot; Required notice{% endif %}
+  </p>
+  <p>The details stay in oNEST HUB. Sign in to read them:</p>
+  <p><a href="{{ action_url }}" style="color:#1b4dbd;">{{ action_url }}</a></p>
+  {% if action_url != centre_url %}
+    <p>All of your notifications: <a href="{{ centre_url }}" style="color:#1b4dbd;">{{ centre_url }}</a></p>
+  {% endif %}
+  <hr style="border:0;border-top:1px solid #cac4d0;margin:24px 0;">
+  <p style="font-size:13px;color:#49454f;">
+    {% if can_unsubscribe %}
+      <a href="{{ preferences_url }}" style="color:#1b4dbd;">Choose which notifications reach your inbox</a>.
+    {% else %}
+      You are receiving this because it is a required notice that cannot be turned off.
+      <a href="{{ preferences_url }}" style="color:#1b4dbd;">Your other notification settings</a>.
+    {% endif %}
+  </p>
+</div>
