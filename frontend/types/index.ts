@@ -30,11 +30,17 @@ export interface DashboardMetric {
   scopeLevel: MetricScopeLevel;
   /** How the figure is calculated — surfaced as the card's tooltip. */
   definition: string;
+  /** ISO timestamp for when this figure was calculated (server clock). */
+  asOf: string;
   availability: "available" | "unavailable";
   /** Why the figure cannot be shown; present only when unavailable. */
   unavailableReason?: string;
   /** Null while unavailable — an unmeasured metric has no number to round. */
   value: string | null;
+  /** Machine-readable figure; omitted when unavailable. */
+  rawValue?: number | string;
+  /** What ``rawValue`` measures — e.g. count, usd, ratio. */
+  unit?: string;
   hint: string;
   tone: "neutral" | "success" | "warning" | "destructive";
   trend: "up" | "down" | "flat";

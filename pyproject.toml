@@ -37,7 +37,7 @@ dev = [
 ]
 
 [tool.pytest.ini_options]
-DJANGO_SETTINGS_MODULE = "config.settings"
+DJANGO_SETTINGS_MODULE = "config.settings_test"
 testpaths = ["apps"]
 
 [tool.ruff]
@@ -50,6 +50,9 @@ select = ["E", "F", "I", "B", "UP", "SIM", "C4"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["apps", "config"]
+
+[tool.ruff.lint.per-file-ignores]
+"config/settings_test.py" = ["F405"]
 
 [tool.ty.environment]
 # Match the project's minimum Python version (project.requires-python).

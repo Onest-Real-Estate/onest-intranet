@@ -7,8 +7,9 @@ client-supplied office or owner identifier — and returns a
 Most modules this dashboard reports on do not exist yet. Those providers return
 ``unavailable`` and point at the hub section where the feature will live. That
 is the whole point of this layer: the page is honest about what it does not
-know, and it becomes useful one provider at a time as
-`P1-022`–`P1-027` land, with no change to the view or the page.
+know, and it becomes useful one provider at a time as remaining domain modules
+(``P1-023``–``P1-027`` and later) ship, with no change to the view or the page.
+The performance metrics widget (``P1-022``) is live via ``web.metrics``.
 """
 
 from __future__ import annotations

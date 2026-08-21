@@ -598,8 +598,12 @@ def _update_link(
     expected_version: str,
     acknowledged: bool,
 ) -> QuickAccessLink:
+    # ``of=("self",)`` is load-bearing: ``owner_office`` is nullable, so
+    # ``select_related`` reaches it through a LEFT OUTER JOIN, and PostgreSQL
+    # refuses a bare ``FOR UPDATE`` that spans the nullable side of an outer
+    # join. SQLite drops row locking altogether, so local sqlite runs miss this.
     locked = (
-        QuickAccessLink.objects.select_for_update()
+        QuickAccessLink.objects.select_for_update(of=("self",))
         .select_related("owner_office")
         .get(pk=link.pk)
     )

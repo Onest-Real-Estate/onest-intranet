@@ -30,6 +30,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, time, timedelta
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
 from django.urls import reverse
@@ -185,6 +186,10 @@ class MetricValue:
     hint: str = ""
     tone: str = "neutral"
     trend: str = "flat"
+    #: Machine-readable figure for tests and future clients; never the display string.
+    raw_value: int | float | str | None = None
+    #: What ``raw_value`` counts — e.g. ``count``, ``usd``, ``ratio``.
+    unit: str | None = None
 
 
 @dataclass(frozen=True)
@@ -198,6 +203,33 @@ class MetricContext:
 
 
 MetricCalculator = Callable[[MetricContext], MetricValue]
+
+
+# --------------------------------------------------------------------------- #
+# Presentation — one adapter for every format the registry allows
+# --------------------------------------------------------------------------- #
+
+
+def format_count(value: int) -> str:
+    """Whole counts only. Never invent fractional people or deals."""
+    return f"{int(value):,}"
+
+
+def format_currency(amount: Decimal | int | float) -> str:
+    """USD to the cent. Whole-dollar inputs still show ``.00`` so scale is honest."""
+    quantized = Decimal(amount).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    sign = "-" if quantized < 0 else ""
+    absolute = abs(quantized)
+    dollars, cents = divmod(int(absolute * 100), 100)
+    return f"{sign}${dollars:,}.{cents:02d}"
+
+
+def format_percent(ratio: float, *, places: int = 0) -> str:
+    """Ratio as a percentage. Default: whole percent, no fake precision."""
+    pct = float(ratio) * 100
+    if places <= 0:
+        return f"{round(pct)}%"
+    return f"{pct:.{places}f}%"
 
 
 @dataclass(frozen=True)
@@ -365,10 +397,12 @@ def calculate_new_agents(context: MetricContext) -> MetricValue:
         .count()
     )
     return MetricValue(
-        value=str(count),
+        value=format_count(count),
         hint=f"Joined in the last {NEW_AGENT_WINDOW_DAYS} days",
         tone="neutral",
         trend="up" if count else "flat",
+        raw_value=count,
+        unit="count",
     )
 
 
@@ -741,6 +775,7 @@ def _metric_payload(definition: MetricDefinition, context: MetricContext) -> dic
         "format": definition.format,
         "scopeLevel": _metric_scope_level(definition, context.scope),
         "definition": definition.definition,
+        "asOf": context.now.isoformat(),
         "drillDown": _drill_down_payload(definition),
     }
     if not SOURCE_MODULE_AVAILABILITY[definition.source_module]:
@@ -754,7 +789,7 @@ def _metric_payload(definition: MetricDefinition, context: MetricContext) -> dic
             "trend": "flat",
         }
     calculated = definition.calculator(context)
-    return {
+    measured: dict[str, Any] = {
         **payload,
         "availability": Availability.AVAILABLE,
         "value": calculated.value,
@@ -762,6 +797,11 @@ def _metric_payload(definition: MetricDefinition, context: MetricContext) -> dic
         "tone": calculated.tone,
         "trend": calculated.trend,
     }
+    if calculated.raw_value is not None:
+        measured["rawValue"] = calculated.raw_value
+    if calculated.unit:
+        measured["unit"] = calculated.unit
+    return measured
 
 
 def dashboard_metrics(

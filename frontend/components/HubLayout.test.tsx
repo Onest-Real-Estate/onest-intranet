@@ -320,18 +320,18 @@ describe("HubLayout navigation", () => {
     });
     renderLayout();
     expect(screen.getByText("Administration")).toBeInTheDocument();
+    const sidebar = nav();
     expect(
-      within(nav())
+      within(sidebar)
         .getAllByRole("region")
         .map((group) => group.getAttribute("aria-label")),
     ).toEqual(["People", "Operations", "Content", "Governance & support"]);
-    for (const item of HUB_ADMIN_NAV) {
-      expect(
-        within(nav())
-          .getAllByRole("link")
-          .find((link) => link.getAttribute("href") === item.route.href),
-      ).toBeInTheDocument();
-    }
+    const hrefs = within(sidebar)
+      .getAllByRole("link")
+      .map((link) => link.getAttribute("href"));
+    expect(hrefs).toEqual(
+      expect.arrayContaining(HUB_ADMIN_NAV.map((item) => item.route.href)),
+    );
   });
 
   it("marks a nested users detail route active without activating Add New User", () => {

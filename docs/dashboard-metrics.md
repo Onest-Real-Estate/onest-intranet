@@ -87,6 +87,20 @@ a module is marked available while a metric still points at `pending_source`.
 Reserve it for figures that would mislead by their mere presence; no production
 row uses it today.
 
+## States the page can show
+
+| State | How it appears | Who decides |
+| --- | --- | --- |
+| Measured value, including **zero** | `availability: available`, formatted `value` (e.g. `"0"`), optional `rawValue` | Calculator ran |
+| **Unavailable** | `availability: unavailable`, `value: null`, `unavailableReason` | Source module flag is off |
+| **Loading** | Skeleton cards | Inertia `<Deferred>` fallback for the `metrics` prop |
+| **Permission withheld** | Card absent from the payload | `select_metrics` — never a visible placeholder |
+| **Stale** | Auth-staleness banner on the dashboard shell | Effective access changed mid-session; metrics themselves are not cached |
+
+Every metric carries `asOf` (ISO, server clock for that calculation). The
+performance section shows one quiet "As of …" line from that stamp. There is no
+per-card stale mark: the metrics widget is uncached and recomputed each request.
+
 ## Calculation definitions
 
 Every row's `definition` is the contract for what its number means. The
@@ -147,8 +161,11 @@ page:
           "format": "count",
           "scopeLevel": "office",
           "definition": "Active users whose office is inside …",
+          "asOf": "2026-08-19T09:00:00-04:00",
           "availability": "available",
           "value": "4",
+          "rawValue": 4,
+          "unit": "count",
           "hint": "Joined in the last 30 days",
           "tone": "neutral",
           "trend": "up",
@@ -160,7 +177,10 @@ page:
 }
 ```
 
-`drillDown.href` is reversed on the server so the destination stays in step with
-`urls.py` without the page holding a route name it would have to widen `routes`
-typing to call. `frontend/components/dashboard/MetricCards.tsx` renders whatever
-arrives and makes no entitlement decision of its own.
+`value` is always pre-formatted by the shared helpers in `apps/web/metrics.py`
+(`format_count`, `format_currency`, `format_percent`). The page never does
+arithmetic on `rawValue`. `drillDown.href` is reversed on the server so the
+destination stays in step with `urls.py` without the page holding a route name
+it would have to widen `routes` typing to call.
+`frontend/components/dashboard/MetricCards.tsx` renders whatever arrives and
+makes no entitlement decision of its own.

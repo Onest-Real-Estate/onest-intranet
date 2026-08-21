@@ -3,6 +3,7 @@
 import json
 from dataclasses import replace
 from datetime import timedelta
+from decimal import Decimal
 from typing import cast
 
 import pytest
@@ -35,6 +36,9 @@ from apps.web.metrics import (
     MetricScope,
     UnavailableBehavior,
     dashboard_metrics,
+    format_count,
+    format_currency,
+    format_percent,
     pending_source,
     resolve_scope,
     select_metrics,
@@ -384,6 +388,30 @@ def test_losing_a_permission_removes_both_the_card_and_its_drill_down(client):
     assert client.get(reverse("admin_new_agents")).status_code == 403
 
 
+@pytest.mark.django_db
+def test_stripping_commission_permission_drops_only_the_commission_card():
+    """Commission visibility is independent of the rest of the agent pipeline."""
+    office = branch()
+    user = agent("no-commission@example.com", office)
+    assert "ownCommissionYtd" in keys(user)
+    assert "ownActiveTransactions" in keys(user)
+
+    group = Group.objects.get(name=role_group_name(AGENT))
+    group.permissions.remove(
+        Permission.objects.get(
+            content_type__app_label="web",
+            content_type__model="dashboardmetricpermission",
+            codename="view_own_commission",
+        )
+    )
+    user = User.objects.get(pk=user.pk)
+
+    selected = keys(user)
+    assert "ownCommissionYtd" not in selected
+    assert "ownActiveTransactions" in selected
+    assert "ownPendingTasks" in selected
+
+
 # --------------------------------------------------------------------------- #
 # Aggregation and scope
 # --------------------------------------------------------------------------- #
@@ -458,7 +486,7 @@ def test_company_wide_admin_counts_every_office():
         for item in group["metrics"]
         if item["key"] == "teamNewAgents"
     )
-    assert metric["value"] == str(User.objects.filter(is_active=True).count())
+    assert metric["value"] == format_count(User.objects.filter(is_active=True).count())
     assert payload["scope"] == {"level": "company", "label": "Brokerage-wide"}
 
 
@@ -520,9 +548,39 @@ def test_unconnected_source_module_is_marked_rather_than_calculated():
     )
     assert metric["availability"] == Availability.UNAVAILABLE
     assert metric["value"] is None
+    assert "rawValue" not in metric
+    assert "asOf" in metric
     assert "not connected" in metric["unavailableReason"]
     # The destination is still offered: the metric is unmeasured, not forbidden.
     assert metric["drillDown"]["href"] == reverse("admin_reservations")
+
+
+@pytest.mark.django_db
+def test_zero_new_agents_is_available_zero_not_unavailable():
+    """An empty trailing window is a measured zero, not an unconnected module."""
+    office = branch()
+    # The manager themselves joined "now" and would count; age them out of the
+    # trailing window so the aggregate is genuinely empty.
+    manager = branch_manager("zero-agents@example.com", office)
+    User.objects.filter(pk=manager.pk).update(
+        date_joined=timezone.now() - timedelta(days=45)
+    )
+    manager = User.objects.get(pk=manager.pk)
+
+    at = timezone.now()
+    payload = dashboard_metrics(manager, at=at)
+    metric = next(
+        item
+        for group in payload["groups"]
+        for item in group["metrics"]
+        if item["key"] == "teamNewAgents"
+    )
+    assert metric["availability"] == Availability.AVAILABLE
+    assert metric["value"] == "0"
+    assert metric["rawValue"] == 0
+    assert metric["unit"] == "count"
+    assert metric["asOf"] == at.isoformat()
+    assert metric["trend"] == "flat"
 
 
 @pytest.mark.django_db
@@ -547,6 +605,29 @@ def test_available_module_flags_stay_in_step_with_the_registry():
     for definition in METRIC_DEFINITIONS:
         if SOURCE_MODULE_AVAILABILITY[definition.source_module]:
             assert definition.calculator is not pending_source
+
+
+# --------------------------------------------------------------------------- #
+# Presentation
+# --------------------------------------------------------------------------- #
+
+
+def test_format_count_keeps_whole_numbers_and_thousands_separators():
+    assert format_count(0) == "0"
+    assert format_count(4) == "4"
+    assert format_count(1234) == "1,234"
+
+
+def test_format_currency_shows_honest_cent_scale():
+    assert format_currency(0) == "$0.00"
+    assert format_currency(Decimal("1234.5")) == "$1,234.50"
+    assert format_currency(Decimal("-10.1")) == "-$10.10"
+
+
+def test_format_percent_avoids_fake_precision_by_default():
+    assert format_percent(0) == "0%"
+    assert format_percent(0.425) == "42%"
+    assert format_percent(0.425, places=1) == "42.5%"
 
 
 # --------------------------------------------------------------------------- #
