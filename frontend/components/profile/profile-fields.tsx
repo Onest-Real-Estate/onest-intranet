@@ -38,6 +38,7 @@ export function TextField({
   description,
   optional,
   required,
+  leading,
   ...props
 }: Omit<React.ComponentProps<typeof Input>, "id" | "name"> & {
   name: string;
@@ -46,6 +47,8 @@ export function TextField({
   description?: React.ReactNode;
   optional?: boolean;
   required?: boolean;
+  /** Decorative icon set inside the control's left edge. */
+  leading?: React.ReactNode;
 }) {
   const help = description ? descriptionId(name) : undefined;
   return (
@@ -53,13 +56,32 @@ export function TextField({
       <FormLabel htmlFor={name} required={required} optional={optional}>
         {label}
       </FormLabel>
-      <Input
-        id={name}
-        name={name}
-        required={required}
-        {...fieldA11yProps(name, validation, help)}
-        {...props}
-      />
+      {leading ? (
+        <div className="relative">
+          <span
+            aria-hidden
+            className="text-muted-foreground pointer-events-none absolute top-1/2 left-3.5 -translate-y-1/2 [&_svg]:size-4"
+          >
+            {leading}
+          </span>
+          <Input
+            id={name}
+            name={name}
+            required={required}
+            className="pl-10"
+            {...fieldA11yProps(name, validation, help)}
+            {...props}
+          />
+        </div>
+      ) : (
+        <Input
+          id={name}
+          name={name}
+          required={required}
+          {...fieldA11yProps(name, validation, help)}
+          {...props}
+        />
+      )}
       {description ? <FormDescription id={help}>{description}</FormDescription> : null}
       <FormFieldError
         id={`${name}_error`}

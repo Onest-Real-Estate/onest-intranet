@@ -1,4 +1,4 @@
-import { Head, router, usePage } from "@inertiajs/react";
+import { Head, Link, router, usePage } from "@inertiajs/react";
 import { ArrowRight, ChevronDown, CircleAlert, SlidersHorizontal } from "lucide-react";
 import { useState } from "react";
 
@@ -124,8 +124,8 @@ export default function NewAgentList() {
               label="Search new agents"
               value={filters.q}
               onValueChange={(q) => setFilters((current) => ({ ...current, q }))}
-              onSearch={(q) => visit({ q })}
-              onClear={() => visit({ q: "" })}
+              onSearch={(q) => visit({ q }, 1)}
+              onClear={() => visit({ q: "" }, 1)}
               placeholder="Name or work email"
               className="max-w-xl"
             />
@@ -320,10 +320,10 @@ export default function NewAgentList() {
                   header: <span className="sr-only">Actions</span>,
                   cell: (row) => (
                     <Button variant="outline" size="sm" asChild>
-                      <a href={routes.new_agent_onboarding(row.user.id)}>
+                      <Link href={routes.new_agent_onboarding(row.user.id)}>
                         Review
                         <ArrowRight className="size-3.5" aria-hidden />
-                      </a>
+                      </Link>
                     </Button>
                   ),
                   className: "text-right",

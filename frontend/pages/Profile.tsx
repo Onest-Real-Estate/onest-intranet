@@ -1,4 +1,5 @@
 import { Head, usePage } from "@inertiajs/react";
+import { CheckCircle2, Lock } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import {
@@ -110,10 +111,19 @@ export default function Profile() {
         title="Your profile"
         description="Keep your contact details, credentials, and public introduction current. Everything here is yours alone — no one else can read or change it from this page."
         meta={
-          <span className="tabular-nums">
-            {completeness.percent}% complete · {completeness.completed} of{" "}
-            {completeness.total} details
-          </span>
+          <>
+            <span className="bg-primary/10 text-primary inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold tabular-nums">
+              {completeness.percent}% complete
+              <span className="text-primary/60 font-medium">
+                {" "}
+                · {completeness.completed} of {completeness.total}
+              </span>
+            </span>
+            <span className="text-muted-foreground inline-flex items-center gap-1.5 text-xs font-medium">
+              <Lock className="size-3.5" aria-hidden />
+              Visible only to you and your brokerage
+            </span>
+          </>
         }
       />
 
@@ -157,11 +167,21 @@ export default function Profile() {
 
           <FormActionBar
             status={
-              submitting
-                ? "Saving your changes…"
-                : dirty
-                  ? "You have unsaved changes."
-                  : "All changes saved."
+              submitting ? (
+                "Saving your changes…"
+              ) : dirty ? (
+                <span className="flex items-center gap-2">
+                  <span className="bg-warning relative flex size-2 rounded-full">
+                    <span className="bg-warning absolute inline-flex h-full w-full animate-ping rounded-full opacity-60" />
+                  </span>
+                  You have unsaved changes.
+                </span>
+              ) : (
+                <span className="flex items-center gap-2">
+                  <CheckCircle2 className="text-success size-4" aria-hidden />
+                  All changes saved.
+                </span>
+              )
             }
           >
             <Button type="submit" disabled={submitting}>
@@ -171,7 +191,7 @@ export default function Profile() {
         </form>
 
         <aside className="order-1 grid content-start gap-6 lg:order-2">
-          <div id={SECTION_ANCHORS.photo}>
+          <div id={SECTION_ANCHORS.photo} className="scroll-mt-24">
             <ProfilePhotoPanel
               headshotUrl={initial.headshotUrl}
               displayName={identity.preferredDisplayName || identity.displayName}

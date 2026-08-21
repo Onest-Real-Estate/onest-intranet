@@ -37,7 +37,7 @@ function ActionRow({ item }: { item: DashboardActionItem }) {
   return (
     <Link
       href={item.ctaHref}
-      className="hover:border-ring/40 hover:bg-muted/40 focus-visible:ring-ring focus-visible:ring-offset-background flex items-start justify-between gap-3 rounded-lg border px-3 py-3 transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
+      className="hover:border-ring/40 hover:bg-muted/40 focus-visible:ring-ring focus-visible:ring-offset-background flex items-start justify-between gap-3 rounded-lg border px-3 py-3 transition-colors duration-(--motion-fast) focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
       aria-label={`${item.title}. ${statusLabel(item)}. ${item.dueLabel}. ${item.ctaLabel}`}
     >
       <span className="grid min-w-0 gap-0.5">

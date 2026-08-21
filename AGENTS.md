@@ -83,6 +83,7 @@ docs/profile.md    Self-service profile: editable allowlist, normalization, audi
 docs/agent-administration.md  Broker-controlled profile half: scope, delegation, audit
 docs/roles.md      Brokerage role catalog: stable codes, scopes, permission bundles
 docs/role-assignment-administration.md  Assign User Roles: preview, concurrency, scopes
+docs/office-resources.md  Scoped office resources: inheritance, precedence, protected files
 DESIGN.md          Raw design tokens (Material-style palette export)
 ```
 

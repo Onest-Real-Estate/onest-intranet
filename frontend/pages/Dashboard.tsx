@@ -122,10 +122,10 @@ export default function Dashboard() {
             <div
               className={
                 showsScopeControl && showsProfileControl
-                  ? "bg-muted/35 grid min-w-0 gap-2 rounded-xl border p-2 sm:grid-cols-[14rem_16rem] lg:shrink-0"
+                  ? "bg-muted/40 grid min-w-0 gap-2 rounded-xl border p-2 sm:grid-cols-[14rem_16rem] lg:shrink-0"
                   : showsProfileControl
-                    ? "bg-muted/35 grid min-w-0 gap-2 rounded-xl border p-2 sm:w-64 lg:shrink-0"
-                    : "bg-muted/35 grid min-w-0 gap-2 rounded-xl border p-2 sm:w-56 lg:shrink-0"
+                    ? "bg-muted/40 grid min-w-0 gap-2 rounded-xl border p-2 sm:w-64 lg:shrink-0"
+                    : "bg-muted/40 grid min-w-0 gap-2 rounded-xl border p-2 sm:w-56 lg:shrink-0"
               }
             >
               <DashboardScopeSelector

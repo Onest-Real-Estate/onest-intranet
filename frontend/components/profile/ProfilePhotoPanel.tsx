@@ -1,5 +1,5 @@
 import { router } from "@inertiajs/react";
-import { Trash2 } from "lucide-react";
+import { CheckCircle2, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import {
@@ -11,6 +11,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { routes } from "@/lib/routes";
+import { cn } from "@/lib/utils";
 import type { ProfileLimits } from "@/types";
 
 function initials(name: string): string {
@@ -128,27 +129,41 @@ export function ProfilePhotoPanel({
         title="Profile photo"
         description="Saved as soon as it uploads — you do not need to press Save changes."
       />
-      <SurfaceCardContent className="grid gap-4">
-        <div className="flex items-center gap-4">
-          <Avatar className="size-16">
-            {avatarSrc ? (
-              <AvatarImage
-                key={avatarSrc}
-                src={avatarSrc}
-                alt=""
-                onLoadingStatusChange={(status) => {
-                  if (status === "loaded" && photoUrl && localPreview) {
-                    clearLocalPreview();
-                  }
-                }}
-              />
-            ) : null}
-            <AvatarFallback>{initials(displayName)}</AvatarFallback>
-          </Avatar>
+      <SurfaceCardContent className="grid gap-5">
+        <div className="flex flex-col items-center gap-3 text-center">
+          <div className="bg-background shadow-card rounded-full p-1">
+            <Avatar className="size-20 border-border/60 border">
+              {avatarSrc ? (
+                <AvatarImage
+                  key={avatarSrc}
+                  src={avatarSrc}
+                  alt=""
+                  onLoadingStatusChange={(status) => {
+                    if (status === "loaded" && photoUrl && localPreview) {
+                      clearLocalPreview();
+                    }
+                  }}
+                />
+              ) : null}
+              <AvatarFallback>{initials(displayName)}</AvatarFallback>
+            </Avatar>
+          </div>
           <div className="min-w-0">
-            <p className="text-sm font-medium">{displayName}</p>
-            <p className="text-muted-foreground text-sm">
-              {avatarSrc ? "Photo on file" : "No photo yet"}
+            <p className="text-base font-semibold tracking-[-0.01em]">{displayName}</p>
+            <p
+              className={cn(
+                "mt-0.5 inline-flex items-center gap-1.5 text-xs font-medium",
+                avatarSrc ? "text-success" : "text-muted-foreground",
+              )}
+            >
+              {avatarSrc ? (
+                <>
+                  <CheckCircle2 className="size-3.5" aria-hidden />
+                  Photo on file
+                </>
+              ) : (
+                "No photo yet"
+              )}
             </p>
           </div>
         </div>

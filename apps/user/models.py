@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from django.contrib.auth.base_user import BaseUserManager
 from django.contrib.auth.models import AbstractUser
 from django.core.exceptions import ValidationError
@@ -41,6 +43,7 @@ from .profile_fields import (
     normalize_url,
 )
 from .roles import ScopeType, is_valid_scope_type, normalize_role_code
+from .storage import private_storage
 from .us import (
     US_STATE_CHOICES,
     US_STATE_CODES,
@@ -477,6 +480,160 @@ class OfficeContactAssignment(models.Model):
             errors["user"] = _("Assigned staff must belong to the same office.")
         if errors:
             raise ValidationError(errors)
+
+
+class OfficeResource(models.Model):
+    """Location-specific instructions, procedures, contacts, links, and files.
+
+    Resources are owned by a node of the office tree. The owner node kind is
+    the scope: head office = company-wide, region = regional, branch/regional
+    office = single-office. Visibility for one agent resolves the scope chain
+    (office → region → company) and deduplicates by ``slug`` so a closer-scope
+    resource with the same slug overrides a wider one deterministically.
+
+    Files are stored in protected storage and are only reachable through the
+    authorized download view — never through public media URLs.
+    """
+
+    class ResourceType(models.TextChoices):
+        CONTENT = "content", _("Content")
+        LINK = "link", _("Link")
+        FILE = "file", _("File")
+
+    class Category(models.TextChoices):
+        PRINTER_WIFI = "printer_wifi", _("Printer / Wi-Fi / copier")
+        CONFERENCE_ROOMS = "conference_rooms", _("Conference rooms")
+        BUILDING_ACCESS = "building_access", _("Building access")
+        VENDOR_CONTACTS = "vendor_contacts", _("Vendor contacts")
+        LOCAL_FORMS = "local_forms", _("Local forms")
+        PROCEDURES = "procedures", _("Procedures")
+        SHIPPING = "shipping", _("Shipping")
+        SUPPLIES = "supplies", _("Supplies")
+        SERVICE_PROVIDERS = "service_providers", _("Service providers")
+        GENERAL = "general", _("General")
+
+    owner_office = models.ForeignKey(
+        Office,
+        verbose_name=_("owning office"),
+        related_name="resources",
+        on_delete=models.PROTECT,
+    )
+    slug = models.SlugField(
+        _("slug"),
+        max_length=80,
+        help_text=_(
+            "Identity within the visibility chain. A same-slug resource at a "
+            "closer scope (office over region over company) overrides this one."
+        ),
+    )
+    title = models.CharField(_("title"), max_length=150)
+    summary = models.CharField(_("summary"), max_length=255, blank=True)
+    body = models.TextField(
+        _("body"),
+        blank=True,
+        help_text=_("Required for content resources; shown on the page."),
+    )
+    category = models.CharField(_("category"), max_length=32, choices=Category.choices)
+    resource_type = models.CharField(
+        _("resource type"), max_length=16, choices=ResourceType.choices
+    )
+    url = models.URLField(
+        _("URL"),
+        max_length=500,
+        blank=True,
+        help_text=_("Required for link resources. Must be HTTPS."),
+    )
+    file = models.FileField(
+        _("file"),
+        max_length=255,
+        blank=True,
+        storage=private_storage,
+        upload_to="office-resources/%Y/%m/",
+        help_text=_("Required for file resources. Stored in protected storage."),
+    )
+    original_file_name = models.CharField(
+        _("original file name"), max_length=255, blank=True
+    )
+    is_active = models.BooleanField(_("active"), default=True)
+    sort_order = models.PositiveSmallIntegerField(_("sort order"), default=0)
+    starts_at = models.DateField(_("publishes on"), null=True, blank=True)
+    ends_at = models.DateField(_("expires after"), null=True, blank=True)
+    created_by = models.ForeignKey(
+        "User",
+        verbose_name=_("created by"),
+        related_name="office_resources_created",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        editable=False,
+    )
+    created_at = models.DateTimeField(_("created at"), auto_now_add=True)
+    updated_at = models.DateTimeField(_("updated at"), auto_now=True)
+
+    class Meta:
+        ordering = ["category", "sort_order", "title"]
+        verbose_name = _("office resource")
+        verbose_name_plural = _("office resources")
+        constraints = [
+            models.UniqueConstraint(
+                fields=["owner_office", "slug"],
+                name="user_office_resource_unique",
+            ),
+            models.CheckConstraint(
+                condition=~Q(url="")
+                | Q(resource_type="content")
+                | Q(resource_type="file"),
+                name="user_office_resource_link_needs_url",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["owner_office", "category"],
+                name="user_office_resource_scope",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.owner_office} / {self.slug} / {self.title}"
+
+    @property
+    def scope_level(self) -> str:
+        """Company, region, or office depending on the owning node kind."""
+        if self.owner_office.kind == Office.Kind.HEAD_OFFICE:
+            return "company"
+        if self.owner_office.kind == Office.Kind.REGION:
+            return "region"
+        return "office"
+
+    def clean(self):
+        super().clean()
+        errors = {}
+        if self.ends_at and self.starts_at and self.ends_at < self.starts_at:
+            errors["ends_at"] = _("Expiration cannot be earlier than publishing.")
+        types = self.ResourceType
+        if self.resource_type == types.LINK and not self.url:
+            errors["url"] = _("Link resources require an HTTPS URL.")
+        elif self.resource_type == types.LINK and not self.url.startswith("https://"):
+            errors["url"] = _("Only HTTPS links are allowed.")
+        elif self.url and self.resource_type != types.LINK:
+            errors["url"] = _("Only link resources carry a URL.")
+        if self.resource_type == types.FILE and not self.file:
+            errors["file"] = _("File resources require an uploaded file.")
+        elif self.file and self.resource_type != types.FILE:
+            errors["file"] = _("Only file resources carry an upload.")
+        if self.resource_type == types.CONTENT and not self.body.strip():
+            errors["body"] = _("Content resources require body text.")
+        elif self.body and self.resource_type != types.CONTENT:
+            errors["body"] = _("Only content resources carry body text.")
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        # Keep the original filename so downloads can restore it even after
+        # the storage backend renames for uniqueness.
+        if self.file and not self.original_file_name:
+            self.original_file_name = Path(self.file.name).name
+        super().save(*args, **kwargs)
 
 
 class User(AbstractUser):

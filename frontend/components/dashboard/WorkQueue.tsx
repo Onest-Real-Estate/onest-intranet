@@ -30,7 +30,7 @@ function Row({ row }: { row: DashboardQueueRow }) {
   );
 
   const className =
-    "flex items-start justify-between gap-3 rounded-lg border px-3 py-3 transition-colors";
+    "flex items-start justify-between gap-3 rounded-lg border px-3 py-3 transition-colors duration-(--motion-fast)";
 
   if (row.href) {
     return (

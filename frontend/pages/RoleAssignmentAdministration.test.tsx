@@ -9,6 +9,9 @@ const visitMock = vi.fn();
 
 vi.mock("@inertiajs/react", () => ({
   Head: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
+  Link: ({ href, children }: { href: string; children?: React.ReactNode }) => (
+    <a href={href}>{children}</a>
+  ),
   router: {
     get: (...args: unknown[]) => visitMock(...args),
     post: vi.fn(),
@@ -85,7 +88,11 @@ describe("RoleAssignmentAdministration", () => {
   });
 
   it("exposes the shared hub layout on the Inertia page export", () => {
-    render(RoleAssignmentAdministration.layout(<div>Page content</div>));
+    const [ResolvedLayout] =
+      RoleAssignmentAdministration.layout() as unknown as readonly [
+        (props: { children?: React.ReactNode }) => React.ReactNode,
+      ];
+    render(<ResolvedLayout>Page content</ResolvedLayout>);
 
     expect(screen.getByTestId("hub-layout")).toHaveTextContent("Page content");
   });
@@ -232,7 +239,10 @@ describe("RoleAssignmentWorkspace", () => {
   });
 
   it("exposes the shared hub layout on the Inertia page export", () => {
-    render(RoleAssignmentWorkspace.layout(<div>Page content</div>));
+    const [ResolvedLayout] = RoleAssignmentWorkspace.layout() as unknown as readonly [
+      (props: { children?: React.ReactNode }) => React.ReactNode,
+    ];
+    render(<ResolvedLayout>Page content</ResolvedLayout>);
 
     expect(screen.getByTestId("hub-layout")).toHaveTextContent("Page content");
   });

@@ -1,4 +1,4 @@
-import { Head, router, usePage } from "@inertiajs/react";
+import { Head, Link, router, usePage } from "@inertiajs/react";
 import { ArrowRight } from "lucide-react";
 import { useState } from "react";
 
@@ -98,7 +98,7 @@ function RoleAssignmentAdministrationPage() {
   return (
     <>
       <Head title="Assign User Roles" />
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-8 sm:px-6">
+      <div className="flex flex-col gap-6">
         <PageHeader
           title="Assign User Roles"
           description="Grant, schedule, and revoke roles inside the offices and regions you may delegate."
@@ -122,7 +122,7 @@ function RoleAssignmentAdministrationPage() {
               <SearchControl
                 value={query}
                 onValueChange={setQuery}
-                onSearch={() => visit({ q: query })}
+                onSearch={() => visit({ q: query }, 1)}
                 placeholder="Search by name or email"
               />
               <FilterSelect
@@ -226,10 +226,10 @@ function RoleAssignmentAdministrationPage() {
                       <span className="text-muted-foreground text-xs">Your record</span>
                     ) : (
                       <Button asChild variant="outline" size="sm">
-                        <a href={routes.admin_assign_roles_user(row.id)}>
+                        <Link href={routes.admin_assign_roles_user(row.id)}>
                           Manage
                           <ArrowRight className="size-3.5" aria-hidden />
-                        </a>
+                        </Link>
                       </Button>
                     ),
                 },
@@ -255,8 +255,18 @@ function RoleAssignmentAdministration() {
   );
 }
 
-RoleAssignmentAdministration.layout = (page: React.ReactNode) => (
-  <HubLayout>{page}</HubLayout>
-);
+RoleAssignmentAdministration.layout = () =>
+  [
+    HubLayout,
+    {
+      context: {
+        title: "Assign User Roles",
+        breadcrumbs: [
+          { label: "Dashboard", href: routes.dashboard() },
+          { label: "Assign User Roles" },
+        ],
+      },
+    },
+  ] as const;
 
 export default RoleAssignmentAdministration;

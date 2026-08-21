@@ -60,7 +60,7 @@ export function AccessChangeDialog({
           {changes.map((change) => (
             <li
               key={change.label}
-              className="border-border/60 bg-muted/35 grid gap-2 rounded-xl border p-4"
+              className="border-border/60 bg-muted/40 grid gap-2 rounded-xl border p-4"
             >
               <p className="text-sm font-semibold">{change.label}</p>
               <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 text-sm">

@@ -1,4 +1,4 @@
-import { Head, router, usePage } from "@inertiajs/react";
+import { Head, Link, router, usePage } from "@inertiajs/react";
 import { ArrowDown, ArrowUp, Building2, Eye, Globe2, Pencil, Plus } from "lucide-react";
 import { useState } from "react";
 
@@ -150,10 +150,10 @@ function QuickAccessAdministrationPage() {
         }
         actions={
           <Button asChild>
-            <a href={routes.quick_access_new()}>
+            <Link href={routes.quick_access_new()}>
               <Plus className="size-4" aria-hidden />
               New link
-            </a>
+            </Link>
           </Button>
         }
       />
@@ -211,7 +211,6 @@ function QuickAccessAdministrationPage() {
             caption="Quick Access links you may manage"
             rows={rows}
             rowKey={(row) => String(row.id)}
-            loading={reordering}
             emptyTitle="No links match"
             emptyDescription="No Quick Access link in your scope matches these filters."
             columns={[
@@ -338,13 +337,13 @@ function QuickAccessAdministrationPage() {
                       disabled={!row.canManage}
                       className="size-8 px-0 sm:h-8 sm:w-auto sm:px-3"
                     >
-                      <a href={routes.quick_access_edit(row.id)}>
+                      <Link href={routes.quick_access_edit(row.id)}>
                         <span className="sr-only">Edit {row.name}</span>
                         <span className="hidden sm:inline" aria-hidden>
                           Edit
                         </span>
                         <Pencil className="size-3.5" aria-hidden />
-                      </a>
+                      </Link>
                     </Button>
                   </div>
                 ),
@@ -353,10 +352,12 @@ function QuickAccessAdministrationPage() {
               },
             ]}
           />
-          <Pagination
-            pagination={links.pagination}
-            onPageChange={(page) => visit({ page })}
-          />
+          {links.pagination.totalPages > 1 ? (
+            <Pagination
+              pagination={links.pagination}
+              onPageChange={(page) => visit({ page })}
+            />
+          ) : null}
         </SurfaceCardContent>
       </SurfaceCard>
 

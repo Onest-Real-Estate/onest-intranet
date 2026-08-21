@@ -18,6 +18,7 @@ from .models import (
     BrokerageRole,
     Office,
     OfficeContactAssignment,
+    OfficeResource,
     User,
     UserOfficeMembership,
     UserRoleAssignment,
@@ -765,3 +766,69 @@ class UserAdmin(DjangoUserAdmin):
                     ),
                 },
             )
+
+
+@admin.register(OfficeResource)
+class OfficeResourceAdmin(admin.ModelAdmin):
+    list_display = (
+        "title",
+        "owner_office",
+        "category",
+        "resource_type",
+        "is_active",
+        "sort_order",
+        "starts_at",
+        "ends_at",
+        "updated_at",
+    )
+    list_filter = ("category", "resource_type", "is_active", "owner_office")
+    search_fields = ("title", "summary", "slug", "body")
+    prepopulated_fields = {"slug": ("title",)}
+    autocomplete_fields = ["owner_office"]
+    readonly_fields = ("created_at", "updated_at", "created_by")
+    fieldsets = (
+        (
+            _("Identity"),
+            {
+                "fields": (
+                    "owner_office",
+                    "slug",
+                    "title",
+                    "summary",
+                    "category",
+                    "resource_type",
+                )
+            },
+        ),
+        (_("Content"), {"fields": ("body", "url", "file", "original_file_name")}),
+        (
+            _("Visibility"),
+            {
+                "fields": (
+                    "is_active",
+                    "sort_order",
+                    "starts_at",
+                    "ends_at",
+                )
+            },
+        ),
+        (_("Audit"), {"fields": ("created_by", "created_at", "updated_at")}),
+    )
+
+    def save_model(self, request, obj, form, change):
+        if not change and not getattr(obj, "created_by_id", None):
+            obj.created_by = request.user
+        super().save_model(request, obj, form, change)
+        log_model_change(
+            "office_resource.created" if not change else "office_resource.updated",
+            actor=actor_from_user(request.user),
+            instance=obj,
+        )
+
+    def delete_model(self, request, obj):
+        log_model_change(
+            "office_resource.deleted",
+            actor=actor_from_user(request.user),
+            instance=obj,
+        )
+        super().delete_model(request, obj)

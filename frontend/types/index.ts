@@ -1458,6 +1458,45 @@ export interface OfficeInfoPageProps extends PageProps {
   empty: { title: string; description: string } | null;
 }
 
+export type OfficeResourceType = "content" | "link" | "file";
+
+export type OfficeResourceSourceLevel = "company" | "region" | "office";
+
+export interface OfficeResourceItem {
+  slug: string;
+  title: string;
+  summary: string;
+  category: string;
+  categoryLabel: string;
+  resourceType: OfficeResourceType;
+  sourceLabel: string;
+  sourceLevel: OfficeResourceSourceLevel;
+  /** Present for link resources; guaranteed HTTPS by model validation. */
+  url?: string;
+  /** Present for file resources; authorized download endpoint on the app origin. */
+  downloadUrl?: string;
+  fileName?: string;
+  /** Present for content resources. */
+  body?: string;
+}
+
+export interface OfficeResourceGroup {
+  key: string;
+  label: string;
+  items: OfficeResourceItem[];
+}
+
+export interface OfficeResourcesPageProps extends PageProps {
+  groups: OfficeResourceGroup[];
+  filters: { q: string; category: string };
+  categories: { value: string; label: string }[];
+  empty: {
+    title: string;
+    description: string;
+    kind: "empty" | "no-results" | "no-office";
+  } | null;
+}
+
 export interface OfficeListFilters {
   q: string;
   kind: string;

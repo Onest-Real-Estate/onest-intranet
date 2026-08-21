@@ -30,6 +30,7 @@ HUB_FEATURES: dict[str, bool] = {
     **OPERATIONS_FEATURES,
 }
 HUB_FEATURES["office-info"] = True
+HUB_FEATURES["office-resources"] = True
 
 
 class PrimaryOffice(TypedDict):

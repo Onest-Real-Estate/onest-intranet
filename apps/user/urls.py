@@ -26,6 +26,10 @@ from .views.office_administration_views import (
     office_administration_update,
     office_info,
 )
+from .views.office_resource_views import (
+    office_resource_download,
+    office_resources,
+)
 from .views.onboarding_administration_views import (
     onboarding_notice,
     onboarding_owner,
@@ -50,6 +54,12 @@ urlpatterns = [
     path("profile", profile, name="profile"),
     path("profile/submit", profile_submit, name="profile_submit"),
     path("office-info", office_info, name="office_info"),
+    path("office-resources", office_resources, name="office_resources"),
+    path(
+        "office-resources/<slug:slug>/download",
+        office_resource_download,
+        name="office_resources_download",
+    ),
     path(
         "operations/users/<int:user_id>/administration",
         user_administration,

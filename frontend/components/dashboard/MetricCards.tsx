@@ -55,7 +55,7 @@ function Metric({ metric }: { metric: DashboardMetric }) {
     <MetricCard
       className={
         metric.drillDown
-          ? "group-hover:border-ring/40 h-full transition-colors"
+          ? "group-hover:border-ring/40 h-full transition-colors duration-(--motion-fast)"
           : "h-full"
       }
       label={metric.label}
@@ -181,7 +181,7 @@ export function MetricCards({ metrics }: { metrics: DashboardMetrics }) {
 
 export function MetricCardsSkeleton() {
   return (
-    <div className="@container grid gap-4">
+    <div className="@container grid gap-3">
       <div className="grid grid-cols-1 gap-4 @3xl:grid-cols-2">
         {["first", "second"].map((group) => (
           <MetricGroup key={group} title="Loading metrics">

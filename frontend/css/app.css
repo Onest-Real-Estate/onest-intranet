@@ -272,7 +272,7 @@
 
 @layer utilities {
   .arrive {
-    animation: arrive 240ms var(--ease-standard);
+    animation: arrive var(--motion-base) var(--ease-standard);
   }
 
   .animate-dialog-overlay-in {

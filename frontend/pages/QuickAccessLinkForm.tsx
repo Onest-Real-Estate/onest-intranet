@@ -1,8 +1,9 @@
-import { Head, router, usePage } from "@inertiajs/react";
+import { Head, Link, router, usePage } from "@inertiajs/react";
 import { type FormEvent, useMemo, useState } from "react";
 
 import { AccessChangeDialog } from "@/components/administration/AccessChangeDialog";
 import {
+  FormActionBar,
   FormDescription,
   FormErrorSummary,
   FormField,
@@ -634,7 +635,15 @@ function QuickAccessLinkFormPage() {
           </SurfaceCardContent>
         </SurfaceCard>
 
-        <div className="flex flex-wrap items-center gap-3">
+        <FormActionBar
+          status={
+            submitting
+              ? "Saving your changes…"
+              : editing
+                ? "Changes apply to every office that shows this link."
+                : "The link goes live as soon as you create it."
+          }
+        >
           <Button
             type="submit"
             disabled={submitting}
@@ -643,9 +652,9 @@ function QuickAccessLinkFormPage() {
             {submitting ? "Saving…" : editing ? "Save changes" : "Create link"}
           </Button>
           <Button type="button" variant="outline" asChild>
-            <a href={routes.admin_quick_access()}>Cancel</a>
+            <Link href={routes.admin_quick_access()}>Cancel</Link>
           </Button>
-        </div>
+        </FormActionBar>
       </form>
 
       <AccessChangeDialog

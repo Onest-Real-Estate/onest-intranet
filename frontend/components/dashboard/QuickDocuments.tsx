@@ -31,10 +31,10 @@ export function QuickDocuments({ documents }: { documents: DashboardDocument[] }
                     that will hold them rather than to nothing at all. */}
                 <Link
                   href={routes.coming_soon("documents-forms")}
-                  className="hover:bg-muted/50 focus-visible:ring-ring focus-visible:ring-offset-background group flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
+                  className="hover:bg-muted/50 focus-visible:ring-ring focus-visible:ring-offset-background group flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm transition-colors duration-(--motion-fast) focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
                 >
                   <Icon
-                    className="text-muted-foreground group-hover:text-foreground size-4 shrink-0 transition-colors"
+                    className="text-muted-foreground group-hover:text-foreground size-4 shrink-0 transition-colors duration-(--motion-fast)"
                     strokeWidth={1.5}
                     aria-hidden
                   />

@@ -1,4 +1,4 @@
-import { Head, usePage } from "@inertiajs/react";
+import { Head, Link, usePage } from "@inertiajs/react";
 import { ArrowRight, History, Lock, ShieldAlert } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
@@ -21,6 +21,7 @@ import {
   StatusBadge,
   SurfaceCard,
   SurfaceCardContent,
+  Timeline,
 } from "@/components/design-system";
 import { HubLayout } from "@/components/HubLayout";
 import { SelectField, TextField } from "@/components/profile/profile-fields";
@@ -429,10 +430,10 @@ export default function UserAdministration() {
                   ) : null}
                 </dl>
                 <Button variant="outline" size="sm" asChild>
-                  <a href={administration.onboardingState.href}>
+                  <Link href={administration.onboardingState.href}>
                     Open onboarding workspace
                     <ArrowRight className="size-3.5" aria-hidden />
-                  </a>
+                  </Link>
                 </Button>
               </SurfaceCardContent>
             </SurfaceCard>
@@ -495,28 +496,21 @@ export default function UserAdministration() {
                 </ReadOnlyValue>
               </dl>
               {history.length > 0 ? (
-                <ol className="grid gap-3 border-t pt-4">
-                  {history.map((entry) => (
-                    <li key={entry.id} className="flex gap-3 text-sm">
-                      <span
-                        className="bg-primary/70 mt-1.5 size-2 shrink-0 rounded-full ring-4 ring-primary/10"
-                        aria-hidden
-                      />
-                      <div className="min-w-0">
-                        <p className="font-medium">{formatMoment(entry.occurredAt)}</p>
-                        <p className="mt-0.5 text-xs leading-5">{entry.label}</p>
-                        <p className="text-muted-foreground mt-0.5 text-xs leading-5">
-                          {entry.actor}
-                          {entry.reason
-                            ? ` · ${entry.reason}`
-                            : entry.fields.length
-                              ? ` · ${entry.fields.join(", ")}`
-                              : ""}
-                        </p>
-                      </div>
-                    </li>
-                  ))}
-                </ol>
+                <Timeline
+                  className="border-t pt-4"
+                  items={history.map((entry) => ({
+                    id: entry.id,
+                    title: entry.label,
+                    meta: formatMoment(entry.occurredAt),
+                    description:
+                      entry.actor +
+                      (entry.reason
+                        ? ` · ${entry.reason}`
+                        : entry.fields.length
+                          ? ` · ${entry.fields.join(", ")}`
+                          : ""),
+                  }))}
+                />
               ) : (
                 <p className="text-muted-foreground border-t pt-4 text-sm">
                   Nothing has been changed on this record yet.

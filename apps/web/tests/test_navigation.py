@@ -52,7 +52,11 @@ def test_only_the_live_destinations_are_enabled():
     # assertion is the reminder to update the nav registry at the same time.
     live_features = {
         key
-        for key, enabled in {**OPERATIONS_FEATURES, "office-info": True}.items()
+        for key, enabled in {
+            **OPERATIONS_FEATURES,
+            "office-info": True,
+            "office-resources": True,
+        }.items()
         if enabled
     }
     coming_soon = {
@@ -63,6 +67,7 @@ def test_only_the_live_destinations_are_enabled():
     assert HUB_FEATURES["admin-users"] is True
     assert HUB_FEATURES["admin-offices"] is True
     assert HUB_FEATURES["office-info"] is True
+    assert HUB_FEATURES["office-resources"] is True
 
 
 def test_feature_states_are_a_copy_callers_cannot_corrupt():
@@ -81,6 +86,7 @@ def test_unauthorized_administrative_feature_keys_are_not_shared(client):
     assert props["features"] == {
         **dict.fromkeys(HUB_SECTIONS, False),
         "office-info": True,
+        "office-resources": True,
     }
     assert not any(key.startswith("admin-") for key in props["features"])
 
@@ -173,6 +179,7 @@ def test_shared_props_carry_feature_state_and_office(client):
     assert props["features"] == {
         **dict.fromkeys(HUB_SECTIONS, False),
         "office-info": True,
+        "office-resources": True,
     }
     assert props["primaryOffice"] == {
         "id": office.id,

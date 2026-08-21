@@ -147,7 +147,7 @@ function QuickAppBody({
 }
 
 const ROW_CLASS =
-  "flex h-full items-center gap-3 rounded-lg border px-3 py-2 transition-colors";
+  "flex h-full items-center gap-3 rounded-lg border px-3 py-2 transition-colors duration-(--motion-fast)";
 
 function QuickAppRow({
   app,
@@ -199,13 +199,13 @@ function QuickAppRow({
       ) : null}
       {external ? (
         <SquareArrowOutUpRight
-          className="text-muted-foreground group-hover:text-foreground size-4 shrink-0 transition-colors"
+          className="text-muted-foreground group-hover:text-foreground size-4 shrink-0 transition-colors duration-(--motion-fast)"
           strokeWidth={1.5}
           aria-hidden
         />
       ) : (
         <ArrowRight
-          className="text-muted-foreground group-hover:text-foreground size-4 shrink-0 transition-colors"
+          className="text-muted-foreground group-hover:text-foreground size-4 shrink-0 transition-colors duration-(--motion-fast)"
           strokeWidth={1.5}
           aria-hidden
         />
