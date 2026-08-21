@@ -65,6 +65,7 @@ fixable.
 config/            Django project — settings.py, urls.py, celery.py
 apps/user/         User model, Microsoft SSO views, onboarding, offices, roles
 apps/web/          Inertia pages, shared props middleware, permissions, tasks
+apps/notifications/  Notification domain, producers, centre, header badge
 frontend/pages/    One .tsx per Inertia page — the name in @inertia("Name")
 frontend/components/       App components (HubLayout, PermissionRequired, …)
 frontend/components/ui/    shadcn/ui primitives — regenerate, don't hand-edit
@@ -76,6 +77,7 @@ docs/dashboard-metrics.md  Metric registry: permissions, scope, calculations
 docs/dashboard-profiles.md  Per-role dashboard profiles, widget registry, resolution
 docs/dashboard-action-items.md  Action-item contract, sources, ordering, CTAs
 docs/quick-access.md   Administered dashboard launchers: audience, grants, ordering
+docs/notifications.md  In-app notifications: producers, sources, centre, badge
 docs/user-directory.md Scoped people directory: filters, field permissions, account state
 docs/profile.md    Self-service profile: editable allowlist, normalization, audit
 docs/agent-administration.md  Broker-controlled profile half: scope, delegation, audit

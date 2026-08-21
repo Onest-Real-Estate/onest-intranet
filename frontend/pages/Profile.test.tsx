@@ -71,6 +71,7 @@ function setPage(overrides: Partial<ProfilePageProps> = {}) {
       help: { url: "https://help.example.com" },
       session: { authenticated: true },
     },
+    notifications: null,
     initial,
     validation: emptyValidation,
     offices: [{ label: "Mid-Atlantic", offices: [{ id: 7, name: "Fairfax VA" }] }],

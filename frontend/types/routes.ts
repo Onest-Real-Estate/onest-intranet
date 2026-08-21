@@ -1,4 +1,8 @@
 const URLS = {
+    'notification_state': (public_id: string) => `/notifications/${public_id}/state`,
+    'notification_read_all': () => `/notifications/read-all`,
+    'notification_summary': () => `/notifications/summary`,
+    'notifications': () => `/notifications`,
     'admin_it_support': () => `/operations/it-support`,
     'admin_offices': () => `/operations/offices`,
     'admin_platform_tasks': () => `/operations/platform-tasks`,

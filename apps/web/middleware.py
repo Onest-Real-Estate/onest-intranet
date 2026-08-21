@@ -6,6 +6,7 @@ from inertia import share
 
 from apps.audit.models import AuditEvent
 from apps.audit.service import AuditTarget, actor_from_user, log_event
+from apps.notifications.shell import notification_shell_payload
 from apps.user.headshot import headshot_public_url
 from apps.user.roles import AGENT, ROLE_LABELS, SUPERADMIN_LABEL
 from apps.user.services.role_assignments import get_effective_access
@@ -36,7 +37,7 @@ class AuthorizationPolicyMiddleware:
         callback = match.func
         module = getattr(callback, "__module__", "")
         callback_name = getattr(callback, "__name__", callback.__class__.__name__)
-        if not module.startswith(("apps.user.", "apps.web.")):
+        if not module.startswith(("apps.notifications.", "apps.user.", "apps.web.")):
             return self.get_response(request)
         policy = get_authorization_policy(callback)
         if policy is None:
@@ -144,6 +145,9 @@ class InertiaShareMiddleware:
                 ),
             ),
             primaryOffice=lambda: primary_office_payload(request.user),
+            # Header badge counts — the reader's own unread total, never
+            # an office aggregate. See apps/notifications/shell.py.
+            notifications=lambda: notification_shell_payload(request.user),
             shell=lambda: self.shell_context(request),
         )
         return self.get_response(request)

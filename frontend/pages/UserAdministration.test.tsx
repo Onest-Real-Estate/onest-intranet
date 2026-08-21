@@ -214,6 +214,7 @@ function setPage(overrides: Partial<AdministrationPayload> = {}, extra = {}) {
       help: { url: null },
       session: { authenticated: true },
     },
+    notifications: null,
     administration: { ...administration, ...overrides },
     validation: { fields: {}, form: [] },
     statusOptions: administration.options.agentStatuses,

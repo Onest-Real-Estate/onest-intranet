@@ -85,6 +85,7 @@ function setPage(overrides: Partial<QuickAccessAdministrationPageProps> = {}) {
       help: { url: null },
       session: { authenticated: true },
     },
+    notifications: null,
     links: {
       items: [
         link(),

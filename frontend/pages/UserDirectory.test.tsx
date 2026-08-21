@@ -105,6 +105,7 @@ function setPage({
       help: { url: null },
       session: { authenticated: true },
     },
+    notifications: null,
     users: {
       items,
       pagination: {

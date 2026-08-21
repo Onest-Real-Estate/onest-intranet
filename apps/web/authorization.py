@@ -366,6 +366,53 @@ ROUTE_POLICIES: dict[str, AuthorizationPolicy] = {
         route_names=("action_items_queue",),
         scope_rule="self_only",
     ),
+    "notifications": AuthorizationPolicy(
+        key="notifications",
+        access="authenticated",
+        description=(
+            "Render the signed-in reader's own notification centre. Never "
+            "accepts a recipient identifier: the queryset starts from "
+            "request.user and there is no path that widens it."
+        ),
+        methods=("GET",),
+        route_names=("notifications",),
+        scope_rule="self_only",
+    ),
+    "notification_state": AuthorizationPolicy(
+        key="notification_state",
+        access="authenticated",
+        description=(
+            "Mark one of the reader's own notifications read, unread, or "
+            "archived. The opaque id is resolved through their own queryset, "
+            "so somebody else's id is indistinguishable from a missing one."
+        ),
+        methods=("POST",),
+        route_names=("notification_state",),
+        scope_rule="self_only",
+    ),
+    "notification_read_all": AuthorizationPolicy(
+        key="notification_read_all",
+        access="authenticated",
+        description=(
+            "Clear the reader's own unread notifications. Mandatory items are "
+            "excluded and stay for individual acknowledgement."
+        ),
+        methods=("POST",),
+        route_names=("notification_read_all",),
+        scope_rule="self_only",
+    ),
+    "notification_summary": AuthorizationPolicy(
+        key="notification_summary",
+        access="authenticated",
+        description=(
+            "Unread counts for the header badge, polled by the shell. Answers "
+            "only about the caller; there is no cross-user or office count."
+        ),
+        methods=("GET",),
+        route_names=("notification_summary",),
+        scope_rule="self_only",
+        auth_behavior="json",
+    ),
     "design_system": AuthorizationPolicy(
         key="design_system",
         access="authenticated",
