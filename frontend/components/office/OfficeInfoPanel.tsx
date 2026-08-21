@@ -1,5 +1,5 @@
 import { Check, Copy, Mail, MapPin, Phone } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 
 import {
   PanelHeader,

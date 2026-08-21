@@ -226,9 +226,13 @@
   *,
   *::before,
   *::after {
+    /* biome-ignore lint/complexity/noImportantStyles: must outrank Tailwind's inline transition utilities */
     animation-duration: 0.01ms !important;
+    /* biome-ignore lint/complexity/noImportantStyles: must outrank Tailwind's inline transition utilities */
     animation-iteration-count: 1 !important;
+    /* biome-ignore lint/complexity/noImportantStyles: must outrank Tailwind's inline transition utilities */
     transition-duration: 0.01ms !important;
+    /* biome-ignore lint/complexity/noImportantStyles: must outrank Tailwind's inline transition utilities */
     scroll-behavior: auto !important;
   }
 }
