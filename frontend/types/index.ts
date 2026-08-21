@@ -785,6 +785,8 @@ export interface AdministrationHistoryEntry {
 export interface AdministrationRoleScope {
   value: string;
   label: string;
+  available?: boolean;
+  unavailableReason?: string | null;
 }
 
 export interface AdministrationRoleOption {
@@ -792,6 +794,8 @@ export interface AdministrationRoleOption {
   label: string;
   description?: string;
   protected?: boolean;
+  available?: boolean;
+  unavailableReason?: string | null;
   scopes: AdministrationRoleScope[];
 }
 
@@ -1196,4 +1200,143 @@ export interface QuickAccessLinkFormPageProps extends PageProps {
   roleOptions: QuickAccessChoice[];
   officeOptions: QuickAccessOfficeChoice[];
   capabilities: QuickAccessCapabilities;
+}
+
+/** Role-assignment administration (ops: Assign User Roles). */
+
+export interface RoleAssignmentListFilters {
+  [key: string]: string;
+  q: string;
+  role: string;
+  status: string;
+  office: string;
+  region: string;
+}
+
+export interface RoleAssignmentListRow {
+  id: number;
+  email: string;
+  displayName: string;
+  isActive: boolean;
+  isSelf: boolean;
+  office: { id: number; name: string; pathLabel: string } | null;
+  liveRoles: Array<{
+    role: string;
+    roleLabel: string;
+    scopeLabel: string;
+    status: string;
+  }>;
+  counts: {
+    active: number;
+    scheduled: number;
+    expired: number;
+    revoked: number;
+  };
+}
+
+export interface RoleAssignmentAccessSnapshot {
+  roles: string[];
+  roleKeys: string[];
+  permissions: string[];
+  scopeLabel: string;
+  companyWide: boolean;
+  assignedRecord: boolean;
+  liveAssignments: number;
+}
+
+export interface RoleAssignmentAccessChange {
+  label: string;
+  from: string;
+  to: string;
+  impact: string;
+}
+
+export interface RoleAssignmentNavItem {
+  key: string;
+  label: string;
+  section: string;
+}
+
+export interface RoleAssignmentPreview {
+  before: RoleAssignmentAccessSnapshot;
+  after: RoleAssignmentAccessSnapshot;
+  permissionDelta: { added: string[]; removed: string[] };
+  navigationDelta: {
+    added: RoleAssignmentNavItem[];
+    removed: RoleAssignmentNavItem[];
+  };
+  highImpact: RoleAssignmentAccessChange[];
+  requiresConfirmation: boolean;
+  warnings: string[];
+}
+
+export interface RoleAssignmentWorkspaceAssignment {
+  id: number;
+  role: string;
+  roleLabel: string;
+  roleDescription: string;
+  scopeType: string;
+  scopeLabel: string;
+  scopeOfficeId: number | null;
+  status: string;
+  startsAt: string | null;
+  endsAt: string | null;
+  assignedBy: string | null;
+  revokedBy: string | null;
+  revokedAt: string | null;
+  businessReason: string;
+  version: string;
+  canEdit: boolean;
+  canRevoke: boolean;
+  access: {
+    roleLabel: string;
+    scopeLabel: string;
+    permissions: string[];
+    orgReach: string;
+  };
+  isLastLive: boolean;
+  isManagement: boolean;
+}
+
+export interface RoleAssignmentWorkspace {
+  subject: {
+    id: number;
+    email: string;
+    displayName: string;
+    isActive: boolean;
+    isSelf: boolean;
+    office: { id: number; name: string; pathLabel: string } | null;
+    agentStatus: string;
+  };
+  assignments: RoleAssignmentWorkspaceAssignment[];
+  effectiveAccess: RoleAssignmentAccessSnapshot;
+  grantVersion: string;
+  options: {
+    roles: AdministrationRoleOption[];
+    offices: AdministrationOfficeOption[];
+  };
+  editable: boolean;
+  administrationHref: string;
+}
+
+export interface RoleAssignmentAdministrationPageProps extends PageProps {
+  users: ListResponse<RoleAssignmentListRow, RoleAssignmentListFilters>;
+  filterOptions: {
+    roles: FilterOption[];
+    statuses: FilterOption[];
+    offices: Array<{
+      id: number;
+      name: string;
+      pathLabel: string;
+      kind: string;
+    }>;
+  };
+  scope: { level: string; label: string };
+}
+
+export interface RoleAssignmentWorkspacePageProps extends PageProps {
+  workspace: RoleAssignmentWorkspace;
+  validation: ValidationErrors;
+  preview: RoleAssignmentPreview | null;
+  scope: { level: string; label: string };
 }

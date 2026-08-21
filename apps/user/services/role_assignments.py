@@ -39,6 +39,9 @@ class EffectiveAccess:
     region_keys: frozenset[str]
     office_keys: frozenset[str]
     company_wide: bool
+    # True when any live assignment is assigned-record scoped. That grant
+    # contributes permissions without expanding org reach.
+    assigned_record: bool = False
 
 
 def _coerce_now(at=None):
@@ -207,11 +210,15 @@ def get_effective_access(user: User, *, at=None) -> EffectiveAccess:
     region_keys: set[str] = set()
     office_keys: set[str] = set()
     company_wide = False
+    assigned_record = False
     # Imported lazily: hierarchy imports audit/models and must not cycle with
     # role assignment resolution at module import time.
     from apps.user.services.hierarchy import is_hierarchy_consistent
 
     for assignment in assignments:
+        if assignment.scope_type == ScopeType.ASSIGNED_RECORD:
+            assigned_record = True
+            continue
         if assignment.scope_type == ScopeType.COMPANY:
             company_wide = True
             continue
@@ -241,6 +248,7 @@ def get_effective_access(user: User, *, at=None) -> EffectiveAccess:
         region_keys=frozenset(region_keys),
         office_keys=frozenset(office_keys),
         company_wide=company_wide,
+        assigned_record=assigned_record,
     )
 
 
@@ -277,6 +285,18 @@ def actor_can_manage_assignments(
         return False
     if target_scope_type == ScopeType.COMPANY:
         return access.company_wide
+    if target_scope_type == ScopeType.ASSIGNED_RECORD:
+        # Narrower than office: the actor must be able to manage an office
+        # grant over the target workplace (or be company-wide). The assignment
+        # itself carries no scope_office.
+        if access.company_wide:
+            return True
+        if scope_office is None:
+            return False
+        return scope_office.stable_key in access.office_keys or (
+            scope_office.region is not None
+            and scope_office.region.stable_key in access.region_keys
+        )
     if scope_office is None:
         return False
     if target_scope_type == ScopeType.REGION:
@@ -294,8 +314,16 @@ def ensure_assignment_authority(
 ) -> None:
     if actor.pk == target_user.pk:
         raise PermissionDenied("Users cannot modify their own role assignments.")
+    # Assigned-record rows store no office; authority is still judged against
+    # the target's workplace (or company-wide reach).
+    authority_office = scope_office
+    if scope_type == ScopeType.ASSIGNED_RECORD and authority_office is None:
+        authority_office = target_user.office
     if not actor_can_manage_assignments(
-        actor, role=role, target_scope_type=scope_type, scope_office=scope_office
+        actor,
+        role=role,
+        target_scope_type=scope_type,
+        scope_office=authority_office,
     ):
         raise PermissionDenied("You do not have authority to manage this assignment.")
 
@@ -370,6 +398,9 @@ def create_role_assignment(
             {"role": "This role is deactivated and cannot receive new assignments."}
         )
     role = code
+    # Org-less scopes never persist a scope office on the row.
+    if scope_type in ScopeType.ORG_LESS:
+        scope_office = None
 
     with transaction.atomic():
         User.objects.select_for_update().filter(pk=target_user.pk).get()

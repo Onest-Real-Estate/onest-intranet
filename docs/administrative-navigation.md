@@ -37,13 +37,15 @@ permission succeeds.
 | 150 | Governance & support | Offices | `admin_offices` | `web.manage_offices` | Office tree scope |
 | 160 | Governance & support | IT Support | `admin_it_support` | `web.view_it_support` | Support request scope |
 
-**Users, New Agent List, and Quick Access are live.** Their feature keys in
-`OPERATIONS_FEATURES` are `True` and their registry entries point at real views
-instead of the generated placeholder. The Users destination is the people
-directory ([user-directory.md](user-directory.md)); opening a row leads to the
-administrative record ([agent-administration.md](agent-administration.md)),
+**Users, New Agent List, Quick Access, and Assign User Roles are live.** Their
+feature keys in `OPERATIONS_FEATURES` are `True` and their registry entries
+point at real views instead of the generated placeholder. The Users destination
+is the people directory ([user-directory.md](user-directory.md)); opening a row
+leads to the administrative record ([agent-administration.md](agent-administration.md)),
 which is reached through the directory rather than through a nav entry of its
-own.
+own. Assign User Roles
+([role-assignment-administration.md](role-assignment-administration.md)) is the
+dedicated grant/revoke workspace for actors with `web.assign_user_roles`.
 
 The remaining modules are intentionally unavailable until their domain backend ships. Their
 explicit false feature keys show the protected destinations as “Soon” only to roles

@@ -232,6 +232,7 @@ OPERATIONS_FEATURES: dict[str, bool] = {
 OPERATIONS_FEATURES["admin-users"] = True
 OPERATIONS_FEATURES["admin-new-agents"] = True
 OPERATIONS_FEATURES["admin-quick-access"] = True
+OPERATIONS_FEATURES["admin-assign-roles"] = True
 
 _OPS_SURFACE_PERMISSIONS = frozenset(
     destination.permission for destination in OPERATIONS_DESTINATIONS

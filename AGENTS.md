@@ -82,6 +82,7 @@ docs/user-directory.md Scoped people directory: filters, field permissions, acco
 docs/profile.md    Self-service profile: editable allowlist, normalization, audit
 docs/agent-administration.md  Broker-controlled profile half: scope, delegation, audit
 docs/roles.md      Brokerage role catalog: stable codes, scopes, permission bundles
+docs/role-assignment-administration.md  Assign User Roles: preview, concurrency, scopes
 DESIGN.md          Raw design tokens (Material-style palette export)
 ```
 

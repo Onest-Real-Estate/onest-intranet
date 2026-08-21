@@ -14,11 +14,11 @@ Django permission codenames (`web.view_users`, `user.change_user_administration`
 | `broker_admin` | Broker Admin | company | no | Full operations; may assign non-protected roles company-wide |
 | `regional_manager` | Regional Manager | region | no | Regional people, transactions, inventory, offices, training |
 | `regional_admin` | Regional Admin | region | no | Regional people/admin support without full manager bundle |
-| `regional_transaction_coordinator` | Regional Transaction Coordinator | region | no | Regional transactions, contracts, documents |
+| `regional_transaction_coordinator` | Regional Transaction Coordinator | region, assigned_record | no | Regional transactions, contracts, documents |
 | `branch_manager` | Branch Manager | office | no | Office people, inventory, training, agent administration |
 | `branch_admin` | Branch Admin / Office Admin | office | no | Office people lists, training, documents |
-| `transaction_coordinator` | Transaction Coordinator | office | no | Office transactions, contracts, documents |
-| `realtor` | Realtor | office | no | Own dashboard metrics (default signup role) |
+| `transaction_coordinator` | Transaction Coordinator | office, assigned_record | no | Office transactions, contracts, documents |
+| `realtor` | Realtor | office, assigned_record | no | Own dashboard metrics (default signup role) |
 | `marketing_team` | Marketing Team | company | no | Announcements, feedback, documents |
 | `accountant` | Accountant | company | no | Transactions, users, contracts, commission visibility |
 | `compliance` | Compliance | company | no | Compliance, users, contracts, documents, admin profile view |
@@ -49,16 +49,20 @@ Superadmin remains Django `is_superuser`, not a catalog role.
 - Users cannot modify their own assignments
 - Effective access = union of permissions from assigned role groups, constrained
   by explicit scope; fail closed on inconsistent hierarchy nodes
+- `assigned_record` scope grants permissions without expanding office, region,
+  or company reach — see [role-assignment-administration.md](role-assignment-administration.md)
 
 ## Frontend
 
 - Catalog helpers: `frontend/lib/roles.ts`
 - Presentation: `RoleBadge` (shows label + optional scope; not an auth check)
 - Admin UI receives `role`, `roleLabel`, `roleDescription`, and `scopeLabel`
+- Dedicated ops surface: Assign User Roles at `/operations/role-assignments`
 
 ## Related docs
 
 - `docs/permissions.md` — permission catalog, capability vs scope, frontend payload
 - `docs/authorization.md` — route policies and permission enforcement
 - `docs/agent-administration.md` — who may edit broker-controlled profile fields
+- `docs/role-assignment-administration.md` — dedicated grant/revoke workspace
 - `docs/hierarchy.md` — office tree and membership (when present)
