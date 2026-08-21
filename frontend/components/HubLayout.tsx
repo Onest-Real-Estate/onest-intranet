@@ -2,7 +2,6 @@ import { Link, router, usePage } from "@inertiajs/react";
 import {
   AlertTriangle,
   ArrowLeft,
-  Bell,
   Building2,
   ChevronDown,
   CircleHelp,
@@ -18,6 +17,7 @@ import { type CSSProperties, type ReactNode, useEffect, useRef, useState } from 
 
 import { BrandMark } from "@/components/BrandMark";
 import { SearchControl } from "@/components/design-system/search-control";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -442,6 +442,7 @@ function ShellWorkspace({
   children,
   context,
   helpUrl,
+  notifications,
   primaryOffice,
   role,
   user,
@@ -452,6 +453,7 @@ function ShellWorkspace({
   children: ReactNode;
   context: HubPageContext;
   helpUrl: string | null;
+  notifications: PageProps["notifications"];
   primaryOffice: PageProps["primaryOffice"];
   role: string;
   user: User | null;
@@ -587,12 +589,7 @@ function ShellWorkspace({
               <CircleHelp className="size-5" strokeWidth={1.5} />
             </PendingAction>
           )}
-          <PendingAction
-            label="Notifications"
-            note="Notifications are not wired up yet"
-          >
-            <Bell className="size-5" strokeWidth={1.5} />
-          </PendingAction>
+          <NotificationBell summary={notifications} />
           <PendingAction label="Create new" note="Quick create is not wired up yet">
             <Plus className="size-5" strokeWidth={1.5} />
           </PendingAction>
@@ -679,7 +676,7 @@ function ShellWorkspace({
 
 export function HubLayout({ children, context, variant = "standard" }: HubLayoutProps) {
   const page = usePage<PageProps>();
-  const { user, features, primaryOffice } = page.props;
+  const { user, features, primaryOffice, notifications } = page.props;
   const current = page.url.split("?")[0];
   const navGroups = resolveHubNav(user, features, primaryOffice);
   const [expandedSections, setExpandedSections] = useState<Set<HubNavSectionKey>>(() =>
@@ -792,6 +789,7 @@ export function HubLayout({ children, context, variant = "standard" }: HubLayout
         authorizationVersion={page.props.shell?.authorizationVersion ?? ""}
         context={resolvedContext}
         helpUrl={page.props.shell?.help.url ?? null}
+        notifications={notifications}
         primaryOffice={primaryOffice}
         role={role}
         user={user}

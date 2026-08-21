@@ -655,7 +655,10 @@ def test_the_dashboard_shell_query_count_is_bounded(client):
     # Warm the session/user lookups so the assertion measures the page itself.
     client.get(reverse("dashboard"), HTTP_X_INERTIA="true")
 
-    with assert_application_queries(7, ignore_tables=("django_session",)):
+    # Eight: the shell's own seven, plus the one indexed aggregate behind the
+    # header's unread badge (apps/notifications/shell.py). That cost is fixed
+    # per page and does not grow with the number of notifications.
+    with assert_application_queries(8, ignore_tables=("django_session",)):
         client.get(reverse("dashboard"), HTTP_X_INERTIA="true")
 
 

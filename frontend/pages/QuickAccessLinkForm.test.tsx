@@ -76,6 +76,7 @@ function setPage(overrides: Partial<QuickAccessLinkFormPageProps> = {}) {
       help: { url: null },
       session: { authenticated: true },
     },
+    notifications: null,
     link: null,
     errors: { fields: {}, form: [] },
     posted: null,

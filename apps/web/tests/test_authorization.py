@@ -34,7 +34,7 @@ def test_local_routes_have_explicit_authorization_policy():
     for pattern in _iter_patterns(get_resolver().url_patterns):
         callback = pattern.callback
         module = getattr(callback, "__module__", "")
-        if not module.startswith(("apps.user.", "apps.web.")):
+        if not module.startswith(("apps.notifications.", "apps.user.", "apps.web.")):
             continue
         assert get_authorization_policy(callback) is not None, (
             f"{module}.{callback.__name__} is missing an authorization policy"

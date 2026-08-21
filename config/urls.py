@@ -7,6 +7,7 @@ urlpatterns: list[URLPattern | URLResolver] = [
     path("accounts/", include("allauth.urls")),
     path("", include("apps.user.urls")),
     path("", include("apps.web.urls")),
+    path("", include("apps.notifications.urls")),
 ]
 
 # Silk (SQL profiling) is dev-only — see config/settings.py. Web UI: /silk/.

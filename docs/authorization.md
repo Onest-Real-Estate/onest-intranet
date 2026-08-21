@@ -5,8 +5,8 @@ Frontend visibility is only a hint; the backend is the enforcement boundary.
 
 ## Route policy declarations
 
-Project-owned Django views in `apps.user` and `apps.web` must use
-`apps.web.authorization.enforce_policy("<policy_key>")`.
+Project-owned Django views in `apps.user`, `apps.web`, and `apps.notifications`
+must use `apps.web.authorization.enforce_policy("<policy_key>")`.
 
 - `public`: reachable without authentication.
 - `authenticated`: requires a signed-in user.

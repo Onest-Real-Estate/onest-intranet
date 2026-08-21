@@ -75,6 +75,7 @@ function setPage(overrides: Partial<PageProps> = {}, url = "/dashboard") {
       help: { url: null },
       session: { authenticated: true },
     },
+    notifications: null,
     ...overrides,
   };
   pageProps.url = url;

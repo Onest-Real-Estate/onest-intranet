@@ -345,7 +345,90 @@ export interface PageProps {
   features: HubFeatures;
   primaryOffice: PrimaryOffice | null;
   shell: ShellSharedProps;
+  /** Header badge counts for the signed-in reader; null when signed out. */
+  notifications: NotificationShell | null;
   [key: string]: unknown;
+}
+
+/**
+ * In-app notifications.
+ *
+ * The wire shape is deliberately thin. `title` is fixed producer copy that
+ * names nobody; `detail` is resolved from the source record on every read and
+ * arrives empty the moment the reader stops being allowed to see it. The
+ * client never decides which of the two it may show — the server has already
+ * decided by the time the prop exists.
+ */
+export type NotificationPriority = "critical" | "high" | "normal" | "low";
+
+export type NotificationStatusFilter = "unread" | "all" | "archived";
+
+export interface NotificationShell {
+  unreadCount: number;
+  /** Unread notifications that must be acknowledged individually. */
+  mandatoryCount: number;
+  /** Server-reversed path to the notification centre. */
+  href: string;
+}
+
+export interface NotificationActionLink {
+  label: string;
+  /** Server-reversed in-app path; the destination re-authorizes on arrival. */
+  href: string;
+}
+
+export interface NotificationRow {
+  /** Opaque server id (UUID). Never a database primary key. */
+  id: string;
+  type: string;
+  typeLabel: string;
+  eventKey: string;
+  title: string;
+  /** Source-resolved context, or "" when the source declines to say. */
+  detail: string;
+  priority: NotificationPriority;
+  priorityLabel: string;
+  mandatory: boolean;
+  createdAt: string;
+  availableAt: string;
+  receivedLabel: string;
+  expiresAt: string | null;
+  readAt: string | null;
+  archivedAt: string | null;
+  read: boolean;
+  archived: boolean;
+  expired: boolean;
+  /** Absent whenever the destination no longer resolves for this reader. */
+  action: NotificationActionLink | null;
+  /** The notification offered a destination that no longer resolves. */
+  staleAction: boolean;
+  staleActionNote: string;
+  /** Why detail and action are missing; "" when nothing is missing. */
+  unavailableReason: string;
+}
+
+export interface NotificationFilters {
+  status: string;
+  type: string;
+  priority: string;
+  [key: string]: unknown;
+}
+
+export interface NotificationFilterOption {
+  value: string;
+  label: string;
+}
+
+export interface NotificationsPageProps extends PageProps {
+  notificationList: ListResponse<NotificationRow, NotificationFilters>;
+  filterOptions: {
+    status: NotificationFilterOption[];
+    type: NotificationFilterOption[];
+    priority: NotificationFilterOption[];
+  };
+  summary: { unreadCount: number; mandatoryCount: number };
+  unreadByType: Record<string, number>;
+  errors: ValidationErrors;
 }
 
 /**

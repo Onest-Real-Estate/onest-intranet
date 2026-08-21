@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     "apps.user",
     "apps.web",
     "apps.audit",
+    "apps.notifications",
 ]
 
 # Silk (SQL profiling, N+1 detection) is dev-only: its web UI lives at
@@ -315,7 +316,7 @@ DJANGO_VITE = {
 # ---------------------------------------------------------------------------
 INERTIA_LAYOUT = "layout.html"
 # Bump whenever the frontend bundle changes so stale clients get a full reload.
-INERTIA_VERSION = "14"
+INERTIA_VERSION = "15"
 
 # Optional external help centre. The shell exposes it only when it is an
 # absolute, credential-free HTTPS URL; an empty or unsafe value leaves the

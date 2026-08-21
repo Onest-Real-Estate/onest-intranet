@@ -36,6 +36,15 @@ def register_consumer(consumer_id: str, fn: ConsumerFn) -> None:
     _registry[consumer_id] = fn
 
 
+def is_registered(consumer_id: str) -> bool:
+    """Whether a consumer id is already registered.
+
+    Registration raises on a duplicate id, which is right for a typo and wrong
+    for an ``AppConfig.ready()`` that a test runner may execute twice.
+    """
+    return consumer_id in _registry
+
+
 def get_consumer(consumer_id: str) -> ConsumerFn:
     if consumer_id not in _registry:
         raise KeyError(f"Consumer '{consumer_id}' is not registered.")
