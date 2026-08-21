@@ -1,8 +1,12 @@
 from django.http import Http404
+from django.utils import timezone
 from inertia import inertia, render
 
+from apps.user.services.role_assignments import get_effective_access
 from apps.user.views.directory_views import user_directory
 from apps.user.views.onboarding_administration_views import new_agent_list
+from apps.web.action_items import queue_for_user
+from apps.web.dashboard.envelope import WidgetStatus
 from apps.web.quick_access.views import quick_access_index
 
 from .authorization import enforce_policy
@@ -28,6 +32,40 @@ def dashboard(request):
     return {
         "greeting": greeting_payload(request.user),
         **deferred_widget_props(request.user),
+    }
+
+
+@enforce_policy("action_items_queue")
+@inertia("ActionItemsQueue")
+def action_items_queue(request):
+    """Full filtered queue for the signed-in user.
+
+    Re-runs source collectors rather than replaying dashboard rows, so a stale
+    CTA cannot widen access: each destination (e.g. ``profile``) still enforces
+    its own policy when followed.
+    """
+    access = get_effective_access(request.user)
+    result = queue_for_user(
+        request.user,
+        access,
+        now=timezone.now(),
+        feed_limit=0,
+    )
+    if result.status == WidgetStatus.READY:
+        queue = result.data
+    elif result.status == WidgetStatus.EMPTY:
+        queue = {
+            "total": 0,
+            "items": [],
+            "viewAllHref": request.path,
+        }
+    else:
+        queue = None
+    return {
+        "queue": queue,
+        "emptyState": result.empty_state.payload() if result.empty_state else None,
+        "unavailable": result.unavailable.payload() if result.unavailable else None,
+        "partialFailure": bool(result.meta.get("partialFailure")),
     }
 
 

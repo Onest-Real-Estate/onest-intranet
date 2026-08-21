@@ -318,6 +318,18 @@ ROUTE_POLICIES: dict[str, AuthorizationPolicy] = {
         route_names=("dashboard",),
         scope_rule="self_only",
     ),
+    "action_items_queue": AuthorizationPolicy(
+        key="action_items_queue",
+        access="authenticated",
+        description=(
+            "Render the full filtered action-item queue for the signed-in "
+            "user. Re-derives items from source records; never trusts a "
+            "stale dashboard row id."
+        ),
+        methods=("GET",),
+        route_names=("action_items_queue",),
+        scope_rule="self_only",
+    ),
     "design_system": AuthorizationPolicy(
         key="design_system",
         access="authenticated",

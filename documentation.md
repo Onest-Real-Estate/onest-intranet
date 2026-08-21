@@ -71,7 +71,7 @@ source yet" or "I failed", so every widget either lied or would have to 500.
 | active_transactions | `transactions` | pipeline | 1 | unavailable | 5 | none |
 | training | `training` | pipeline | 1 | unavailable | — | none |
 | my_day | `schedule` | widgets | 1 | unavailable | 6 | none |
-| action_items | `actionItems` | widgets | 1 | unavailable | 5 | none |
+| action_items | `actionItems` | widgets | 2 | ready / empty | 5 | none |
 | market | `market` | widgets | 1 | unavailable | 4 | none |
 | quick_documents | `documents` | widgets | 1 | unavailable | 5 | none |
 
@@ -118,11 +118,9 @@ Backend suite: 256 passed. `ruff`, `ty` clean.
 ## Open questions / follow-ups
 
 - The production dashboard now shows: greeting, **performance metrics**
-  (``P1-022`` — registry-driven cards with scoped aggregates; pending source
-  modules stay marked unavailable until those domains ship), Quick Access, and
-  **six widgets in an explicit unavailable state**. That is the composition
-  ticket's intent ("unavailable providers return an explicit empty/unavailable
-  state, not invented data"). Remaining feed widgets are ``P1-023``–``P1-027``.
+  (``P1-022``), Quick Access, **Action Items** (``P1-027`` — profile-backed
+  sources today; other domains register as they ship), and remaining feed
+  widgets in an explicit unavailable state. See ``docs/dashboard-action-items.md``.
   Flagged for the product call.
 - No per-user timezone field exists. `user_timezone()` returns the application
   timezone; if per-user timezones are wanted, that function plus a migration is

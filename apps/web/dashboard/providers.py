@@ -8,8 +8,9 @@ Most modules this dashboard reports on do not exist yet. Those providers return
 ``unavailable`` and point at the hub section where the feature will live. That
 is the whole point of this layer: the page is honest about what it does not
 know, and it becomes useful one provider at a time as remaining domain modules
-(``P1-023``–``P1-027`` and later) ship, with no change to the view or the page.
-The performance metrics widget (``P1-022``) is live via ``web.metrics``.
+ship, with no change to the view or the page. Live today: performance metrics
+(``web.metrics``), Quick Access, and Action Items (``web.action_items``, with
+profile-backed sources and slots for contract/transaction/CRM modules).
 """
 
 from __future__ import annotations
@@ -165,7 +166,20 @@ def my_day(context: DashboardContext) -> ProviderResult:
 
 
 def action_items(context: DashboardContext) -> ProviderResult:
-    return unavailable("Tasks are not connected to the hub yet.")
+    """Prioritized queue of work assigned to or actionable by this reader.
+
+    Domain sources live in ``apps.web.action_items``; this provider only asks
+    the composer for the capped dashboard slice. Completion is derived from
+    each source record — never stored or toggled here.
+    """
+    from apps.web.action_items import queue_for_user
+
+    return queue_for_user(
+        context.user,
+        context.access,
+        now=context.now,
+        feed_limit=context.feed_limit,
+    )
 
 
 def market(context: DashboardContext) -> ProviderResult:

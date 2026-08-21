@@ -167,7 +167,12 @@ export function DashboardWidgetSlot({
           widget={page.actionItems}
           skeleton={<ActionItemsSkeleton />}
           stale={stale}
-          render={(data) => <ActionItems data={data} />}
+          render={(data) => (
+            <ActionItems
+              data={data}
+              truncated={page.actionItems?.meta.truncated === true}
+            />
+          )}
         />
       );
     case "activeTransactions":

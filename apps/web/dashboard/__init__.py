@@ -6,6 +6,7 @@ prop/version/cache contract in :mod:`apps.web.dashboard.registry`, and the
 envelope every widget speaks in :mod:`apps.web.dashboard.envelope`.
 
 See ``docs/dashboard.md`` for the widget contracts and freshness policy.
+See ``docs/dashboard-action-items.md`` for the action-item source registry.
 """
 
 from apps.web.dashboard.envelope import (
