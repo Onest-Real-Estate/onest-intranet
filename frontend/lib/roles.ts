@@ -6,7 +6,7 @@
  * change.
  */
 
-export type RoleScopeType = "company" | "region" | "office";
+export type RoleScopeType = "company" | "region" | "office" | "assigned_record";
 
 export interface RoleCatalogEntry {
   code: string;
@@ -61,7 +61,7 @@ export const ROLE_CATALOG: readonly RoleCatalogEntry[] = [
     code: "regional_transaction_coordinator",
     label: "Regional Transaction Coordinator",
     description: "Coordinates transactions across offices in a region.",
-    validScopeTypes: ["region"],
+    validScopeTypes: ["region", "assigned_record"],
     protected: false,
   },
   {
@@ -83,14 +83,14 @@ export const ROLE_CATALOG: readonly RoleCatalogEntry[] = [
     code: "transaction_coordinator",
     label: "Transaction Coordinator",
     description: "Runs transaction files for an office.",
-    validScopeTypes: ["office"],
+    validScopeTypes: ["office", "assigned_record"],
     protected: false,
   },
   {
     code: "realtor",
     label: "Realtor",
     description: "Licensed agent. Default role for new signups.",
-    validScopeTypes: ["office"],
+    validScopeTypes: ["office", "assigned_record"],
     protected: false,
   },
   {

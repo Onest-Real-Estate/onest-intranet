@@ -303,13 +303,24 @@ def delegable_role_options(actor: User) -> list[dict[str, Any]]:
             continue
         scopes: list[dict[str, str]] = []
         for scope_type in definition.valid_scope_types:
-            probe = (
-                None
-                if scope_type == ScopeType.COMPANY
-                else _scope_probe(actor, scope_type)
-            )
-            if scope_type != ScopeType.COMPANY and probe is None:
-                continue
+            if scope_type in ScopeType.ORG_LESS:
+                probe = (
+                    None
+                    if scope_type == ScopeType.COMPANY
+                    else _scope_probe(actor, ScopeType.OFFICE)
+                )
+                # Assigned-record needs either company-wide reach or at least
+                # one office the actor can name; company needs company-wide.
+                if scope_type == ScopeType.ASSIGNED_RECORD:
+                    access = get_effective_access(actor)
+                    if not access.company_wide and probe is None:
+                        continue
+                elif scope_type == ScopeType.COMPANY:
+                    probe = None
+            else:
+                probe = _scope_probe(actor, scope_type)
+                if probe is None:
+                    continue
             if actor_can_manage_assignments(
                 actor,
                 role=definition.key,

@@ -42,6 +42,7 @@ def authorization_version(access: EffectiveAccess) -> str:
     """Opaque version for detecting changes to the effective access context."""
 
     payload = {
+        "assignedRecord": access.assigned_record,
         "companyWide": access.company_wide,
         "officeKeys": sorted(access.office_keys),
         "permissions": sorted(access.permissions),

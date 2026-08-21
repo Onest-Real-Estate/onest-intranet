@@ -50,6 +50,9 @@ function formatMoment(value: string | null): string {
  * Both actions post to the same endpoint the role-assignment service already
  * guards; the panel only offers what the server said this administrator may
  * delegate, and hides the grant form entirely when that set is empty.
+ *
+ * When the actor also holds ``web.assign_user_roles``, a link opens the
+ * dedicated Assign User Roles workspace for fuller preview and date editing.
  */
 export function RoleAssignmentsPanel({
   userId,
@@ -59,6 +62,7 @@ export function RoleAssignmentsPanel({
   officeOptions,
   validation,
   editable,
+  manageHref,
 }: {
   userId: number;
   csrfToken: string;
@@ -67,6 +71,8 @@ export function RoleAssignmentsPanel({
   officeOptions: AdministrationOfficeOption[];
   validation: ValidationErrors;
   editable: boolean;
+  /** Dedicated role-assignment workspace, when the actor may open it. */
+  manageHref?: string | null;
 }) {
   const [role, setRole] = useState(roleOptions[0]?.value ?? "");
   const [scopeType, setScopeType] = useState(
@@ -88,8 +94,18 @@ export function RoleAssignmentsPanel({
         title="Roles and scope"
         description="What this person may reach across the hub, and until when."
         meta={
-          <span className="text-muted-foreground text-xs font-medium tabular-nums">
-            {assignments.length} live
+          <span className="flex items-center gap-3">
+            {manageHref ? (
+              <a
+                href={manageHref}
+                className="text-primary text-xs font-medium underline-offset-4 hover:underline"
+              >
+                Manage in Assign User Roles
+              </a>
+            ) : null}
+            <span className="text-muted-foreground text-xs font-medium tabular-nums">
+              {assignments.length} live
+            </span>
           </span>
         }
       />

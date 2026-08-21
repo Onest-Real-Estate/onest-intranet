@@ -164,6 +164,42 @@ ROUTE_POLICIES: dict[str, AuthorizationPolicy] = {
         all_permissions=("user.change_user_administration",),
         scope_rule="role_delegation_scope",
     ),
+    "role_assignment_workspace": AuthorizationPolicy(
+        key="role_assignment_workspace",
+        access="permission_protected",
+        description=(
+            "Render one user's role-assignment workspace inside the actor's "
+            "delegation scope."
+        ),
+        methods=("GET",),
+        route_names=("admin_assign_roles_user",),
+        all_permissions=("web.assign_user_roles",),
+        scope_rule="role_delegation_scope",
+    ),
+    "role_assignment_preview": AuthorizationPolicy(
+        key="role_assignment_preview",
+        access="permission_protected",
+        description=(
+            "Dry-run the effective access change for a grant, edit, or revoke "
+            "before confirmation."
+        ),
+        methods=("POST",),
+        route_names=("admin_assign_roles_preview",),
+        all_permissions=("web.assign_user_roles",),
+        scope_rule="role_delegation_scope",
+    ),
+    "role_assignment_mutate": AuthorizationPolicy(
+        key="role_assignment_mutate",
+        access="permission_protected",
+        description=(
+            "Grant, edit, or revoke a role assignment through the dedicated "
+            "assignment administration surface."
+        ),
+        methods=("POST",),
+        route_names=("admin_assign_roles_mutate",),
+        all_permissions=("web.assign_user_roles",),
+        scope_rule="role_delegation_scope",
+    ),
     "user_account_state": AuthorizationPolicy(
         key="user_account_state",
         access="permission_protected",
