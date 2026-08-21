@@ -19,11 +19,22 @@ import { Label } from "@/components/ui/label";
 import { routes } from "@/lib/routes";
 import type {
   NotificationCategoryPreference,
+  NotificationChannelDefinition,
   NotificationPreferencesPageProps,
 } from "@/types";
 
 /** Editable cells, keyed by the field name the server expects. */
 type Draft = Record<string, boolean>;
+
+/**
+ * One grid template for the header row and every category row.
+ *
+ * The channel columns are fixed and the category column takes the rest. An
+ * `auto` channel column sizes to its widest content, which on this page is a
+ * sentence — it would squeeze the category text into a one-word ribbon.
+ */
+const ROW_GRID =
+  "grid gap-x-4 gap-y-3 sm:grid-cols-[minmax(0,1fr)_6rem_6rem] sm:items-start";
 
 function initialDraft(categories: NotificationCategoryPreference[]): Draft {
   const draft: Draft = {};
@@ -52,73 +63,78 @@ function formatSaved(value: string | null): string {
 }
 
 /**
- * One category's row: what arrives in it, and one control per channel.
+ * One category: what arrives in it on the left, one control per channel on the
+ * right, aligned to the column headers above.
  *
- * A locked cell is rendered, not hidden. Hiding it would read as "this
- * category does not use email", when what is true is "you are always told".
- * The checkbox is present, checked, disabled, and followed by the sentence
- * explaining why — and it posts nothing, because the server has no field for
- * it either.
+ * A locked cell is rendered, not hidden. Hiding it would read as "this category
+ * does not use email", when what is true is "you are always told". It shows
+ * checked and disabled, and points at the sentence that says why — which lives
+ * once per reason rather than beside every checkbox, so the row stays a row.
  */
 function CategoryRow({
   category,
+  channels,
   draft,
   disabled,
   onChange,
 }: {
   category: NotificationCategoryPreference;
+  channels: NotificationChannelDefinition[];
   draft: Draft;
   disabled: boolean;
   onChange: (field: string, value: boolean) => void;
 }) {
-  const channelLabels =
-    usePage<NotificationPreferencesPageProps>().props.preferences.channels;
+  const mandatoryNoteId = `mandatory-${category.key}`;
 
   return (
-    <fieldset className="border-border/60 grid gap-3 border-t py-5 first:border-t-0 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start sm:gap-6">
-      {/* The legend names the group for assistive technology and has to be the
-          fieldset's first child to do so, so the visible heading below is a
-          plain paragraph rather than the legend itself. */}
+    <fieldset className="border-border/60 min-w-0 border-t py-5 first:border-t-0">
+      {/* Names the group for assistive technology. It has to be the fieldset's
+          first child to do that, so the visible heading below is a paragraph. */}
       <legend className="sr-only">{category.label}</legend>
-      <div className="grid min-w-0 gap-1">
-        <p className="text-foreground text-sm font-semibold">{category.label}</p>
-        <p className="text-muted-foreground text-sm leading-5">
-          {category.description}
-        </p>
-        {category.mandatory ? (
-          <p className="text-muted-foreground flex items-start gap-1.5 text-sm leading-5">
-            <Lock className="mt-0.5 size-3.5 shrink-0" aria-hidden />
-            <span>{category.mandatoryReason}</span>
+      <div className={ROW_GRID}>
+        <div className="grid min-w-0 gap-1">
+          <p className="text-foreground text-sm font-semibold">{category.label}</p>
+          <p className="text-muted-foreground text-sm leading-5">
+            {category.description}
           </p>
-        ) : null}
-      </div>
+          {category.mandatory ? (
+            <p
+              id={mandatoryNoteId}
+              className="text-muted-foreground flex items-start gap-1.5 text-sm leading-5"
+            >
+              <Lock className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+              <span>{category.mandatoryReason}</span>
+            </p>
+          ) : null}
+        </div>
 
-      <div className="flex flex-wrap gap-x-6 gap-y-3 sm:justify-end">
         {category.channels.map((cell) => {
-          const channel = channelLabels.find((item) => item.key === cell.key);
+          const channel = channels.find((item) => item.key === cell.key);
           const id = `pref-${cell.field}`;
-          const noteId = cell.locked ? `${id}-note` : undefined;
+          const describedBy = !cell.locked
+            ? undefined
+            : category.mandatory && channel?.configurable !== false
+              ? mandatoryNoteId
+              : `channel-note-${cell.key}`;
           const checked = cell.locked ? cell.enabled : (draft[cell.field] ?? false);
           return (
-            <div key={cell.field} className="flex min-w-32 items-start gap-2">
+            <div
+              key={cell.field}
+              className="flex items-center gap-2 sm:justify-center sm:pt-0.5"
+            >
               <Checkbox
                 id={id}
                 name={cell.field}
                 checked={checked}
                 disabled={cell.locked || disabled}
-                aria-describedby={noteId}
+                aria-describedby={describedBy}
                 onCheckedChange={(next) => onChange(cell.field, next === true)}
               />
-              <div className="grid gap-1">
-                <Label htmlFor={id} className="text-sm font-normal">
-                  {channel?.label ?? cell.key}
-                </Label>
-                {cell.locked ? (
-                  <p id={noteId} className="text-muted-foreground text-xs leading-4">
-                    {cell.lockedReason}
-                  </p>
-                ) : null}
-              </div>
+              {/* Visible on narrow screens, where there is no column header to
+                  read the checkbox against. */}
+              <Label htmlFor={id} className="text-sm font-normal sm:sr-only">
+                {channel?.label ?? cell.key}
+              </Label>
             </div>
           );
         })}
@@ -132,10 +148,10 @@ function CategoryRow({
  *
  * Two things this page is careful about. It never pretends a locked control is
  * a choice — mandatory notices and the in-app record show as switched on and
- * disabled, with the reason next to them. And it never presents a cell as
- * "off by default" without saying so: every value here is the server's
- * resolved answer, so a category added after somebody last saved arrives at
- * its documented default rather than silently off.
+ * disabled, with the reason nearby. And it never presents a cell as "off by
+ * default" without saying so: every value here is the server's resolved
+ * answer, so a category added after somebody last saved arrives at its
+ * documented default rather than silently off.
  */
 export default function NotificationPreferences() {
   const { preferences, notificationsHref, errors } =
@@ -161,10 +177,7 @@ export default function NotificationPreferences() {
     router.post(
       routes.notification_preferences_submit(),
       { ...draft },
-      {
-        preserveScroll: true,
-        onFinish: () => setSaving(false),
-      },
+      { preserveScroll: true, onFinish: () => setSaving(false) },
     );
   }
 
@@ -201,19 +214,69 @@ export default function NotificationPreferences() {
 
       <SurfaceCard>
         <SurfaceCardHeader>
-          <SurfaceCardTitle>What you are told about</SurfaceCardTitle>
+          <SurfaceCardTitle>How you are told</SurfaceCardTitle>
           <SurfaceCardDescription>
-            {preferences.channels
-              .map((channel) => `${channel.label}: ${channel.description}`)
-              .join(" ")}
+            Two ways one notification can reach you. One of them is the record and stays
+            on.
           </SurfaceCardDescription>
         </SurfaceCardHeader>
         <SurfaceCardContent>
+          <dl className="grid gap-4 sm:grid-cols-2">
+            {preferences.channels.map((channel) => (
+              <div key={channel.key} className="grid min-w-0 gap-1">
+                <dt className="text-foreground text-sm font-semibold">
+                  {channel.label}
+                </dt>
+                <dd className="text-muted-foreground text-sm leading-5">
+                  {channel.description}
+                </dd>
+                {channel.configurable ? null : (
+                  <dd
+                    id={`channel-note-${channel.key}`}
+                    className="text-muted-foreground flex items-start gap-1.5 text-sm leading-5"
+                  >
+                    <Lock className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+                    <span>{channel.lockedReason}</span>
+                  </dd>
+                )}
+              </div>
+            ))}
+          </dl>
+        </SurfaceCardContent>
+      </SurfaceCard>
+
+      <SurfaceCard>
+        <SurfaceCardHeader>
+          <SurfaceCardTitle>What you are told about</SurfaceCardTitle>
+          <SurfaceCardDescription>
+            Turn off anything you would rather pick up in the hub. Required notices have
+            no switch.
+          </SurfaceCardDescription>
+        </SurfaceCardHeader>
+        <SurfaceCardContent>
+          {/* Column headers, wide screens only. Each checkbox carries its own
+              label for assistive technology, so this is decoration. */}
+          <div
+            className={`${ROW_GRID} border-border/60 hidden border-b pb-3 sm:grid`}
+            aria-hidden
+          >
+            <span />
+            {preferences.channels.map((channel) => (
+              <span
+                key={channel.key}
+                className="text-muted-foreground text-center text-xs font-semibold tracking-[0.06em] uppercase"
+              >
+                {channel.label}
+              </span>
+            ))}
+          </div>
+
           <div className="grid">
             {preferences.categories.map((category) => (
               <CategoryRow
                 key={category.key}
                 category={category}
+                channels={preferences.channels}
                 draft={draft}
                 disabled={saving}
                 onChange={change}
@@ -249,10 +312,7 @@ NotificationPreferences.layout = () =>
         breadcrumbs: [
           { label: "Dashboard", href: routes.dashboard() },
           { label: "Notifications", href: routes.notifications() },
-          {
-            label: "Settings",
-            href: routes.notification_preferences(),
-          },
+          { label: "Settings", href: routes.notification_preferences() },
         ],
         back: { label: "Back to notifications", href: routes.notifications() },
       },
