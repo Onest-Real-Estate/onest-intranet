@@ -247,14 +247,16 @@ function RoleAssignmentAdministrationPage() {
   );
 }
 
-RoleAssignmentAdministrationPage.layout = (page: React.ReactNode) => (
-  <HubLayout>{page}</HubLayout>
-);
-
-export default function RoleAssignmentAdministration() {
+function RoleAssignmentAdministration() {
   return (
     <PermissionRequired permission={ASSIGN}>
       <RoleAssignmentAdministrationPage />
     </PermissionRequired>
   );
 }
+
+RoleAssignmentAdministration.layout = (page: React.ReactNode) => (
+  <HubLayout>{page}</HubLayout>
+);
+
+export default RoleAssignmentAdministration;

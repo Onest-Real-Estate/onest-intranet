@@ -866,3 +866,104 @@ class AccountStateForm(forms.Form):
         if not value:
             raise forms.ValidationError(_("Say why this account is changing hands."))
         return value
+
+
+class OfficeInfoUpdateForm(forms.Form):
+    """Edit operational office information within the actor's tree scope."""
+
+    name = forms.CharField(label=_("Name"), max_length=150)
+    street_address = forms.CharField(
+        label=_("Street address"), max_length=255, required=False
+    )
+    city = forms.CharField(label=_("City"), max_length=100, required=False)
+    state = forms.ChoiceField(
+        label=_("State"), choices=[("", "—")] + list(US_STATE_CHOICES), required=False
+    )
+    zip_code = forms.CharField(label=_("ZIP code"), max_length=10, required=False)
+    main_phone = forms.CharField(label=_("Main phone"), max_length=30, required=False)
+    public_email = forms.EmailField(label=_("Public email"), required=False)
+    internal_email = forms.EmailField(label=_("Internal email"), required=False)
+    office_hours_text = forms.CharField(
+        label=_("Office hours"),
+        required=False,
+        widget=forms.Textarea(attrs={"rows": 4}),
+        help_text=_("One line per day, or a JSON list."),
+    )
+    parking_instructions = forms.CharField(
+        label=_("Parking instructions"),
+        required=False,
+        widget=forms.Textarea(attrs={"rows": 3}),
+    )
+    access_instructions = forms.CharField(
+        label=_("Access instructions"),
+        required=False,
+        widget=forms.Textarea(attrs={"rows": 3}),
+    )
+    access_instructions_internal = forms.BooleanField(
+        label=_("Access instructions are internal"),
+        required=False,
+    )
+    expected_version = forms.CharField(required=False, widget=forms.HiddenInput)
+
+
+class OfficeStructureUpdateForm(forms.Form):
+    """Company-wide hierarchy and status changes (high-impact)."""
+
+    parent = forms.ModelChoiceField(
+        label=_("Parent office"),
+        queryset=Office.objects.none(),
+        required=False,
+    )
+    kind = forms.ChoiceField(label=_("Kind"), choices=Office.Kind.choices)
+    is_active = forms.BooleanField(label=_("Active"), required=False)
+    is_assignable = forms.BooleanField(label=_("Assignable"), required=False)
+    expected_version = forms.CharField(required=False, widget=forms.HiddenInput)
+    confirmed = forms.BooleanField(required=False)
+
+    def __init__(self, *args, parent_queryset=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        qs = parent_queryset if parent_queryset is not None else Office.objects.none()
+        cast(forms.ModelChoiceField, self.fields["parent"]).queryset = qs
+
+
+class OfficeImpactPreviewForm(forms.Form):
+    parent = forms.ModelChoiceField(queryset=Office.objects.all(), required=False)
+    kind = forms.ChoiceField(choices=Office.Kind.choices, required=False)
+    is_active = forms.NullBooleanField(required=False)
+    is_assignable = forms.NullBooleanField(required=False)
+
+    def __init__(self, *args, parent_queryset=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if parent_queryset is not None:
+            cast(
+                forms.ModelChoiceField, self.fields["parent"]
+            ).queryset = parent_queryset
+
+
+class OfficeContactUpsertForm(forms.Form):
+    assignment = forms.IntegerField(required=False)
+    user = forms.ModelChoiceField(queryset=User.objects.none())
+    assignment_type = forms.ChoiceField(
+        choices=(),
+    )
+    is_primary = forms.BooleanField(required=False)
+    starts_at = forms.DateField(required=False, input_formats=["%Y-%m-%d"])
+    ends_at = forms.DateField(required=False, input_formats=["%Y-%m-%d"])
+    expected_version = forms.CharField(required=False, widget=forms.HiddenInput)
+
+    def __init__(self, *args, office: Office, **kwargs):
+        from apps.user.models import OfficeContactAssignment
+
+        super().__init__(*args, **kwargs)
+        cast(
+            forms.ModelChoiceField, self.fields["user"]
+        ).queryset = User.objects.filter(office=office, is_active=True)
+        cast(forms.ChoiceField, self.fields["assignment_type"]).choices = list(
+            OfficeContactAssignment.AssignmentType.choices
+        )
+
+
+class OfficeContactEndForm(forms.Form):
+    assignment = forms.IntegerField()
+    ends_at = forms.DateField(required=False, input_formats=["%Y-%m-%d"])
+    expected_version = forms.CharField(required=False, widget=forms.HiddenInput)

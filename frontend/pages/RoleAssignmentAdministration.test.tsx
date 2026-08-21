@@ -17,7 +17,9 @@ vi.mock("@inertiajs/react", () => ({
 }));
 
 vi.mock("@/components/HubLayout", () => ({
-  HubLayout: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  HubLayout: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="hub-layout">{children}</div>
+  ),
 }));
 
 vi.mock("@/components/PermissionRequired", () => ({
@@ -80,6 +82,12 @@ describe("RoleAssignmentAdministration", () => {
         scope: { level: "brokerage", label: "Brokerage-wide" },
       },
     } as never);
+  });
+
+  it("exposes the shared hub layout on the Inertia page export", () => {
+    render(RoleAssignmentAdministration.layout(<div>Page content</div>));
+
+    expect(screen.getByTestId("hub-layout")).toHaveTextContent("Page content");
   });
 
   it("lists people and links into the workspace", () => {
@@ -221,6 +229,12 @@ describe("RoleAssignmentWorkspace", () => {
         },
       },
     } as never);
+  });
+
+  it("exposes the shared hub layout on the Inertia page export", () => {
+    render(RoleAssignmentWorkspace.layout(<div>Page content</div>));
+
+    expect(screen.getByTestId("hub-layout")).toHaveTextContent("Page content");
   });
 
   it("renders assignments and explains unavailable roles", () => {

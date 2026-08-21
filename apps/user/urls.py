@@ -17,6 +17,15 @@ from .views.auth_views import (
     profile,
     profile_submit,
 )
+from .views.office_administration_views import (
+    office_administration_contact,
+    office_administration_contact_end,
+    office_administration_detail,
+    office_administration_impact,
+    office_administration_structure,
+    office_administration_update,
+    office_info,
+)
 from .views.onboarding_administration_views import (
     onboarding_notice,
     onboarding_owner,
@@ -40,6 +49,7 @@ urlpatterns = [
     path("account/headshot/file", headshot_display, name="headshot_display"),
     path("profile", profile, name="profile"),
     path("profile/submit", profile_submit, name="profile_submit"),
+    path("office-info", office_info, name="office_info"),
     path(
         "operations/users/<int:user_id>/administration",
         user_administration,
@@ -74,6 +84,36 @@ urlpatterns = [
         "operations/role-assignments/<int:user_id>/assignments",
         role_assignment_mutate,
         name="admin_assign_roles_mutate",
+    ),
+    path(
+        "operations/offices/<int:office_id>",
+        office_administration_detail,
+        name="admin_office",
+    ),
+    path(
+        "operations/offices/<int:office_id>/update",
+        office_administration_update,
+        name="admin_office_update",
+    ),
+    path(
+        "operations/offices/<int:office_id>/structure",
+        office_administration_structure,
+        name="admin_office_structure",
+    ),
+    path(
+        "operations/offices/<int:office_id>/impact",
+        office_administration_impact,
+        name="admin_office_impact",
+    ),
+    path(
+        "operations/offices/<int:office_id>/contacts",
+        office_administration_contact,
+        name="admin_office_contact",
+    ),
+    path(
+        "operations/offices/<int:office_id>/contacts/end",
+        office_administration_contact_end,
+        name="admin_office_contact_end",
     ),
     path(
         "operations/new-agents/<int:user_id>",

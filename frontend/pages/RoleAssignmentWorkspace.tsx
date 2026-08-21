@@ -760,14 +760,16 @@ function PreviewSummary({
   );
 }
 
-RoleAssignmentWorkspacePage.layout = (page: React.ReactNode) => (
-  <HubLayout>{page}</HubLayout>
-);
-
-export default function RoleAssignmentWorkspace() {
+function RoleAssignmentWorkspace() {
   return (
     <PermissionRequired permission={ASSIGN}>
       <RoleAssignmentWorkspacePage />
     </PermissionRequired>
   );
 }
+
+RoleAssignmentWorkspace.layout = (page: React.ReactNode) => (
+  <HubLayout>{page}</HubLayout>
+);
+
+export default RoleAssignmentWorkspace;

@@ -98,6 +98,7 @@ def test_registry_has_exact_destinations_order_routes_and_permissions():
                 "admin_new_agents",
                 "admin_quick_access",
                 "admin_assign_roles",
+                "admin_offices",
             }
         )
 
@@ -205,6 +206,11 @@ def test_brokerage_admin_can_reach_every_registered_destination(client):
         if destination.route_name == "admin_assign_roles":
             assert "users" in props
             assert "filterOptions" in props
+            continue
+        if destination.route_name == "admin_offices":
+            assert "offices" in props
+            assert "filterOptions" in props
+            assert "capabilities" in props
             continue
         assert props["title"] == destination.label
         assert props["administrative"] is True

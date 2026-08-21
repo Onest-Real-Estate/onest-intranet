@@ -329,7 +329,7 @@ export const HUB_NAV_REGISTRY: HubNavItem[] = [
   {
     key: "office-info",
     label: "Office info",
-    route: route("coming_soon", routes.coming_soon("office-info")),
+    route: route("office_info", routes.office_info()),
     icon: Landmark,
     group: "my-office",
     order: 10,
@@ -337,7 +337,7 @@ export const HUB_NAV_REGISTRY: HubNavItem[] = [
     permissions: {},
     feature: "office-info",
     requiresOffice: true,
-    activeMatch: active(routes.coming_soon("office-info")),
+    activeMatch: active(routes.office_info()),
   },
   {
     key: "office-resources",
