@@ -1,5 +1,5 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { OfficeInfoPanel } from "@/components/office/OfficeInfoPanel";
 import type { OfficeInfoPayload } from "@/types";
@@ -11,6 +11,15 @@ vi.mock("@inertiajs/react", () => ({
   ),
   usePage: () => ({ props: {} }),
 }));
+
+const clipboardMock = vi.fn();
+Object.defineProperty(navigator, "clipboard", {
+  value: { writeText: clipboardMock },
+  configurable: true,
+});
+afterEach(() => {
+  clipboardMock.mockClear();
+});
 
 const baseInfo: OfficeInfoPayload = {
   id: 1,
@@ -32,6 +41,7 @@ const baseInfo: OfficeInfoPayload = {
   parkingInstructions: "Lot B",
   accessInstructions: "Door code 9999",
   accessInstructionsInternal: true,
+  directionsUrl: "https://www.google.com/maps/search/?api=1&query=1+Main+St%2C+Fairfax",
   includeInternal: false,
   updatedAt: "2026-08-22T00:00:00Z",
   version: "1:2026-08-22T00:00:00Z",
@@ -42,6 +52,7 @@ const baseInfo: OfficeInfoPayload = {
     transactionCoordinator: null,
     itSupport: null,
   },
+  corporateContacts: [],
 };
 
 describe("OfficeInfoPanel", () => {
@@ -69,5 +80,126 @@ describe("OfficeInfoPanel", () => {
     render(<OfficeInfoPanel info={baseInfo} />);
     expect(screen.getByText("No branch manager assigned.")).toBeInTheDocument();
     expect(screen.getByText("No IT support contact assigned.")).toBeInTheDocument();
+  });
+
+  it("links directions to the approved external map destination", () => {
+    render(<OfficeInfoPanel info={baseInfo} />);
+    const link = screen.getByRole("link", { name: /directions/i });
+    expect(link).toHaveAttribute(
+      "href",
+      "https://www.google.com/maps/search/?api=1&query=1+Main+St%2C+Fairfax",
+    );
+    expect(link).toHaveAttribute("target", "_blank");
+    expect(link).toHaveAttribute("rel", "noopener noreferrer");
+  });
+
+  it("omits the directions action without a URL and shows address fallback", () => {
+    render(
+      <OfficeInfoPanel
+        info={{
+          ...baseInfo,
+          directionsUrl: "",
+          streetAddress: "",
+          city: "",
+          state: "",
+          zipCode: "",
+        }}
+      />,
+    );
+    expect(screen.queryByRole("link", { name: /directions/i })).not.toBeInTheDocument();
+    expect(screen.getByText("Not listed yet.")).toBeInTheDocument();
+  });
+
+  it("copies the single-line address to the clipboard", async () => {
+    clipboardMock.mockResolvedValue(undefined);
+    render(<OfficeInfoPanel info={baseInfo} />);
+    fireEvent.click(screen.getByRole("button", { name: /copy address/i }));
+    expect(clipboardMock).toHaveBeenCalledWith("1 Main St, Fairfax, VA, 22030");
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: /address copied/i }),
+      ).toBeInTheDocument(),
+    );
+  });
+
+  it("renders structured hours with closed days and timezone caption", () => {
+    render(
+      <OfficeInfoPanel
+        info={{
+          ...baseInfo,
+          officeHours: [
+            { day: "monday", open: "09:00", close: "17:00" },
+            { day: "friday", open: "09:00", close: "17:00" },
+          ],
+        }}
+      />,
+    );
+    expect(screen.getByText("Monday: 09:00–17:00")).toBeInTheDocument();
+    expect(screen.getByText("Sunday: Closed")).toBeInTheDocument();
+    expect(screen.getByText("Times shown in Eastern Time.")).toBeInTheDocument();
+  });
+
+  it("renders free-text hours without a timezone caption", () => {
+    render(<OfficeInfoPanel info={baseInfo} />);
+    expect(screen.getByText("Mon–Fri 9–5")).toBeInTheDocument();
+    expect(screen.queryByText("Times shown in Eastern Time.")).not.toBeInTheDocument();
+  });
+
+  it("shows an empty-state hours fallback", () => {
+    render(<OfficeInfoPanel info={{ ...baseInfo, officeHours: [] }} />);
+    expect(screen.getByText("Hours not listed.")).toBeInTheDocument();
+  });
+
+  it("renders companywide support contacts with their role labels", () => {
+    render(
+      <OfficeInfoPanel
+        info={{
+          ...baseInfo,
+          corporateContacts: [
+            {
+              id: 9,
+              displayName: "Anjana Budhathoki",
+              email: "info@onest.realestate",
+              phoneNumber: "(703) 509-1167",
+              isPrimary: true,
+              assignmentType: "principal_broker",
+              assignmentTypeLabel: "Principal broker",
+            },
+          ],
+        }}
+      />,
+    );
+    expect(screen.getByText("Companywide support")).toBeInTheDocument();
+    expect(screen.getByText("Principal broker")).toBeInTheDocument();
+    expect(screen.getByText("info@onest.realestate")).toBeInTheDocument();
+  });
+
+  it("omits the corporate section when there are no corporate contacts", () => {
+    render(<OfficeInfoPanel info={baseInfo} />);
+    expect(screen.queryByText("Companywide support")).not.toBeInTheDocument();
+  });
+
+  it("exposes tel: links with sanitized numbers", () => {
+    render(
+      <OfficeInfoPanel
+        info={{
+          ...baseInfo,
+          contacts: {
+            ...baseInfo.contacts,
+            branchManager: {
+              id: 2,
+              displayName: "Suman Mahara",
+              email: "suman@onest.realestate",
+              phoneNumber: "(857) 869-2765",
+              isPrimary: true,
+              assignmentType: "manager",
+              assignmentTypeLabel: "Branch manager",
+            },
+          },
+        }}
+      />,
+    );
+    const phoneLink = screen.getByRole("link", { name: /\(857\) 869-2765/ });
+    expect(phoneLink).toHaveAttribute("href", "tel:8578692765");
   });
 });

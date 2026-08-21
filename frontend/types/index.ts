@@ -1411,6 +1411,13 @@ export interface OfficeContactPerson {
   assignmentTypeLabel: string;
 }
 
+export interface OfficeHourEntry {
+  day?: string;
+  open?: string | null;
+  close?: string | null;
+  [key: string]: unknown;
+}
+
 export interface OfficeInfoPayload {
   id: number;
   name: string;
@@ -1431,6 +1438,7 @@ export interface OfficeInfoPayload {
   parkingInstructions: string;
   accessInstructions: string;
   accessInstructionsInternal: boolean;
+  directionsUrl: string;
   includeInternal: boolean;
   updatedAt: string;
   version: string;
@@ -1442,6 +1450,7 @@ export interface OfficeInfoPayload {
     transactionCoordinator: OfficeContactPerson | null;
     itSupport: OfficeContactPerson | null;
   };
+  corporateContacts: OfficeContactPerson[];
 }
 
 export interface OfficeInfoPageProps extends PageProps {

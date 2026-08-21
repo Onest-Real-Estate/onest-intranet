@@ -7,6 +7,7 @@ letting admin/internal surfaces opt into richer data.
 from __future__ import annotations
 
 from typing import Any
+from urllib.parse import urlencode
 
 from django.utils import timezone
 
@@ -87,6 +88,56 @@ def _primary_or_first(
     return assignments[0]
 
 
+def office_directions_url(office: Office) -> str:
+    """Approved external map destination (Google Maps URL API).
+
+    Built from the public address fields only — no internal data is ever
+    embedded in the query string.
+    """
+    parts = [office.street_address, office.city, office.state, office.zip_code]
+    query = ", ".join(part for part in parts if part)
+    if not query:
+        return ""
+    return f"https://www.google.com/maps/search/?api=1&{urlencode({'query': query})}"
+
+
+def _head_office() -> Office | None:
+    return (
+        Office.objects.filter(kind=Office.Kind.HEAD_OFFICE, is_active=True)
+        .order_by("pk")
+        .first()
+    )
+
+
+def corporate_contacts_payload(*, on_date=None) -> list[dict[str, Any]]:
+    """Company-level directory carried as head-office contact assignments.
+
+    Ordered by role seniority (the corporate_types order), primary holder
+    first within a role — not alphabetically by type code.
+    """
+    head = _head_office()
+    if head is None:
+        return []
+    assignments = list(
+        OfficeContactAssignment.current_queryset(head, on_date=on_date).filter(
+            assignment_type__in=OfficeContactAssignment.corporate_types()
+        )
+    )
+    order = {
+        value: index
+        for index, value in enumerate(OfficeContactAssignment.corporate_types())
+    }
+    assignments.sort(
+        key=lambda item: (
+            order.get(item.assignment_type, len(order)),
+            not item.is_primary,
+            item.user.email,
+        )
+    )
+    people = (_contact_person(assignment) for assignment in assignments)
+    return [person for person in people if person is not None]
+
+
 def office_info_payload(office: Office, *, include_internal: bool = False) -> dict:
     """Agent-facing office brochure for one office.
 
@@ -103,6 +154,7 @@ def office_info_payload(office: Office, *, include_internal: bool = False) -> di
     payload: dict[str, Any] = {
         **office_summary_payload(office),
         "regionName": office.region_name(),
+        "directionsUrl": office_directions_url(office),
         "updatedAt": office.updated_at.isoformat(),
         "version": f"{office.pk}:{office.updated_at.isoformat()}",
         "contacts": {
@@ -127,6 +179,7 @@ def office_info_payload(office: Office, *, include_internal: bool = False) -> di
                 _primary_or_first(by_type.get(types.IT_SUPPORT, []))
             ),
         },
+        "corporateContacts": corporate_contacts_payload(),
         "includeInternal": include_internal,
     }
     if include_internal:

@@ -379,6 +379,27 @@ class OfficeContactAssignment(models.Model):
             _("Transaction coordinator"),
         )
         IT_SUPPORT = "it_support", _("IT support")
+        # Company-level roles carried as assignments on the head office so
+        # they reuse the same validity-window machinery as branch contacts.
+        PRINCIPAL_BROKER = "principal_broker", _("Principal broker")
+        ASSOCIATE_BROKER = "associate_broker", _("Associate broker")
+        TC_MANAGER = "tc_manager", _("TC manager")
+        MARKETING_MANAGER = "marketing_manager", _("Marketing manager")
+        IT_MANAGER = "it_manager", _("IT manager")
+        ACCOUNTING = "accounting", _("Accounting")
+
+    @classmethod
+    def corporate_types(cls) -> tuple[str, ...]:
+        """Assignment types that live on the head office, not branches."""
+        types = cls.AssignmentType
+        return (
+            types.PRINCIPAL_BROKER,
+            types.ASSOCIATE_BROKER,
+            types.TC_MANAGER,
+            types.MARKETING_MANAGER,
+            types.IT_MANAGER,
+            types.ACCOUNTING,
+        )
 
     office = models.ForeignKey(
         Office,
