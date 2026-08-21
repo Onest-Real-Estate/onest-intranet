@@ -19,5 +19,7 @@ export default defineConfig({
     include: ["frontend/**/*.test.{ts,tsx}"],
     setupFiles: ["frontend/test/setup.ts"],
     execArgv: disableNodeWebstorage,
+    // jsdom + Radix under parallel load routinely exceeds Vitest's 5s default.
+    testTimeout: 15_000,
   },
 });

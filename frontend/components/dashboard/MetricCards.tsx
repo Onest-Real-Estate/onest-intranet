@@ -1,4 +1,5 @@
 import { Link } from "@inertiajs/react";
+import { format } from "date-fns";
 import { ChevronDown } from "lucide-react";
 import { useState } from "react";
 
@@ -27,6 +28,25 @@ const NO_VALUE = "—";
 
 function isMeasured(metric: DashboardMetric): boolean {
   return metric.availability === "available";
+}
+
+function sectionAsOf(metrics: DashboardMetrics): string | null {
+  for (const group of metrics.groups) {
+    for (const metric of group.metrics) {
+      if (metric.asOf) {
+        return metric.asOf;
+      }
+    }
+  }
+  return null;
+}
+
+function formatAsOf(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+  return format(date, "PPP p");
 }
 
 function Metric({ metric }: { metric: DashboardMetric }) {
@@ -109,6 +129,9 @@ export function MetricCards({ metrics }: { metrics: DashboardMetrics }) {
     }))
     .filter((entry) => entry.metrics.length > 0);
 
+  const asOf = sectionAsOf(metrics);
+  const asOfLabel = asOf ? formatAsOf(asOf) : "";
+
   const toggle =
     unmeasuredCount === 0 ? null : (
       <Button
@@ -148,6 +171,9 @@ export function MetricCards({ metrics }: { metrics: DashboardMetrics }) {
           None of your figures have a data source yet.
         </p>
       )}
+      {asOfLabel ? (
+        <p className="text-muted-foreground text-xs">As of {asOfLabel}</p>
+      ) : null}
       {toggle}
     </div>
   );

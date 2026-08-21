@@ -1,4 +1,5 @@
 import json
+import re
 
 import pytest
 from django.contrib.auth.models import Group, Permission
@@ -357,5 +358,6 @@ def test_platform_tasks_and_it_support_return_no_internal_operational_data(clien
     for route_name in ("admin_platform_tasks", "admin_it_support"):
         props = inertia_props(client.get(reverse(route_name), HTTP_X_INERTIA="true"))
         serialized = json.dumps(props).lower()
+        # Word boundaries: CSRF/request tokens can contain "log" as a substring.
         for forbidden in ("secret", "traceback", "worker", "log", "queue"):
-            assert forbidden not in serialized
+            assert re.search(rf"\b{re.escape(forbidden)}\b", serialized) is None

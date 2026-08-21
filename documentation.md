@@ -117,10 +117,12 @@ Backend suite: 256 passed. `ruff`, `ty` clean.
 
 ## Open questions / follow-ups
 
-- The production dashboard now shows: greeting, performance metrics, Quick
-  Access, and **six widgets in an explicit unavailable state**. That is the
+- The production dashboard now shows: greeting, **performance metrics**
+  (``P1-022`` — registry-driven cards with scoped aggregates; pending source
+  modules stay marked unavailable until those domains ship), Quick Access, and
+  **six widgets in an explicit unavailable state**. That is the composition
   ticket's intent ("unavailable providers return an explicit empty/unavailable
-  state, not invented data") but it is a stark page until P1-022–P1-027 land.
+  state, not invented data"). Remaining feed widgets are ``P1-023``–``P1-027``.
   Flagged for the product call.
 - No per-user timezone field exists. `user_timezone()` returns the application
   timezone; if per-user timezones are wanted, that function plus a migration is

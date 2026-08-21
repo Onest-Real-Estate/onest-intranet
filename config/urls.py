@@ -10,10 +10,13 @@ urlpatterns: list[URLPattern | URLResolver] = [
 ]
 
 # Silk (SQL profiling) is dev-only — see config/settings.py. Web UI: /silk/.
+# Tests strip Silk from INSTALLED_APPS; keep the URL in step so DEBUG still
+# serves media without importing a profiler that is not loaded.
 if settings.DEBUG:
     from django.conf.urls.static import static
 
-    urlpatterns += [path("silk/", include("silk.urls", namespace="silk"))]
+    if "silk" in settings.INSTALLED_APPS:
+        urlpatterns += [path("silk/", include("silk.urls", namespace="silk"))]
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 
 # Custom 403 page (PermissionDenied Inertia page) — see

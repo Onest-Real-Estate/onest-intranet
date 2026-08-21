@@ -23,7 +23,11 @@ registration, and deployment; don't duplicate it here.
 7. **Ask before touching** `config/settings.py` auth/CSRF settings,
    `deployment/`, `.github/workflows/`, or anything under `migrations/` that is
    already applied.
-
+8. If there is a requirement only if create a new apps under `apps/` folder add it to `settings.py`
+9. Do not use plain <a href> tag use inertia's <Link></Link> tag for all the movement 
+10. select_for_update() with select_related("owner_office").
+     owner_office is nullable → Postgres LEFT OUTER JOIN → FOR UPDATE cannot be
+     applied to the nullable side of an outer join. SQLite hides this.
 ## Commands
 
 Two ways to run things. Pick one and stay consistent within a task.

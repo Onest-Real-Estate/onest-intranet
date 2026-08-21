@@ -191,8 +191,10 @@ def test_a_corrupted_external_destination_never_reaches_the_browser():
 def test_a_corrupted_icon_payload_becomes_the_approved_generic_mark():
     clear_seeded_links()
     link = make_link("corrupt-icon", company_wide=True)
+    # Must fit ``icon``'s max_length=32 while still looking like a remote URL
+    # so the provider's allowlist fallback is what we exercise, not the DB.
     QuickAccessLink.objects.filter(pk=link.pk).update(
-        icon="https://tracker.example.com/pixel.gif"
+        icon="https://tracker.example.com/x"
     )
     reader = make_user("generic-icon@example.com", office=branch(0))
 

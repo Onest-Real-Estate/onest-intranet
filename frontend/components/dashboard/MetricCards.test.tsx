@@ -1,10 +1,13 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { format } from "date-fns";
 import { describe, expect, it } from "vitest";
 import { axe } from "vitest-axe";
 
 import { MetricCards } from "@/components/dashboard/MetricCards";
 import type { DashboardMetric, DashboardMetrics } from "@/types";
+
+const AS_OF = "2026-08-19T09:00:00-04:00";
 
 function metric(overrides: Partial<DashboardMetric> = {}): DashboardMetric {
   return {
@@ -13,8 +16,11 @@ function metric(overrides: Partial<DashboardMetric> = {}): DashboardMetric {
     format: "count",
     scopeLevel: "office",
     definition: "Active users who joined in the trailing 30 days.",
+    asOf: AS_OF,
     availability: "available",
     value: "4",
+    rawValue: 4,
+    unit: "count",
     hint: "Joined in the last 30 days",
     tone: "neutral",
     trend: "up",
@@ -51,6 +57,8 @@ function unmeasuredGroup() {
         availability: "unavailable" as const,
         unavailableReason: "Reservations are not connected to the hub yet.",
         value: null,
+        rawValue: undefined,
+        unit: undefined,
         hint: "",
         drillDown: null,
       }),
@@ -77,11 +85,107 @@ describe("MetricCards", () => {
     expect(screen.getByText("Fairfax VA")).toBeVisible();
   });
 
+  it("shows section freshness from the metric as-of timestamp", () => {
+    render(<MetricCards metrics={payload()} />);
+    expect(screen.getByText(`As of ${format(new Date(AS_OF), "PPP p")}`)).toBeVisible();
+  });
+
   it("links a card to the drill-down the server reversed", () => {
     render(<MetricCards metrics={payload()} />);
 
     const link = screen.getByRole("link", { name: "New agents — View new agents" });
     expect(link).toHaveAttribute("href", "/operations/new-agents");
+  });
+
+  it("keeps a measured zero distinct from an unavailable dash", async () => {
+    render(
+      <MetricCards
+        metrics={payload({
+          groups: [
+            {
+              key: "teamOversight",
+              title: "Team oversight",
+              description: "People and compliance in my scope",
+              metrics: [
+                metric({
+                  key: "teamNewAgents",
+                  value: "0",
+                  rawValue: 0,
+                  trend: "flat",
+                  drillDown: null,
+                }),
+                metric({
+                  key: "teamComplianceExceptions",
+                  label: "Compliance exceptions",
+                  availability: "unavailable",
+                  unavailableReason:
+                    "Compliance tracking is not connected to the hub yet.",
+                  value: null,
+                  hint: "",
+                  drillDown: null,
+                }),
+              ],
+            },
+          ],
+        })}
+      />,
+    );
+
+    expect(screen.getByText("0")).toBeVisible();
+    expect(screen.queryByText("Compliance exceptions")).toBeNull();
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Show 1 figure without a data source yet" }),
+    );
+    expect(screen.getByText("Compliance exceptions")).toBeVisible();
+    expect(screen.getByText("—")).toBeVisible();
+    expect(
+      screen.getByText("Compliance tracking is not connected to the hub yet."),
+    ).toBeVisible();
+  });
+
+  it("lays out a variable number of cards in one group without dropping any", () => {
+    render(
+      <MetricCards
+        metrics={payload({
+          groups: [
+            {
+              key: "myPipeline",
+              title: "My pipeline",
+              description: "Deals I own",
+              metrics: [
+                metric({
+                  key: "a",
+                  label: "Active",
+                  value: "1",
+                  drillDown: null,
+                }),
+                metric({
+                  key: "b",
+                  label: "Closings",
+                  value: "2",
+                  drillDown: null,
+                }),
+                metric({
+                  key: "c",
+                  label: "Commission",
+                  value: "$3.00",
+                  format: "currency",
+                  drillDown: null,
+                }),
+              ],
+            },
+          ],
+        })}
+      />,
+    );
+
+    expect(screen.getByText("Active")).toBeVisible();
+    expect(screen.getByText("Closings")).toBeVisible();
+    expect(screen.getByText("Commission")).toBeVisible();
+    expect(screen.getByText("1")).toBeVisible();
+    expect(screen.getByText("2")).toBeVisible();
+    expect(screen.getByText("$3.00")).toBeVisible();
   });
 
   it("folds figures that have no data source out of the way", async () => {
@@ -143,8 +247,16 @@ describe("MetricCards", () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it("has no detectable accessibility violations", async () => {
+  it("has no detectable accessibility violations for measured cards", async () => {
     const { container } = render(<MetricCards metrics={payload()} />);
+    expect(await axe(container)).toHaveNoViolations();
+  });
+
+  it("has no detectable accessibility violations for mixed measured and unavailable", async () => {
+    const { container } = render(<MetricCards metrics={mixed()} />);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Show 1 figure without a data source yet" }),
+    );
     expect(await axe(container)).toHaveNoViolations();
   });
 });
