@@ -1,9 +1,14 @@
-"""Quick Access administration endpoints.
+"""Quick Access endpoints: administration, plus the dashboard's click beacon.
 
-Every entry point re-derives the actor's authority and scope before it reads or
-writes: a link is always loaded through ``manageable_link_queryset``, never by
-bare id, so a link outside the actor's scope is a 404 rather than a 403 —
-confirming that an id exists is itself a disclosure across a scope boundary.
+Every administrative entry point re-derives the actor's authority and scope
+before it reads or writes: a link is always loaded through
+``manageable_link_queryset``, never by bare id, so a link outside the actor's
+scope is a 404 rather than a 403 — confirming that an id exists is itself a
+disclosure across a scope boundary.
+
+:func:`quick_access_click` is the one endpoint here that is not administrative.
+It belongs to the dashboard panel and answers ``204`` unconditionally; see
+:mod:`apps.web.quick_access.analytics` for why it declines to say more.
 """
 
 from __future__ import annotations
@@ -31,6 +36,7 @@ from apps.web.quick_access.administration import (
     set_link_state,
     update_link,
 )
+from apps.web.quick_access.analytics import record_click
 from apps.web.quick_access.forms import (
     QuickAccessLinkForm,
     QuickAccessReorderForm,
@@ -46,6 +52,7 @@ __all__ = [
     "quick_access_update",
     "quick_access_state",
     "quick_access_reorder",
+    "quick_access_click",
 ]
 
 INDEX_ROUTE = "admin_quick_access"
@@ -258,3 +265,23 @@ def _render_index_with_error(request: HttpRequest, message: str) -> HttpResponse
     )
     response.status_code = 422
     return response
+
+
+# --------------------------------------------------------------------------- #
+# Dashboard panel
+# --------------------------------------------------------------------------- #
+
+
+@enforce_policy("quick_access_click")
+@require_POST
+def quick_access_click(request: HttpRequest) -> HttpResponse:
+    """Record that the signed-in reader opened a launcher. Always ``204``.
+
+    The response is deliberately uniform. Answering ``404`` for a key the
+    reader may not see would let the dashboard be used to enumerate other
+    offices' configuration, and answering ``400`` for a malformed one would
+    tell a caller when it had guessed the shape right. Nothing here is worth
+    that: the browser has already navigated by the time this returns.
+    """
+    record_click(cast(User, request.user), request.POST.get("key", ""))
+    return HttpResponse(status=204)

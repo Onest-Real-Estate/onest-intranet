@@ -7,6 +7,13 @@ urlpatterns = [
     path("dashboard", views.dashboard, name="dashboard"),
     path("design-system", views.design_system, name="design_system"),
     path("hub/<slug:section>", views.coming_soon, name="coming_soon"),
+    # The dashboard panel's fire-and-forget click beacon. Not administrative:
+    # it answers 204 to any signed-in reader and never says what it recorded.
+    path(
+        "dashboard/quick-access/click",
+        quick_access_views.quick_access_click,
+        name="quick_access_click",
+    ),
     # Quick Access administration. The list itself is an operations
     # destination (below); these are the endpoints it drives.
     path(

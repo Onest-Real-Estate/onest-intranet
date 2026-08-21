@@ -11,6 +11,7 @@ import pytest
 from django.core.cache import cache
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import IntegrityError, transaction
+from django.test import Client
 from django.urls import reverse
 
 from apps.audit.models import AuditEvent
@@ -20,6 +21,7 @@ from apps.web.dashboard import WIDGET_BY_KEY, build_context, widget_payload
 from apps.web.dashboard.envelope import WidgetStatus
 from apps.web.models import (
     QuickAccessLink,
+    QuickAccessLinkClick,
     QuickAccessLinkOfficeAudience,
     QuickAccessLinkRoleAudience,
 )
@@ -35,7 +37,11 @@ from apps.web.quick_access.administration import (
     set_link_state,
     update_link,
 )
-from apps.web.quick_access.catalog import ICON_KEYS, internal_destination_keys
+from apps.web.quick_access.catalog import (
+    DEFAULT_ICON,
+    ICON_KEYS,
+    internal_destination_keys,
+)
 from apps.web.quick_access.destinations import validate_destination
 from apps.web.quick_access.resolution import (
     configuration_version,
@@ -166,6 +172,34 @@ def test_a_destination_key_that_left_the_allowlist_renders_empty():
         destination_value="hub:not-a-section"
     )
     assert QuickAccessLink.objects.get(pk=link.pk).href() == ""
+
+
+def test_a_corrupted_external_destination_never_reaches_the_browser():
+    clear_seeded_links()
+    link = make_link("corrupt-url", company_wide=True)
+    QuickAccessLink.objects.filter(pk=link.pk).update(
+        destination_value="javascript:alert(document.cookie)"
+    )
+    reader = make_user("safe-reader@example.com", office=branch(0))
+
+    payload = widget_payload(WIDGET_BY_KEY["quick_access"], build_context(reader))
+
+    assert payload["status"] == WidgetStatus.EMPTY
+    assert "javascript:" not in json.dumps(payload)
+
+
+def test_a_corrupted_icon_payload_becomes_the_approved_generic_mark():
+    clear_seeded_links()
+    link = make_link("corrupt-icon", company_wide=True)
+    QuickAccessLink.objects.filter(pk=link.pk).update(
+        icon="https://tracker.example.com/pixel.gif"
+    )
+    reader = make_user("generic-icon@example.com", office=branch(0))
+
+    payload = widget_payload(WIDGET_BY_KEY["quick_access"], build_context(reader))
+
+    assert payload["data"][0]["icon"] == DEFAULT_ICON
+    assert "tracker.example.com" not in json.dumps(payload)
 
 
 # --------------------------------------------------------------------------- #
@@ -1050,3 +1084,184 @@ def test_a_link_naming_no_office_is_nobody_else_to_manage():
     assert orphan.pk not in set(
         manageable_link_queryset(manager).values_list("pk", flat=True)
     )
+
+
+# --------------------------------------------------------------------------- #
+# Click analytics
+#
+# The beacon is optional telemetry that must never cost a click, never confirm
+# what a reader may not see, and never carry a destination.
+# --------------------------------------------------------------------------- #
+
+
+def click(client, user, key: str):
+    client.force_login(user)
+    return client.post(reverse("quick_access_click"), {"key": key})
+
+
+def test_a_click_on_a_visible_link_is_recorded_without_its_destination(client):
+    clear_seeded_links()
+    office = branch(0)
+    link = make_link(
+        "lofty",
+        company_wide=True,
+        destination_value="https://lofty.example.com/app?workspace=onest",
+    )
+    reader = make_user("clicker@example.com", office=office)
+
+    assert click(client, reader, "lofty").status_code == 204
+
+    row = QuickAccessLinkClick.objects.get()
+    assert row.link_id == link.pk
+    assert row.link_stable_key == "lofty"
+    assert row.user_id == reader.pk
+    assert row.office_id == office.pk
+    assert row.destination_type == "external_url"
+    # Nothing on the row may carry a third-party query string.
+    stored = " ".join(
+        str(value) for value in row.__dict__.values() if isinstance(value, str)
+    )
+    assert "workspace=onest" not in stored
+    assert "lofty.example.com" not in stored
+
+
+def test_a_click_on_a_link_outside_the_reader_audience_records_nothing(client):
+    clear_seeded_links()
+    home = branch(0)
+    away = other_region_office(home)
+    make_link("theirs", offices=(away,))
+    reader = make_user("outsider@example.com", office=home)
+
+    # 204 either way: a 404 here would turn the dashboard into a way to
+    # enumerate another office's configuration.
+    assert click(client, reader, "theirs").status_code == 204
+    assert not QuickAccessLinkClick.objects.exists()
+
+
+def test_a_click_on_an_inactive_link_records_nothing(client):
+    clear_seeded_links()
+    make_link("retired", company_wide=True, is_active=False)
+    reader = make_user("hopeful@example.com", office=branch(0))
+
+    assert click(client, reader, "retired").status_code == 204
+    assert not QuickAccessLinkClick.objects.exists()
+
+
+@pytest.mark.parametrize("key", ["", "unknown", "x" * 200])
+def test_a_click_with_a_key_that_is_not_one_records_nothing(client, key):
+    clear_seeded_links()
+    make_link("real", company_wide=True)
+    reader = make_user("fuzzer@example.com", office=branch(0))
+
+    assert click(client, reader, key).status_code == 204
+    assert not QuickAccessLinkClick.objects.exists()
+
+
+def test_the_click_beacon_refuses_an_anonymous_caller(client):
+    """401, not a login redirect: the beacon is XHR, and has no page to send."""
+    response = client.post(reverse("quick_access_click"), {"key": "lofty"})
+    assert response.status_code == 401
+    assert not QuickAccessLinkClick.objects.exists()
+
+
+def test_the_click_beacon_refuses_a_get(client):
+    reader = make_user("getter@example.com", office=branch(0))
+    client.force_login(reader)
+    assert client.get(reverse("quick_access_click")).status_code == 405
+
+
+def test_the_click_beacon_requires_csrf():
+    clear_seeded_links()
+    make_link("lofty", company_wide=True)
+    reader = make_user("csrf-clicker@example.com", office=branch(0))
+    csrf_client = Client(enforce_csrf_checks=True)
+    csrf_client.force_login(reader)
+
+    response = csrf_client.post(reverse("quick_access_click"), {"key": "lofty"})
+
+    assert response.status_code == 403
+    assert not QuickAccessLinkClick.objects.exists()
+
+
+def test_click_analytics_can_be_turned_off(client, settings):
+    clear_seeded_links()
+    make_link("lofty", company_wide=True)
+    reader = make_user("opted-out@example.com", office=branch(0))
+    settings.QUICK_ACCESS_CLICK_ANALYTICS = False
+
+    # Still 204: turning recording off costs a count, never a click.
+    assert click(client, reader, "lofty").status_code == 204
+    assert not QuickAccessLinkClick.objects.exists()
+
+
+def test_a_removed_link_leaves_its_clicks_countable():
+    clear_seeded_links()
+    link = make_link("doomed", company_wide=True)
+    reader = make_user("historian@example.com", office=branch(0))
+    QuickAccessLinkClick.objects.create(
+        link=link,
+        link_stable_key=link.stable_key,
+        user=reader,
+        office=reader.office,
+        destination_type=link.destination_type,
+    )
+
+    link.delete()
+
+    row = QuickAccessLinkClick.objects.get()
+    assert row.link_id is None
+    assert row.link_stable_key == "doomed"
+
+
+# --------------------------------------------------------------------------- #
+# Panel bounds
+# --------------------------------------------------------------------------- #
+
+
+def test_the_panel_payload_is_capped_and_says_so():
+    """One over-broad company-wide audience cannot become an unbounded feed."""
+    clear_seeded_links()
+    definition = WIDGET_BY_KEY["quick_access"]
+    for index in range(definition.feed_limit + 3):
+        make_link(f"tool-{index:02d}", company_wide=True, sort_order=index)
+    reader = make_user("many-tools@example.com", office=branch(0))
+
+    payload = widget_payload(definition, build_context(reader))
+
+    assert payload["status"] == WidgetStatus.READY
+    assert len(payload["data"]) == definition.feed_limit
+    assert payload["meta"]["truncated"] is True
+    # Truncation takes the tail, never the middle: order is administered.
+    assert [tool["id"] for tool in payload["data"]] == [
+        f"tool-{index:02d}" for index in range(definition.feed_limit)
+    ]
+
+
+def test_a_panel_inside_the_cap_is_not_flagged_as_truncated():
+    clear_seeded_links()
+    make_link("only-one", company_wide=True)
+    reader = make_user("one-tool@example.com", office=branch(0))
+
+    payload = widget_payload(WIDGET_BY_KEY["quick_access"], build_context(reader))
+
+    assert payload["meta"].get("truncated") is not True
+
+
+def test_unsafe_rows_do_not_hide_later_safe_rows_or_the_cap():
+    clear_seeded_links()
+    definition = WIDGET_BY_KEY["quick_access"]
+    corrupt = make_link("corrupt-first", company_wide=True, sort_order=0)
+    QuickAccessLink.objects.filter(pk=corrupt.pk).update(
+        destination_value="javascript:alert(1)"
+    )
+    for index in range(definition.feed_limit + 1):
+        make_link(f"safe-{index:02d}", company_wide=True, sort_order=index + 1)
+    reader = make_user("safe-cap@example.com", office=branch(0))
+
+    payload = widget_payload(definition, build_context(reader))
+
+    assert len(payload["data"]) == definition.feed_limit
+    assert payload["meta"]["truncated"] is True
+    assert [tool["id"] for tool in payload["data"]] == [
+        f"safe-{index:02d}" for index in range(definition.feed_limit)
+    ]

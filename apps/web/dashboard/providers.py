@@ -79,25 +79,41 @@ def quick_access(context: DashboardContext) -> ProviderResult:
 
     A link whose internal destination has since left the allowlist resolves to
     an empty href and is dropped rather than rendered as a dead tile.
+
+    The payload is bounded by the registry's ``feed_limit``, which the
+    composer enforces and flags as ``meta.truncated``. The panel shows fewer
+    still and offers "View all"; the registry cap is the outer bound on what an
+    over-broad company-wide audience can push down the wire, not the product
+    rule.
     """
+    from apps.web.quick_access.catalog import DEFAULT_ICON, ICON_KEYS
     from apps.web.quick_access.resolution import visible_links_for
 
-    links = list(visible_links_for(context.user, access=context.access, at=context.now))
-    tools = [
-        {
-            "id": link.stable_key,
-            "name": link.name,
-            "description": link.description,
-            "href": href,
-            "icon": link.icon,
-            "external": link.is_external,
-            "sso": link.sso_capability,
-            "health": link.integration_health,
-            "setup": link.setup_behavior,
-        }
-        for link in links
-        if (href := link.href())
-    ]
+    queryset = visible_links_for(context.user, access=context.access, at=context.now)
+    tools = []
+    # Stop after one *safe* row past the cap. Counting database rows before
+    # validating them lets one corrupt row hide a later approved launcher and
+    # suppresses the composer's ``truncated`` bit.
+    chunk_size = max(context.feed_limit + 1, 25)
+    for link in queryset.iterator(chunk_size=chunk_size):
+        href = link.href()
+        if not href:
+            continue
+        tools.append(
+            {
+                "id": link.stable_key,
+                "name": link.name,
+                "description": link.description,
+                "href": href,
+                "icon": link.icon if link.icon in ICON_KEYS else DEFAULT_ICON,
+                "external": link.is_external,
+                "sso": link.sso_capability,
+                "health": link.integration_health,
+                "setup": link.setup_behavior,
+            }
+        )
+        if context.feed_limit and len(tools) > context.feed_limit:
+            break
     if not tools:
         return empty(
             "No tools configured",

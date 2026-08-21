@@ -296,6 +296,20 @@ ROUTE_POLICIES: dict[str, AuthorizationPolicy] = {
         all_permissions=("web.manage_quick_access",),
         scope_rule="quick_access_link_scope",
     ),
+    "quick_access_click": AuthorizationPolicy(
+        key="quick_access_click",
+        access="authenticated",
+        description=(
+            "Record that the signed-in reader opened one of their own Quick "
+            "Access launchers. Answers 204 to every caller: the key is "
+            "resolved against the reader's own visible links, so it can "
+            "neither confirm nor deny another office's configuration."
+        ),
+        methods=("POST",),
+        route_names=("quick_access_click",),
+        scope_rule="self_only",
+        auth_behavior="json",
+    ),
     "dashboard": AuthorizationPolicy(
         key="dashboard",
         access="authenticated",

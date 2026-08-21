@@ -66,7 +66,7 @@ source yet" or "I failed", so every widget either lied or would have to 500.
 | key | prop | group | v | provider status today | feed cap | cache |
 | --- | --- | --- | --- | --- | --- | --- |
 | performance | `metrics` | metrics | 1 | ready / empty | — | none (sensitive) |
-| quick_access | `quickApps` | pipeline | 1 | ready | 8 | shared, 300s |
+| quick_access | `quickApps` | pipeline | 1 | ready | 24 | per-user, 300s |
 | announcements | `announcements` | pipeline | 1 | unavailable | — | none |
 | active_transactions | `transactions` | pipeline | 1 | unavailable | 5 | none |
 | training | `training` | pipeline | 1 | unavailable | — | none |

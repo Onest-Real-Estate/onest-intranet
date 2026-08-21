@@ -22,6 +22,7 @@ const URLS = {
     'quick_access_create': () => `/operations/quick-access/submit`,
     'quick_access_reorder': () => `/operations/quick-access/reorder`,
     'quick_access_new': () => `/operations/quick-access/new`,
+    'quick_access_click': () => `/dashboard/quick-access/click`,
     'coming_soon': (section: string) => `/hub/${section}`,
     'design_system': () => `/design-system`,
     'dashboard': () => `/dashboard`,

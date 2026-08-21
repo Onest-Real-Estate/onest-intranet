@@ -315,12 +315,20 @@ DJANGO_VITE = {
 # ---------------------------------------------------------------------------
 INERTIA_LAYOUT = "layout.html"
 # Bump whenever the frontend bundle changes so stale clients get a full reload.
-INERTIA_VERSION = "12"
+INERTIA_VERSION = "13"
 
 # Optional external help centre. The shell exposes it only when it is an
 # absolute, credential-free HTTPS URL; an empty or unsafe value leaves the
 # future-facing help entry point disabled.
 HUB_HELP_URL = config("HUB_HELP_URL", default="")
+
+# Quick Access click analytics. Optional, and off is a supported answer: the
+# beacon endpoint keeps returning 204 either way, so turning this off costs a
+# count and never a click. Rows carry a link's stable key and never its URL —
+# see apps/web/quick_access/analytics.py.
+QUICK_ACCESS_CLICK_ANALYTICS = config(
+    "QUICK_ACCESS_CLICK_ANALYTICS", default=True, cast=bool
+)
 
 # Inertia's HTTP client reads the XSRF-TOKEN cookie and echoes it back as the
 # X-XSRF-TOKEN header, so we align Django's CSRF cookie/header names with that.

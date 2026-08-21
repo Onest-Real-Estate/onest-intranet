@@ -4,6 +4,7 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import Q
+from django.urls import NoReverseMatch
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
@@ -293,17 +294,25 @@ class QuickAccessLink(models.Model):
             raise ValidationError(errors)
 
     def href(self) -> str:
-        """Rendered destination, or ``""`` when it can no longer be resolved.
+        """Return a currently approved destination, or ``""``.
 
-        Internal keys resolve through ``reverse()`` at render time. A key that
-        has since left the allowlist returns empty rather than raising: the
-        provider drops such a link from the panel, which is the safe reading of
-        "this destination is no longer approved".
+        The form and ``clean()`` validate every write, but the browser boundary
+        validates again so a legacy row or direct database edit cannot surface
+        an unsafe URL. Internal keys resolve through ``reverse()`` at render
+        time. A key that left the allowlist, or a route that no longer reverses,
+        returns empty rather than taking down the whole panel.
         """
+        try:
+            value = validate_destination(self.destination_type, self.destination_value)
+        except ValidationError:
+            return ""
         if self.destination_type == self.DestinationType.INTERNAL_ROUTE:
-            destination = internal_destination_by_key().get(self.destination_value)
-            return destination.href() if destination else ""
-        return self.destination_value
+            destination = internal_destination_by_key().get(value)
+            try:
+                return destination.href() if destination else ""
+            except NoReverseMatch:
+                return ""
+        return value
 
     @property
     def is_external(self) -> bool:
@@ -381,3 +390,76 @@ class QuickAccessLinkOfficeAudience(models.Model):
 
     def __str__(self) -> str:
         return f"{self.link_id}:{self.office_id}"
+
+
+class QuickAccessLinkClick(models.Model):
+    """One reader opening one launcher, recorded for panel analytics.
+
+    Deliberately *not* an :class:`~apps.audit.models.AuditEvent`. A click is
+    high-volume telemetry about which tools an office actually uses, not a
+    security-relevant lifecycle change, and mixing the two would bury the audit
+    trail under traffic.
+
+    **The row carries no destination.** It names the link by stable key and
+    records nothing about the URL — no path, no query string, no fragment — so
+    an external tool's session token or tenant identifier can never reach this
+    table by way of a click. The key is enough to answer every question the
+    panel asks; the URL is only ever a liability here.
+
+    ``link`` is nulled rather than cascaded when a link is finally removed:
+    counts for a retired tool stay answerable through ``link_stable_key``.
+    """
+
+    link = models.ForeignKey(
+        QuickAccessLink,
+        verbose_name=_("link"),
+        related_name="clicks",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+    )
+    #: Snapshot, so a removed link still counts. Not unique, not a foreign key.
+    link_stable_key = models.SlugField(_("link key"), max_length=64)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        verbose_name=_("user"),
+        related_name="quick_access_clicks",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+    )
+    #: The office the reader sat in at the time, so a later transfer does not
+    #: rewrite history. Denormalized on purpose.
+    office = models.ForeignKey(
+        "user.Office",
+        verbose_name=_("office"),
+        related_name="quick_access_clicks",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+    )
+    destination_type = models.CharField(
+        _("destination type"),
+        max_length=32,
+        choices=QuickAccessLink.DestinationType.choices,
+    )
+    occurred_at = models.DateTimeField(_("occurred at"), default=timezone.now)
+
+    if TYPE_CHECKING:
+        link_id: int | None
+        user_id: int | None
+        office_id: int | None
+
+    class Meta:
+        ordering = ["-occurred_at", "-pk"]
+        verbose_name = _("quick access click")
+        verbose_name_plural = _("quick access clicks")
+        indexes = [
+            models.Index(
+                fields=["link_stable_key", "occurred_at"], name="web_qac_key_time"
+            ),
+            models.Index(fields=["occurred_at"], name="web_qac_time"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.link_stable_key}@{self.occurred_at.isoformat()}"
