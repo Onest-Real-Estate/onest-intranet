@@ -284,6 +284,29 @@ ROUTE_POLICIES: dict[str, AuthorizationPolicy] = {
         route_names=("office_info",),
         scope_rule="self_only",
     ),
+    "office_resources": AuthorizationPolicy(
+        key="office_resources",
+        access="authenticated",
+        description=(
+            "Effective office resources for the signed-in user's primary "
+            "office. Scope chain resolved server-side; never accepts an "
+            "office or resource identifier from the client."
+        ),
+        methods=("GET",),
+        route_names=("office_resources",),
+        scope_rule="self_only",
+    ),
+    "office_resource_download": AuthorizationPolicy(
+        key="office_resource_download",
+        access="authenticated",
+        description=(
+            "Stream one resource file after re-checking the actor's own "
+            "effective-resource visibility (same gate as the page)."
+        ),
+        methods=("GET",),
+        route_names=("office_resources_download",),
+        scope_rule="self_only",
+    ),
     "new_agent_onboarding": AuthorizationPolicy(
         key="new_agent_onboarding",
         access="permission_protected",

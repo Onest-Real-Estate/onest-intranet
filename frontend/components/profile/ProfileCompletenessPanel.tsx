@@ -1,4 +1,5 @@
-import { CheckCircle2 } from "lucide-react";
+import { ArrowUpRight, CheckCircle2, CircleAlert } from "lucide-react";
+import { useEffect, useState } from "react";
 
 import {
   PanelHeader,
@@ -23,28 +24,39 @@ export function ProfileCompletenessPanel({
   const optional = completeness.missing.filter((item) => !item.required);
   const required = completeness.missing.filter((item) => item.required);
 
+  // One authored moment: the bar sweeps to its real value on arrival instead
+  // of snapping there before anyone has looked.
+  const [shownPercent, setShownPercent] = useState(0);
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => setShownPercent(completeness.percent));
+    return () => cancelAnimationFrame(frame);
+  }, [completeness.percent]);
+
   return (
     <SurfaceCard>
       <PanelHeader
         title="Profile completeness"
         meta={
-          <span className="text-sm font-semibold tabular-nums">
+          <span className="text-primary text-lg leading-none font-bold tabular-nums">
             {completeness.percent}%
           </span>
         }
       />
       <SurfaceCardContent className="grid gap-4">
         <Progress
-          value={completeness.percent}
+          value={shownPercent}
           aria-label={`Profile ${completeness.percent} percent complete`}
         />
-        <p className="text-muted-foreground text-sm">
+        <p className="text-muted-foreground text-sm tabular-nums">
           {completeness.completed} of {completeness.total} details filled in.
         </p>
 
         {required.length > 0 ? (
           <div className="grid gap-1.5">
-            <p className="text-sm font-medium">Missing required details</p>
+            <p className="flex items-center gap-1.5 text-sm font-medium">
+              <CircleAlert className="text-warning-ink size-4" aria-hidden />
+              Missing required details
+            </p>
             <ul className="text-muted-foreground grid gap-1 text-sm">
               {required.map((item) => (
                 <li key={item.key}>{item.label}</li>
@@ -56,25 +68,29 @@ export function ProfileCompletenessPanel({
         {optional.length > 0 ? (
           <div className="grid gap-1.5">
             <p className="text-sm font-medium">Still worth adding</p>
-            <ul className="grid gap-1 text-sm">
+            <ul className="grid gap-0.5 text-sm">
               {optional.map((item) => {
                 const anchor = sectionAnchors[item.section];
                 return (
-                  <li key={item.key}>
+                  <li
+                    key={item.key}
+                    className="flex items-center justify-between gap-2"
+                  >
                     {anchor ? (
                       <a
-                        className="text-primary underline-offset-2 hover:underline"
+                        className="group hover:bg-muted/60 -mx-2 flex flex-1 items-center justify-between gap-2 rounded-lg px-2 py-1 transition-colors duration-(--motion-fast)"
                         href={`#${anchor}`}
                       >
-                        {item.label}
+                        <span>{item.label}</span>
+                        <ArrowUpRight
+                          className="text-muted-foreground group-hover:text-primary size-4 shrink-0 transition-colors duration-(--motion-fast)"
+                          aria-hidden
+                        />
                       </a>
                     ) : (
                       item.label
                     )}
-                    <span className="text-muted-foreground">
-                      {" "}
-                      · {item.sectionLabel}
-                    </span>
+                    <span className="text-muted-foreground">· {item.sectionLabel}</span>
                   </li>
                 );
               })}

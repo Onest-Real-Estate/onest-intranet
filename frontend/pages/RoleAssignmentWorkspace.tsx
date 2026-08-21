@@ -1,5 +1,5 @@
-import { Head, router, usePage } from "@inertiajs/react";
-import { ArrowLeft, CalendarClock, ShieldOff } from "lucide-react";
+import { Head, Link, router, usePage } from "@inertiajs/react";
+import { CalendarClock, ShieldOff } from "lucide-react";
 import { useId, useMemo, useState } from "react";
 
 import {
@@ -7,6 +7,7 @@ import {
   AccessChangeDialog,
 } from "@/components/administration/AccessChangeDialog";
 import {
+  CardStateMessage,
   DataTable,
   DateField,
   Dialog,
@@ -271,40 +272,29 @@ function RoleAssignmentWorkspacePage() {
   return (
     <>
       <Head title={`Roles · ${subject.displayName}`} />
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-8 sm:px-6">
-        <div>
-          <Button asChild variant="ghost" size="sm" className="-ml-2 mb-2">
-            <a href={routes.admin_assign_roles()}>
-              <ArrowLeft className="size-3.5" aria-hidden />
-              All people
-            </a>
-          </Button>
-          <PageHeader
-            title={subject.displayName}
-            description={subject.email}
-            meta={
-              <span className="text-muted-foreground text-sm">
-                {subject.office?.pathLabel ?? "No office"} ·{" "}
-                {effectiveAccess.scopeLabel}
-              </span>
-            }
-            actions={
-              canOpenAdmin ? (
-                <Button asChild variant="outline" size="sm">
-                  <a href={administrationHref}>Administrative record</a>
-                </Button>
-              ) : null
-            }
-          />
-        </div>
+      <div className="flex flex-col gap-6">
+        <PageHeader
+          title={subject.displayName}
+          description={subject.email}
+          meta={
+            <span className="text-muted-foreground text-sm">
+              {subject.office?.pathLabel ?? "No office"} · {effectiveAccess.scopeLabel}
+            </span>
+          }
+          actions={
+            canOpenAdmin ? (
+              <Button asChild variant="outline" size="sm">
+                <Link href={administrationHref}>Administrative record</Link>
+              </Button>
+            ) : null
+          }
+        />
 
         {hasValidationErrors(validation) ? (
           <FormErrorSummary errors={validation} labels={ERROR_LABELS} />
         ) : null}
         {previewError ? (
-          <p className="text-destructive text-sm" role="alert">
-            {previewError}
-          </p>
+          <CardStateMessage state="error">{previewError}</CardStateMessage>
         ) : null}
 
         <SurfaceCard>
@@ -768,8 +758,20 @@ function RoleAssignmentWorkspace() {
   );
 }
 
-RoleAssignmentWorkspace.layout = (page: React.ReactNode) => (
-  <HubLayout>{page}</HubLayout>
-);
+RoleAssignmentWorkspace.layout = () =>
+  [
+    HubLayout,
+    {
+      context: {
+        title: "Assign User Roles",
+        breadcrumbs: [
+          { label: "Dashboard", href: routes.dashboard() },
+          { label: "Assign User Roles", href: routes.admin_assign_roles() },
+          { label: "Workspace" },
+        ],
+        back: { label: "All people", href: routes.admin_assign_roles() },
+      },
+    },
+  ] as const;
 
 export default RoleAssignmentWorkspace;

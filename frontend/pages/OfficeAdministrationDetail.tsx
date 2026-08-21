@@ -1,5 +1,5 @@
 import { Head, Link, router, usePage } from "@inertiajs/react";
-import { ExternalLink } from "lucide-react";
+import { Contact, ExternalLink } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import {
@@ -7,12 +7,14 @@ import {
   AccessChangeDialog,
 } from "@/components/administration/AccessChangeDialog";
 import {
+  EmptyState,
   FormActionBar,
   FormErrorSummary,
   FormField,
   FormLabel,
   PageHeader,
   PanelHeader,
+  ReadOnlyValue,
   StatusBadge,
   SurfaceCard,
   SurfaceCardContent,
@@ -20,6 +22,7 @@ import {
 import { HubLayout } from "@/components/HubLayout";
 import { OfficeInfoPanel } from "@/components/office/OfficeInfoPanel";
 import { PermissionRequired } from "@/components/PermissionRequired";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -111,7 +114,7 @@ function OfficeAdministrationDetailPage() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-10 px-4 py-8 sm:px-6">
+    <div className="flex flex-col gap-10">
       <Head title={`${office.name} · Offices`} />
       <PageHeader
         title={office.name}
@@ -142,30 +145,18 @@ function OfficeAdministrationDetailPage() {
               description="Stable key never changes. Kind and parent require company authority."
             />
             <SurfaceCardContent className="grid gap-3 sm:grid-cols-2">
-              <div className="grid gap-1">
-                <p className="text-muted-foreground text-xs font-medium uppercase">
-                  Stable key
-                </p>
-                <p className="text-sm font-medium">{office.stableKey}</p>
-              </div>
-              <div className="grid gap-1">
-                <p className="text-muted-foreground text-xs font-medium uppercase">
-                  Slug
-                </p>
-                <p className="text-sm font-medium">{office.slug}</p>
-              </div>
-              <div className="grid gap-1">
-                <p className="text-muted-foreground text-xs font-medium uppercase">
-                  Kind
-                </p>
-                <p className="text-sm font-medium">{office.kindLabel}</p>
-              </div>
-              <div className="grid gap-1">
-                <p className="text-muted-foreground text-xs font-medium uppercase">
-                  Parent
-                </p>
-                <p className="text-sm font-medium">{office.parentPathLabel ?? "—"}</p>
-              </div>
+              <ReadOnlyValue label="Stable key">
+                <span className="font-medium">{office.stableKey}</span>
+              </ReadOnlyValue>
+              <ReadOnlyValue label="Slug">
+                <span className="font-medium">{office.slug}</span>
+              </ReadOnlyValue>
+              <ReadOnlyValue label="Kind">
+                <span className="font-medium">{office.kindLabel}</span>
+              </ReadOnlyValue>
+              <ReadOnlyValue label="Parent">
+                <span className="font-medium">{office.parentPathLabel ?? "—"}</span>
+              </ReadOnlyValue>
             </SurfaceCardContent>
           </SurfaceCard>
 
@@ -316,20 +307,25 @@ function OfficeAdministrationDetailPage() {
             />
             <SurfaceCardContent className="grid gap-6">
               {contacts.length === 0 ? (
-                <p className="text-muted-foreground text-sm">
-                  No contact assignments yet.
-                </p>
+                <EmptyState
+                  icon={Contact}
+                  compact
+                  title="No contact assignments yet"
+                  description="Assign a branch manager, admin, broker, TC, or IT contact to fill this list."
+                />
               ) : (
                 <ul className="grid gap-3">
                   {contacts.map((contact) => (
                     <li
                       key={contact.id}
-                      className="border-border flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between"
+                      className="border-border flex flex-col gap-2 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between"
                     >
                       <div className="grid gap-0.5">
-                        <p className="text-sm font-medium">
+                        <p className="flex items-center gap-2 text-sm font-medium">
                           {contact.displayName}
-                          {contact.isPrimary ? " · Primary" : ""}
+                          {contact.isPrimary ? (
+                            <Badge variant="secondary">Primary</Badge>
+                          ) : null}
                         </p>
                         <p className="text-muted-foreground text-xs">
                           {contact.assignmentTypeLabel} · {contact.email}

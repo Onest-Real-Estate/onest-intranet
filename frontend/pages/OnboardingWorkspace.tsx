@@ -1,6 +1,5 @@
-import { Head, usePage } from "@inertiajs/react";
+import { Head, Link, usePage } from "@inertiajs/react";
 import {
-  ArrowLeft,
   Check,
   CircleAlert,
   Clock3,
@@ -134,20 +133,12 @@ export default function OnboardingWorkspace() {
     <PermissionRequired permission={{ all: ["web.view_new_agents"] }}>
       <div className="grid gap-8">
         <Head title={`Onboarding · ${onboarding.user.name}`} />
-        <div>
-          <Button variant="ghost" size="sm" asChild className="-ml-3 mb-3">
-            <a href={routes.admin_new_agents()}>
-              <ArrowLeft className="size-4" aria-hidden />
-              New Agent List
-            </a>
-          </Button>
-          <PageHeader
-            eyebrow="Operational onboarding"
-            title={onboarding.user.name}
-            description={`${onboarding.user.email} · ${onboarding.user.office ?? "No office"} · Starts ${formatDate(onboarding.user.startDate)}`}
-            meta={<StatusBadge status={onboarding.overall} />}
-          />
-        </div>
+        <PageHeader
+          eyebrow="Operational onboarding"
+          title={onboarding.user.name}
+          description={`${onboarding.user.email} · ${onboarding.user.office ?? "No office"} · Starts ${formatDate(onboarding.user.startDate)}`}
+          meta={<StatusBadge status={onboarding.overall} />}
+        />
 
         <div ref={summaryRef} tabIndex={-1} className="outline-none">
           <FormErrorSummary
@@ -229,10 +220,10 @@ export default function OnboardingWorkspace() {
                         />
                         {milestone.correction ? (
                           <Button variant="ghost" size="sm" asChild>
-                            <a href={milestone.correction.href}>
+                            <Link href={milestone.correction.href}>
                               {milestone.correction.label}
                               <ExternalLink className="size-3.5" aria-hidden />
-                            </a>
+                            </Link>
                           </Button>
                         ) : null}
                       </div>
@@ -490,7 +481,9 @@ export default function OnboardingWorkspace() {
             <SurfaceCard state="read-only" className="rounded-2xl">
               <PanelHeader
                 title="Record policy"
-                meta={<LockKeyhole className="text-muted-foreground size-4" />}
+                meta={
+                  <LockKeyhole className="text-muted-foreground size-4" aria-hidden />
+                }
               />
               <SurfaceCardContent className="grid gap-4">
                 <p className="text-muted-foreground text-sm leading-6">
@@ -554,6 +547,7 @@ OnboardingWorkspace.layout = (props: OnboardingWorkspacePageProps) =>
             href: routes.new_agent_onboarding(props.onboarding.user.id),
           },
         ],
+        back: { label: "New Agent List", href: routes.admin_new_agents() },
       },
       variant: "wide",
     },

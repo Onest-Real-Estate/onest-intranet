@@ -1,3 +1,4 @@
+import { Globe, Link2 } from "lucide-react";
 import { useId, useState } from "react";
 
 import {
@@ -19,6 +20,7 @@ import {
 } from "@/components/profile/profile-fields";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 import { firstFieldError } from "@/lib/validation";
 import type {
   ContactMethodOption,
@@ -60,7 +62,7 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <SurfaceCard id={id}>
+    <SurfaceCard id={id} className="scroll-mt-24">
       <PanelHeader title={title} description={description} />
       <SurfaceCardContent className="grid gap-4">{children}</SurfaceCardContent>
     </SurfaceCard>
@@ -382,12 +384,20 @@ function LanguagePicker({
       {selected.map((code) => (
         <input key={code} type="hidden" name="languages" value={code} />
       ))}
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="flex flex-wrap gap-2">
         {options.map((option) => {
           const checked = selected.includes(option.code);
           const id = `${groupId}-${option.code}`;
           return (
-            <div key={option.code} className="flex items-center gap-2">
+            <div
+              key={option.code}
+              className={cn(
+                "-m-px flex items-center gap-2 rounded-full border py-1.5 pr-4 pl-3 transition-colors duration-(--motion-fast)",
+                checked
+                  ? "border-primary/40 bg-primary/10"
+                  : "border-border hover:border-primary/30 hover:bg-muted/50",
+              )}
+            >
               <Checkbox
                 id={id}
                 checked={checked}
@@ -396,7 +406,7 @@ function LanguagePicker({
               />
               <label
                 htmlFor={id}
-                className="text-sm leading-none peer-disabled:opacity-60"
+                className="cursor-pointer text-sm leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-60"
               >
                 {option.name}
               </label>
@@ -424,6 +434,7 @@ export function ProfileBiographySection({
   const [bioLength, setBioLength] = useState(initial.bio.length);
   const [languages, setLanguages] = useState<string[]>(initial.languages);
   const bioHelp = descriptionId("bio");
+  const bioNearLimit = bioLength >= bioMaxLength * 0.9;
 
   return (
     <Section
@@ -447,8 +458,26 @@ export function ProfileBiographySection({
           }}
           {...fieldA11yProps("bio", validation, bioHelp)}
         />
+        <div
+          className={cn(
+            "mt-1.5 h-1 w-full overflow-hidden rounded-full transition-colors duration-(--motion-fast)",
+            bioNearLimit ? "bg-warning/25" : "bg-muted",
+          )}
+          role="presentation"
+        >
+          <div
+            className={cn(
+              "h-full rounded-full transition-[width] duration-(--motion-slow) ease-out",
+              bioNearLimit ? "bg-warning" : "bg-primary/50",
+            )}
+            style={{ width: `${Math.min(100, (bioLength / bioMaxLength) * 100)}%` }}
+          />
+        </div>
         <FormDescription id={bioHelp}>
-          <span aria-live="polite">
+          <span
+            aria-live="polite"
+            className={bioNearLimit ? "text-warning-ink font-medium" : undefined}
+          >
             {bioLength} of {bioMaxLength} characters used.
           </span>
         </FormDescription>
@@ -501,6 +530,7 @@ export function ProfileLinksSection({
         placeholder="https://example.com"
         inputMode="url"
         optional
+        leading={<Globe />}
       />
       <div className="grid gap-4 sm:grid-cols-2">
         {socialPlatforms.map((platform) => (
@@ -514,6 +544,7 @@ export function ProfileLinksSection({
             placeholder={platform.placeholder}
             inputMode="url"
             optional
+            leading={<Link2 />}
           />
         ))}
       </div>

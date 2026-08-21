@@ -1,4 +1,4 @@
-import { Head, router, usePage } from "@inertiajs/react";
+import { Head, Link, router, usePage } from "@inertiajs/react";
 import {
   ArrowRight,
   ChevronDown,
@@ -91,6 +91,9 @@ function FilterSelect({
   disabled?: boolean;
   hint?: string;
 }) {
+  // aria-describedby is a whitespace-separated token list, so the id may not
+  // contain spaces — derive it from the label instead of embedding it.
+  const hintId = `${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-hint`;
   return (
     <FilterField label={label}>
       <Select
@@ -100,7 +103,7 @@ function FilterSelect({
       >
         <SelectTrigger
           aria-label={label}
-          aria-describedby={hint ? `${label}-hint` : undefined}
+          aria-describedby={hint ? hintId : undefined}
           className="w-full sm:w-44"
         >
           <SelectValue placeholder={`All ${label.toLowerCase()}`} />
@@ -115,7 +118,7 @@ function FilterSelect({
         </SelectContent>
       </Select>
       {hint ? (
-        <p id={`${label}-hint`} className="text-muted-foreground text-xs leading-4">
+        <p id={hintId} className="text-muted-foreground text-xs leading-4">
           {hint}
         </p>
       ) : null}
@@ -252,15 +255,15 @@ export default function UserDirectory() {
           variant="outline"
           size="sm"
           asChild
-          className="ml-auto size-8 px-0 sm:h-8 sm:w-auto sm:px-3"
+          className="ml-auto size-9 px-0 sm:h-8 sm:w-auto sm:px-3"
         >
-          <a href={routes.user_administration(row.id)}>
+          <Link href={routes.user_administration(row.id)}>
             <span className="sr-only">Open the record for {row.name}</span>
             <span className="hidden sm:inline" aria-hidden>
               Open
             </span>
             <ArrowRight className="size-3.5" aria-hidden />
-          </a>
+          </Link>
         </Button>
       ),
       className: "text-right",
@@ -317,7 +320,7 @@ export default function UserDirectory() {
               label="Search people"
               value={filters.q}
               onValueChange={(q) => setFilters((current) => ({ ...current, q }))}
-              onSearch={(q) => visit({ q })}
+              onSearch={(q) => visit({ q }, 1)}
               onClear={() => visit({ q: "" })}
               placeholder={
                 visible.administration
