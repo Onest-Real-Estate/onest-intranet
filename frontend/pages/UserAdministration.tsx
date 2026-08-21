@@ -27,6 +27,7 @@ import { SelectField, TextField } from "@/components/profile/profile-fields";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { hasPermission } from "@/lib/permissions";
 import { routes } from "@/lib/routes";
 import { hasValidationErrors } from "@/lib/validation";
 import type { UserAdministrationPageProps } from "@/types";
@@ -72,7 +73,7 @@ function formatMoment(value: string | null): string {
  * cannot be submitted without first being confirmed against what they do.
  */
 export default function UserAdministration() {
-  const { csrfToken, administration, validation } =
+  const { csrfToken, administration, validation, user } =
     usePage<UserAdministrationPageProps>().props;
   const {
     subject,
@@ -384,6 +385,11 @@ export default function UserAdministration() {
             officeOptions={options.offices}
             validation={validation}
             editable={editable.roleAssignments}
+            manageHref={
+              hasPermission(user, { all: ["web.assign_user_roles"] }) && !subject.isSelf
+                ? routes.admin_assign_roles_user(subject.id)
+                : null
+            }
           />
         </div>
 

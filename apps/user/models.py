@@ -1069,9 +1069,14 @@ class UserRoleAssignment(models.Model):
                 name="user_role_assignment_valid_dates",
             ),
             models.CheckConstraint(
-                condition=Q(scope_type=ScopeType.COMPANY, scope_office__isnull=True)
-                | ~Q(scope_type=ScopeType.COMPANY),
-                name="user_role_assignment_company_scope_empty",
+                condition=Q(
+                    scope_type__in=[ScopeType.COMPANY, ScopeType.ASSIGNED_RECORD],
+                    scope_office__isnull=True,
+                )
+                | ~Q(
+                    scope_type__in=[ScopeType.COMPANY, ScopeType.ASSIGNED_RECORD],
+                ),
+                name="user_role_assignment_org_less_scope_empty",
             ),
             models.CheckConstraint(
                 condition=~Q(scope_type__in=[ScopeType.REGION, ScopeType.OFFICE])
@@ -1102,6 +1107,8 @@ class UserRoleAssignment(models.Model):
     def scope_label(self) -> str:
         if self.scope_type == ScopeType.COMPANY:
             return "Company"
+        if self.scope_type == ScopeType.ASSIGNED_RECORD:
+            return "Assigned records"
         if self.scope_office is None:
             return self.scope_type
         return self.scope_office.path_label()
@@ -1120,8 +1127,8 @@ class UserRoleAssignment(models.Model):
                     "This role cannot be assigned with that scope."
                 )
 
-        if self.scope_type == ScopeType.COMPANY and self.scope_office is not None:
-            errors["scope_office"] = _("Company-scoped roles cannot target an office.")
+        if self.scope_type in ScopeType.ORG_LESS and self.scope_office is not None:
+            errors["scope_office"] = _("This scope cannot target an office or region.")
         if (
             self.scope_type in {ScopeType.REGION, ScopeType.OFFICE}
             and self.scope_office is None

@@ -22,12 +22,17 @@ class ScopeType:
     COMPANY = "company"
     REGION = "region"
     OFFICE = "office"
+    ASSIGNED_RECORD = "assigned_record"
 
     CHOICES: tuple[tuple[str, str], ...] = (
         (COMPANY, "Company"),
         (REGION, "Region"),
         (OFFICE, "Office"),
+        (ASSIGNED_RECORD, "Assigned records"),
     )
+
+    # Scopes that never target an office/region node on the assignment row.
+    ORG_LESS: frozenset[str] = frozenset({COMPANY, ASSIGNED_RECORD})
 
 
 # Stable codes — never rename these; change ``label`` instead.
@@ -267,7 +272,7 @@ ROLE_DEFINITIONS: tuple[RoleDefinition, ...] = (
             "replace branch-level coordinators."
         ),
         priority=5,
-        valid_scope_types=(ScopeType.REGION,),
+        valid_scope_types=(ScopeType.REGION, ScopeType.ASSIGNED_RECORD),
         default_permissions=_OPS_TC + ("web.view_inventory", "web.view_reservations"),
     ),
     RoleDefinition(
@@ -303,7 +308,7 @@ ROLE_DEFINITIONS: tuple[RoleDefinition, ...] = (
             "granular permissions, not this label alone."
         ),
         priority=8,
-        valid_scope_types=(ScopeType.OFFICE,),
+        valid_scope_types=(ScopeType.OFFICE, ScopeType.ASSIGNED_RECORD),
         default_permissions=_OPS_TC,
     ),
     RoleDefinition(
@@ -315,7 +320,7 @@ ROLE_DEFINITIONS: tuple[RoleDefinition, ...] = (
             "follows primary membership."
         ),
         priority=9,
-        valid_scope_types=(ScopeType.OFFICE,),
+        valid_scope_types=(ScopeType.OFFICE, ScopeType.ASSIGNED_RECORD),
         default_permissions=_OPS_REALTOR,
     ),
     RoleDefinition(

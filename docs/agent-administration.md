@@ -43,7 +43,10 @@ and it is exactly `AgentAdministrationForm.Meta.fields`.
 
 Role and scope assignments are **not** in that list. They go through
 `services.role_assignments`, which owns delegation, effective dates, and its
-own audit events; the administration page is only a caller.
+own audit events; the administration page is only a caller. Brokerage
+administrators with `web.assign_user_roles` also have the dedicated Assign User
+Roles workspace ([role-assignment-administration.md](role-assignment-administration.md)),
+linked from this panel when they may open it.
 
 Contract status has no column at all. It is read from the contract domain by
 `agent_administration.contract_status()` and reported as unavailable until that

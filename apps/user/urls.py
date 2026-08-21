@@ -24,6 +24,11 @@ from .views.onboarding_administration_views import (
     onboarding_tools,
     onboarding_workspace,
 )
+from .views.role_assignment_views import (
+    role_assignment_mutate,
+    role_assignment_preview,
+    role_assignment_workspace,
+)
 
 urlpatterns = [
     path("", login_page, name="login"),
@@ -54,6 +59,21 @@ urlpatterns = [
         "operations/users/<int:user_id>/account-state",
         user_account_state,
         name="user_account_state",
+    ),
+    path(
+        "operations/role-assignments/<int:user_id>",
+        role_assignment_workspace,
+        name="admin_assign_roles_user",
+    ),
+    path(
+        "operations/role-assignments/<int:user_id>/preview",
+        role_assignment_preview,
+        name="admin_assign_roles_preview",
+    ),
+    path(
+        "operations/role-assignments/<int:user_id>/assignments",
+        role_assignment_mutate,
+        name="admin_assign_roles_mutate",
     ),
     path(
         "operations/new-agents/<int:user_id>",

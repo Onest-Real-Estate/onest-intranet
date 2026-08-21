@@ -680,6 +680,8 @@ class RoleAssignmentGrantForm(forms.Form):
         max_length=500,
         widget=forms.Textarea(attrs={"rows": 2}),
     )
+    expected_version = forms.CharField(required=False, widget=forms.HiddenInput)
+    confirmed = forms.BooleanField(required=False)
 
     def __init__(self, *args, actor: User, **kwargs):
         super().__init__(*args, **kwargs)
@@ -707,9 +709,10 @@ class RoleAssignmentGrantForm(forms.Form):
         scope_office = cleaned.get("scope_office")
         if role and scope_type and not is_valid_scope_type(role, scope_type):
             self.add_error("scope_type", _("This role cannot use that scope."))
-        if scope_type == ScopeType.COMPANY and scope_office is not None:
+        if scope_type in ScopeType.ORG_LESS and scope_office is not None:
             self.add_error(
-                "scope_office", _("Company-wide roles do not target an office.")
+                "scope_office",
+                _("This scope does not target an office or region."),
             )
         if scope_type in {ScopeType.REGION, ScopeType.OFFICE} and scope_office is None:
             self.add_error("scope_office", _("Choose the office or region to cover."))
@@ -725,6 +728,71 @@ class RoleAssignmentGrantForm(forms.Form):
 class RoleAssignmentRevokeForm(forms.Form):
     assignment = forms.IntegerField(widget=forms.HiddenInput)
     business_reason = forms.CharField(required=True, max_length=500)
+    expected_version = forms.CharField(required=False, widget=forms.HiddenInput)
+    confirmed = forms.BooleanField(required=False)
+
+
+class RoleAssignmentEditForm(forms.Form):
+    assignment = forms.IntegerField(widget=forms.HiddenInput)
+    starts_at = forms.DateTimeField(
+        label=_("Effective from"),
+        required=False,
+        input_formats=["%Y-%m-%dT%H:%M", "%Y-%m-%d"],
+        widget=forms.DateTimeInput(attrs={"type": "datetime-local"}),
+    )
+    ends_at = forms.DateTimeField(
+        label=_("Effective until"),
+        required=False,
+        input_formats=["%Y-%m-%dT%H:%M", "%Y-%m-%d"],
+        widget=forms.DateTimeInput(attrs={"type": "datetime-local"}),
+    )
+    business_reason = forms.CharField(
+        label=_("Business reason"),
+        required=True,
+        max_length=500,
+        widget=forms.Textarea(attrs={"rows": 2}),
+    )
+    expected_version = forms.CharField(required=False, widget=forms.HiddenInput)
+
+    def clean(self):
+        cleaned = super().clean()
+        starts_at = cleaned.get("starts_at")
+        ends_at = cleaned.get("ends_at")
+        if starts_at and ends_at and ends_at < starts_at:
+            self.add_error("ends_at", _("The end date comes before the start date."))
+        return cleaned
+
+
+class RoleAssignmentPreviewForm(forms.Form):
+    """Dry-run a grant, edit, or revoke before confirmation."""
+
+    action = forms.ChoiceField(
+        choices=(
+            ("grant", "grant"),
+            ("edit", "edit"),
+            ("revoke", "revoke"),
+        )
+    )
+    role = forms.CharField(required=False)
+    scope_type = forms.CharField(required=False)
+    scope_office = forms.ModelChoiceField(
+        queryset=Office.objects.none(), required=False
+    )
+    assignment = forms.IntegerField(required=False)
+    starts_at = forms.DateTimeField(
+        required=False,
+        input_formats=["%Y-%m-%dT%H:%M", "%Y-%m-%d"],
+    )
+    ends_at = forms.DateTimeField(
+        required=False,
+        input_formats=["%Y-%m-%dT%H:%M", "%Y-%m-%d"],
+    )
+
+    def __init__(self, *args, actor: User, **kwargs):
+        super().__init__(*args, **kwargs)
+        cast(
+            forms.ModelChoiceField, self.fields["scope_office"]
+        ).queryset = scope_target_queryset(actor)
 
 
 ADMINISTRATION_FIELD_MAP: tuple[tuple[str, str], ...] = (
