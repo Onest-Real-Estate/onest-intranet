@@ -25,8 +25,8 @@ so the deploy that turned the panel into data changed nothing an agent sees.
 | `sort_order` | Lower sorts first. **Not unique** — see *Ordering*. |
 | `publish_start_at`, `publish_end_at` | Optional window; start inclusive, end exclusive. |
 | `sso_capability` | `none`, `microsoft_entra`, `saml`, `oidc`. Describes the tool; holds no credential. |
-| `integration_health` | `unknown`, `healthy`, `degraded`, `offline`. Rendered as a badge. |
-| `setup_behavior` | `none`, `self_service`, `request_access`, `provisioned`. Read by onboarding. |
+| `integration_health` | `unknown`, `healthy`, `degraded`, `offline`. Drives the panel's row state — see *The dashboard panel*. |
+| `setup_behavior` | `none`, `self_service`, `request_access`, `provisioned`. Read by onboarding; `request_access` also marks the row *Setup required*. |
 | `company_wide` | Visible to every office. Implies company ownership. |
 | `owner_scope` | `company` or `scoped`. Gates who may edit the definition. |
 | `owner_office` | The node a scoped link belongs to; used for the audit `office_id`. |
@@ -69,6 +69,107 @@ like any other. A reader with no office sees only company-wide links: there is
 no office tree that can be said to contain them.
 
 Order is `sort_order`, then `name`, then `pk`.
+
+## The dashboard panel
+
+Everything above decides *what* reaches a reader. This section is what the
+reader then sees, in `frontend/components/dashboard/QuickApps.tsx`.
+
+The browser boundary revalidates stored destinations as well as validating
+them on write. A legacy or directly edited row carrying an unsafe external URL
+is dropped, and an unapproved icon value is replaced with the reviewed generic
+application mark; neither raw value is serialized. Invalid rows are skipped
+before the feed cap is counted, so they cannot hide a later approved launcher
+or suppress the panel's truncation notice.
+
+### States
+
+A launcher is not simply present or absent. Four outcomes are kept apart,
+because conflating any two of them misleads somebody about whether clicking
+will work. `quickAppStatus` in `frontend/lib/quick-access.ts` decides which,
+and health outranks setup — there is nothing to set up on a tool that is down.
+
+| State | Condition | Render |
+| --- | --- | --- |
+| `ready` | Healthy or unmonitored, no access request needed | A link. Second line is the administrator's description. |
+| `setup` | `setup_behavior` is `request_access` | A link, second line "Setup required — request access first". |
+| `degraded` | `integration_health` is `degraded` | A link, warning ink, second line naming the degradation. |
+| `unavailable` | `integration_health` is `offline` | **Not a link at all.** Dashed border, muted mark, and a plain statement. |
+
+An offline integration stops being an anchor rather than becoming a disabled
+one. HTML has no disabled link, `aria-disabled` on an anchor still lets the
+reader follow it, and a launcher that lands on someone else's error page is
+worse than one that says so. Keyboard users tab past the row instead of into a
+dead end.
+
+Every state carries its own words. Colour is never the only signal, and each
+row adds an `sr-only` sentence naming the integration or setup status.
+
+### The maximum, and "View all"
+
+The panel collapses to `QUICK_ACCESS_COLLAPSED_LIMIT` (six) rows and offers
+*View all N tools*, which expands in place. Six is a layout number: the panel
+occupies the narrow third of the dashboard's top band, and a seventh row makes
+the card outgrow its neighbours.
+
+That is separate from the registry's `feed_limit` (24), the outer bound on the
+*payload*. The composer enforces it and sets `meta.truncated`, which the panel
+renders as a plain sentence. Nothing is silently dropped at either level: past
+six is one button away, and past 24 the panel says so.
+
+### Opening a link
+
+The product rule is explicit, not per-link:
+
+- an **external** destination opens in a new tab, so the hub session is not
+  navigated away from;
+- an **internal** destination navigates in place — opening an in-app path in a
+  new tab forks the session's history for no reason.
+
+Every new tab carries `rel="noopener noreferrer"`. The opener reference and the
+referrer are both things a third-party tool has no business receiving, and
+neither is left to the browser's default. The behaviour is announced, not just
+drawn: an external row ends with an `sr-only` "(opens in a new tab)" beside the
+outward arrow.
+
+### Empty
+
+No visible links is a genuine zero, not a failure, so the provider returns
+`empty` and `WidgetPanel` renders the shared empty state: *No tools
+configured — ask an administrator to add the systems your office uses.* It is
+instructive on purpose; a new agent's blank panel should say who fixes it.
+
+## Click analytics
+
+Which launchers an office actually opens is useful to whoever administers the
+panel, and worth almost nothing at the cost of a slower click. So:
+
+- **It never blocks navigation.** The row's `onClick` fires a `keepalive`
+  `fetch` and returns; the browser follows the link immediately. Every failure
+  is swallowed — a lost count must not surface as an error beside a link that
+  opened perfectly well.
+- **It never records a destination.** `QuickAccessLinkClick` stores the link's
+  stable key, the reader, the office they sat in at the time, and the
+  destination *type*. No URL, no query string, no fragment. An external tool's
+  session token or tenant identifier therefore cannot reach the table by way of
+  a click, whatever an administrator later puts in the destination field.
+- **It is not an audit event.** A click is high-volume telemetry about tool
+  use, not a security-relevant lifecycle change. Mixing the two would bury the
+  audit trail under traffic.
+- **It is optional.** `QUICK_ACCESS_CLICK_ANALYTICS=False` stops the recording;
+  the endpoint keeps answering `204`, so turning it off costs a count and never
+  a click.
+
+The key a browser posts is untrusted, so it is resolved through the reader's
+*own* `visible_links_for` queryset: a click can only be recorded against a
+launcher that reader could actually see. `quick_access_click` answers **204 to
+everything** — an unknown key, a hidden key, a malformed one, analytics
+switched off. A `404` for a key outside the reader's audience would turn the
+dashboard into a way to enumerate another office's configuration, and a `400`
+for a malformed one would tell a caller when it had guessed the shape right.
+
+Retiring a link nulls `link` and leaves `link_stable_key`, so counts for a
+removed tool stay answerable.
 
 ## Who may administer what
 
@@ -177,6 +278,7 @@ the two checks still loses.
 
 | Route | Method | Permission |
 | --- | --- | --- |
+| `quick_access_click` | POST | authenticated (any reader) |
 | `admin_quick_access` | GET | `web.manage_quick_access` |
 | `quick_access_new` | GET | `web.manage_quick_access` |
 | `quick_access_edit` | GET | `web.manage_quick_access` |

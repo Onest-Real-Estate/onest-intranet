@@ -141,7 +141,13 @@ export function DashboardWidgetSlot({
           widget={page.quickApps}
           skeleton={<QuickAppsSkeleton />}
           stale={stale}
-          render={(data) => <QuickApps apps={data} />}
+          render={(data) => (
+            <QuickApps
+              apps={data}
+              csrfToken={page.csrfToken}
+              truncated={page.quickApps?.meta.truncated === true}
+            />
+          )}
         />
       );
     case "myDay":

@@ -121,7 +121,10 @@ WIDGET_DEFINITIONS: tuple[WidgetDefinition, ...] = (
                 "bounds a stale role grant."
             ),
         ),
-        feed_limit=8,
+        # Outer bound on an administered list. The panel collapses to far
+        # fewer and offers "View all"; this only stops one over-broad
+        # company-wide audience becoming an unbounded response.
+        feed_limit=24,
         cache_version=quick_access_configuration_version,
     ),
     WidgetDefinition(
