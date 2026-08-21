@@ -313,6 +313,7 @@ The compose file fails fast with a helpful message if any of these are missing:
 | `AWS_S3_URL_PROTOCOL`     | `https:`                         |                                                      |
 | `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `EMAIL_USE_TLS` | `587` / TLS on | External SMTP relay (`EMAIL_HOST` is required to send mail) |
 | `DEFAULT_FROM_EMAIL`      | `Onest <noreply@onest.local>`    |                                                      |
+| `SITE_BASE_URL`           | `http://localhost:8000`          | Absolute base for links in outbound mail. Notification email carries no record detail, only a link back into the hub — point this at the app, never at a storage host |
 | `WEB_PORT`                | `8000`                           | Host port the web service is published on            |
 | `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET`, `MICROSOFT_TENANT` | *(empty)* | Microsoft SSO — same values as local dev  |
 | `GUNICORN_WORKERS` / `GUNICORN_THREADS` | `3` / `2`              |                                                      |
@@ -338,6 +339,7 @@ EMAIL_PORT=587
 EMAIL_HOST_USER=<smtp user>
 EMAIL_HOST_PASSWORD=<smtp password>
 EMAIL_USE_TLS=1
+SITE_BASE_URL=https://app.example.com
 
 MICROSOFT_CLIENT_ID=<Application (client) ID>
 MICROSOFT_CLIENT_SECRET=<client secret>

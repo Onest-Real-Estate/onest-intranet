@@ -24,9 +24,11 @@ from apps.notifications.forms import (
     ACTION_ARCHIVE,
     ACTION_READ,
     ACTION_UNREAD,
+    NotificationPreferencesForm,
     NotificationStateForm,
 )
 from apps.notifications.payloads import serialize_page
+from apps.notifications.preferences import preference_payload, save_choices
 from apps.notifications.queries import (
     NotificationFilters,
     build_page,
@@ -38,12 +40,18 @@ from apps.notifications.queries import (
 )
 from apps.user.models import User
 from apps.web.authorization import enforce_policy
-from apps.web.contracts import empty_validation_errors, list_response
+from apps.web.contracts import (
+    empty_validation_errors,
+    list_response,
+    validation_errors,
+)
 
 __all__ = [
     "notification_center",
-    "notification_state",
+    "notification_preferences",
+    "notification_preferences_submit",
     "notification_read_all",
+    "notification_state",
     "notification_summary",
 ]
 
@@ -170,3 +178,47 @@ def _error_response(request: HttpRequest, message: str) -> HttpResponse:
     )
     response.status_code = 422
     return response
+
+
+# --------------------------------------------------------------------------- #
+# Preferences
+# --------------------------------------------------------------------------- #
+
+
+def _preferences_props(request: HttpRequest, *, errors: dict | None = None) -> dict:
+    reader = cast(User, request.user)
+    return {
+        "preferences": preference_payload(reader),
+        "notificationsHref": reverse("notifications"),
+        "errors": errors or empty_validation_errors(),
+    }
+
+
+@enforce_policy("notification_preferences")
+@require_GET
+@inertia("NotificationPreferences")
+def notification_preferences(request: HttpRequest):
+    """The reader's own notification settings. Always their own record."""
+    return _preferences_props(request)
+
+
+@enforce_policy("notification_preferences_submit")
+@require_POST
+def notification_preferences_submit(request: HttpRequest) -> HttpResponse:
+    """Persist the reader's own channel choices.
+
+    The form has no field for a mandatory category or for the in-app channel,
+    so a post naming one changes nothing rather than being refused — there is
+    no wording of the request that can turn a required notice off.
+    """
+    form = NotificationPreferencesForm(request.POST)
+    if not form.is_valid():
+        response = render(
+            request,
+            "NotificationPreferences",
+            _preferences_props(request, errors=validation_errors(form)),
+        )
+        response.status_code = 422
+        return response
+    save_choices(cast(User, request.user), form.choices())
+    return redirect("notification_preferences")

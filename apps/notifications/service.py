@@ -38,6 +38,7 @@ from apps.notifications.actions import validate_action_args
 from apps.notifications.contract import (
     NotificationRequest,
 )
+from apps.notifications.delivery import queue_emails
 from apps.notifications.models import Notification
 from apps.notifications.sources import SELF_CONTAINED, resolve_sources
 from apps.user.models import User
@@ -145,6 +146,10 @@ def deliver(
     )
     if created:
         _audit_delivery(event_key=request.event_key, delivered=1, recipients=1)
+        # The email copy is a separate, retryable ledger row (see
+        # apps.notifications.delivery). Nothing about its fate touches the row
+        # that was just committed.
+        queue_emails([notification], now=moment)
     return notification
 
 
@@ -196,6 +201,17 @@ def deliver_many(
     if not fresh:
         return 0
     Notification.objects.bulk_create(fresh, ignore_conflicts=True)
+    # ``ignore_conflicts`` leaves ``fresh`` without primary keys, so read the
+    # committed rows back before handing them to the email ledger.
+    queue_emails(
+        list(
+            Notification.objects.filter(
+                recipient_id__in={instance.recipient_id for instance in fresh},
+                dedupe_key__in={instance.dedupe_key for instance in fresh},
+            )
+        ),
+        now=moment,
+    )
     _audit_delivery(
         event_key=fresh[0].event_key,
         delivered=len(fresh),
@@ -384,7 +400,10 @@ def purge_expired(*, before: datetime | None = None) -> int:
     inbox; keeping them forever only grows the table.
     """
     moment = _now(before)
-    deleted, _ = Notification.objects.filter(
+    # Count notifications, not the cascade. Each row drags its email delivery
+    # ledger with it, and reporting that total would make the housekeeping
+    # figure grow every time another channel is added.
+    _total, by_model = Notification.objects.filter(
         Q(expires_at__isnull=False) & Q(expires_at__lte=moment)
     ).delete()
-    return deleted
+    return by_model.get(Notification._meta.label, 0)

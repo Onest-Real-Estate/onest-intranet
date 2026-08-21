@@ -1,5 +1,5 @@
-import { Head, router, usePage } from "@inertiajs/react";
-import { BellOff, CheckCheck } from "lucide-react";
+import { Head, Link, router, usePage } from "@inertiajs/react";
+import { BellOff, CheckCheck, SlidersHorizontal } from "lucide-react";
 import { useState } from "react";
 
 import {
@@ -173,16 +173,24 @@ export default function Notifications() {
           </span>
         }
         actions={
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={busy || summary.unreadCount - summary.mandatoryCount <= 0}
-            onClick={markAllRead}
-          >
-            <CheckCheck className="size-4" aria-hidden />
-            Mark all read
-          </Button>
+          <>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={busy || summary.unreadCount - summary.mandatoryCount <= 0}
+              onClick={markAllRead}
+            >
+              <CheckCheck className="size-4" aria-hidden />
+              Mark all read
+            </Button>
+            <Button asChild variant="outline" size="sm">
+              <Link href={routes.notification_preferences()}>
+                <SlidersHorizontal className="size-4" aria-hidden />
+                Settings
+              </Link>
+            </Button>
+          </>
         }
       />
 
