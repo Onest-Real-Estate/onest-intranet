@@ -137,7 +137,7 @@ def announcements(context: DashboardContext) -> ProviderResult:
     return unavailable(
         "Company news is not published through the hub yet.",
         action_label="Browse office info",
-        action_href=_section_href("office-info"),
+        action_href=reverse("office_info"),
     )
 
 

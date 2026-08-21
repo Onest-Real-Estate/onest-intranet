@@ -50,13 +50,19 @@ def test_every_hub_section_declares_its_availability():
 def test_only_the_live_destinations_are_enabled():
     # Flip the section's entry in the commit that gives it a real route; this
     # assertion is the reminder to update the nav registry at the same time.
-    live_features = {key for key, enabled in OPERATIONS_FEATURES.items() if enabled}
+    live_features = {
+        key
+        for key, enabled in {**OPERATIONS_FEATURES, "office-info": True}.items()
+        if enabled
+    }
     coming_soon = {
         key: value for key, value in HUB_FEATURES.items() if key not in live_features
     }
     assert set(coming_soon.values()) == {False}
     assert HUB_FEATURES["admin-new-agents"] is True
     assert HUB_FEATURES["admin-users"] is True
+    assert HUB_FEATURES["admin-offices"] is True
+    assert HUB_FEATURES["office-info"] is True
 
 
 def test_feature_states_are_a_copy_callers_cannot_corrupt():
@@ -72,7 +78,10 @@ def test_unauthorized_administrative_feature_keys_are_not_shared(client):
 
     props = shared_props(client)
 
-    assert props["features"] == dict.fromkeys(HUB_SECTIONS, False)
+    assert props["features"] == {
+        **dict.fromkeys(HUB_SECTIONS, False),
+        "office-info": True,
+    }
     assert not any(key.startswith("admin-") for key in props["features"])
 
 
@@ -161,7 +170,10 @@ def test_shared_props_carry_feature_state_and_office(client):
     office = branch_office()
     client.force_login(agent(office=office))
     props = shared_props(client)
-    assert props["features"] == dict.fromkeys(HUB_SECTIONS, False)
+    assert props["features"] == {
+        **dict.fromkeys(HUB_SECTIONS, False),
+        "office-info": True,
+    }
     assert props["primaryOffice"] == {
         "id": office.id,
         "name": office.name,

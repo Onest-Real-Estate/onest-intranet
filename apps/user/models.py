@@ -371,9 +371,14 @@ class Office(models.Model):
 
 class OfficeContactAssignment(models.Model):
     class AssignmentType(models.TextChoices):
-        MANAGER = "manager", _("Manager")
-        ADMIN = "admin", _("Admin")
+        MANAGER = "manager", _("Branch manager")
+        ADMIN = "admin", _("Branch admin")
         BROKER_CONTACT = "broker_contact", _("Broker contact")
+        TRANSACTION_COORDINATOR = (
+            "transaction_coordinator",
+            _("Transaction coordinator"),
+        )
+        IT_SUPPORT = "it_support", _("IT support")
 
     office = models.ForeignKey(
         Office,
@@ -420,6 +425,25 @@ class OfficeContactAssignment(models.Model):
 
     def __str__(self):
         return f"{self.office} / {self.assignment_type} / {self.user}"
+
+    def is_current(self, on_date=None) -> bool:
+        """Whether this assignment is effective on ``on_date`` (local today)."""
+        today = on_date or timezone.localdate()
+        if self.starts_at is not None and self.starts_at > today:
+            return False
+        return not (self.ends_at is not None and self.ends_at < today)
+
+    @classmethod
+    def current_queryset(cls, office: "Office", *, on_date=None):
+        """Assignments currently effective for ``office`` on ``on_date``."""
+        today = on_date or timezone.localdate()
+        return (
+            cls.objects.filter(office=office)
+            .filter(Q(starts_at__isnull=True) | Q(starts_at__lte=today))
+            .filter(Q(ends_at__isnull=True) | Q(ends_at__gte=today))
+            .select_related("user")
+            .order_by("assignment_type", "-is_primary", "user__email")
+        )
 
     def clean(self):
         super().clean()

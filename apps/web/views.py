@@ -4,6 +4,7 @@ from inertia import inertia, render
 
 from apps.user.services.role_assignments import get_effective_access
 from apps.user.views.directory_views import user_directory
+from apps.user.views.office_administration_views import office_administration_index
 from apps.user.views.onboarding_administration_views import new_agent_list
 from apps.user.views.role_assignment_views import role_assignment_index
 from apps.web.action_items import queue_for_user
@@ -101,6 +102,7 @@ OPERATIONS_VIEWS["admin_users"] = user_directory
 OPERATIONS_VIEWS["admin_new_agents"] = new_agent_list
 OPERATIONS_VIEWS["admin_quick_access"] = quick_access_index
 OPERATIONS_VIEWS["admin_assign_roles"] = role_assignment_index
+OPERATIONS_VIEWS["admin_offices"] = office_administration_index
 
 
 _CATALOG_CONTRACTS = (

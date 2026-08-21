@@ -1400,3 +1400,181 @@ export interface RoleAssignmentWorkspacePageProps extends PageProps {
   preview: RoleAssignmentPreview | null;
   scope: { level: string; label: string };
 }
+
+export interface OfficeContactPerson {
+  id: number;
+  displayName: string;
+  email: string;
+  phoneNumber?: string;
+  isPrimary: boolean;
+  assignmentType: string;
+  assignmentTypeLabel: string;
+}
+
+export interface OfficeInfoPayload {
+  id: number;
+  name: string;
+  slug: string;
+  stableKey: string;
+  kind: string;
+  pathLabel: string;
+  regionName: string;
+  isActive: boolean;
+  streetAddress: string;
+  city: string;
+  state: string;
+  zipCode: string;
+  mainPhone: string;
+  publicEmail: string;
+  internalEmail: string;
+  officeHours: unknown[];
+  parkingInstructions: string;
+  accessInstructions: string;
+  accessInstructionsInternal: boolean;
+  includeInternal: boolean;
+  updatedAt: string;
+  version: string;
+  generatedAt?: string;
+  contacts: {
+    branchManager: OfficeContactPerson | null;
+    branchAdmin: OfficeContactPerson | null;
+    brokers: OfficeContactPerson[];
+    transactionCoordinator: OfficeContactPerson | null;
+    itSupport: OfficeContactPerson | null;
+  };
+}
+
+export interface OfficeInfoPageProps extends PageProps {
+  officeInfo: OfficeInfoPayload | null;
+  empty: { title: string; description: string } | null;
+}
+
+export interface OfficeListFilters {
+  q: string;
+  kind: string;
+  status: string;
+  region: string;
+  [key: string]: string;
+}
+
+export interface OfficeListRow {
+  id: number;
+  name: string;
+  stableKey: string;
+  slug: string;
+  kind: string;
+  kindLabel: string;
+  pathLabel: string;
+  regionName: string;
+  isActive: boolean;
+  isAssignable: boolean;
+  city: string;
+  state: string;
+}
+
+export interface OfficeAdministrationPageProps extends PageProps {
+  offices: ListResponse<OfficeListRow, OfficeListFilters>;
+  filterOptions: {
+    kinds: FilterOption[];
+    statuses: FilterOption[];
+    regions: FilterOption[];
+  };
+  capabilities: {
+    companyWide: boolean;
+    canRestructure: boolean;
+  };
+  scope: { level: string; label: string };
+}
+
+export interface OfficeContactRow {
+  id: number;
+  assignmentType: string;
+  assignmentTypeLabel: string;
+  userId: number;
+  displayName: string;
+  email: string;
+  isPrimary: boolean;
+  startsAt: string;
+  endsAt: string;
+  isCurrent: boolean;
+}
+
+export interface OfficeResourceLink {
+  key: string;
+  label: string;
+  description: string;
+  href: string;
+  available: boolean;
+  note?: string;
+}
+
+export interface OfficeAdministrationDetail {
+  office: {
+    id: number;
+    name: string;
+    stableKey: string;
+    slug: string;
+    kind: string;
+    kindLabel: string;
+    pathLabel: string;
+    regionName: string;
+    parentId: number | null;
+    parentPathLabel: string | null;
+    isActive: boolean;
+    isAssignable: boolean;
+    streetAddress: string;
+    city: string;
+    state: string;
+    zipCode: string;
+    mainPhone: string;
+    publicEmail: string;
+    internalEmail: string;
+    officeHours: unknown[];
+    officeHoursText: string;
+    parkingInstructions: string;
+    accessInstructions: string;
+    accessInstructionsInternal: boolean;
+    updatedAt: string;
+  };
+  contacts: OfficeContactRow[];
+  contactTypes: FilterOption[];
+  contactCandidates: Array<{
+    id: number;
+    displayName: string;
+    email: string;
+  }>;
+  version: string;
+  capabilities: {
+    companyWide: boolean;
+    canEditInfo: boolean;
+    canEditSensitive: boolean;
+    canRestructure: boolean;
+    highImpactFields: string[];
+  };
+  parentOptions: Array<{
+    id: number;
+    name: string;
+    pathLabel: string;
+    kind: string;
+    stableKey: string;
+  }>;
+  kindOptions: FilterOption[];
+  resourceLinks: OfficeResourceLink[];
+  agentPreview: OfficeInfoPayload;
+  breadcrumbs: Array<{ name: string; id: number }>;
+}
+
+export interface OfficeAdministrationDetailPageProps extends PageProps {
+  administration: OfficeAdministrationDetail;
+  validation: ValidationErrors;
+  preview: {
+    highImpact: Array<{
+      label: string;
+      from: string;
+      to: string;
+      impact: string;
+    }>;
+    requiresConfirmation: boolean;
+  } | null;
+  scope: { level: string; label: string };
+}

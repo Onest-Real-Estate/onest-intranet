@@ -216,6 +216,74 @@ ROUTE_POLICIES: dict[str, AuthorizationPolicy] = {
         ),
         scope_rule="administered_user_delegation_scope",
     ),
+    "office_administration_detail": AuthorizationPolicy(
+        key="office_administration_detail",
+        access="permission_protected",
+        description="Render one office record inside the actor's office-tree scope.",
+        methods=("GET",),
+        route_names=("admin_office",),
+        all_permissions=("web.manage_offices",),
+        scope_rule="office_tree_scope",
+    ),
+    "office_administration_update": AuthorizationPolicy(
+        key="office_administration_update",
+        access="permission_protected",
+        description="Update operational office information within scope.",
+        methods=("POST",),
+        route_names=("admin_office_update",),
+        all_permissions=("web.manage_offices",),
+        scope_rule="office_tree_scope",
+    ),
+    "office_administration_structure": AuthorizationPolicy(
+        key="office_administration_structure",
+        access="permission_protected",
+        description=(
+            "Apply high-impact hierarchy or status changes after impact "
+            "confirmation. Company-wide authority is re-checked in the service."
+        ),
+        methods=("POST",),
+        route_names=("admin_office_structure",),
+        all_permissions=("web.manage_offices",),
+        scope_rule="office_tree_scope",
+    ),
+    "office_administration_impact": AuthorizationPolicy(
+        key="office_administration_impact",
+        access="permission_protected",
+        description="Dry-run impact analysis for hierarchy or status changes.",
+        methods=("POST",),
+        route_names=("admin_office_impact",),
+        all_permissions=("web.manage_offices",),
+        scope_rule="office_tree_scope",
+    ),
+    "office_administration_contact": AuthorizationPolicy(
+        key="office_administration_contact",
+        access="permission_protected",
+        description="Create or update an office contact assignment.",
+        methods=("POST",),
+        route_names=("admin_office_contact",),
+        all_permissions=("web.manage_offices",),
+        scope_rule="office_tree_scope",
+    ),
+    "office_administration_contact_end": AuthorizationPolicy(
+        key="office_administration_contact_end",
+        access="permission_protected",
+        description="End an office contact assignment.",
+        methods=("POST",),
+        route_names=("admin_office_contact_end",),
+        all_permissions=("web.manage_offices",),
+        scope_rule="office_tree_scope",
+    ),
+    "office_info": AuthorizationPolicy(
+        key="office_info",
+        access="authenticated",
+        description=(
+            "Agent-facing office brochure for the signed-in user's primary "
+            "office. Never accepts an office id from the client."
+        ),
+        methods=("GET",),
+        route_names=("office_info",),
+        scope_rule="self_only",
+    ),
     "new_agent_onboarding": AuthorizationPolicy(
         key="new_agent_onboarding",
         access="permission_protected",
