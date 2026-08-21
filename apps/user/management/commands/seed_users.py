@@ -46,6 +46,8 @@ class Command(BaseCommand):
                 f"Users seeded: {len(report.created)} created, "
                 f"{len(report.matched)} matched; "
                 f"{len(report.assignments_created)} assignments created, "
-                f"{len(report.assignments_matched)} matched."
+                f"{len(report.assignments_matched)} matched; "
+                f"{len(report.contacts_created)} contact assignments created, "
+                f"{len(report.contacts_matched)} matched."
             )
         )

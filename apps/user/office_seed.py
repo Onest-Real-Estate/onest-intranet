@@ -33,6 +33,80 @@ class SeedConflictError(Exception):
     """Raised when a slug is owned by a record with incompatible name/kind."""
 
 
+# Structured hours schema: one entry per open day; closed days are omitted
+# and rendered as "Closed". All oNEST offices operate on Eastern Time.
+def weekday_hours() -> list[dict[str, str]]:
+    return [
+        {"day": day, "open": "09:00", "close": "17:00"}
+        for day in ("monday", "tuesday", "wednesday", "thursday", "friday")
+    ]
+
+
+OFFICE_DETAILS: dict[str, dict] = {
+    # The seven served markets from the ONEST Regional Offices directory.
+    # Parking / building-access copy is intentionally NOT seeded — it must
+    # come from verified local operations input, never invented here.
+    "massachusetts": {
+        "street_address": "301 Edgewater Pl",
+        "city": "Wakefield",
+        "state": "MA",
+        "zip_code": "01880",
+        "main_phone": "(857) 869-2765",
+        "public_email": "suman@onest.realestate",
+    },
+    "harrisburg": {
+        "street_address": "2600 Commerce Dr Ste 1",
+        "city": "Harrisburg",
+        "state": "PA",
+        "zip_code": "17110-9368",
+        "main_phone": "(730) 608-9412",
+        "public_email": "bishwa@onest.realestate",
+    },
+    "pittsburgh": {
+        "street_address": "4101 Brownsville Rd Suite 200",
+        "city": "Pittsburgh",
+        "state": "PA",
+        "zip_code": "15227",
+        "main_phone": "(412) 515-1429",
+        "public_email": "srai@onest.realestate",
+    },
+    "philadelphia": {
+        # Directory screenshot showed malladhakal@ones.realestate (missing
+        # the "t"); treated as a typo and normalized to the onest domain.
+        "street_address": "25 Sentry Parkway Building 5",
+        "city": "Blue Bell",
+        "state": "PA",
+        "zip_code": "19422",
+        "main_phone": "(551) 254-0620",
+        "public_email": "malladhakal@onest.realestate",
+    },
+    "connecticut": {
+        "street_address": "119 Montowese St.",
+        "city": "Branford",
+        "state": "CT",
+        "zip_code": "06405",
+        "main_phone": "(617) 229-9883",
+        "public_email": "chiran@onest.realestate",
+    },
+    "new-hampshire": {
+        "street_address": "350 Harvey Road",
+        "city": "Manchester",
+        "state": "NH",
+        "zip_code": "03103",
+        "main_phone": "(617) 319-9541",
+        "public_email": "ranjan@onest.realestate",
+    },
+    "charlottesville-va": {
+        "street_address": "1024 Carrington Pl",
+        "city": "Charlottesville",
+        "state": "VA",
+        "zip_code": "22901",
+        "main_phone": "(571) 222-5555",
+        "public_email": "prashanna@onest.realestate",
+    },
+}
+
+
 def upsert_office(
     office_model,
     report: SeedReport,
@@ -43,6 +117,7 @@ def upsert_office(
     parent=None,
     is_assignable: bool = True,
     sort_order: int = 0,
+    details: dict | None = None,
 ):
     """
     Look up by slug (the stable key). Three outcomes:
@@ -50,11 +125,11 @@ def upsert_office(
     - **Created**: no record with this slug → insert with all fields including
       ``is_active=True``.
     - **Matched**: slug found AND name+kind agree → update only the structural
-      fields (parent, is_assignable, sort_order) that may legitimately drift.
-      ``is_active`` is intentionally NOT touched so an admin deactivation is
-      preserved.
+      fields (parent, is_assignable, sort_order) that may legitimately drift,
+      plus any seeded ``details`` (address, phone, email, hours). ``is_active``
+      is intentionally NOT touched so an admin deactivation is preserved.
     - **Conflict**: slug found BUT name or kind differs → raises
-      ``SeedConflictError`` with an actionable message; caller should abort the
+      SeedConflictError with an actionable message; caller should abort the
       transaction.
     """
     try:
@@ -71,6 +146,7 @@ def upsert_office(
             "is_assignable": is_assignable,
             "is_active": True,
             "sort_order": sort_order,
+            **(details or {}),
         }
         field_names = {field.name for field in office_model._meta.get_fields()}
         if "stable_key" in field_names:
@@ -88,11 +164,12 @@ def upsert_office(
             f"kind='{kind}'. Resolve this manually before re-seeding."
         )
 
-    # Matched: update structural fields only; preserve is_active.
+    # Matched: update structural + seeded detail fields; preserve is_active.
     updates = {
         "parent": parent,
         "is_assignable": is_assignable,
         "sort_order": sort_order,
+        **(details or {}),
     }
     if hasattr(existing, "stable_key") and not existing.stable_key:
         updates["stable_key"] = slug
@@ -251,5 +328,19 @@ def seed_offices(office_model=None) -> SeedReport:
             parent=new_england,
             sort_order=order,
         )
+
+    # Second pass: apply the regional-office directory details (address,
+    # phone, email, structured hours) on top of whatever was just created or
+    # matched. Kept separate so structural seeding above stays untouched.
+    # Fields unknown to historical migration models (this also runs from
+    # migration 0004) are skipped so old schemas keep seeding safely.
+    field_names = {f.name for f in Office._meta.get_fields()}
+    for slug, details in OFFICE_DETAILS.items():
+        updates = {
+            key: value
+            for key, value in {**details, "office_hours": weekday_hours()}.items()
+            if key in field_names
+        }
+        Office.objects.filter(slug=slug).update(**updates)
 
     return report

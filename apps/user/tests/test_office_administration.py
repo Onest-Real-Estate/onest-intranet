@@ -290,6 +290,130 @@ def test_tc_and_it_contact_types():
 
 
 @pytest.mark.django_db
+def test_contact_validity_window_excludes_future_and_ended():
+    from datetime import timedelta
+
+    from django.utils import timezone as tz
+
+    target = office(FAIRFAX)
+    past = agent_in(FAIRFAX, email="past@example.com")
+    future = agent_in(FAIRFAX, email="future@example.com")
+    today = tz.localdate()
+    OfficeContactAssignment.objects.create(
+        office=target,
+        user=past,
+        assignment_type=OfficeContactAssignment.AssignmentType.MANAGER,
+        ends_at=today - timedelta(days=1),
+    )
+    OfficeContactAssignment.objects.create(
+        office=target,
+        user=future,
+        assignment_type=OfficeContactAssignment.AssignmentType.MANAGER,
+        starts_at=today + timedelta(days=1),
+    )
+    payload = office_info_payload(target, include_internal=True)
+    assert payload["contacts"]["branchManager"] is None
+
+
+@pytest.mark.django_db
+def test_overlapping_assignments_prefer_primary():
+    target = office(FAIRFAX)
+    primary = agent_in(FAIRFAX, email="primary@example.com")
+    secondary = agent_in(FAIRFAX, email="secondary@example.com")
+    OfficeContactAssignment.objects.create(
+        office=target,
+        user=secondary,
+        assignment_type=OfficeContactAssignment.AssignmentType.MANAGER,
+    )
+    OfficeContactAssignment.objects.create(
+        office=target,
+        user=primary,
+        assignment_type=OfficeContactAssignment.AssignmentType.MANAGER,
+        is_primary=True,
+    )
+    payload = office_info_payload(target, include_internal=True)
+    manager = payload["contacts"]["branchManager"]
+    assert manager is not None
+    assert manager["email"] == "primary@example.com"
+    assert manager["isPrimary"] is True
+
+
+@pytest.mark.django_db
+def test_directions_url_built_from_address():
+    target = office(FAIRFAX)
+    target.street_address = "1 Main St"
+    target.city = "Fairfax"
+    target.state = "VA"
+    target.zip_code = "22030"
+    target.save()
+    payload = office_info_payload(target, include_internal=True)
+    url = payload["directionsUrl"]
+    assert url.startswith("https://www.google.com/maps/search/?api=1&query=")
+    assert "1+Main+St" in url
+
+
+@pytest.mark.django_db
+def test_directions_url_empty_without_address():
+    target = office(FAIRFAX)
+    target.street_address = ""
+    target.city = ""
+    target.save()
+    payload = office_info_payload(target, include_internal=True)
+    assert payload["directionsUrl"] == ""
+
+
+@pytest.mark.django_db
+def test_corporate_contacts_come_from_head_office():
+    head = office("onest-head-office")
+    principal = completed_user(email="principal@example.com", office=head)
+    OfficeContactAssignment.objects.create(
+        office=head,
+        user=principal,
+        assignment_type=OfficeContactAssignment.AssignmentType.PRINCIPAL_BROKER,
+        is_primary=True,
+    )
+    payload = office_info_payload(office(FAIRFAX), include_internal=True)
+    corporate = payload["corporateContacts"]
+    assert len(corporate) == 1
+    assert corporate[0]["email"] == "principal@example.com"
+    assert corporate[0]["assignmentTypeLabel"] == "Principal broker"
+
+
+@pytest.mark.django_db
+def test_inactive_head_office_yields_no_corporate_contacts():
+    head = office("onest-head-office")
+    principal = completed_user(email="principal@example.com", office=head)
+    OfficeContactAssignment.objects.create(
+        office=head,
+        user=principal,
+        assignment_type=OfficeContactAssignment.AssignmentType.PRINCIPAL_BROKER,
+    )
+    head.is_active = False
+    head.save(update_fields=["is_active"])
+    payload = office_info_payload(office(FAIRFAX), include_internal=True)
+    assert payload["corporateContacts"] == []
+
+
+@pytest.mark.django_db
+def test_office_info_query_count_is_bounded(client):
+    from django.db import connection
+    from django.test.utils import CaptureQueriesContext
+
+    head = office("onest-head-office")
+    principal = completed_user(email="principal@example.com", office=head)
+    OfficeContactAssignment.objects.create(
+        office=head,
+        user=principal,
+        assignment_type=OfficeContactAssignment.AssignmentType.PRINCIPAL_BROKER,
+    )
+    user = agent_in(FAIRFAX)
+    client.force_login(user)
+    with CaptureQueriesContext(connection) as context:
+        client.get(reverse("office_info"), HTTP_X_INERTIA="true")
+    assert len(context) < 60
+
+
+@pytest.mark.django_db
 def test_office_info_hides_internal_access_without_flag():
     target = office(FAIRFAX)
     target.access_instructions = "Door code 9999"
