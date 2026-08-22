@@ -118,6 +118,9 @@ _OPS_ALL = (
     "web.view_platform_tasks",
     "web.manage_offices",
     "web.view_it_support",
+    "web.view_office_resources_admin",
+    "web.manage_office_resources",
+    "web.publish_company_resources",
     "user.view_user_administration",
     "user.change_user_administration",
     "user.manage_account_state",
@@ -139,6 +142,8 @@ _OPS_REGIONAL = (
     "web.manage_documents",
     "web.view_feedback",
     "web.manage_offices",
+    "web.view_office_resources_admin",
+    "web.manage_office_resources",
     "user.view_user_administration",
     "user.change_user_administration",
     "web.view_own_transactions",
@@ -158,6 +163,8 @@ _OPS_BRANCH = (
     "web.manage_documents",
     "web.view_feedback",
     "web.manage_offices",
+    "web.view_office_resources_admin",
+    "web.manage_office_resources",
     "user.view_user_administration",
     "user.change_user_administration",
     "web.view_own_transactions",
@@ -258,6 +265,8 @@ ROLE_DEFINITIONS: tuple[RoleDefinition, ...] = (
         + (
             "web.view_transactions",
             "web.manage_offices",
+            "web.view_office_resources_admin",
+            "web.manage_office_resources",
             "web.view_own_transactions",
             "web.view_own_commission",
             "web.view_own_leads",
@@ -297,7 +306,11 @@ ROLE_DEFINITIONS: tuple[RoleDefinition, ...] = (
         ),
         priority=7,
         valid_scope_types=(ScopeType.OFFICE,),
-        default_permissions=_OPS_OFFICE_ADMIN,
+        default_permissions=_OPS_OFFICE_ADMIN
+        + (
+            "web.view_office_resources_admin",
+            "web.manage_office_resources",
+        ),
     ),
     RoleDefinition(
         code=TRANSACTION_COORDINATOR,
@@ -337,6 +350,8 @@ ROLE_DEFINITIONS: tuple[RoleDefinition, ...] = (
             "web.view_feedback",
             "web.manage_documents",
             "web.manage_quick_access",
+            "web.view_office_resources_admin",
+            "web.manage_office_resources",
         ),
     ),
     RoleDefinition(

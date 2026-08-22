@@ -26,6 +26,15 @@ from .views.office_administration_views import (
     office_administration_update,
     office_info,
 )
+from .views.office_resource_administration_views import (
+    office_resource_create,
+    office_resource_detail,
+    office_resource_file,
+    office_resource_new,
+    office_resource_transition,
+    office_resource_update,
+    office_resources_admin_index,
+)
 from .views.office_resource_views import (
     office_resource_download,
     office_resources,
@@ -59,6 +68,41 @@ urlpatterns = [
         "office-resources/<slug:slug>/download",
         office_resource_download,
         name="office_resources_download",
+    ),
+    path(
+        "operations/office-resources",
+        office_resources_admin_index,
+        name="admin_office_resources",
+    ),
+    path(
+        "operations/office-resources/new",
+        office_resource_new,
+        name="admin_office_resource_new",
+    ),
+    path(
+        "operations/office-resources/create",
+        office_resource_create,
+        name="admin_office_resource_create",
+    ),
+    path(
+        "operations/office-resources/<int:resource_id>",
+        office_resource_detail,
+        name="admin_office_resource",
+    ),
+    path(
+        "operations/office-resources/<int:resource_id>/submit",
+        office_resource_update,
+        name="admin_office_resource_update",
+    ),
+    path(
+        "operations/office-resources/<int:resource_id>/file",
+        office_resource_file,
+        name="admin_office_resource_file",
+    ),
+    path(
+        "operations/office-resources/<int:resource_id>/transition",
+        office_resource_transition,
+        name="admin_office_resource_transition",
     ),
     path(
         "operations/users/<int:user_id>/administration",

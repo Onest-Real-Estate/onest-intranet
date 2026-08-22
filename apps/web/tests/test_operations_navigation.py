@@ -67,24 +67,44 @@ def test_registry_has_exact_destinations_order_routes_and_permissions():
         "Compliance",
         "Feedback",
         "Platform Tasks",
+        "Office Resources",
         "Offices",
         "IT Support",
     ]
-    assert [destination.order for destination in OPERATIONS_DESTINATIONS] == list(
-        range(10, 180, 10)
-    )
+    assert [destination.order for destination in OPERATIONS_DESTINATIONS] == [
+        10,
+        20,
+        30,
+        40,
+        50,
+        60,
+        70,
+        80,
+        90,
+        100,
+        110,
+        120,
+        130,
+        140,
+        150,
+        35,
+        160,
+        170,
+    ]
     assert [destination.section for destination in OPERATIONS_DESTINATIONS] == [
         *("People" for _ in range(5)),
         *("Operations" for _ in range(3)),
         *("Content" for _ in range(4)),
-        *("Governance & support" for _ in range(5)),
+        *("Governance & support" for _ in range(3)),
+        *("Content" for _ in range(1)),
+        *("Governance & support" for _ in range(2)),
     ]
-    assert len({destination.key for destination in OPERATIONS_DESTINATIONS}) == 17
+    assert len({destination.key for destination in OPERATIONS_DESTINATIONS}) == 18
     assert (
-        len({destination.route_name for destination in OPERATIONS_DESTINATIONS}) == 17
+        len({destination.route_name for destination in OPERATIONS_DESTINATIONS}) == 18
     )
     assert (
-        len({destination.permission for destination in OPERATIONS_DESTINATIONS}) == 17
+        len({destination.permission for destination in OPERATIONS_DESTINATIONS}) == 18
     )
     for destination in OPERATIONS_DESTINATIONS:
         assert reverse(destination.route_name) == f"/{destination.path}"
@@ -98,6 +118,7 @@ def test_registry_has_exact_destinations_order_routes_and_permissions():
                 "admin_new_agents",
                 "admin_quick_access",
                 "admin_assign_roles",
+                "admin_office_resources",
                 "admin_offices",
             }
         )
@@ -139,6 +160,7 @@ def test_scoped_management_role_permission_matrix():
             "Documents",
             "Quick Access",
             "Feedback",
+            "Office Resources",
             "Offices",
         },
         BRANCH_MANAGER: {
@@ -150,6 +172,7 @@ def test_scoped_management_role_permission_matrix():
             "Documents",
             "Quick Access",
             "Feedback",
+            "Office Resources",
             "Offices",
         },
     }
@@ -209,6 +232,11 @@ def test_brokerage_admin_can_reach_every_registered_destination(client):
             continue
         if destination.route_name == "admin_offices":
             assert "offices" in props
+            assert "filterOptions" in props
+            assert "capabilities" in props
+            continue
+        if destination.route_name == "admin_office_resources":
+            assert "resources" in props
             assert "filterOptions" in props
             assert "capabilities" in props
             continue

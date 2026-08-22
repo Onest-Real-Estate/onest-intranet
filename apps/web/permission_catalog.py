@@ -338,6 +338,55 @@ PERMISSION_DEFINITIONS: tuple[PermissionDefinition, ...] = (
         sensitive=True,
     ),
     PermissionDefinition(
+        codename="web.view_office_resources_admin",
+        name="Can view the office resources console",
+        domain="content",
+        action="view",
+        description=(
+            "Open the office resources administration console for resources "
+            "within the actor's office-tree scope."
+        ),
+        default_roles=(
+            *_BROKERAGE_ADMINS,
+            REGIONAL_MANAGER,
+            REGIONAL_ADMIN,
+            BRANCH_MANAGER,
+            BRANCH_ADMIN,
+            MARKETING_TEAM,
+        ),
+    ),
+    PermissionDefinition(
+        codename="web.manage_office_resources",
+        name="Can manage scoped office resources",
+        domain="content",
+        action="manage",
+        description=(
+            "Create, edit, schedule, reorder, archive, and upload files for "
+            "office resources owned by offices within scope."
+        ),
+        default_roles=(
+            *_BROKERAGE_ADMINS,
+            REGIONAL_MANAGER,
+            REGIONAL_ADMIN,
+            BRANCH_MANAGER,
+            BRANCH_ADMIN,
+            MARKETING_TEAM,
+        ),
+        risk="high",
+    ),
+    PermissionDefinition(
+        codename="web.publish_company_resources",
+        name="Can publish company-wide office resources",
+        domain="content",
+        action="manage",
+        description=(
+            "Author or edit company-owned (head-office) resources and shadow "
+            "wider-scope slugs. Requires company-wide authority as well."
+        ),
+        default_roles=_BROKERAGE_ADMINS,
+        risk="high",
+    ),
+    PermissionDefinition(
         codename="web.view_it_support",
         name="Can view scoped IT support requests",
         domain="platform",

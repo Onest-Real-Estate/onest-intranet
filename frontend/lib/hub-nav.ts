@@ -563,6 +563,22 @@ export const HUB_NAV_REGISTRY: HubNavItem[] = [
     activeMatch: active(routes.admin_platform_tasks()),
   },
   {
+    key: "admin-office-resources",
+    label: "Office Resources",
+    route: route("admin_office_resources", routes.admin_office_resources()),
+    icon: Boxes,
+    group: "administration",
+    section: "admin-governance-support",
+    order: 35,
+    access: "permission-protected",
+    permissions: { all: ["web.view_office_resources_admin"] },
+    feature: "admin-office-resources",
+    activeMatch: {
+      prefixes: [routes.admin_office_resources()],
+      exclusions: [routes.admin_office_resource_new()],
+    },
+  },
+  {
     key: "admin-offices",
     label: "Offices",
     route: route("admin_offices", routes.admin_offices()),

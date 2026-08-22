@@ -1497,6 +1497,113 @@ export interface OfficeResourcesPageProps extends PageProps {
   } | null;
 }
 
+export type OfficeResourceState =
+  | "active"
+  | "inactive"
+  | "scheduled"
+  | "expired"
+  | "archived";
+
+export interface AdminOfficeResourceRow {
+  id: number;
+  slug: string;
+  title: string;
+  summary: string;
+  category: string;
+  categoryLabel: string;
+  resourceType: string;
+  typeLabel: string;
+  ownerPathLabel: string;
+  ownerStableKey: string;
+  sourceLabel: string;
+  state: OfficeResourceState;
+  isActive: boolean;
+  isArchived: boolean;
+  processingState: string;
+  fileName: string;
+  startsAt: string;
+  endsAt: string;
+  updatedAt: string;
+}
+
+export interface AdminOfficeResourceDetail {
+  id: number;
+  slug: string;
+  title: string;
+  summary: string;
+  category: string;
+  resourceType: string;
+  body: string;
+  url: string;
+  ownerId: number;
+  ownerPathLabel: string;
+  isActive: boolean;
+  isArchived: boolean;
+  archivedAt: string;
+  processingState: string;
+  fileName: string;
+  downloadUrl: string;
+  sortOrder: number;
+  startsAt: string;
+  endsAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdminResourcePreviewItem {
+  slug: string;
+  title: string;
+  summary: string;
+  categoryLabel: string;
+  resourceType: string;
+  sourceLabel: string;
+  origin: "local" | "inherited";
+  url?: string;
+  downloadUrl?: string;
+  body?: string;
+}
+
+export interface OfficeResourceListFilters {
+  q: string;
+  category: string;
+  resource_type: string;
+  status: string;
+  owner: string;
+  region: string;
+  [key: string]: string;
+}
+
+export interface OfficeResourcesAdministrationPageProps extends PageProps {
+  resources: ListResponse<AdminOfficeResourceRow, OfficeResourceListFilters>;
+  filterOptions: {
+    categories: FilterOption[];
+    types: FilterOption[];
+    statuses: FilterOption[];
+    owners: FilterOption[];
+  };
+  capabilities: { canManage: boolean; canPublishCompany: boolean };
+  scope: { level: string; label: string };
+  validation: ValidationErrors;
+}
+
+export interface OfficeResourceWorkspacePageProps extends PageProps {
+  resource: AdminOfficeResourceDetail | null;
+  version: string;
+  preview: {
+    officeId: number;
+    officeLabel: string;
+    items: AdminResourcePreviewItem[];
+    localCount: number;
+    inheritedCount: number;
+  } | null;
+  writableOffices: { id: number; label: string; kind: string }[];
+  capabilities: { canManage: boolean; canPublishCompany: boolean };
+  categories: FilterOption[];
+  types: FilterOption[];
+  scope: { level: string; label: string };
+  validation: ValidationErrors;
+}
+
 export interface OfficeListFilters {
   q: string;
   kind: string;
