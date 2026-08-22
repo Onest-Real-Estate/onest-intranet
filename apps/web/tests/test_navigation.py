@@ -54,6 +54,7 @@ def test_only_the_live_destinations_are_enabled():
         key
         for key, enabled in {
             **OPERATIONS_FEATURES,
+            "announcements": True,
             "office-info": True,
             "office-resources": True,
         }.items()
@@ -66,6 +67,7 @@ def test_only_the_live_destinations_are_enabled():
     assert HUB_FEATURES["admin-new-agents"] is True
     assert HUB_FEATURES["admin-users"] is True
     assert HUB_FEATURES["admin-offices"] is True
+    assert HUB_FEATURES["announcements"] is True
     assert HUB_FEATURES["office-info"] is True
     assert HUB_FEATURES["office-resources"] is True
 
@@ -85,6 +87,7 @@ def test_unauthorized_administrative_feature_keys_are_not_shared(client):
 
     assert props["features"] == {
         **dict.fromkeys(HUB_SECTIONS, False),
+        "announcements": True,
         "office-info": True,
         "office-resources": True,
     }
@@ -178,6 +181,7 @@ def test_shared_props_carry_feature_state_and_office(client):
     props = shared_props(client)
     assert props["features"] == {
         **dict.fromkeys(HUB_SECTIONS, False),
+        "announcements": True,
         "office-info": True,
         "office-resources": True,
     }

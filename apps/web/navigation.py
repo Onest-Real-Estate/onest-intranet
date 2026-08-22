@@ -29,6 +29,7 @@ HUB_FEATURES: dict[str, bool] = {
     **dict.fromkeys(HUB_SECTIONS, False),
     **OPERATIONS_FEATURES,
 }
+HUB_FEATURES["announcements"] = True
 HUB_FEATURES["office-info"] = True
 HUB_FEATURES["office-resources"] = True
 
