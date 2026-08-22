@@ -26,6 +26,7 @@ from apps.announcements.taxonomy import (
     SYSTEM_CATEGORY_CODES,
 )
 from apps.user.models import Office
+from apps.user.storage import private_storage
 
 
 class ProtectedCategoryError(Exception):
@@ -167,6 +168,20 @@ class Announcement(models.Model):
     title = models.CharField(_("title"), max_length=180)
     summary = models.CharField(_("summary"), max_length=280, blank=True)
     body = models.TextField(_("body"), blank=True)
+    attachment = models.FileField(
+        _("attachment"),
+        max_length=255,
+        blank=True,
+        storage=private_storage,
+        upload_to="announcements/%Y/%m/",
+        help_text=_(
+            "Stored in protected storage and only reachable through the "
+            "download view, which re-evaluates the audience on every request."
+        ),
+    )
+    attachment_name = models.CharField(
+        _("original file name"), max_length=255, blank=True
+    )
     category = models.ForeignKey(
         AnnouncementCategory,
         verbose_name=_("category"),
@@ -309,3 +324,143 @@ class Announcement(models.Model):
             .first()
         )
         return previous != (self.category.code if self.category else None)
+
+
+class AnnouncementAudienceQuerySet(models.QuerySet["AnnouncementAudience"]):
+    def for_kind(self, kind: str) -> AnnouncementAudienceQuerySet:
+        return self.filter(kind=kind)
+
+
+class AnnouncementAudience(models.Model):
+    """One audience selector attached to one announcement.
+
+    Audience is a set of rows rather than a column so it can be indexed,
+    constrained, and joined. Selectors combine as a **union (OR)**: a reader
+    who matches any one of them sees the announcement, and matching several
+    still yields one feed entry — see ``docs/announcements.md``.
+
+    Each row names exactly one target, enforced by a check constraint per
+    kind, so an ill-formed selector cannot be stored and every read path can
+    trust the shape it finds. Rows are never a materialized recipient list:
+    they are the *rule*, re-evaluated against the reader's current office and
+    current effective roles on every read.
+    """
+
+    class Kind(models.TextChoices):
+        COMPANY = "company", _("Everyone at the brokerage")
+        ROLE = "role", _("Everyone holding a role")
+        REGION = "region", _("A region and the offices under it")
+        OFFICE = "office", _("One office only")
+        USER = "user", _("One named person")
+
+    announcement = models.ForeignKey(
+        "Announcement",
+        verbose_name=_("announcement"),
+        related_name="audiences",
+        on_delete=models.CASCADE,
+    )
+    kind = models.CharField(_("kind"), max_length=16, choices=Kind.choices)
+    role = models.CharField(
+        _("role code"),
+        max_length=64,
+        blank=True,
+        help_text=_("Stable role catalog code. Only for role selectors."),
+    )
+    office = models.ForeignKey(
+        Office,
+        verbose_name=_("office"),
+        related_name="announcement_audiences",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        help_text=_(
+            "The region or office targeted. A region selector reaches every "
+            "office beneath it; an office selector reaches that office alone."
+        ),
+    )
+    user = models.ForeignKey(
+        "user.User",
+        verbose_name=_("person"),
+        related_name="announcement_audiences",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+    )
+    created_at = models.DateTimeField(_("created at"), auto_now_add=True)
+
+    objects = AnnouncementAudienceQuerySet.as_manager()
+
+    class Meta:
+        verbose_name = _("announcement audience")
+        verbose_name_plural = _("announcement audiences")
+        constraints = [
+            # Exactly one target per kind. Without this a "role" row could
+            # carry an office nobody reads, and the two would disagree about
+            # who the audience is.
+            models.CheckConstraint(
+                condition=(
+                    Q(kind="company", role="", office__isnull=True, user__isnull=True)
+                    | (
+                        Q(kind="role", office__isnull=True, user__isnull=True)
+                        & ~Q(role="")
+                    )
+                    | Q(
+                        kind__in=["region", "office"],
+                        role="",
+                        office__isnull=False,
+                        user__isnull=True,
+                    )
+                    | Q(kind="user", role="", office__isnull=True, user__isnull=False)
+                ),
+                name="announcement_audience_one_target_per_kind",
+            ),
+            # Partial uniques rather than one wide constraint: NULL columns do
+            # not deduplicate inside a composite unique index.
+            models.UniqueConstraint(
+                fields=["announcement"],
+                condition=Q(kind="company"),
+                name="announcement_audience_one_company_row",
+            ),
+            models.UniqueConstraint(
+                fields=["announcement", "role"],
+                condition=Q(kind="role"),
+                name="announcement_audience_unique_role",
+            ),
+            models.UniqueConstraint(
+                fields=["announcement", "kind", "office"],
+                condition=Q(office__isnull=False),
+                name="announcement_audience_unique_office",
+            ),
+            models.UniqueConstraint(
+                fields=["announcement", "user"],
+                condition=Q(kind="user"),
+                name="announcement_audience_unique_user",
+            ),
+        ]
+        indexes = [
+            # One index per read shape. The feed asks "which announcements
+            # target this office / these roles / this person", so the leading
+            # column is the selector target, not the announcement.
+            models.Index(fields=["kind", "office"], name="announcement_aud_office"),
+            models.Index(fields=["kind", "role"], name="announcement_aud_role"),
+            models.Index(fields=["kind", "user"], name="announcement_aud_user"),
+        ]
+
+    def __str__(self):
+        return f"{self.announcement_ref} → {self.kind}:{self.target_label}"
+
+    @property
+    def announcement_ref(self) -> str:
+        return str(self.announcement.slug)
+
+    @property
+    def target_label(self) -> str:
+        if self.kind == self.Kind.COMPANY:
+            return "everyone"
+        if self.kind == self.Kind.ROLE:
+            return self.role
+        if self.office is not None:
+            return self.office.name
+        if self.user is not None:
+            return self.user.get_full_name() or self.user.email
+        return ""

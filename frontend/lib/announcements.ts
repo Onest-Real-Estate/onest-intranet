@@ -1,6 +1,19 @@
-import { AlertTriangle, ArrowUp, type LucideIcon } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowUp,
+  Building2,
+  Landmark,
+  type LucideIcon,
+  Map as MapIcon,
+  UserRound,
+  Users,
+} from "lucide-react";
 
-import type { AnnouncementBadge, AnnouncementFilters } from "@/types";
+import type {
+  AnnouncementAudienceEntry,
+  AnnouncementBadge,
+  AnnouncementFilters,
+} from "@/types";
 import type { StatusPresentation } from "@/types/design-system";
 
 /**
@@ -62,4 +75,38 @@ export function rejectedFilterMessage(filters: AnnouncementFilters): string | nu
 /** Announcements shown with a fallback because their stored code is unknown. */
 export function hasUnknownClassification(badges: AnnouncementBadge[]): boolean {
   return badges.some((badge) => !badge.known);
+}
+
+/**
+ * Icon per audience selector kind. The label always carries the meaning; the
+ * icon is a second channel, the same bargain the priority badge makes.
+ */
+const AUDIENCE_ICONS: Record<AnnouncementAudienceEntry["kind"], LucideIcon> = {
+  company: Building2,
+  role: Users,
+  region: MapIcon,
+  office: Landmark,
+  user: UserRound,
+};
+
+export function audienceIcon(kind: AnnouncementAudienceEntry["kind"]): LucideIcon {
+  return AUDIENCE_ICONS[kind] ?? Users;
+}
+
+/**
+ * Union semantics, said out loud.
+ *
+ * The same sentence the backend documents in `docs/announcements.md`: any one
+ * selector is enough. Reading "Fairfax, VA" beside "Compliance" and inferring
+ * "compliance officers *in* Fairfax" would be exactly backwards, so the page
+ * states the rule rather than leaving the list to imply it.
+ */
+export function audienceSummary(entries: AnnouncementAudienceEntry[]): string {
+  if (entries.length === 0) {
+    return "No audience selected yet.";
+  }
+  if (entries.length === 1) {
+    return `Sent to ${entries[0].label}.`;
+  }
+  return `Sent to anyone matching any of these ${entries.length} audiences.`;
 }

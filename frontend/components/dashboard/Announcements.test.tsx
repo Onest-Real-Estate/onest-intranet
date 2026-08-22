@@ -1,21 +1,37 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { axe } from "vitest-axe";
+
+vi.mock("@inertiajs/react", () => ({
+  Link: ({ children, href }: { children: React.ReactNode; href: string }) => (
+    <a href={href}>{children}</a>
+  ),
+}));
 
 import { Announcements } from "@/components/dashboard/Announcements";
 import type { DashboardAnnouncements } from "@/types";
 
 const data: DashboardAnnouncements = {
   featured: {
+    id: 1,
+    href: "/announcements/1",
     tag: "Policy",
     title: "Updated commission schedule takes effect 1 September",
     excerpt: "Splits and cap thresholds change for the new plan year.",
     imageUrl: "/static/news/commission.jpg",
   },
   items: [
-    { tag: "Event", title: "Fall kickoff", excerpt: "Doors at 9." },
     {
+      id: 2,
+      href: "/announcements/2",
+      tag: "Event",
+      title: "Fall kickoff",
+      excerpt: "Doors at 9.",
+    },
+    {
+      id: 3,
+      href: "/announcements/3",
       tag: "Training",
       title: "New contract forms",
       excerpt: "A walkthrough.",

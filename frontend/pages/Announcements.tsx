@@ -1,4 +1,4 @@
-import { Head, router, usePage } from "@inertiajs/react";
+import { Head, Link, router, usePage } from "@inertiajs/react";
 import { Info, Newspaper } from "lucide-react";
 
 import {
@@ -108,7 +108,12 @@ function AnnouncementCard({ row }: { row: AnnouncementRow }) {
             id={`announcement-${row.id}-title`}
             className="text-lg leading-snug font-semibold text-balance"
           >
-            {row.title}
+            <Link
+              href={routes.announcement_detail(row.id)}
+              className="hover:text-primary focus-visible:ring-ring rounded-sm focus-visible:ring-2 focus-visible:outline-none"
+            >
+              {row.title}
+            </Link>
           </h2>
           {row.summary ? (
             <p className="text-muted-foreground text-sm leading-6">{row.summary}</p>

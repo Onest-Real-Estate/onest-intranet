@@ -3,6 +3,7 @@ import os
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
+from apps.announcements.seed import seed_announcements
 from apps.user.office_seed import SeedConflictError, seed_offices
 from apps.user.roles import seed_role_groups
 from apps.user.user_seed import seed_users
@@ -39,6 +40,9 @@ class Command(BaseCommand):
                     ensure_prerequisites=False,
                     faker_seed=options["faker_seed"],
                 )
+                # After users: the role selectors only mean something once
+                # somebody holds those roles.
+                announcement_report = seed_announcements()
         except SeedConflictError as exc:
             self.stderr.write(self.style.ERROR(str(exc)))
             raise SystemExit(1) from exc
@@ -49,6 +53,8 @@ class Command(BaseCommand):
                 f"{len(office_report.created)} offices created, "
                 f"{len(office_report.matched)} matched; "
                 f"{len(user_report.created)} users created, "
-                f"{len(user_report.matched)} matched."
+                f"{len(user_report.matched)} matched; "
+                f"{len(announcement_report.created)} announcements created, "
+                f"{len(announcement_report.matched)} updated."
             )
         )

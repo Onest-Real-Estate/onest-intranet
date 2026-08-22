@@ -52,6 +52,8 @@ function previewWidget<T>(data: T): DashboardWidget<T> {
 
 const announcements: DashboardAnnouncements = {
   featured: {
+    id: 1,
+    href: "/announcements/1",
     tag: "Policy",
     title: "Updated commission schedule takes effect 1 September",
     excerpt:
@@ -62,23 +64,31 @@ const announcements: DashboardAnnouncements = {
   // carousel has to hold its shape either way once editors are publishing.
   items: [
     {
+      id: 2,
+      href: "/announcements/2",
       tag: "Event",
       title: "Fall kickoff — 4 September, Fairfax VA",
       excerpt: "Doors at 9, awards at noon.",
       imageUrl: previewPhoto,
     },
     {
+      id: 3,
+      href: "/announcements/3",
       tag: "Training",
       title: "New contract forms: what changed and why",
       excerpt: "A 20-minute walkthrough of the revised purchase agreement.",
     },
     {
+      id: 4,
+      href: "/announcements/4",
       tag: "Operations",
       title: "Arlington office moves to the third floor this weekend",
       excerpt: "Pack your desk by Friday at 5.",
       imageUrl: previewPhoto,
     },
     {
+      id: 5,
+      href: "/announcements/5",
       tag: "People",
       title: "Welcome to the six agents who joined us this month",
       excerpt: "Say hello when you see them in the office.",

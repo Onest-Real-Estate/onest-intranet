@@ -381,6 +381,45 @@ ROUTE_POLICIES: dict[str, AuthorizationPolicy] = {
         route_names=("announcements",),
         scope_rule="announcement_audience_scope",
     ),
+    "announcement_detail": AuthorizationPolicy(
+        key="announcement_detail",
+        access="authenticated",
+        description=(
+            "One announcement by id. Authorized by the same audience "
+            "predicate as the feed, so a guessed id is no more permissive "
+            "than the list the reader was shown."
+        ),
+        methods=("GET",),
+        route_names=("announcement_detail",),
+        scope_rule="announcement_audience_scope",
+    ),
+    "announcement_attachment": AuthorizationPolicy(
+        key="announcement_attachment",
+        access="authenticated",
+        description=(
+            "Stream one announcement attachment from protected storage. "
+            "Audience is re-evaluated on every request; there is no durable "
+            "public URL."
+        ),
+        methods=("GET",),
+        route_names=("announcement_attachment",),
+        scope_rule="announcement_audience_scope",
+    ),
+    "announcement_recipient_search": AuthorizationPolicy(
+        key="announcement_recipient_search",
+        access="permission_protected",
+        description=(
+            "Typeahead for individual announcement recipients, bounded by the "
+            "actor's administered users. Answers JSON and returns nothing "
+            "below the minimum query length, so it cannot be used to "
+            "enumerate the directory."
+        ),
+        methods=("GET",),
+        route_names=("announcement_recipient_search",),
+        all_permissions=("web.manage_announcements",),
+        scope_rule="delegated_user_scope",
+        auth_behavior="json",
+    ),
     "office_resource_download": AuthorizationPolicy(
         key="office_resource_download",
         access="authenticated",

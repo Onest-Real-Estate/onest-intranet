@@ -1,4 +1,7 @@
 const URLS = {
+    'announcement_attachment': (announcement_id: number) => `/announcements/${announcement_id}/attachment`,
+    'announcement_detail': (announcement_id: number) => `/announcements/${announcement_id}`,
+    'announcement_recipient_search': () => `/announcements/recipients`,
     'announcements': () => `/announcements`,
     'notification_state': (public_id: string) => `/notifications/${public_id}/state`,
     'notification_read_all': () => `/notifications/read-all`,

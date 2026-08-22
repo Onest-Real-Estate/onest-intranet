@@ -68,7 +68,7 @@ administrator's relabel survives a redeploy.
 
 Drafts may be incomplete. `services.validation_debt()` reports what still
 stands between a draft and publication — missing category, missing or unknown
-priority, empty title, empty body — as `(field, message)` pairs, so the same
+priority, empty title, empty body, no audience — as `(field, message)` pairs, so the same
 list raises as a `ValidationError` on publish and renders as a checklist on the
 draft. `validation_debt_payload()` is its camelCase form
 (`{isPublishable, items[]}`).
@@ -77,6 +77,15 @@ At publish, the rule holds three times over: `publish_announcement()` refuses
 while debt remains, `Announcement.clean()` re-checks, and the check constraint
 `announcement_published_requires_taxonomy` makes it a database fact. A
 published row without a category or priority cannot exist.
+
+Audience debt is reported only once the row exists — selectors are related
+rows, so an unsaved announcement has no way to carry one. `publish_announcement()`
+always runs on a saved row and refuses an empty audience, so that is the gate.
+
+`publish_announcement()` checks in a deliberate order: permission and
+publishing-office scope first (an unauthorized caller learns nothing about the
+draft), then the whole validation checklist at once, then authority over each
+named selector.
 
 Publishing emits `announcement.published` twice — an `AuditEvent` with a
 before/after snapshot, and a `DomainEvent` carrying the taxonomy codes plus the
@@ -99,22 +108,124 @@ that can drift from `taxonomy.py`.
 
 `services.py` runs strictly one-directional:
 
-1. `visible_queryset()` decides which rows exist for this reader — audience
-   scope, then published status, then the publication window.
+1. `audience.visible_announcements()` decides which rows exist for this reader
+   — audience predicate, then published status, then the publication window.
 2. `apply_filters()` narrows that set with validated reader input.
 3. `order_for_feed()` sorts what steps 1 and 2 produced. It does not filter and
    does not re-query.
 
 Priority participates in step 3 only. An urgent announcement outside its
-window, or owned by a node the reader does not sit under, is simply not in the
-set that reaches the sort. That is a property of the code shape, not a rule
-someone has to remember — and `test_announcements.py` asserts it directly with
-deliberately urgent invisible rows.
+window, or not addressed to the reader, is simply not in the set that reaches
+the sort. That is a property of the code shape, not a rule someone has to
+remember — and `test_announcements.py` asserts it directly with deliberately
+urgent invisible rows.
 
-**Audience** is the owning office node: head office owns brokerage-wide news, a
-region owns its region, a branch owns itself. A reader sees announcements owned
-by any node on their own office's ancestor chain, resolved server-side from
-`request.user.office`. No office identifier is ever accepted from the client.
+## Audience
+
+Audience is a set of rows on `AnnouncementAudience`, not a column. Each row
+names exactly one target, enforced by a check constraint per kind, so an
+ill-formed selector cannot be stored.
+
+`owner_office` still exists but no longer *implies* the audience: it is the
+publishing office — provenance, and the scope a manager needs authority over.
+Migration `0004_backfill_owner_office_audience` wrote the old implication down
+as explicit rows.
+
+### Selector types
+
+| Kind | Reaches |
+| --- | --- |
+| `company` | Every user. |
+| `role` | Every user holding that role code in a live assignment — validity windows honoured, multiple roles honoured. |
+| `region` | Every user whose primary office is that node **or any office beneath it**. |
+| `office` | Every user whose primary office is exactly that node. Never a sibling, never a parent. |
+| `user` | That one person. |
+
+`region` and `office` selectors may both point at the same node: they mean
+different things ("under this node" versus "this node itself") and the unique
+constraints allow both.
+
+### Union semantics
+
+**Selectors are OR.** A reader who matches *any* selector sees the
+announcement. Matching several still yields exactly one feed entry, because
+membership is a set test — `audience_q()` is one `IN` against the audience
+table, not one `OR`-ed join per kind — so there is no `.distinct()` here
+compensating for a join that fans out. `recipients_for()` returns a `User`
+queryset for the same reason.
+
+The UI states the rule rather than leaving the list to imply it: the detail
+page's audience section reads "Sent to anyone matching any of these N
+audiences", because reading "Fairfax, VA" beside "Compliance" and inferring
+"compliance officers *in* Fairfax" would be exactly backwards.
+
+### One predicate, everywhere
+
+`apps/announcements/audience.py` is the only implementation. The feed, the
+detail page, the attachment download, the dashboard, notifications, and search
+all call `visible_announcements()` or `visible_to()` — so a guessed detail URL
+or a shared attachment link is exactly as permissive as the list the reader was
+actually shown, which is to say not at all. `assert_visible()` is the
+direct-object-access form; it records the denial before raising.
+
+Attachments live in protected storage and are streamed by the download view.
+There is no durable public URL that could outlive the reader's place in the
+audience.
+
+### Evaluated at read time, never materialized
+
+The predicate reads the reader's *current* primary office and *current*
+effective roles on every request. Nothing is cached against the announcement
+and no recipient list is frozen at publish. The documented consequence:
+
+- **Moving someone to another office** changes what they can open from that
+  moment on, for announcements published long before — they gain their new
+  office's history and lose their old office's.
+- **Ending or revoking a role assignment** closes access immediately; a
+  *scheduled* assignment opens it when its window arrives, with no backfill job
+  involved.
+- **Deactivating an office** does not revoke news addressed to it. The reader
+  still belongs to that office, and silently dropping people mid-reorganization
+  would be worse than the alternative.
+
+The `announcement.published` domain event carries the selector list — the
+*rule* — not a recipient list. Consumers call `recipients_for()` so fan-out is
+computed against the org as it stands.
+
+### Publishing authority
+
+A publisher needs `web.manage_announcements` **and** authority over every
+selector they name, checked in `assert_can_target()` against the actor's own
+querysets rather than against what was submitted:
+
+| Selector | Requires |
+| --- | --- |
+| `company` | Company-wide effective access. |
+| `region` / `office` | The node inside `targetable_office_ids()` — the actor's grant, expanded downward. Never a sibling, never an ancestor. |
+| `role` | The role inside `targetable_role_codes()`, which is the set the actor may *delegate*. Reusing the delegation catalog keeps one answer to "which roles may this administrator act on". |
+| `user` | The person inside the actor's administered user queryset. |
+
+One denied selector rejects the whole set; a mixed request is never partially
+applied. Denials are recorded as `security.announcement.audience_denied`, and
+every change to a stored audience is recorded as
+`announcement.audience_changed` with before/after selector lists.
+
+### Recipient search is not a directory
+
+`search_recipients()` backs the individual-recipient typeahead. Three things
+stop it becoming an enumeration tool: the manage permission is required, the
+queryset starts from the actor's administered set, and a query shorter than
+`MIN_RECIPIENT_QUERY` (2) returns nothing at all. Results are capped at 20.
+
+### Cost
+
+The reader's facts — office ancestor chain and live role codes — are gathered
+once per request into an `AudienceContext` and turned into one indexed
+subquery. The three indexes on `AnnouncementAudience` lead with `kind` and then
+the selector's own target column, matching the shape of each `OR` branch.
+Answering "can this person see these fifty announcements" costs the same as
+asking about two; `test_the_feed_cost_does_not_grow_with_the_number_of_announcements`
+pins that by comparing query counts at two sizes.
 
 ## Feed filters
 
@@ -181,8 +292,11 @@ how a notification centre stops being read.
 event are in place. Fan-out to recipients belongs with the announcement
 publishing pipeline — register a builder in
 `apps/notifications/producers.py` keyed on `announcement.published`, take
-`notify` and `notification_priority` straight from the event payload, and
-resolve recipients from the audience scope. Do not re-derive policy there.
+`notify` and `notification_priority` straight from the event payload, and call
+`audience.recipients_for()` for the recipient set. Do not re-derive policy
+there, and do not cache the recipients: audience is re-evaluated at read time,
+so a notification's *detail* must still pass `visible_to()` when it is
+rendered.
 
 ## Unknown legacy codes
 
@@ -206,6 +320,29 @@ pretending the row was always normal.
 - **New category that ships with the product:** add a `CategorySeed` to
   `CATEGORY_SEED`, a tone to `CATEGORY_TONES`, and a data migration that
   mirrors `0002_seed_categories.py`.
+- **New audience selector kind:** a deliberate deploy. Add the `Kind`, extend
+  the check constraint and the index set, add a branch to `selector_q()` *and*
+  `recipients_for()` — the two directions must agree, and
+  `test_the_two_directions_agree` is what catches it if they do not — then add
+  its authority rule to `assert_can_target()`.
 - **New priority:** a deliberate deploy. Add the `PriorityDefinition`, its
   tone, and its `NotificationBehavior`, and update this document's tables —
   `test_taxonomy.py` fails if the priority tone or policy map is incomplete.
+
+## Local demo data
+
+```bash
+uv run python manage.py seed_announcements   # announcements only, idempotent
+uv run python manage.py seed_dev             # offices + roles + users + announcements
+```
+
+The seed deliberately includes rows a Fairfax reader should **not** see — a
+sibling branch's notice, another region's news, a scheduled one, an expired
+one, a role they do not hold — plus a draft carrying validation debt. A seed
+that only produces visible rows makes an audience bug look like a working
+feature, so the negatives are the point;
+`test_the_seeds_negatives_really_are_negative` asserts each row that claims to
+be hidden really is.
+
+The individual-recipient row targets `agent.fairfax@onest.test` and is skipped
+with a note if `seed_users` has not run.

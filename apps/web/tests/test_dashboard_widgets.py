@@ -222,7 +222,6 @@ def test_modules_without_a_backing_source_report_unavailable_not_empty():
     user = make_user("unbuilt@example.com")
     context = build_context(user)
     for key in (
-        "announcements",
         "active_transactions",
         "training",
         "my_day",
@@ -725,9 +724,16 @@ def test_widget_providers_are_bounded_in_queries():
         widget_payload(WIDGET_BY_KEY["performance"], context)
 
     # Providers awaiting their module must not touch the database at all.
-    for key in ("announcements", "active_transactions", "market", "my_day"):
+    for key in ("active_transactions", "market", "my_day"):
         with assert_application_queries(0):
             widget_payload(WIDGET_BY_KEY[key], context)
+
+    # Announcements is bounded by the audience predicate, not by the number of
+    # announcements: the reader's live role codes, then one read whose audience
+    # test is a single indexed subquery. The office ancestor chain comes off
+    # the already-loaded user.
+    with assert_application_queries(2):
+        widget_payload(WIDGET_BY_KEY["announcements"], context)
 
     # Quick access resolves the whole audience in one statement — the office
     # ancestor chain comes off the already-loaded user, and the configuration
