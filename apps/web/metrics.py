@@ -190,6 +190,13 @@ class MetricValue:
     raw_value: int | float | str | None = None
     #: What ``raw_value`` counts — e.g. ``count``, ``usd``, ``ratio``.
     unit: str | None = None
+    #: Signed change against the comparable prior period, e.g. ``"+15%"``.
+    #: ``None`` when no honest comparison exists (no prior data, or a
+    #: denominator of zero) — the card then simply has no pill.
+    delta: str | None = None
+    #: The figure being compared against, already formatted, e.g. ``"12"``.
+    #: The card renders it as "vs. 12 last period".
+    compared_to: str | None = None
 
 
 @dataclass(frozen=True)
@@ -256,6 +263,9 @@ class MetricDefinition:
     all_permissions: tuple[str, ...] = ()
     drill_down: MetricDrillDown | None = None
     unavailable_behavior: str = UnavailableBehavior.MARK
+    #: Stable icon key from the frontend's approved metric-icon set. The card
+    #: renders it top-right; an unknown key falls back to a neutral glyph there.
+    icon: str = ""
 
 
 # --------------------------------------------------------------------------- #
@@ -385,8 +395,16 @@ def pending_source(context: MetricContext) -> MetricValue:
 
 
 def calculate_new_agents(context: MetricContext) -> MetricValue:
-    """Agents who joined the caller's scope inside the trailing window."""
-    count = (
+    """Agents who joined the caller's scope inside the trailing window.
+
+    The comparison is the *preceding* window of the same length, so the delta
+    is a real period-over-period change rather than a trend guessed from the
+    level. With no joiners in the prior window there is no honest percentage —
+    dividing by zero or calling it infinite growth both misdescribe the data —
+    so the card keeps its figure and its "vs. 0" line and simply carries no
+    pill.
+    """
+    current = (
         dashboard_new_agent_queryset(
             context.user,
             at=context.now,
@@ -396,13 +414,42 @@ def calculate_new_agents(context: MetricContext) -> MetricValue:
         .filter(date_joined__lte=context.now)
         .count()
     )
+    prior_window_end = trailing_window_start(context.now, days=NEW_AGENT_WINDOW_DAYS)
+    previous = (
+        dashboard_new_agent_queryset(
+            context.user,
+            at=context.now,
+            days=NEW_AGENT_WINDOW_DAYS * 2,
+            access=context.access,
+        )
+        .filter(date_joined__lte=prior_window_end)
+        .count()
+    )
+
+    delta: str | None = None
+    tone = "neutral"
+    trend = "up" if current else "flat"
+    if previous > 0:
+        percent = round((current - previous) / previous * 100)
+        if percent > 0:
+            delta = f"+{percent}%"
+            tone, trend = "success", "up"
+        elif percent < 0:
+            delta = f"{percent}%"
+            tone, trend = "destructive", "down"
+        else:
+            tone = "neutral"
+            trend = "flat"
+
     return MetricValue(
-        value=format_count(count),
+        value=format_count(current),
         hint=f"Joined in the last {NEW_AGENT_WINDOW_DAYS} days",
-        tone="neutral",
-        trend="up" if count else "flat",
-        raw_value=count,
+        tone=tone,
+        trend=trend,
+        raw_value=current,
         unit="count",
+        delta=delta,
+        compared_to=format_count(previous),
     )
 
 
@@ -424,6 +471,7 @@ METRIC_DEFINITIONS: tuple[MetricDefinition, ...] = (
             "Transactions where the signed-in user is the owning agent and the "
             "stage is neither settled nor cancelled. Point in time."
         ),
+        icon="transactions",
     ),
     MetricDefinition(
         key="ownUpcomingClosings",
@@ -438,6 +486,7 @@ METRIC_DEFINITIONS: tuple[MetricDefinition, ...] = (
             f"Own transactions with a closing date from now through "
             f"{UPCOMING_WINDOW_DAYS} days ahead, excluding already-settled deals."
         ),
+        icon="closings",
     ),
     MetricDefinition(
         key="ownCommissionYtd",
@@ -453,6 +502,7 @@ METRIC_DEFINITIONS: tuple[MetricDefinition, ...] = (
             "Commission credited to the signed-in user on transactions settled "
             "from local 1 January through now. Gross of splits."
         ),
+        icon="commission",
     ),
     MetricDefinition(
         key="ownPendingTasks",
@@ -467,6 +517,7 @@ METRIC_DEFINITIONS: tuple[MetricDefinition, ...] = (
             "Tasks assigned to the signed-in user that are not complete or "
             "cancelled. Point in time."
         ),
+        icon="tasks",
     ),
     MetricDefinition(
         key="ownFollowUpsDue",
@@ -481,6 +532,7 @@ METRIC_DEFINITIONS: tuple[MetricDefinition, ...] = (
             "Own open follow-up tasks due before the end of the local calendar "
             "day, overdue ones included."
         ),
+        icon="follow-ups",
     ),
     MetricDefinition(
         key="ownNewLeads",
@@ -495,6 +547,7 @@ METRIC_DEFINITIONS: tuple[MetricDefinition, ...] = (
             "Leads assigned to the signed-in user in the trailing 30 days, "
             "counted by assignment time rather than capture time."
         ),
+        icon="leads",
     ),
     MetricDefinition(
         key="teamActiveTransactions",
@@ -513,6 +566,7 @@ METRIC_DEFINITIONS: tuple[MetricDefinition, ...] = (
             "Transactions whose office falls inside the caller's effective "
             "scope and whose stage is neither settled nor cancelled."
         ),
+        icon="transactions",
     ),
     MetricDefinition(
         key="teamContractsAwaitingSignature",
@@ -531,6 +585,7 @@ METRIC_DEFINITIONS: tuple[MetricDefinition, ...] = (
             "Agent contracts in scope sitting in a pending-signature state, "
             "counted once per contract regardless of signer count."
         ),
+        icon="contracts",
     ),
     MetricDefinition(
         key="teamOverdueInventory",
@@ -549,6 +604,7 @@ METRIC_DEFINITIONS: tuple[MetricDefinition, ...] = (
             "Inventory items in scope checked out with a due date earlier than "
             "the start of the current local day."
         ),
+        icon="inventory",
     ),
     MetricDefinition(
         key="teamRoomUtilization",
@@ -571,6 +627,7 @@ METRIC_DEFINITIONS: tuple[MetricDefinition, ...] = (
             "bookable minutes reports as unmeasured rather than 0%. See "
             "utilization_ratio."
         ),
+        icon="utilization",
     ),
     MetricDefinition(
         key="teamNewAgents",
@@ -589,6 +646,7 @@ METRIC_DEFINITIONS: tuple[MetricDefinition, ...] = (
             f"Active users whose office is inside the caller's effective scope "
             f"and who joined in the trailing {NEW_AGENT_WINDOW_DAYS} days."
         ),
+        icon="new-agents",
     ),
     MetricDefinition(
         key="teamOpenTasks",
@@ -603,6 +661,7 @@ METRIC_DEFINITIONS: tuple[MetricDefinition, ...] = (
             "Tasks in scope that are neither complete nor cancelled, counted "
             "once per task even when several people are assigned to it."
         ),
+        icon="tasks",
     ),
     MetricDefinition(
         key="teamComplianceExceptions",
@@ -621,6 +680,7 @@ METRIC_DEFINITIONS: tuple[MetricDefinition, ...] = (
             "Open compliance exceptions raised against records in scope, "
             "excluding those already waived or resolved."
         ),
+        icon="compliance",
     ),
 )
 
@@ -660,6 +720,8 @@ def _validate_registry() -> None:
             )
         if not definition.definition:
             raise ValueError(f"{definition.key}: a calculation definition is required")
+        if not definition.icon:
+            raise ValueError(f"{definition.key}: an icon key is required")
         assert_drill_down_is_guarded(definition)
 
 
@@ -777,6 +839,7 @@ def _metric_payload(definition: MetricDefinition, context: MetricContext) -> dic
         "definition": definition.definition,
         "asOf": context.now.isoformat(),
         "drillDown": _drill_down_payload(definition),
+        "icon": definition.icon,
     }
     if not SOURCE_MODULE_AVAILABILITY[definition.source_module]:
         return {
@@ -801,6 +864,10 @@ def _metric_payload(definition: MetricDefinition, context: MetricContext) -> dic
         measured["rawValue"] = calculated.raw_value
     if calculated.unit:
         measured["unit"] = calculated.unit
+    if calculated.delta is not None:
+        measured["delta"] = calculated.delta
+    if calculated.compared_to is not None:
+        measured["comparedTo"] = calculated.compared_to
     return measured
 
 

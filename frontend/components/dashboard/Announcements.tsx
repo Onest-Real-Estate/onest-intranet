@@ -2,14 +2,7 @@ import { Link } from "@inertiajs/react";
 import { ChevronLeft, ChevronRight, Newspaper } from "lucide-react";
 import { useState } from "react";
 
-import {
-  PanelHeader,
-  SurfaceCard,
-  SurfaceCardContent,
-  SurfaceCardMeta,
-} from "@/components/design-system/surface-card";
-import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
+import { SurfaceCard } from "@/components/design-system/surface-card";
 import { cn } from "@/lib/utils";
 import type { DashboardAnnouncement, DashboardAnnouncements } from "@/types";
 
@@ -33,9 +26,11 @@ function Slide({
       aria-roledescription="slide"
       aria-label={`${position} of ${total}: ${announcement.title}`}
       aria-hidden={current ? undefined : true}
-      className="w-full shrink-0 px-5"
+      className="w-full shrink-0"
     >
-      <div className="bg-muted relative h-56 overflow-hidden rounded-xl border">
+      {/* Every frame carries the same responsive box, so the band holds its
+          height whichever story — with artwork or without — is on it. */}
+      <div className="bg-muted relative aspect-[4/3] w-full overflow-hidden sm:aspect-[16/8]">
         {announcement.imageUrl ? (
           <img
             src={announcement.imageUrl}
@@ -46,7 +41,7 @@ function Slide({
           />
         ) : (
           <span className="brand-well text-primary grid size-full place-items-center">
-            <Newspaper className="size-8" aria-hidden />
+            <Newspaper className="size-10" aria-hidden />
           </span>
         )}
         {/*
@@ -55,11 +50,11 @@ function Slide({
           ordinary foreground tokens — white text over an arbitrary photograph
           is a contrast bet we would lose eventually.
         */}
-        <div className="from-background via-background/85 absolute inset-x-0 bottom-0 grid gap-1 bg-linear-to-t to-transparent px-4 pt-10 pb-4">
-          <p className="text-muted-foreground text-xs font-semibold tracking-[0.08em] uppercase">
+        <div className="from-background via-background/90 absolute inset-x-0 bottom-0 grid gap-1.5 bg-linear-to-t px-5 pt-20 pb-5 to-transparent sm:px-6 sm:pb-6">
+          <p className="text-primary text-xs font-bold tracking-[0.08em] uppercase">
             {announcement.tag}
           </p>
-          <h3 className="line-clamp-2 text-lg leading-snug font-semibold text-balance">
+          <h3 className="line-clamp-2 text-xl leading-snug font-bold tracking-[-0.02em] text-balance sm:text-2xl">
             {/* Only the current slide is reachable: the off-frame ones are
                 hidden from assistive technology and must not take focus. */}
             <Link
@@ -71,7 +66,7 @@ function Slide({
             </Link>
           </h3>
           {announcement.excerpt ? (
-            <p className="text-muted-foreground line-clamp-1 text-sm leading-5">
+            <p className="text-muted-foreground line-clamp-2 max-w-2xl text-sm leading-6">
               {announcement.excerpt}
             </p>
           ) : null}
@@ -82,11 +77,12 @@ function Slide({
 }
 
 /**
- * The brokerage's news: one story at a time, at the top of every dashboard.
+ * The brokerage's news: one story at a time, filling its whole card.
  *
- * Each story is one hero — the picture fills the frame and the headline sits
- * over it on a scrim — so the band spends its height on the photograph rather
- * than on a thumbnail and an equal measure of empty column beside it.
+ * Each story is one full-bleed hero — the photograph runs edge to edge, the
+ * headline sits over it on a scrim built from the page's own background
+ * tokens, and the controls float on the picture instead of in a header bar —
+ * so the band spends every pixel of its height on the story itself.
  *
  * The track is moved with a transform rather than by scrolling a snap
  * container. A programmatic scroll inside `scroll-snap-type: mandatory` is not
@@ -109,53 +105,21 @@ export function Announcements({ data }: { data: DashboardAnnouncements }) {
   }
 
   return (
-    <SurfaceCard className="arrive h-full">
-      <PanelHeader
-        title="News & announcements"
-        meta={
-          single ? undefined : (
-            <SurfaceCardMeta>
-              {current + 1} / {items.length}
-            </SurfaceCardMeta>
-          )
-        }
-        action={
-          single ? undefined : (
-            <div className="flex gap-1">
-              <Button
-                variant="outline"
-                size="icon"
-                aria-label="Previous announcement"
-                disabled={current === 0}
-                onClick={() => show(current - 1)}
-              >
-                <ChevronLeft aria-hidden />
-              </Button>
-              <Button
-                variant="outline"
-                size="icon"
-                aria-label="Next announcement"
-                disabled={current === items.length - 1}
-                onClick={() => show(current + 1)}
-              >
-                <ChevronRight aria-hidden />
-              </Button>
-            </div>
-          )
-        }
-      />
-      <SurfaceCardContent className="grid gap-3 px-0">
-        {/*
-          A named `section` is a `region`, which the APG lists alongside `group`
-          for a carousel — and unlike an explicit `role="group"` it is the
-          element's own semantics rather than an override.
-          The frame clips; the track inside it slides.
-        */}
-        <section
-          aria-roledescription="carousel"
-          aria-label="News and announcements"
-          className="overflow-hidden"
-        >
+    <SurfaceCard className="gap-0 py-0">
+      {/*
+        A named `section` is a `region`, which the APG lists alongside `group`
+        for a carousel — and unlike an explicit `role="group"` it is the
+        element's own semantics rather than an override. The heading is real
+        for document outline but visual chrome is the story itself.
+      */}
+      <section
+        aria-roledescription="carousel"
+        aria-label="News and announcements"
+        className="group/carousel relative overflow-hidden rounded-(--radius-card)"
+      >
+        <h2 className="sr-only">News & announcements</h2>
+
+        <div className="overflow-hidden">
           <div
             className="motion-safe:duration-(--motion-slow) flex transition-transform ease-out"
             style={{ transform: `translateX(-${current * 100}%)` }}
@@ -170,45 +134,66 @@ export function Announcements({ data }: { data: DashboardAnnouncements }) {
               />
             ))}
           </div>
-        </section>
-        {single ? null : (
-          <div className="flex justify-center gap-1.5 px-5">
-            {items.map((item, index) => (
+        </div>
+
+        {!single ? (
+          <>
+            <span className="bg-background/85 absolute top-4 left-4 z-10 rounded-full border px-3 py-1 text-xs font-semibold tabular-nums backdrop-blur-sm">
+              {current + 1} / {items.length}
+            </span>
+            <div className="absolute top-4 right-4 z-10 flex gap-1.5">
               <button
-                key={item.id}
                 type="button"
-                aria-label={`Show announcement ${index + 1}`}
-                aria-current={index === current}
-                onClick={() => show(index)}
-                className="focus-visible:ring-ring group grid size-9 place-items-center rounded-md focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
+                aria-label="Previous announcement"
+                disabled={current === 0}
+                onClick={() => show(current - 1)}
+                className="bg-background/85 hover:bg-background focus-visible:ring-ring grid size-9 place-items-center rounded-full border shadow-xs backdrop-blur-sm transition-colors duration-(--motion-fast) focus-visible:ring-2 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-40"
               >
-                <span
-                  className={cn(
-                    "h-1.5 rounded-full transition-[width,background-color]",
-                    index === current
-                      ? "bg-primary w-5"
-                      : "bg-border group-hover:bg-primary/40 w-1.5",
-                  )}
-                  aria-hidden
-                />
+                <ChevronLeft className="size-4" aria-hidden />
               </button>
-            ))}
-          </div>
-        )}
-      </SurfaceCardContent>
+              <button
+                type="button"
+                aria-label="Next announcement"
+                disabled={current === items.length - 1}
+                onClick={() => show(current + 1)}
+                className="bg-background/85 hover:bg-background focus-visible:ring-ring grid size-9 place-items-center rounded-full border shadow-xs backdrop-blur-sm transition-colors duration-(--motion-fast) focus-visible:ring-2 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-40"
+              >
+                <ChevronRight className="size-4" aria-hidden />
+              </button>
+            </div>
+            <div className="absolute inset-x-0 bottom-0 z-10 hidden justify-end gap-1.5 px-6 pb-3 sm:flex">
+              {items.map((item, index) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  aria-label={`Show announcement ${index + 1}`}
+                  aria-current={index === current}
+                  onClick={() => show(index)}
+                  className="focus-visible:ring-ring group grid size-7 place-items-center rounded-full focus-visible:ring-2 focus-visible:outline-none"
+                >
+                  <span
+                    className={cn(
+                      "rounded-full transition-[width,background-color]",
+                      index === current
+                        ? "bg-primary h-1.5 w-5"
+                        : "bg-background/70 group-hover:bg-background h-1.5 w-1.5",
+                    )}
+                    aria-hidden
+                  />
+                </button>
+              ))}
+            </div>
+          </>
+        ) : null}
+      </section>
     </SurfaceCard>
   );
 }
 
 export function AnnouncementsSkeleton() {
   return (
-    <SurfaceCard state="loading" className="h-full">
-      <PanelHeader title="News & announcements" />
-      <SurfaceCardContent className="px-0">
-        <div className="px-5">
-          <Skeleton className="h-56 w-full rounded-xl" />
-        </div>
-      </SurfaceCardContent>
+    <SurfaceCard state="loading" className="gap-0 py-0">
+      <div className="bg-muted animate-pulse aspect-[4/3] w-full sm:aspect-[16/8]" />
     </SurfaceCard>
   );
 }

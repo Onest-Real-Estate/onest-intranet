@@ -1,10 +1,11 @@
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import AnnouncementDetail from "@/pages/AnnouncementDetail";
 import type {
   AnnouncementDetailPageProps,
   AnnouncementDetail as AnnouncementDetailType,
+  AnnouncementMedia as AnnouncementMediaType,
 } from "@/types";
 
 vi.mock("@inertiajs/react", () => ({
@@ -54,8 +55,8 @@ function detail(
         userId: null,
       },
     ],
-    hasAttachment: false,
-    attachmentName: "",
+    hero: null,
+    attachments: [],
     ...overrides,
   };
 }
@@ -133,22 +134,117 @@ describe("classification", () => {
   });
 });
 
-describe("attachment", () => {
-  it("offers no download when there is no attachment", () => {
+function mediaFile(overrides: Partial<AnnouncementMediaType> = {}) {
+  return {
+    id: 31,
+    role: "attachment" as const,
+    displayName: "memo.pdf",
+    mediaType: "application/pdf",
+    byteSize: 2048,
+    width: null,
+    height: null,
+    isImage: false,
+    url: "/announcements/media/31",
+    variants: {},
+    ...overrides,
+  };
+}
+
+describe("attachments", () => {
+  it("offers no files section when there are none", () => {
     render(<AnnouncementDetail />);
-    expect(screen.queryByRole("link", { name: /Download/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /memo/ })).not.toBeInTheDocument();
   });
 
-  it("points the download at the re-authorized attachment route", () => {
+  it("points each download at the re-authorized media route", () => {
     pageProps = {
-      announcement: detail({ hasAttachment: true, attachmentName: "memo.pdf" }),
+      announcement: detail({ attachments: [mediaFile()] }),
     } as AnnouncementDetailPageProps;
     render(<AnnouncementDetail />);
 
-    const link = screen.getByRole("link", { name: /Download \(memo\.pdf\)/ });
-    expect(link).toHaveAttribute("href", "/announcements/7/attachment");
+    const link = screen.getByRole("link", { name: /memo\.pdf/ });
+    expect(link).toHaveAttribute("href", "/announcements/media/31");
     // A plain anchor, not an Inertia visit: the browser must own the download.
     expect(link).toHaveAttribute("download");
+  });
+
+  it("shows each file's size so a reader knows what they are opening", () => {
+    pageProps = {
+      announcement: detail({ attachments: [mediaFile({ byteSize: 3_500_000 })] }),
+    } as AnnouncementDetailPageProps;
+    render(<AnnouncementDetail />);
+    expect(screen.getByText("3.3 MB")).toBeInTheDocument();
+  });
+});
+
+describe("hero image", () => {
+  const hero = mediaFile({
+    id: 9,
+    role: "hero" as const,
+    mediaType: "image/png",
+    isImage: true,
+    width: 1600,
+    height: 900,
+    url: "/announcements/media/9",
+    variants: {
+      thumb: "/announcements/media/9/thumb",
+      card: "/announcements/media/9/card",
+      hero: "/announcements/media/9/hero",
+    },
+  });
+
+  it("renders responsive sources from the generated variants", () => {
+    pageProps = {
+      announcement: detail({ hero }),
+    } as AnnouncementDetailPageProps;
+    const { container } = render(<AnnouncementDetail />);
+
+    const image = container.querySelector("img");
+    expect(image).toHaveAttribute("src", "/announcements/media/9/hero");
+    expect(image?.getAttribute("srcset")).toContain("320w");
+    expect(image?.getAttribute("srcset")).toContain("1600w");
+  });
+
+  it("is decorative, because the headline already carries the meaning", () => {
+    pageProps = {
+      announcement: detail({ hero }),
+    } as AnnouncementDetailPageProps;
+    const { container } = render(<AnnouncementDetail />);
+    expect(container.querySelector("img")).toHaveAttribute("alt", "");
+  });
+
+  it("falls back to the original when no variants were generated", () => {
+    pageProps = {
+      announcement: detail({ hero: { ...hero, variants: {} } }),
+    } as AnnouncementDetailPageProps;
+    const { container } = render(<AnnouncementDetail />);
+
+    const image = container.querySelector("img");
+    expect(image).toHaveAttribute("src", "/announcements/media/9");
+    expect(image?.getAttribute("srcset")).toBeNull();
+  });
+
+  it("degrades to the text layout when there is no hero at all", () => {
+    const { container } = render(<AnnouncementDetail />);
+    expect(container.querySelector("img")).toBeNull();
+    expect(screen.getByRole("heading", { level: 1 })).toBeInTheDocument();
+  });
+
+  it("removes a hero that fails to load rather than leaving a broken image", () => {
+    pageProps = {
+      announcement: detail({ hero }),
+    } as AnnouncementDetailPageProps;
+    const { container } = render(<AnnouncementDetail />);
+
+    const image = container.querySelector("img");
+    expect(image).not.toBeNull();
+    fireEvent.error(image as HTMLImageElement);
+
+    expect(container.querySelector("img")).toBeNull();
+    // The article is still complete without it.
+    expect(
+      screen.getByText("The Fairfax office is closed Monday."),
+    ).toBeInTheDocument();
   });
 });
 

@@ -110,6 +110,57 @@ def _validation_error_payload(exc: ValidationError) -> dict:
     return {"fields": {}, "form": list(exc.messages)}
 
 
+# Draft keys posted from the create sheet, mapped to the camelCase defaults
+# the frontend form component repopulates after a 422.
+_SHEET_DRAFT_FIELDS = {
+    "slug": "slug",
+    "title": "title",
+    "summary": "summary",
+    "category": "category",
+    "resource_type": "resourceType",
+    "body": "body",
+    "url": "url",
+    "owner_office": "ownerId",
+    "sort_order": "sortOrder",
+    "starts_at": "startsAt",
+    "ends_at": "endsAt",
+}
+
+
+def _sheet_draft(request: HttpRequest) -> dict[str, str]:
+    draft: dict[str, str] = {}
+    for source, target in _SHEET_DRAFT_FIELDS.items():
+        value = request.POST.get(source, "")
+        if value:
+            draft[target] = value
+    if request.POST.get("is_active") in {"on", "true", "True"}:
+        draft["isActive"] = "on"
+    return draft
+
+
+def _render_index_with_sheet_errors(
+    request: HttpRequest,
+    actor: User,
+    *,
+    errors: dict,
+) -> HttpResponse:
+    """Re-render the console with the create sheet reopened and populated."""
+    filters = parse_admin_filters(request.POST)
+    payload = build_resource_list(actor, filters=filters)
+    response = render(
+        request,
+        "OfficeResourcesAdministration",
+        {
+            **payload,
+            "scope": operations_scope_payload(actor),
+            "validation": errors,
+            "createSheet": {"open": True, "draft": _sheet_draft(request)},
+        },
+    )
+    response.status_code = 422
+    return response
+
+
 @enforce_policy("admin_office_resources")
 @require_GET
 @inertia("OfficeResourcesAdministration")
@@ -121,6 +172,7 @@ def office_resources_admin_index(request: HttpRequest):
         **payload,
         "scope": operations_scope_payload(actor),
         "validation": empty_validation_errors(),
+        "createSheet": None,
     }
 
 
@@ -136,9 +188,14 @@ def office_resource_new(request: HttpRequest):
 @require_POST
 def office_resource_create(request: HttpRequest):
     actor = cast(User, request.user)
+    sheet_mode = request.POST.get("context") == "sheet"
     scope_offices = Office.objects.filter(pk__in=resource_scope(actor).office_ids)
     form = OfficeResourceForm(request.POST, owner_queryset=scope_offices)
     if not form.is_valid():
+        if sheet_mode:
+            return _render_index_with_sheet_errors(
+                request, actor, errors=form_errors(form)
+            )
         return _render_detail(
             request, actor, None, errors=form_errors(form), status=422
         )
@@ -150,24 +207,24 @@ def office_resource_create(request: HttpRequest):
         else None
     )
     if uploaded is None and form.cleaned_data["resource_type"] == "file":
-        return _render_detail(
-            request,
-            actor,
-            None,
-            errors={
-                "fields": {"file": ["Upload a file for file resources."]},
-                "form": [],
-            },
-            status=422,
-        )
+        errors = {
+            "fields": {"file": ["Upload a file for file resources."]},
+            "form": [],
+        }
+        if sheet_mode:
+            return _render_index_with_sheet_errors(request, actor, errors=errors)
+        return _render_detail(request, actor, None, errors=errors, status=422)
     try:
         resource = create_resource(actor, cleaned=cleaned, uploaded_file=uploaded)
     except ValidationError as exc:
+        errors = _validation_error_payload(exc)
+        if sheet_mode:
+            return _render_index_with_sheet_errors(request, actor, errors=errors)
         return _render_detail(
             request,
             actor,
             None,
-            errors=_validation_error_payload(exc),
+            errors=errors,
             status=422,
         )
     except PermissionDenied:

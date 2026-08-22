@@ -393,17 +393,82 @@ ROUTE_POLICIES: dict[str, AuthorizationPolicy] = {
         route_names=("announcement_detail",),
         scope_rule="announcement_audience_scope",
     ),
-    "announcement_attachment": AuthorizationPolicy(
-        key="announcement_attachment",
+    "announcement_media": AuthorizationPolicy(
+        key="announcement_media",
         access="authenticated",
         description=(
-            "Stream one announcement attachment from protected storage. "
-            "Audience is re-evaluated on every request; there is no durable "
-            "public URL."
+            "Stream one announcement file from protected storage. Audience is "
+            "re-evaluated on every request and the file must have passed "
+            "processing; no presigned or otherwise durable URL is issued."
         ),
         methods=("GET",),
-        route_names=("announcement_attachment",),
+        route_names=("announcement_media",),
         scope_rule="announcement_audience_scope",
+    ),
+    "announcement_media_variant": AuthorizationPolicy(
+        key="announcement_media_variant",
+        access="authenticated",
+        description=(
+            "Stream one generated derivative behind exactly the same audience "
+            "check as its original."
+        ),
+        methods=("GET",),
+        route_names=("announcement_media_variant",),
+        scope_rule="announcement_audience_scope",
+    ),
+    "announcement_media_manager": AuthorizationPolicy(
+        key="announcement_media_manager",
+        access="permission_protected",
+        description=(
+            "Manage one announcement's hero image and attachments. Scoped to "
+            "the actor's publishing offices; shows quarantine state, which "
+            "recipients never see."
+        ),
+        methods=("GET",),
+        route_names=("announcement_media_manager",),
+        all_permissions=("web.manage_announcements",),
+        scope_rule="office_tree_scope",
+    ),
+    "announcement_media_upload": AuthorizationPolicy(
+        key="announcement_media_upload",
+        access="permission_protected",
+        description="Upload a hero image or attachment to a scoped announcement.",
+        methods=("POST",),
+        route_names=("announcement_media_upload",),
+        all_permissions=("web.manage_announcements",),
+        scope_rule="office_tree_scope",
+        auth_behavior="json",
+    ),
+    "announcement_media_replace": AuthorizationPolicy(
+        key="announcement_media_replace",
+        access="permission_protected",
+        description="Replace one stored announcement file in place.",
+        methods=("POST",),
+        route_names=("announcement_media_replace",),
+        all_permissions=("web.manage_announcements",),
+        scope_rule="office_tree_scope",
+        auth_behavior="json",
+    ),
+    "announcement_media_remove": AuthorizationPolicy(
+        key="announcement_media_remove",
+        access="permission_protected",
+        description=(
+            "Remove one announcement file. Deleted while the announcement is a "
+            "draft; retained but deactivated once it has been published."
+        ),
+        methods=("POST",),
+        route_names=("announcement_media_remove",),
+        all_permissions=("web.manage_announcements",),
+        scope_rule="office_tree_scope",
+    ),
+    "announcement_media_reorder": AuthorizationPolicy(
+        key="announcement_media_reorder",
+        access="permission_protected",
+        description="Set the display order of one announcement's attachments.",
+        methods=("POST",),
+        route_names=("announcement_media_reorder",),
+        all_permissions=("web.manage_announcements",),
+        scope_rule="office_tree_scope",
     ),
     "announcement_recipient_search": AuthorizationPolicy(
         key="announcement_recipient_search",

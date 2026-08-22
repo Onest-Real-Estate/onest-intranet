@@ -254,14 +254,16 @@ export default function DesignSystem() {
             <MetricCard
               label="Active volume"
               value="$24.5M"
-              hint="14% vs last month"
+              subline="vs. $21.4M last month"
+              delta="+14%"
               trend="up"
               tone="success"
             />
             <MetricCard
               label="Commission"
               value="$490K"
-              hint="5% vs last month"
+              subline="vs. $467K last month"
+              delta="+5%"
               trend="up"
               tone="success"
             />
@@ -270,7 +272,7 @@ export default function DesignSystem() {
             <MetricCard
               label="Pending tasks"
               value="12"
-              hint="3 overdue"
+              subline="3 overdue"
               tone="warning"
             />
             <MetricCard label="Server metric" value="—" loading />

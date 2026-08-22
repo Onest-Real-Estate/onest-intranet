@@ -29,7 +29,7 @@ export function SurfaceCard({
       data-state={state}
       aria-busy={state === "loading" || undefined}
       className={cn(
-        "@container shadow-card gap-5 overflow-hidden py-5",
+        "@container shadow-card gap-6 overflow-hidden py-6",
         interactive &&
           "hover:border-primary/30 hover:shadow-card-hover focus-within:border-ring transition-[transform,box-shadow,border-color] duration-(--motion-fast) hover:-translate-y-px",
         state === "error" && "border-destructive/40",
@@ -48,7 +48,7 @@ export function SurfaceCardHeader({
   className,
   ...props
 }: React.ComponentProps<typeof CardHeader>) {
-  return <CardHeader className={cn("gap-2 px-5", className)} {...props} />;
+  return <CardHeader className={cn("gap-2 px-6", className)} {...props} />;
 }
 
 export function SurfaceCardTitle(props: React.ComponentProps<typeof CardTitle>) {
@@ -65,14 +65,14 @@ export function SurfaceCardContent({
   className,
   ...props
 }: React.ComponentProps<typeof CardContent>) {
-  return <CardContent className={cn("px-5", className)} {...props} />;
+  return <CardContent className={cn("px-6", className)} {...props} />;
 }
 
 export function SurfaceCardFooter({
   className,
   ...props
 }: React.ComponentProps<typeof CardFooter>) {
-  return <CardFooter className={cn("gap-2 px-5", className)} {...props} />;
+  return <CardFooter className={cn("gap-2 px-6", className)} {...props} />;
 }
 
 /**
@@ -125,14 +125,14 @@ export function PanelHeader({
     <SurfaceCardHeader
       className={cn(
         "flex flex-col items-stretch justify-between gap-3 @md:flex-row @md:items-start",
-        divided && "border-border/60 border-b pb-5",
+        divided && "border-border/60 border-b pb-6",
         className,
       )}
       {...props}
     >
       <div className="min-w-0">
         <CardTitle asChild>
-          <Heading className="text-base leading-6 font-semibold tracking-[-0.01em]">
+          <Heading className="text-lg leading-7 font-bold tracking-[-0.02em]">
             {title}
           </Heading>
         </CardTitle>

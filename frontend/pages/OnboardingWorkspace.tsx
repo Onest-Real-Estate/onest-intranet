@@ -1,10 +1,11 @@
-import { Head, Link, usePage } from "@inertiajs/react";
+import { Head, Link, router, usePage } from "@inertiajs/react";
 import {
   Check,
   CircleAlert,
   Clock3,
   ExternalLink,
   LockKeyhole,
+  Plus,
   ShieldCheck,
   UserRoundCheck,
 } from "lucide-react";
@@ -16,6 +17,8 @@ import {
   FormErrorSummary,
   FormField,
   FormLabel,
+  FormSheet,
+  FormSheetBody,
   PageHeader,
   PanelHeader,
   ReadOnlyValue,
@@ -116,6 +119,9 @@ export default function OnboardingWorkspace() {
     privacy,
   } = usePage<OnboardingWorkspacePageProps>().props;
   const [owner, setOwner] = useState(onboarding.owner?.id.toString() ?? "");
+  const [taskOpen, setTaskOpen] = useState(false);
+  const [taskSubmitting, setTaskSubmitting] = useState(false);
+  const taskFormRef = useRef<HTMLFormElement>(null);
   const summaryRef = useRef<HTMLDivElement>(null);
   const hasErrors = hasValidationErrors(validation);
   const canManage =
@@ -126,8 +132,32 @@ export default function OnboardingWorkspace() {
     : 0;
 
   useEffect(() => {
-    if (hasErrors) summaryRef.current?.focus();
-  }, [hasErrors]);
+    // While the task sheet is open its own summary has focus; yanking the
+    // page behind the overlay would be disorienting.
+    if (hasErrors && !taskOpen) summaryRef.current?.focus();
+  }, [hasErrors, taskOpen]);
+
+  /**
+   * The create-task form posts through Inertia so a failed submit keeps the
+   * sheet open with everything typed: the 422 re-renders this same page and
+   * only the `validation` prop changes. Success closes the sheet and clears
+   * the draft for next time.
+   */
+  function onCreateTaskSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setTaskSubmitting(true);
+    router.post(
+      routes.new_agent_onboarding_tasks(onboarding.user.id),
+      new FormData(event.currentTarget),
+      {
+        onSuccess: () => {
+          setTaskOpen(false);
+          taskFormRef.current?.reset();
+        },
+        onFinish: () => setTaskSubmitting(false),
+      },
+    );
+  }
 
   return (
     <PermissionRequired permission={{ all: ["web.view_new_agents"] }}>
@@ -329,52 +359,12 @@ export default function OnboardingWorkspace() {
                 )}
 
                 {canManage ? (
-                  <form
-                    method="post"
-                    action={routes.new_agent_onboarding_tasks(onboarding.user.id)}
-                    className="border-border/60 grid gap-4 border-t pt-5"
-                  >
-                    <input type="hidden" name="csrfmiddlewaretoken" value={csrfToken} />
-                    <input type="hidden" name="action" value="create" />
-                    <input
-                      type="hidden"
-                      name="expected_version"
-                      value={onboarding.version}
-                    />
-                    <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_12rem]">
-                      <TextField
-                        name="title"
-                        label="New task"
-                        required
-                        maxLength={200}
-                        validation={validation}
-                        description="A brief operational instruction—no sensitive details."
-                      />
-                      <DateField
-                        name="due_on"
-                        label="Due date"
-                        optional
-                        validation={validation}
-                      />
-                    </div>
-                    <FormField>
-                      <div className="flex items-start gap-3">
-                        <Checkbox id="is_blocking" name="is_blocking" value="1" />
-                        <div className="grid gap-1">
-                          <FormLabel htmlFor="is_blocking">
-                            This task blocks activation
-                          </FormLabel>
-                          <FormDescription>
-                            Use only when the agent cannot safely begin work until it is
-                            resolved.
-                          </FormDescription>
-                        </div>
-                      </div>
-                    </FormField>
-                    <div>
-                      <Button type="submit">Add task</Button>
-                    </div>
-                  </form>
+                  <div className="border-border/60 flex justify-end border-t pt-5">
+                    <Button type="button" onClick={() => setTaskOpen(true)}>
+                      <Plus className="size-4" aria-hidden />
+                      Add task
+                    </Button>
+                  </div>
                 ) : null}
               </SurfaceCardContent>
             </SurfaceCard>
@@ -529,6 +519,83 @@ export default function OnboardingWorkspace() {
           </aside>
         </div>
       </div>
+
+      {canManage ? (
+        <FormSheet
+          open={taskOpen}
+          onOpenChange={setTaskOpen}
+          title="Add task"
+          description="A brief operational instruction for coordinating this onboarding."
+          footer={
+            <div className="flex items-center justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setTaskOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                form="onboarding-task-create-form"
+                disabled={taskSubmitting}
+                aria-busy={taskSubmitting || undefined}
+              >
+                {taskSubmitting ? "Adding…" : "Add task"}
+              </Button>
+            </div>
+          }
+        >
+          <form
+            ref={taskFormRef}
+            id="onboarding-task-create-form"
+            onSubmit={onCreateTaskSubmit}
+            className="flex min-h-0 flex-1 flex-col overflow-hidden"
+          >
+            <input type="hidden" name="csrfmiddlewaretoken" value={csrfToken} />
+            <input type="hidden" name="action" value="create" />
+            <input type="hidden" name="expected_version" value={onboarding.version} />
+            <FormSheetBody>
+              <div className="grid gap-5">
+                {hasValidationErrors(validation) ? (
+                  <FormErrorSummary
+                    errors={validation}
+                    labels={{ title: "Task", due_on: "Due date" }}
+                  />
+                ) : null}
+                <TextField
+                  name="title"
+                  label="Task"
+                  required
+                  maxLength={200}
+                  validation={validation}
+                  description="A brief operational instruction—no sensitive details."
+                />
+                <DateField
+                  name="due_on"
+                  label="Due date"
+                  optional
+                  validation={validation}
+                />
+                <FormField>
+                  <div className="flex items-start gap-3">
+                    <Checkbox id="is_blocking" name="is_blocking" value="1" />
+                    <div className="grid gap-1">
+                      <FormLabel htmlFor="is_blocking">
+                        This task blocks activation
+                      </FormLabel>
+                      <FormDescription>
+                        Use only when the agent cannot safely begin work until it is
+                        resolved.
+                      </FormDescription>
+                    </div>
+                  </div>
+                </FormField>
+              </div>
+            </FormSheetBody>
+          </form>
+        </FormSheet>
+      ) : null}
     </PermissionRequired>
   );
 }

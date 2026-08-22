@@ -41,9 +41,11 @@ const data: DashboardAnnouncements = {
 };
 
 function track(): HTMLElement {
-  const element = screen.getByRole("region", {
+  const region = screen.getByRole("region", {
     name: "News and announcements",
-  }).firstElementChild;
+  });
+  // The track is the moving flex row inside the clipping frame.
+  const element = region.querySelector("div > div");
   if (!(element instanceof HTMLElement)) {
     throw new Error("the carousel has no track");
   }
@@ -69,9 +71,12 @@ describe("Announcements", () => {
     expect(images).toHaveLength(2);
     // The headline over it names the story; a duplicate alt reads twice.
     expect(images[0]).toHaveAttribute("alt", "");
-    // The story with no artwork still gets a frame, so the band keeps its
-    // height as you move through them.
-    expect(container.querySelectorAll(".h-56")).toHaveLength(3);
+    // The story with no artwork still gets a frame, and every slide shares
+    // the same responsive box so the band keeps its height as you move
+    // through them.
+    const frames = Array.from(container.querySelectorAll("article > div"));
+    expect(frames).toHaveLength(3);
+    expect(new Set(frames.map((frame) => frame.className)).size).toBe(1);
   });
 
   it("moves the track exactly one story at a time", async () => {
@@ -117,6 +122,12 @@ describe("Announcements", () => {
     await userEvent.click(screen.getByRole("button", { name: "Next announcement" }));
 
     expect(screen.getByRole("article")).toHaveAccessibleName(/^2 of 3: Fall kickoff/);
+  });
+
+  it("keeps a real heading in the document outline", () => {
+    render(<Announcements data={data} />);
+    const heading = screen.getByRole("heading", { level: 2 });
+    expect(heading).toHaveTextContent("News & announcements");
   });
 
   it("offers no controls for a single story", () => {

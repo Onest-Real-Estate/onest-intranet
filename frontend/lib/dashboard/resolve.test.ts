@@ -78,24 +78,29 @@ describe("dashboard registry integrity", () => {
 
   it("keeps the top band's two widgets adjacent so the row closes", () => {
     // `announcements` and `quickAccess` share one twelve-column row. A widget
-    // between them wraps the band into three rows.
+    // between them wraps the band into three rows. They sit behind the
+    // metrics row, which leads every profile as its own full-width band.
     for (const profile of DASHBOARD_PROFILES) {
-      expect(profile.widgets.slice(0, 2), `${profile.id} splits the top band`).toEqual([
+      expect(profile.widgets.slice(1, 3), `${profile.id} splits the top band`).toEqual([
         "announcements",
         "quickAccess",
       ]);
     }
   });
 
-  it("leads every profile with brokerage news", () => {
-    // The one panel everybody is meant to have read cannot sit two columns
-    // down in a rail.
+  it("leads every profile with the metrics row", () => {
+    // The four-figure stat band is the first thing after the greeting, in
+    // every role — before news, launchers, and every workflow panel.
     for (const profile of DASHBOARD_PROFILES) {
-      expect(profile.widgets[0], `${profile.id} does not lead with news`).toBe(
-        "announcements",
+      expect(profile.widgets[0], `${profile.id} does not lead with figures`).toBe(
+        "performance",
       );
     }
+  });
+
+  it("still registers brokerage news at the top of the wide band", () => {
     expect(getDashboardWidget("announcements")?.column).toBe("wide");
+    expect(getDashboardWidget("performance")?.column).toBe("wide");
   });
 
   it("gives every profile something to show", () => {

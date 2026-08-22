@@ -13,17 +13,22 @@
   color-scheme: light;
 
   --brand-gold: #ddb52a;
+  --brand-gold-deep: #c39a15;
   --brand-gold-soft: #fbf5df;
+  /* Ink that stays readable on a gold surface in either theme. */
+  --brand-on-gold: #231a00;
   --brand-ink: #0d0d0d;
 
-  --radius: 0.75rem;
-  --radius-card: 0.875rem;
+  --radius: 0.875rem;
+  --radius-card: 1.25rem;
   --motion-fast: 150ms;
   --motion-base: 200ms;
   --motion-slow: 280ms;
   --ease-standard: cubic-bezier(0.16, 1, 0.3, 1);
-  --elevation-card: 0 4px 12px oklch(0.2 0.01 72 / 4%);
-  --elevation-card-hover: 0 10px 28px oklch(0.2 0.01 72 / 8%);
+  --elevation-card:
+    0 1px 2px oklch(0.2 0.01 72 / 4%), 0 8px 24px oklch(0.2 0.01 72 / 5%);
+  --elevation-card-hover:
+    0 2px 6px oklch(0.2 0.01 72 / 4%), 0 16px 40px oklch(0.2 0.01 72 / 9%);
   --elevation-popover: 0 18px 48px oklch(0.16 0.01 72 / 14%);
   --background: oklch(0.985 0.006 80);
   --foreground: oklch(0.22 0.018 72);
@@ -73,7 +78,9 @@
   color-scheme: dark;
 
   --brand-gold: #d0a04a;
+  --brand-gold-deep: #b98733;
   --brand-gold-soft: #493719;
+  --brand-on-gold: #231a00;
   --brand-ink: #fff8eb;
 
   --background: oklch(0.17 0.012 72);
@@ -171,6 +178,11 @@
   --shadow-card: var(--elevation-card);
   --shadow-card-hover: var(--elevation-card-hover);
   --shadow-popover: var(--elevation-popover);
+  --color-brand-gold: var(--brand-gold);
+  --color-brand-gold-deep: var(--brand-gold-deep);
+  --color-brand-gold-soft: var(--brand-gold-soft);
+  --color-brand-on-gold: var(--brand-on-gold);
+  --color-brand-ink: var(--brand-ink);
 }
 
 @layer base {
@@ -270,6 +282,72 @@
   }
 }
 
+/*
+ * Sheets slide in from a viewport edge over the page, the way dialogs rise:
+ * one motion language across every surface that covers the page. The panel
+ * travels on the standard easing so it settles instead of stopping; the exit
+ * is shorter and ease-in so closing feels decisive rather than reluctant.
+ */
+@keyframes sheet-overlay-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes sheet-overlay-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes sheet-in-right {
+  from {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes sheet-out-right {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes sheet-in-left {
+  from {
+    transform: translateX(-100%);
+  }
+}
+
+@keyframes sheet-out-left {
+  to {
+    transform: translateX(-100%);
+  }
+}
+
+@keyframes sheet-in-top {
+  from {
+    transform: translateY(-100%);
+  }
+}
+
+@keyframes sheet-out-top {
+  to {
+    transform: translateY(-100%);
+  }
+}
+
+@keyframes sheet-in-bottom {
+  from {
+    transform: translateY(100%);
+  }
+}
+
+@keyframes sheet-out-bottom {
+  to {
+    transform: translateY(100%);
+  }
+}
+
 @layer utilities {
   .arrive {
     animation: arrive var(--motion-base) var(--ease-standard);
@@ -287,6 +365,46 @@
     animation: dialog-content-in var(--motion-base) var(--ease-standard);
   }
 
+  .animate-sheet-overlay-in {
+    animation: sheet-overlay-in var(--motion-base) var(--ease-standard);
+  }
+
+  .animate-sheet-overlay-out {
+    animation: sheet-overlay-out var(--motion-fast) ease-in;
+  }
+
+  .animate-sheet-in-right {
+    animation: sheet-in-right var(--motion-slow) var(--ease-standard);
+  }
+
+  .animate-sheet-out-right {
+    animation: sheet-out-right var(--motion-base) ease-in;
+  }
+
+  .animate-sheet-in-left {
+    animation: sheet-in-left var(--motion-slow) var(--ease-standard);
+  }
+
+  .animate-sheet-out-left {
+    animation: sheet-out-left var(--motion-base) ease-in;
+  }
+
+  .animate-sheet-in-top {
+    animation: sheet-in-top var(--motion-slow) var(--ease-standard);
+  }
+
+  .animate-sheet-out-top {
+    animation: sheet-out-top var(--motion-base) ease-in;
+  }
+
+  .animate-sheet-in-bottom {
+    animation: sheet-in-bottom var(--motion-slow) var(--ease-standard);
+  }
+
+  .animate-sheet-out-bottom {
+    animation: sheet-out-bottom var(--motion-base) ease-in;
+  }
+
   .brand-text {
     color: var(--brand-gold);
   }
@@ -299,11 +417,11 @@
   /* The signature gold action — sign-in and other brand moments. */
   .brand-action {
     background: var(--brand-gold);
-    color: var(--brand-ink);
+    color: var(--brand-on-gold);
   }
 
   .brand-action:hover {
-    background: color-mix(in oklab, var(--brand-gold) 92%, var(--brand-ink));
+    background: var(--brand-gold-deep);
   }
 
   .page-shell {

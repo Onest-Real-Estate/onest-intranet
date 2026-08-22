@@ -632,6 +632,75 @@ def test_managed_queryset_respects_scope(seeded_offices):
     assert keys == {"pa-doc"}
 
 
+# ---------------------------------------------------------------------------
+# Create sheet (slide-over) error flow
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_sheet_create_failure_reopens_index_with_draft(client, seeded_offices):
+    actor = branch_admin()
+    client.force_login(actor)
+    response = client.post(
+        reverse("admin_office_resource_create"),
+        {
+            "context": "sheet",
+            "title": "",  # required — fails validation
+            "slug": "",
+            "summary": "Draft summary",
+            "category": "general",
+            "resource_type": "content",
+            "body": "x",
+            "url": "",
+            "owner_office": str(office("fairfax-va").pk),
+            "sort_order": "",
+            "starts_at": "",
+            "ends_at": "",
+            "is_active": "on",
+        },
+        HTTP_X_INERTIA="true",
+    )
+    assert response.status_code == 422
+    payload = props(response)
+    assert payload["createSheet"]["open"] is True
+    assert payload["createSheet"]["draft"]["summary"] == "Draft summary"
+    assert payload["createSheet"]["draft"].get("isActive") == "on"
+    assert "title" in payload["validation"]["fields"]
+    # The console still only shows in-scope rows alongside the errors.
+    keys = {row["slug"] for row in payload["resources"]["items"]}
+    assert keys == set()
+
+
+@pytest.mark.django_db
+def test_sheet_create_success_redirects_to_workspace(
+    client, seeded_offices, settings, tmp_path
+):
+    settings.MEDIA_ROOT = str(tmp_path)
+    actor = branch_admin()
+    client.force_login(actor)
+    response = client.post(
+        reverse("admin_office_resource_create"),
+        {
+            "context": "sheet",
+            "title": "Sheet made",
+            "slug": "",
+            "summary": "",
+            "category": "general",
+            "resource_type": "content",
+            "body": "hello",
+            "url": "",
+            "owner_office": str(office("fairfax-va").pk),
+            "sort_order": "5",
+            "starts_at": "",
+            "ends_at": "",
+            "is_active": "on",
+        },
+    )
+    assert response.status_code == 302
+    resource = OfficeResource.objects.get(slug="sheet-made")
+    assert response.url == reverse("admin_office_resource", args=[resource.pk])
+
+
 @pytest.mark.django_db
 def test_workspace_get_pages_render_as_inertia(client, seeded_offices):
     """Both GET workspaces must return an Inertia page, not a bare dict."""

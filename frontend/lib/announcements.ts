@@ -13,6 +13,8 @@ import type {
   AnnouncementAudienceEntry,
   AnnouncementBadge,
   AnnouncementFilters,
+  AnnouncementMedia,
+  AnnouncementMediaAdmin,
 } from "@/types";
 import type { StatusPresentation } from "@/types/design-system";
 
@@ -109,4 +111,101 @@ export function audienceSummary(entries: AnnouncementAudienceEntry[]): string {
     return `Sent to ${entries[0].label}.`;
   }
   return `Sent to anyone matching any of these ${entries.length} audiences.`;
+}
+
+/**
+ * Hero rendering.
+ *
+ * The hero is decoration wrapped around a headline that already carries the
+ * meaning, so its `alt` is empty and every failure mode — no hero, no variants,
+ * a broken response — has to land on the same text-first layout rather than a
+ * broken-image icon. `heroSources` returns null whenever there is nothing safe
+ * to render, and the caller treats that identically to an image that failed to
+ * load at runtime.
+ */
+export interface HeroSources {
+  src: string;
+  srcSet?: string;
+  width: number | null;
+  height: number | null;
+}
+
+/** Widths the server generates, mirrored here only to build `srcset`. */
+const VARIANT_WIDTHS: Record<string, number> = {
+  thumb: 320,
+  card: 768,
+  hero: 1600,
+};
+
+export function heroSources(
+  hero: AnnouncementMedia | null | undefined,
+): HeroSources | null {
+  if (!hero?.isImage || !hero.url) {
+    return null;
+  }
+  const entries = Object.entries(hero.variants ?? {}).filter(
+    ([label]) => label in VARIANT_WIDTHS,
+  );
+  const srcSet = entries
+    .map(([label, url]) => `${url} ${VARIANT_WIDTHS[label]}w`)
+    .join(", ");
+  return {
+    // The largest variant is the best default, but the original always works,
+    // so a processing pass that produced nothing still renders.
+    src: hero.variants?.hero ?? hero.url,
+    srcSet: srcSet || undefined,
+    width: hero.width,
+    height: hero.height,
+  };
+}
+
+export function formatBytes(bytes: number): string {
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+  if (bytes < 1024 * 1024) {
+    return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  }
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+const PROCESSING_LABELS: Record<
+  AnnouncementMediaAdmin["processingState"],
+  StatusPresentation
+> = {
+  pending: { label: "Processing", tone: "info" },
+  ready: { label: "Ready", tone: "success" },
+  quarantined: { label: "Quarantined", tone: "destructive" },
+  failed: { label: "Check failed", tone: "destructive" },
+};
+
+/** Administrator-facing only; a recipient is never told a file was rejected. */
+export function processingPresentation(
+  state: AnnouncementMediaAdmin["processingState"],
+): StatusPresentation {
+  return PROCESSING_LABELS[state] ?? PROCESSING_LABELS.pending;
+}
+
+/** True while anything on the announcement still blocks publication. */
+export function hasBlockingMedia(items: AnnouncementMediaAdmin[]): boolean {
+  return items.some((item) => item.processingState !== "ready");
+}
+
+/**
+ * Client-side pre-check. Cheap feedback only — the server validates the bytes
+ * and is the decision that matters, so this never has to be exhaustive.
+ */
+export function fileRejectionReason(
+  file: { name: string; size: number },
+  limits: { extensions: string[]; maxBytes: number },
+): string | null {
+  const dot = file.name.lastIndexOf(".");
+  const extension = dot === -1 ? "" : file.name.slice(dot).toLowerCase();
+  if (!limits.extensions.includes(extension)) {
+    return `${extension || "That file type"} is not an allowed file type.`;
+  }
+  if (file.size > limits.maxBytes) {
+    return `Files must be ${formatBytes(limits.maxBytes)} or smaller.`;
+  }
+  return null;
 }

@@ -167,8 +167,11 @@ page:
           "rawValue": 4,
           "unit": "count",
           "hint": "Joined in the last 30 days",
-          "tone": "neutral",
+          "tone": "success",
           "trend": "up",
+          "delta": "+33%",
+          "comparedTo": "3",
+          "icon": "new-agents",
           "drillDown": { "href": "/operations/new-agents", "label": "View new agents" }
         }
       ]
@@ -184,3 +187,15 @@ destination stays in step with `urls.py` without the page holding a route name
 it would have to widen `routes` typing to call.
 `frontend/components/dashboard/MetricCards.tsx` renders whatever arrives and
 makes no entitlement decision of its own.
+
+Three fields are presentation-adjacent but server-owned:
+
+- `icon` — a stable key from the approved set in
+  `frontend/lib/metric-icons.ts`. An unknown key falls back to a neutral glyph;
+  it never reaches the card as free-form text.
+- `delta` / `comparedTo` — the signed change against the *preceding window of
+  the same length* and the figure compared against. They are omitted entirely
+  when no honest comparison exists (no prior data, or an empty baseline), so
+  the card shows no pill rather than inventing one.
+- `trend`/`tone` continue to describe the direction and its valence; when a
+  delta exists they agree with it.
