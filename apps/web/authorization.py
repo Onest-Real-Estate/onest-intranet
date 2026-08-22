@@ -368,6 +368,19 @@ ROUTE_POLICIES: dict[str, AuthorizationPolicy] = {
         route_names=("office_resources",),
         scope_rule="self_only",
     ),
+    "announcements_feed": AuthorizationPolicy(
+        key="announcements_feed",
+        access="authenticated",
+        description=(
+            "Announcement feed for the signed-in user. Audience is the "
+            "reader's own office scope chain, resolved server-side; category "
+            "and priority arrive as validated codes and can only narrow the "
+            "set, never widen it."
+        ),
+        methods=("GET",),
+        route_names=("announcements",),
+        scope_rule="announcement_audience_scope",
+    ),
     "office_resource_download": AuthorizationPolicy(
         key="office_resource_download",
         access="authenticated",

@@ -7,6 +7,7 @@ section map without pulling in providers, the ORM, or the metric registry.
 from __future__ import annotations
 
 HUB_SECTIONS: dict[str, str] = {
+    "announcements": "Announcements",
     "my-contract": "My contract",
     "agent-transactions": "Agent transactions",
     "my-reservations": "My reservations",

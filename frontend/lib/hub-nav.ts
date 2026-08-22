@@ -226,6 +226,18 @@ export const HUB_NAV_REGISTRY: HubNavItem[] = [
     activeMatch: active(routes.dashboard()),
   },
   {
+    key: "announcements",
+    label: "Announcements",
+    route: route("announcements", routes.announcements()),
+    icon: Megaphone,
+    group: "general",
+    order: 15,
+    access: "authenticated",
+    permissions: {},
+    feature: "announcements",
+    activeMatch: active(routes.announcements()),
+  },
+  {
     key: "agent-profile",
     label: "Your profile",
     route: route("profile", routes.profile()),

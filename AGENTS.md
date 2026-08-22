@@ -66,6 +66,7 @@ config/            Django project — settings.py, urls.py, celery.py
 apps/user/         User model, Microsoft SSO views, onboarding, offices, roles
 apps/web/          Inertia pages, shared props middleware, permissions, tasks
 apps/notifications/  Notification domain, producers, centre, header badge
+apps/announcements/  Announcement domain, taxonomy, presentation + policy adapters
 frontend/pages/    One .tsx per Inertia page — the name in @inertia("Name")
 frontend/components/       App components (HubLayout, PermissionRequired, …)
 frontend/components/ui/    shadcn/ui primitives — regenerate, don't hand-edit
@@ -84,6 +85,7 @@ docs/agent-administration.md  Broker-controlled profile half: scope, delegation,
 docs/roles.md      Brokerage role catalog: stable codes, scopes, permission bundles
 docs/role-assignment-administration.md  Assign User Roles: preview, concurrency, scopes
 docs/office-resources.md  Scoped office resources: inheritance, precedence, protected files
+docs/announcements.md  Announcement taxonomy: governance, ordering, filters, adapters
 DESIGN.md          Raw design tokens (Material-style palette export)
 ```
 
@@ -132,3 +134,4 @@ indent. Types: `ty` on the backend, `tsc --noEmit` on the frontend — both must
   That is supply-chain hardening, not a bug; don't disable it to unblock yourself.
 - **Secrets live in `.env`** (python-decouple). Never commit them, never print
   them into logs, output, or artifacts.
+

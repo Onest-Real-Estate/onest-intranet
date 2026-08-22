@@ -127,3 +127,28 @@ registry.register(
     required_payload_keys={"reservation_id", "property_id", "agent_id"},
     description="Emitted when a property reservation is recorded.",
 )
+
+# ---------------------------------------------------------------------------
+# announcement domain  (publisher: apps.announcements)
+# ---------------------------------------------------------------------------
+
+registry.register(
+    name="announcement.published",
+    version=1,
+    required_payload_keys={
+        "announcement_id",
+        "category_code",
+        "priority_code",
+        "owner_office_id",
+        "scope_level",
+        "notify",
+        "notification_priority",
+    },
+    description=(
+        "Emitted when an announcement moves to published. Carries the stable "
+        "taxonomy codes and the notification behaviour already resolved by "
+        "apps.announcements.policy, so a consumer never re-derives policy "
+        "from the row. category_code is null only on legacy rows that predate "
+        "the published-requires-taxonomy constraint."
+    ),
+)

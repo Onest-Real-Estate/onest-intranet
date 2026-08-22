@@ -1733,3 +1733,56 @@ export interface OfficeAdministrationDetailPageProps extends PageProps {
   } | null;
   scope: { level: string; label: string };
 }
+
+/**
+ * Announcements.
+ *
+ * Every classification arrives already resolved by the server's presentation
+ * adapter: a stable `code`, a human `label`, a semantic `tone`, and an
+ * `srLabel` sentence. The page maps tone to a design-system badge and does no
+ * classification of its own — there is no second copy of the taxonomy here to
+ * drift from `apps/announcements/taxonomy.py`.
+ */
+export interface AnnouncementBadge {
+  code: string;
+  label: string;
+  tone: StatusTone;
+  /** Full sentence for assistive technology; never color alone. */
+  srLabel: string;
+  /** False when the stored code is unrecognized and a fallback was shown. */
+  known: boolean;
+}
+
+export interface AnnouncementPriorityBadge extends AnnouncementBadge {
+  /** Lower sorts first. The server has already applied it. */
+  rank: number;
+}
+
+export interface AnnouncementRow {
+  id: number;
+  slug: string;
+  title: string;
+  summary: string;
+  body: string;
+  publishedAt: string | null;
+  expiresAt: string | null;
+  category: AnnouncementBadge;
+  priority: AnnouncementPriorityBadge;
+  scope: { level: string; label: string; officeName: string };
+}
+
+export interface AnnouncementFilters {
+  category: string;
+  priority: string;
+  /** Filter keys the server refused to apply because the value was unknown. */
+  rejected: string[];
+  [key: string]: string | string[];
+}
+
+export interface AnnouncementsPageProps extends PageProps {
+  feed: ListResponse<AnnouncementRow, AnnouncementFilters>;
+  filterOptions: {
+    categories: FilterOption[];
+    priorities: FilterOption[];
+  };
+}
