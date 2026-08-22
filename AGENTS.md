@@ -85,7 +85,7 @@ docs/agent-administration.md  Broker-controlled profile half: scope, delegation,
 docs/roles.md      Brokerage role catalog: stable codes, scopes, permission bundles
 docs/role-assignment-administration.md  Assign User Roles: preview, concurrency, scopes
 docs/office-resources.md  Scoped office resources: inheritance, precedence, protected files
-docs/announcements.md  Announcement taxonomy: governance, ordering, filters, adapters
+docs/announcements.md  Announcement taxonomy + audience: union semantics, grant boundaries
 DESIGN.md          Raw design tokens (Material-style palette export)
 ```
 

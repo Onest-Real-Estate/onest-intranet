@@ -1,3 +1,4 @@
+import { Link } from "@inertiajs/react";
 import { ChevronLeft, ChevronRight, Newspaper } from "lucide-react";
 import { useState } from "react";
 
@@ -59,7 +60,15 @@ function Slide({
             {announcement.tag}
           </p>
           <h3 className="line-clamp-2 text-lg leading-snug font-semibold text-balance">
-            {announcement.title}
+            {/* Only the current slide is reachable: the off-frame ones are
+                hidden from assistive technology and must not take focus. */}
+            <Link
+              href={announcement.href}
+              tabIndex={current ? undefined : -1}
+              className="hover:text-primary focus-visible:ring-ring rounded-sm focus-visible:ring-2 focus-visible:outline-none"
+            >
+              {announcement.title}
+            </Link>
           </h3>
           {announcement.excerpt ? (
             <p className="text-muted-foreground line-clamp-1 text-sm leading-5">
@@ -101,7 +110,6 @@ export function Announcements({ data }: { data: DashboardAnnouncements }) {
 
   return (
     <SurfaceCard className="arrive h-full">
-      {/* No news archive exists yet, so there is no "View all" to offer. */}
       <PanelHeader
         title="News & announcements"
         meta={
@@ -154,7 +162,7 @@ export function Announcements({ data }: { data: DashboardAnnouncements }) {
           >
             {items.map((item, index) => (
               <Slide
-                key={item.title}
+                key={item.id}
                 announcement={item}
                 position={index + 1}
                 total={items.length}
@@ -167,7 +175,7 @@ export function Announcements({ data }: { data: DashboardAnnouncements }) {
           <div className="flex justify-center gap-1.5 px-5">
             {items.map((item, index) => (
               <button
-                key={item.title}
+                key={item.id}
                 type="button"
                 aria-label={`Show announcement ${index + 1}`}
                 aria-current={index === current}

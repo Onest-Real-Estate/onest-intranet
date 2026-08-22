@@ -134,11 +134,39 @@ def quick_access(context: DashboardContext) -> ProviderResult:
 
 
 def announcements(context: DashboardContext) -> ProviderResult:
-    return unavailable(
-        "Company news is not published through the hub yet.",
-        action_label="Browse office info",
-        action_href=reverse("office_info"),
+    """The reader's own news band, straight from the announcement audience.
+
+    Deliberately no scoping of its own: it calls the same
+    ``apps.announcements.audience`` predicate the feed and the detail page use,
+    so the band can never surface a story the feed would have withheld. The
+    ordering is the feed's documented one — priority, then recency — so the
+    featured slot is the most important thing addressed to this reader.
+    """
+    from apps.announcements.audience import visible_announcements
+    from apps.announcements.services import order_for_feed
+
+    limit = max(1, context.feed_limit or 5)
+    rows = list(
+        order_for_feed(visible_announcements(context.user, at=context.now))[:limit]
     )
+    if not rows:
+        return empty(
+            "No announcements for you yet",
+            "News addressed to you, your office, or the brokerage appears here.",
+            action_label="Open announcements",
+            action_href=reverse("announcements"),
+        )
+    cards = [
+        {
+            "id": row.pk,
+            "tag": row.category.label if row.category else "Announcement",
+            "title": row.title,
+            "excerpt": row.summary,
+            "href": reverse("announcement_detail", args=[row.pk]),
+        }
+        for row in rows
+    ]
+    return ready({"featured": cards[0], "items": cards[1:]})
 
 
 def active_transactions(context: DashboardContext) -> ProviderResult:

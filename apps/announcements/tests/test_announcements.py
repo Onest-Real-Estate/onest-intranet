@@ -20,13 +20,13 @@ from django.utils import timezone
 
 from apps.announcements.models import (
     Announcement,
+    AnnouncementAudience,
     AnnouncementCategory,
     ProtectedCategoryError,
 )
 from apps.announcements.services import (
     AnnouncementFilters,
     apply_filters,
-    audience_office_ids,
     build_feed,
     category_filter_options,
     delete_category,
@@ -129,7 +129,28 @@ def make(
     )
     announcement.full_clean()
     announcement.save()
+    # These tests are about taxonomy, ordering, and filters — not audience — so
+    # each row gets the selector its owning node implies, exactly as the
+    # backfill migration derives it. Audience itself is covered in
+    # ``test_audience.py``.
+    AnnouncementAudience.objects.create(
+        announcement=announcement,
+        kind=_implied_kind(announcement.owner_office),
+        office=(
+            None
+            if announcement.owner_office.kind == Office.Kind.HEAD_OFFICE
+            else announcement.owner_office
+        ),
+    )
     return announcement
+
+
+def _implied_kind(owner: Office) -> str:
+    if owner.kind == Office.Kind.HEAD_OFFICE:
+        return AnnouncementAudience.Kind.COMPANY
+    if owner.kind == Office.Kind.REGION:
+        return AnnouncementAudience.Kind.REGION
+    return AnnouncementAudience.Kind.OFFICE
 
 
 def slugs(rows) -> list[str]:
@@ -240,7 +261,7 @@ def test_draft_saves_incomplete_and_reports_what_is_missing(seeded):
         status=Announcement.Status.DRAFT,
     )
     fields = {field for field, _message in validation_debt(draft)}
-    assert fields == {"category", "priority", "body"}
+    assert fields == {"category", "priority", "body", "audience"}
 
     payload = validation_debt_payload(draft)
     assert payload["isPublishable"] is False
@@ -268,7 +289,12 @@ def test_publishing_a_draft_with_debt_is_refused(seeded):
     )
     with pytest.raises(ValidationError) as excinfo:
         publish_announcement(company_admin(), draft)
-    assert set(excinfo.value.message_dict) == {"category", "priority", "body"}
+    assert set(excinfo.value.message_dict) == {
+        "category",
+        "priority",
+        "body",
+        "audience",
+    }
     draft.refresh_from_db()
     assert draft.status == Announcement.Status.DRAFT
 
@@ -296,11 +322,21 @@ def test_publish_records_an_audit_entry_and_a_domain_event(seeded):
     assert draft.status == Announcement.Status.PUBLISHED
     assert draft.published_at is not None
 
-    entry = AuditEvent.objects.filter(action="announcement.published").latest("id")
+    entry = (
+        AuditEvent.objects.filter(action="announcement.published")
+        .order_by("occurred_at")
+        .last()
+    )
+    assert entry is not None
     assert entry.before["status"] == Announcement.Status.DRAFT
     assert entry.after["priority"] == PRIORITY_URGENT
 
-    event = DomainEvent.objects.filter(name="announcement.published").latest("id")
+    event = (
+        DomainEvent.objects.filter(name="announcement.published")
+        .order_by("occurred_at")
+        .last()
+    )
+    assert event is not None
     assert event.payload["category_code"] == "urgent_operational_notice"
     assert event.payload["priority_code"] == PRIORITY_URGENT
     assert event.payload["notify"] is True
@@ -338,24 +374,12 @@ def test_publishing_without_the_manage_permission_is_denied(seeded):
 # --------------------------------------------------------------------------- #
 
 
-def test_audience_is_the_readers_own_office_chain(seeded):
-    chain = audience_office_ids(agent("fairfax-va"))
-    assert set(chain) == {
-        office(slug).pk
-        for slug in (
-            "fairfax-va",
-            "ro-virginia",
-            "region-mid-atlantic",
-            "onest-head-office",
-        )
-    }
-
-
-def test_a_user_without_an_office_sees_nothing(seeded):
+def test_a_user_without_an_office_still_gets_brokerage_wide_news(seeded):
+    """Company-wide reaches everyone; an office selector reaches nobody without one."""
     make("onest-head-office", "company-news")
+    make("fairfax-va", "branch-news")
     officeless = completed_user(email="nobody@example.com", office=None)
-    assert audience_office_ids(officeless) == []
-    assert list(visible_queryset(officeless)) == []
+    assert slugs(visible_queryset(officeless)) == ["company-news"]
 
 
 def test_a_sibling_branch_announcement_is_invisible_however_urgent(seeded):

@@ -78,9 +78,12 @@ export interface DashboardQuickApp {
 }
 
 export interface DashboardAnnouncement {
+  id: number;
   tag: string;
   title: string;
   excerpt: string;
+  /** Detail route; the destination re-checks the audience on arrival. */
+  href: string;
   imageUrl?: string;
 }
 
@@ -1758,6 +1761,21 @@ export interface AnnouncementPriorityBadge extends AnnouncementBadge {
   rank: number;
 }
 
+/**
+ * One audience selector, already resolved to a label by the server.
+ *
+ * Selectors combine as a **union**: a reader who matches any one of them sees
+ * the announcement. The client never evaluates them — this is a description of
+ * who was addressed, not the rule that decided the reader may be here.
+ */
+export interface AnnouncementAudienceEntry {
+  kind: "company" | "role" | "region" | "office" | "user";
+  label: string;
+  code: string;
+  officeId: number | null;
+  userId: number | null;
+}
+
 export interface AnnouncementRow {
   id: number;
   slug: string;
@@ -1769,6 +1787,24 @@ export interface AnnouncementRow {
   category: AnnouncementBadge;
   priority: AnnouncementPriorityBadge;
   scope: { level: string; label: string; officeName: string };
+}
+
+export interface AnnouncementDetail extends AnnouncementRow {
+  audience: AnnouncementAudienceEntry[];
+  hasAttachment: boolean;
+  attachmentName: string;
+}
+
+export interface AnnouncementDetailPageProps extends PageProps {
+  announcement: AnnouncementDetail;
+}
+
+/** One result from the scoped recipient typeahead. Never a full directory. */
+export interface AnnouncementRecipientResult {
+  id: number;
+  name: string;
+  email: string;
+  officeName: string;
 }
 
 export interface AnnouncementFilters {

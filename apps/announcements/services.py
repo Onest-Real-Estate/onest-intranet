@@ -28,6 +28,12 @@ from django.db.models import Case, IntegerField, Q, QuerySet, When
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
+from apps.announcements.audience import (
+    assert_can_target,
+    describe_audience,
+    selectors_for,
+    visible_announcements,
+)
 from apps.announcements.models import (
     Announcement,
     AnnouncementCategory,
@@ -46,7 +52,6 @@ from apps.audit.events import publish as publish_event
 from apps.audit.models import AuditEvent
 from apps.audit.service import AuditTarget, actor_from_user, log_event
 from apps.user.models import Office, User
-from apps.user.services.office_resources import scope_chain
 from apps.user.services.role_assignments import has_effective_permission
 
 MANAGE_PERMISSION = "web.manage_announcements"
@@ -65,30 +70,14 @@ _SCOPE_LABELS = {
 # --------------------------------------------------------------------------- #
 
 
-def audience_office_ids(user: User) -> list[int]:
-    """The reader's office and every ancestor up to head office.
-
-    A user with no primary office has no chain and therefore sees nothing.
-    Never derived from anything the client sent.
-    """
-    office = getattr(user, "office", None)
-    if office is None:
-        return []
-    return [node.pk for node in scope_chain(office)]
-
-
 def visible_queryset(user: User, *, now=None) -> QuerySet[Announcement]:
-    """Published, in-window announcements owned by the reader's scope chain."""
-    office_ids = audience_office_ids(user)
-    if not office_ids:
-        return Announcement.objects.none()
-    moment = now or timezone.now()
-    return (
-        Announcement.objects.filter(owner_office_id__in=office_ids)
-        .published()
-        .within_window(now=moment)
-        .select_related("category", "owner_office")
-    )
+    """Delegates to the one audience predicate. Do not reimplement it here.
+
+    Kept as a thin alias so every existing caller — feed, dashboard, tests —
+    goes through :func:`apps.announcements.audience.visible_announcements`,
+    which is also what the detail page and the attachment download use.
+    """
+    return visible_announcements(user, at=now)
 
 
 # --------------------------------------------------------------------------- #
@@ -290,6 +279,11 @@ def validation_debt(announcement: Announcement) -> list[tuple[str, Any]]:
         debt.append(("title", _("Give the announcement a title.")))
     if not announcement.body.strip():
         debt.append(("body", _("Write the announcement body.")))
+    # Only once the row exists: selectors are related rows, so an unsaved
+    # announcement has no way to carry one yet. ``publish_announcement`` is the
+    # gate that always sees a saved row, and it refuses an empty audience.
+    if announcement.pk is not None and not selectors_for(announcement).exists():
+        debt.append(("audience", _("Choose who this announcement is for.")))
     return debt
 
 
@@ -341,7 +335,23 @@ def _snapshot(announcement: Announcement) -> dict[str, Any]:
         "category": announcement.category.code if announcement.category else None,
         "priority": announcement.priority,
         "owner_office_id": announcement.owner_office.pk,
+        "audience": describe_audience(announcement),
     }
+
+
+def _stored_selectors(actor: User, announcement: Announcement):
+    """Stored audience rows as selector objects, for re-authorization."""
+    from apps.announcements.audience import AudienceSelector
+
+    return [
+        AudienceSelector(
+            kind=row.kind,
+            role=row.role,
+            office=row.office,
+            user=row.user,
+        )
+        for row in selectors_for(announcement)
+    ]
 
 
 @transaction.atomic
@@ -351,11 +361,20 @@ def publish_announcement(actor: User, announcement: Announcement, *, now=None):
     The domain event carries the taxonomy codes and the resolved notification
     behaviour so a consumer never has to re-derive policy from the row.
     """
+    # Order matters. The permission and publishing-office scope come first, so
+    # an unauthorized caller learns nothing about the draft. Then the author
+    # gets the whole checklist at once — including a missing audience — rather
+    # than one item per attempt. Only then is authority over each named
+    # selector re-checked, which by that point is guaranteed non-empty.
     assert_can_manage(actor, announcement.owner_office)
     before = _snapshot(announcement)
     debt = validation_debt(announcement)
     if debt:
         raise ValidationError(dict(debt))
+    # Authority over the publishing office is not authority over the audience.
+    # Re-checked here rather than trusted from whenever the draft was composed:
+    # the author's grant may have narrowed since.
+    assert_can_target(actor, _stored_selectors(actor, announcement))
 
     announcement.status = Announcement.Status.PUBLISHED
     announcement.published_at = announcement.published_at or (now or timezone.now())
@@ -386,6 +405,7 @@ def publish_announcement(actor: User, announcement: Announcement, *, now=None):
             "priority_code": announcement.priority,
             "owner_office_id": announcement.owner_office.pk,
             "scope_level": announcement.scope_level,
+            "audience": describe_audience(announcement),
             "notify": behavior.notify,
             "notification_priority": behavior.priority,
         },

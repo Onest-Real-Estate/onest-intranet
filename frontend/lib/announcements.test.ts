@@ -2,12 +2,18 @@ import { describe, expect, it } from "vitest";
 
 import {
   activeFilterCount,
+  audienceIcon,
+  audienceSummary,
   categoryPresentation,
   hasUnknownClassification,
   priorityPresentation,
   rejectedFilterMessage,
 } from "@/lib/announcements";
-import type { AnnouncementBadge, AnnouncementFilters } from "@/types";
+import type {
+  AnnouncementAudienceEntry,
+  AnnouncementBadge,
+  AnnouncementFilters,
+} from "@/types";
 
 function badge(overrides: Partial<AnnouncementBadge> = {}): AnnouncementBadge {
   return {
@@ -100,5 +106,45 @@ describe("hasUnknownClassification", () => {
   it("is true when any badge fell back", () => {
     expect(hasUnknownClassification([badge(), badge({ known: false })])).toBe(true);
     expect(hasUnknownClassification([badge(), badge()])).toBe(false);
+  });
+});
+
+describe("audienceSummary", () => {
+  function entry(
+    overrides: Partial<AnnouncementAudienceEntry> = {},
+  ): AnnouncementAudienceEntry {
+    return {
+      kind: "office",
+      label: "Fairfax, VA",
+      code: "",
+      officeId: 6,
+      userId: null,
+      ...overrides,
+    };
+  }
+
+  it("says a single audience plainly", () => {
+    expect(audienceSummary([entry()])).toBe("Sent to Fairfax, VA.");
+  });
+
+  it("states the union rule when several selectors are combined", () => {
+    const summary = audienceSummary([
+      entry(),
+      entry({ kind: "role", label: "Compliance", code: "compliance" }),
+    ]);
+    expect(summary).toContain("any of these 2");
+    expect(summary).not.toContain("all");
+  });
+
+  it("says so when nothing is selected yet", () => {
+    expect(audienceSummary([])).toBe("No audience selected yet.");
+  });
+});
+
+describe("audienceIcon", () => {
+  it("gives every selector kind its own icon", () => {
+    const kinds = ["company", "role", "region", "office", "user"] as const;
+    const icons = kinds.map((kind) => audienceIcon(kind));
+    expect(new Set(icons).size).toBe(kinds.length);
   });
 });

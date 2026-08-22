@@ -141,6 +141,7 @@ registry.register(
         "priority_code",
         "owner_office_id",
         "scope_level",
+        "audience",
         "notify",
         "notification_priority",
     },
@@ -148,7 +149,10 @@ registry.register(
         "Emitted when an announcement moves to published. Carries the stable "
         "taxonomy codes and the notification behaviour already resolved by "
         "apps.announcements.policy, so a consumer never re-derives policy "
-        "from the row. category_code is null only on legacy rows that predate "
-        "the published-requires-taxonomy constraint."
+        "from the row. audience is the resolved selector list — the rule, not "
+        "a materialized recipient list; consumers re-evaluate it with "
+        "apps.announcements.audience.recipients_for. category_code is null "
+        "only on legacy rows that predate the published-requires-taxonomy "
+        "constraint."
     ),
 )
