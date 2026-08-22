@@ -2,16 +2,21 @@
 
 Visibility contract (deterministic, documented in docs/office-resources.md):
 
-1. The scope chain is the user's primary office plus its ancestors up to and
-   including the head office. A user without a primary office has no chain and
-   therefore sees nothing.
-2. Only active resources inside their publish window (``starts_at`` /
-   ``ends_at``) on nodes of that chain are candidates. Filtering happens here,
-   before serialization — search can never see other offices' data.
+1. The scope chain is the primary office plus its ancestors up to and
+   including the head office. A user without a primary office has no chain
+   and therefore sees nothing.
+2. Only non-archived, active resources inside their publish window
+   (``starts_at`` / ``ends_at``) on nodes of that chain are candidates.
+   Filtering happens here, before serialization — search can never see other
+   offices' data.
 3. ``slug`` is the resource identity across scopes. When the same slug exists
    at multiple levels, the closest scope wins (office > region > company), so
    a branch can override company defaults without duplicates appearing.
 4. Ordering within a category: ``sort_order``, then title, then pk.
+
+Resolution is cached per office node keyed by a generation counter that any
+``OfficeResource`` write bumps (see signals at the bottom), so admin changes
+appear immediately without stale reads.
 """
 
 from __future__ import annotations
@@ -19,7 +24,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from django.core.cache import cache
 from django.db.models import Q
+from django.db.models.signals import post_delete, post_save
+from django.dispatch import receiver
 from django.urls import reverse
 from django.utils import timezone
 
@@ -31,6 +39,9 @@ _CATEGORY_ORDER = {
 }
 
 _SOURCE_LABELS = {"company": "Company", "region": "Region"}
+
+GENERATION_KEY = "office_resources:generation"
+_CACHE_TTL = 300
 
 
 @dataclass(frozen=True)
@@ -50,13 +61,71 @@ class ResourceFilters:
 
 
 def scope_chain(office: Office) -> list[Office]:
-    """Primary office followed by ancestors, head office last."""
+    """The office followed by ancestors, head office last."""
     chain: list[Office] = []
     current: Office | None = office
     while current is not None and current not in chain:
         chain.append(current)
         current = current.parent
     return chain
+
+
+def _generation() -> int:
+    return int(cache.get(GENERATION_KEY, 0))
+
+
+def bump_generation() -> None:
+    """Invalidate every cached effective library (any resource write)."""
+    try:
+        cache.incr(GENERATION_KEY)
+    except ValueError:
+        cache.set(GENERATION_KEY, 1, None)
+
+
+def effective_library_for_office(office_node: Office) -> list[OfficeResource]:
+    """Deduplicated, precedence-ordered library for one office node.
+
+    The single resolution path shared by the agent page, search, downloads,
+    and the admin preview — so a preview always matches what that office's
+    members actually see.
+    """
+    key = f"office_resources:library:{_generation()}:{office_node.pk}"
+    cached = cache.get(key)
+    if cached is not None:
+        return cached
+
+    chain = scope_chain(office_node)
+    chain_ids = {node.pk: index for index, node in enumerate(chain)}
+    today = timezone.localdate()
+    by_slug: dict[str, tuple[int, OfficeResource]] = {}
+    resources = (
+        OfficeResource.objects.filter(
+            owner_office__in=chain,
+            is_active=True,
+            archived_at__isnull=True,
+        )
+        .filter(Q(starts_at__isnull=True) | Q(starts_at__lte=today))
+        .filter(Q(ends_at__isnull=True) | Q(ends_at__gte=today))
+        .select_related("owner_office")
+        .order_by("category", "sort_order", "title", "pk")
+    )
+    for resource in resources:
+        specificity = chain_ids.get(resource.owner_office.pk, len(chain_ids))
+        incumbent = by_slug.get(resource.slug)
+        if incumbent is None or specificity < incumbent[0]:
+            by_slug[resource.slug] = (specificity, resource)
+
+    winners = [resource for _spec, resource in by_slug.values()]
+    winners.sort(
+        key=lambda item: (
+            _CATEGORY_ORDER.get(item.category, len(_CATEGORY_ORDER)),
+            item.sort_order,
+            item.title,
+            item.pk,
+        )
+    )
+    cache.set(key, winners, _CACHE_TTL)
+    return winners
 
 
 def effective_resources_queryset(user: User):
@@ -73,6 +142,7 @@ def effective_resources_queryset(user: User):
         OfficeResource.objects.filter(
             owner_office__in=scope_chain(primary),
             is_active=True,
+            archived_at__isnull=True,
         )
         .filter(Q(starts_at__isnull=True) | Q(starts_at__lte=today))
         .filter(Q(ends_at__isnull=True) | Q(ends_at__gte=today))
@@ -81,33 +151,12 @@ def effective_resources_queryset(user: User):
     )
 
 
-def _specificity(resource: OfficeResource, chain_ids: dict[int, int]) -> int:
-    return chain_ids.get(resource.owner_office.pk, len(chain_ids))
-
-
 def effective_resources(user: User) -> list[OfficeResource]:
     """Deduplicated, precedence-ordered resource list for one user."""
     primary = getattr(user, "office", None)
     if primary is None or not primary.is_active:
         return []
-    chain = scope_chain(primary)
-    chain_ids = {node.pk: index for index, node in enumerate(chain)}
-    by_slug: dict[str, tuple[int, OfficeResource]] = {}
-    for resource in effective_resources_queryset(user):
-        specificity = _specificity(resource, chain_ids)
-        incumbent = by_slug.get(resource.slug)
-        if incumbent is None or specificity < incumbent[0]:
-            by_slug[resource.slug] = (specificity, resource)
-    winners = [resource for _spec, resource in by_slug.values()]
-    winners.sort(
-        key=lambda item: (
-            _CATEGORY_ORDER.get(item.category, len(_CATEGORY_ORDER)),
-            item.sort_order,
-            item.title,
-            item.pk,
-        )
-    )
-    return winners
+    return effective_library_for_office(primary)
 
 
 def apply_resource_filters(
@@ -129,7 +178,7 @@ def apply_resource_filters(
     return result
 
 
-def _source_label(resource: OfficeResource) -> str:
+def source_label(resource: OfficeResource) -> str:
     level = resource.scope_level
     return _SOURCE_LABELS.get(level, resource.owner_office.name)
 
@@ -142,7 +191,7 @@ def _resource_payload(resource: OfficeResource) -> dict[str, object]:
         "category": resource.category,
         "categoryLabel": OfficeResource.Category(resource.category).label,
         "resourceType": resource.resource_type,
-        "sourceLabel": _source_label(resource),
+        "sourceLabel": source_label(resource),
         "sourceLevel": resource.scope_level,
     }
     types = OfficeResource.ResourceType
@@ -229,3 +278,13 @@ def office_resources_page_payload(
         "categories": _categories_payload(),
         "empty": empty,
     }
+
+
+@receiver(post_save, sender=OfficeResource)
+def _resource_saved(sender, instance, **kwargs) -> None:
+    bump_generation()
+
+
+@receiver(post_delete, sender=OfficeResource)
+def _resource_deleted(sender, instance, **kwargs) -> None:
+    bump_generation()

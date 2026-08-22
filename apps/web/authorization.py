@@ -273,6 +273,78 @@ ROUTE_POLICIES: dict[str, AuthorizationPolicy] = {
         all_permissions=("web.manage_offices",),
         scope_rule="office_tree_scope",
     ),
+    "admin_office_resources": AuthorizationPolicy(
+        key="admin_office_resources",
+        access="permission_protected",
+        description=(
+            "Scoped office resources console: list and filter the catalog "
+            "within the actor's office-tree grant."
+        ),
+        methods=("GET",),
+        route_names=("admin_office_resources",),
+        all_permissions=("web.view_office_resources_admin",),
+        scope_rule="office_tree_scope",
+    ),
+    "admin_office_resource_new": AuthorizationPolicy(
+        key="admin_office_resource_new",
+        access="permission_protected",
+        description="Render the create form for a scoped office resource.",
+        methods=("GET",),
+        route_names=("admin_office_resource_new",),
+        all_permissions=("web.manage_office_resources",),
+        scope_rule="office_tree_scope",
+    ),
+    "admin_office_resource_create": AuthorizationPolicy(
+        key="admin_office_resource_create",
+        access="permission_protected",
+        description="Create an office resource within the actor's boundary.",
+        methods=("POST",),
+        route_names=("admin_office_resource_create",),
+        all_permissions=("web.manage_office_resources",),
+        scope_rule="office_tree_scope",
+    ),
+    "admin_office_resource": AuthorizationPolicy(
+        key="admin_office_resource",
+        access="permission_protected",
+        description=(
+            "Render one scoped office resource workspace with optional "
+            "in-scope library preview."
+        ),
+        methods=("GET",),
+        route_names=("admin_office_resource",),
+        all_permissions=("web.view_office_resources_admin",),
+        scope_rule="office_tree_scope",
+    ),
+    "admin_office_resource_update": AuthorizationPolicy(
+        key="admin_office_resource_update",
+        access="permission_protected",
+        description=("Edit one scoped office resource with optimistic concurrency."),
+        methods=("POST",),
+        route_names=("admin_office_resource_update",),
+        all_permissions=("web.manage_office_resources",),
+        scope_rule="office_tree_scope",
+    ),
+    "admin_office_resource_file": AuthorizationPolicy(
+        key="admin_office_resource_file",
+        access="permission_protected",
+        description="Upload or replace one scoped resource file.",
+        methods=("POST",),
+        route_names=("admin_office_resource_file",),
+        all_permissions=("web.manage_office_resources",),
+        scope_rule="office_tree_scope",
+    ),
+    "admin_office_resource_transition": AuthorizationPolicy(
+        key="admin_office_resource_transition",
+        access="permission_protected",
+        description=(
+            "Lifecycle transitions (activate, deactivate, archive, reorder) "
+            "for one scoped office resource."
+        ),
+        methods=("POST",),
+        route_names=("admin_office_resource_transition",),
+        all_permissions=("web.manage_office_resources",),
+        scope_rule="office_tree_scope",
+    ),
     "office_info": AuthorizationPolicy(
         key="office_info",
         access="authenticated",

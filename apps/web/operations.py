@@ -197,6 +197,17 @@ OPERATIONS_DESTINATIONS: tuple[OperationsDestination, ...] = (
         scope_rule="sanitized_status_only",
     ),
     OperationsDestination(
+        key="admin-office-resources",
+        label="Office Resources",
+        section="Content",
+        route_name="admin_office_resources",
+        path="operations/office-resources",
+        permission="web.view_office_resources_admin",
+        order=35,
+        feature="admin-office-resources",
+        scope_rule="office_tree_scope",
+    ),
+    OperationsDestination(
         key="admin-offices",
         label="Offices",
         section="Governance & support",
@@ -234,6 +245,7 @@ OPERATIONS_FEATURES["admin-new-agents"] = True
 OPERATIONS_FEATURES["admin-quick-access"] = True
 OPERATIONS_FEATURES["admin-assign-roles"] = True
 OPERATIONS_FEATURES["admin-offices"] = True
+OPERATIONS_FEATURES["admin-office-resources"] = True
 
 _OPS_SURFACE_PERMISSIONS = frozenset(
     destination.permission for destination in OPERATIONS_DESTINATIONS

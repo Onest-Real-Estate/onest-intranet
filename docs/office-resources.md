@@ -58,10 +58,63 @@ from other branches.
 
 ## Administration
 
-Resources are authored in Django admin (`OfficeResourceAdmin`) with
-create/update/delete audit events. Agents reach the page through the
-"Office resources" nav entry (feature key `office-resources`,
-policy `office_resources`, authenticated + self-only).
+Resources are authored in the scoped operations console at
+`/operations/office-resources` (`OfficeResourcesAdministration` list page +
+`OfficeResourceWorkspace` editor), backed by
+`apps/user/services/office_resource_administration.py`. Django admin
+(`OfficeResourceAdmin`) remains available as a fallback with audit events on
+create/update/delete.
+
+### Permission model
+
+| Codename | Purpose |
+| --- | --- |
+| `web.view_office_resources_admin` | Open the console; see scoped rows. |
+| `web.manage_office_resources` | Create/edit/schedule/reorder/archive within scope. |
+| `web.publish_company_resources` | Author company-owned (head-office) resources. |
+
+Default holders mirror the office-administration bundles: brokerage admins and
+principal broker hold all three; regional managers/admins, branch managers,
+branch admins, and marketing hold read+manage.
+
+### Grant boundaries
+
+Writable owners come from the actor's effective access (same source as office
+administration): company-wide actors reach every node; region actors reach
+their region nodes and descendants; office actors reach their own seat only.
+Server-side enforcement re-validates every write:
+
+- The owning office must be inside the actor's writable boundary.
+- Editing head-office resources additionally requires
+  `web.publish_company_resources` plus company-wide authority.
+- A slug that would shadow (collide with) a resource owned by a node outside
+  the actor's boundary is rejected — crafted slug values fail closed.
+- Preview (`?preview=<officeId>`) only resolves offices inside the boundary.
+
+### Concurrency, lifecycle, files
+
+- Every edit form carries an optimistic-concurrency token
+  (`{pk}:{updated_at}`); a stale token returns HTTP 409 with a recoverable
+  message instead of overwriting a newer edit.
+- Lifecycle transitions are `activate`, `deactivate`, `archive`,
+  `unarchive`, `move_up`, `move_down`. Archive is preferred over delete:
+  rows stay for audit and are excluded from visibility while archived.
+- Uploads are validated by extension allowlist and a 10 MB cap. A failed
+  upload marks the row **quarantined** (and deactivates it); quarantined
+  files cannot be published until replaced. Replaced or abandoned upload
+  objects are deleted from protected storage; nothing is written to public
+  media URLs.
+- Every content/ownership/file/activation/schedule/order change emits audit
+  events (`office_resource.created`, `.updated`, `.archive`, `.activate`,
+  …) with before/after snapshots; denials emit
+  `security.office_resource_administration.denied`.
+
+### Cache
+
+Agent-facing resolution caches per office node keyed by a generation counter;
+any resource save/delete bumps the generation via signals, so console changes
+are visible immediately without stale reads.
+
 
 ## Search and URL state
 

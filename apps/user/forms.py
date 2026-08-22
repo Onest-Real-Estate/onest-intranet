@@ -967,3 +967,76 @@ class OfficeContactEndForm(forms.Form):
     assignment = forms.IntegerField()
     ends_at = forms.DateField(required=False, input_formats=["%Y-%m-%d"])
     expected_version = forms.CharField(required=False, widget=forms.HiddenInput)
+
+
+class OfficeResourceForm(forms.Form):
+    """Create or edit one office resource within the actor's scope."""
+
+    owner_office = forms.ModelChoiceField(
+        label=_("Owning office"), queryset=Office.objects.none()
+    )
+    slug = forms.SlugField(
+        label=_("Slug"),
+        required=False,
+        help_text=_("Identity across scopes. Leave blank to derive from title."),
+    )
+    title = forms.CharField(label=_("Title"), max_length=150)
+    summary = forms.CharField(label=_("Summary"), max_length=255, required=False)
+    category = forms.ChoiceField(choices=())
+    resource_type = forms.ChoiceField(label=_("Type"), choices=())
+    body = forms.CharField(
+        label=_("Content"),
+        required=False,
+        widget=forms.Textarea(attrs={"rows": 5}),
+    )
+    url = forms.URLField(
+        label=_("Destination URL"),
+        required=False,
+        help_text=_("Link resources only. Must start with https://"),
+    )
+    sort_order = forms.IntegerField(label=_("Sort order"), required=False, min_value=0)
+    is_active = forms.BooleanField(label=_("Active"), required=False)
+    starts_at = forms.DateField(required=False, input_formats=["%Y-%m-%d"])
+    ends_at = forms.DateField(required=False, input_formats=["%Y-%m-%d"])
+    expected_version = forms.CharField(required=False, widget=forms.HiddenInput)
+
+    def __init__(self, *args, owner_queryset=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        qs = owner_queryset if owner_queryset is not None else Office.objects.none()
+        cast(forms.ModelChoiceField, self.fields["owner_office"]).queryset = qs
+        from .models import OfficeResource
+
+        cast(forms.ChoiceField, self.fields["category"]).choices = list(
+            OfficeResource.Category.choices
+        )
+        cast(forms.ChoiceField, self.fields["resource_type"]).choices = list(
+            OfficeResource.ResourceType.choices
+        )
+
+    def clean(self):
+        cleaned = super().clean()
+        resource_type = cleaned.get("resource_type")
+        if resource_type == "link" and not (cleaned.get("url") or "").startswith(
+            "https://"
+        ):
+            self.add_error("url", _("Only HTTPS links are allowed."))
+        return cleaned
+
+
+class OfficeResourceFileForm(forms.Form):
+    file = forms.FileField(label=_("File"))
+    expected_version = forms.CharField(required=False, widget=forms.HiddenInput)
+
+
+class OfficeResourceTransitionForm(forms.Form):
+    action = forms.ChoiceField(
+        choices=[
+            ("activate", "Activate"),
+            ("deactivate", "Deactivate"),
+            ("archive", "Archive"),
+            ("unarchive", "Unarchive"),
+            ("move_up", "Move up"),
+            ("move_down", "Move down"),
+        ]
+    )
+    expected_version = forms.CharField(required=False, widget=forms.HiddenInput)

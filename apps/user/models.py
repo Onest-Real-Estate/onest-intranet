@@ -500,6 +500,10 @@ class OfficeResource(models.Model):
         LINK = "link", _("Link")
         FILE = "file", _("File")
 
+    class ProcessingState(models.TextChoices):
+        READY = "ready", _("Ready")
+        QUARANTINED = "quarantined", _("Quarantined")
+
     class Category(models.TextChoices):
         PRINTER_WIFI = "printer_wifi", _("Printer / Wi-Fi / copier")
         CONFERENCE_ROOMS = "conference_rooms", _("Conference rooms")
@@ -519,7 +523,7 @@ class OfficeResource(models.Model):
         on_delete=models.PROTECT,
     )
     slug = models.SlugField(
-        _("slug"),
+        verbose_name=_("slug"),
         max_length=80,
         help_text=_(
             "Identity within the visibility chain. A same-slug resource at a "
@@ -554,10 +558,26 @@ class OfficeResource(models.Model):
     original_file_name = models.CharField(
         _("original file name"), max_length=255, blank=True
     )
+    processing_state = models.CharField(
+        _("processing state"),
+        max_length=16,
+        choices=ProcessingState.choices,
+        default=ProcessingState.READY,
+        help_text=_(
+            "Files that failed validation are quarantined and cannot be "
+            "published until replaced."
+        ),
+    )
     is_active = models.BooleanField(_("active"), default=True)
     sort_order = models.PositiveSmallIntegerField(_("sort order"), default=0)
     starts_at = models.DateField(_("publishes on"), null=True, blank=True)
     ends_at = models.DateField(_("expires after"), null=True, blank=True)
+    archived_at = models.DateTimeField(
+        _("archived at"),
+        null=True,
+        blank=True,
+        help_text=_("Archived resources remain for audit but never display."),
+    )
     created_by = models.ForeignKey(
         "User",
         verbose_name=_("created by"),
@@ -625,6 +645,10 @@ class OfficeResource(models.Model):
             errors["body"] = _("Content resources require body text.")
         elif self.body and self.resource_type != types.CONTENT:
             errors["body"] = _("Only content resources carry body text.")
+        if self.is_active and self.processing_state == self.ProcessingState.QUARANTINED:
+            errors["processing_state"] = _(
+                "A quarantined file cannot be published. Replace the file first."
+            )
         if errors:
             raise ValidationError(errors)
 
