@@ -34,6 +34,7 @@ from apps.announcements.audience import (
     selectors_for,
     visible_announcements,
 )
+from apps.announcements.media_service import media_publish_debt
 from apps.announcements.models import (
     Announcement,
     AnnouncementCategory,
@@ -284,6 +285,9 @@ def validation_debt(announcement: Announcement) -> list[tuple[str, Any]]:
     # gate that always sees a saved row, and it refuses an empty audience.
     if announcement.pk is not None and not selectors_for(announcement).exists():
         debt.append(("audience", _("Choose who this announcement is for.")))
+    # Nothing publishes while a file is still being checked or has failed:
+    # an unscanned upload must never become readable by a recipient.
+    debt.extend(media_publish_debt(announcement))
     return debt
 
 

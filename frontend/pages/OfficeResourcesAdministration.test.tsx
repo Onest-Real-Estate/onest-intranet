@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import OfficeResourcesAdministration from "@/pages/OfficeResourcesAdministration";
@@ -91,14 +92,15 @@ const baseProps: OfficeResourcesAdministrationPageProps = {
     statuses: [{ value: "archived", label: "Archived" }],
     owners: [{ value: "fairfax-va", label: "Fairfax VA" }],
   },
+  writableOffices: [{ id: 3, label: "Fairfax VA", kind: "branch" }],
   capabilities: { canManage: true, canPublishCompany: false },
   scope: { level: "office", label: "Office scope" },
+  csrfToken: "test-csrf-token",
   validation: { fields: {}, form: [] },
   user: {
     id: 1,
     permissions: ["web.view_office_resources_admin"],
   },
-  csrfToken: "test-csrf-token",
 } as unknown as OfficeResourcesAdministrationPageProps;
 
 describe("OfficeResourcesAdministration", () => {
@@ -122,22 +124,41 @@ describe("OfficeResourcesAdministration", () => {
     expect(link).toHaveAttribute("href", "/operations/office-resources/1");
   });
 
-  it("shows the new-resource action for managers", () => {
+  it("opens the create sheet from the New resource action", async () => {
+    const user = userEvent.setup();
     render(<OfficeResourcesAdministration />);
-    expect(screen.getByRole("link", { name: /new resource/i })).toHaveAttribute(
-      "href",
-      "/operations/office-resources/new",
-    );
+    await user.click(screen.getByRole("button", { name: /new resource/i }));
+    expect(screen.getByRole("heading", { name: /new resource/i })).toBeInTheDocument();
+    expect(screen.getByLabelText(/title/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/owning office/i)).toBeInTheDocument();
+    // The form posts to the create endpoint with the sheet marker.
+    const form = document.getElementById("office-resource-create-form");
+    expect(form).toHaveAttribute("action", "/operations/office-resources/create");
+    expect(form).toHaveAttribute("enctype", "multipart/form-data");
+    const context = form?.querySelector('input[name="context"]');
+    expect(context).toHaveValue("sheet");
   });
 
-  it("hides the new-resource action without manage rights", () => {
+  it("re-opens the create sheet with a draft after a failed submit", () => {
     pageProps = {
-      ...pageProps,
-      capabilities: { canManage: false, canPublishCompany: false },
+      ...baseProps,
+      validation: { fields: { title: ["This field is required."] }, form: [] },
+      createSheet: { open: true, draft: { title: "Draft title" } },
     };
     render(<OfficeResourcesAdministration />);
     expect(
-      screen.queryByRole("link", { name: /new resource/i }),
-    ).not.toBeInTheDocument();
+      screen.getAllByRole("heading", { name: /new resource/i }).length,
+    ).toBeGreaterThan(0);
+    expect(screen.getByLabelText(/title/i)).toHaveValue("Draft title");
+  });
+
+  it("does not render the create sheet for read-only viewers", () => {
+    pageProps = {
+      ...baseProps,
+      capabilities: { canManage: false, canPublishCompany: false },
+    };
+    render(<OfficeResourcesAdministration />);
+    expect(screen.queryByRole("button", { name: /new resource/i })).toBeNull();
+    expect(screen.queryByText(/publish an instruction/i)).not.toBeInTheDocument();
   });
 });

@@ -316,6 +316,10 @@ def build_resource_list(
             total_items=len(matching),
             filters=filters.as_payload(),
         ),
+        "writableOffices": [
+            {"id": node.pk, "label": node.path_label(), "kind": node.kind}
+            for node in writable_offices
+        ],
         "filterOptions": {
             "categories": [
                 {"value": value, "label": label}

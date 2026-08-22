@@ -68,7 +68,7 @@ export default function Login() {
               <Button
                 type="submit"
                 size="lg"
-                className="brand-action h-12 w-full rounded-lg font-semibold shadow-none"
+                className="brand-action h-12 w-full rounded-full font-semibold shadow-none"
               >
                 <MicrosoftLogo className="size-5" />
                 Sign in with Microsoft

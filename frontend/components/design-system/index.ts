@@ -5,6 +5,7 @@ export * from "./empty-state";
 export * from "./file-uploader";
 export * from "./filter-controls";
 export * from "./form";
+export * from "./form-sheet";
 export * from "./hierarchy-breadcrumb";
 export * from "./hierarchy-selector";
 export * from "./metric-card";

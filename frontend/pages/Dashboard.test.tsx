@@ -143,9 +143,11 @@ describe("Dashboard shell", () => {
     );
   });
 
-  it("leads with brokerage news for every profile", () => {
+  it("leads with the metrics row, then brokerage news", () => {
     render(<Dashboard />);
-    expect(panelTitles()[0]).toBe("News & announcements");
+    const titles = panelTitles();
+    expect(titles[0]).toBe("Performance");
+    expect(titles[1]).toBe("News & announcements");
   });
 
   it("keeps role-defining work before supporting utilities in source order", () => {
@@ -166,9 +168,8 @@ describe("Dashboard shell", () => {
     deferredReady.current = false;
     render(<Dashboard />);
 
-    expect(
-      screen.getAllByRole("heading", { name: "Loading metrics" }).length,
-    ).toBeGreaterThan(0);
+    // The metrics row's skeleton is four loading stat cards.
+    expect(screen.getAllByText("Loading").length).toBeGreaterThanOrEqual(4);
     expect(screen.queryByText("schedule is not connected.")).toBeNull();
   });
 

@@ -44,6 +44,12 @@ export interface DashboardMetric {
   hint: string;
   tone: "neutral" | "success" | "warning" | "destructive";
   trend: "up" | "down" | "flat";
+  /** Signed period-over-period change, e.g. "+15%"; omitted when none exists. */
+  delta?: string;
+  /** The figure the delta compares against; renders as "vs. N last period". */
+  comparedTo?: string;
+  /** Key from the approved metric-icon set (`frontend/lib/metric-icons.ts`). */
+  icon: string;
   /** Server-reversed destination, already guarded by its own permission. */
   drillDown: { href: string; label: string } | null;
 }
@@ -1576,8 +1582,16 @@ export interface OfficeResourceListFilters {
   [key: string]: string;
 }
 
+export interface OfficeResourceCreateSheet {
+  open: boolean;
+  /** Previously submitted values (camelCase form defaults) after a 422. */
+  draft: Record<string, string>;
+}
+
 export interface OfficeResourcesAdministrationPageProps extends PageProps {
   resources: ListResponse<AdminOfficeResourceRow, OfficeResourceListFilters>;
+  writableOffices: { id: number; label: string; kind: string }[];
+  createSheet: OfficeResourceCreateSheet | null;
   filterOptions: {
     categories: FilterOption[];
     types: FilterOption[];
@@ -1789,10 +1803,53 @@ export interface AnnouncementRow {
   scope: { level: string; label: string; officeName: string };
 }
 
+/**
+ * One stored file. `url` and every entry in `variants` is a view path that
+ * re-runs the announcement's audience check on each request — not a signed or
+ * otherwise durable link, so none of them can be shared onward.
+ */
+export interface AnnouncementMedia {
+  id: number;
+  role: "hero" | "attachment";
+  displayName: string;
+  mediaType: string;
+  byteSize: number;
+  width: number | null;
+  height: number | null;
+  isImage: boolean;
+  url: string;
+  /** Generated responsive derivatives, keyed by label. May be empty. */
+  variants: Record<string, string>;
+}
+
+/** Administrator-only fields. Recipients never receive these. */
+export interface AnnouncementMediaAdmin extends AnnouncementMedia {
+  processingState: "pending" | "ready" | "quarantined" | "failed";
+  processingNote: string;
+  isActive: boolean;
+  checksum: string;
+  sortOrder: number;
+}
+
 export interface AnnouncementDetail extends AnnouncementRow {
   audience: AnnouncementAudienceEntry[];
-  hasAttachment: boolean;
-  attachmentName: string;
+  hero: AnnouncementMedia | null;
+  attachments: AnnouncementMedia[];
+}
+
+export interface AnnouncementMediaLimits {
+  hero: { extensions: string[]; maxBytes: number; minWidth: number };
+  attachment: { extensions: string[]; maxBytes: number; maxCount: number };
+}
+
+export interface AnnouncementMediaManagerPageProps extends PageProps {
+  announcement: { id: number; title: string; status: string };
+  media: {
+    hero: AnnouncementMediaAdmin | null;
+    attachments: AnnouncementMediaAdmin[];
+  };
+  limits: AnnouncementMediaLimits;
+  validation: ValidationErrors;
 }
 
 export interface AnnouncementDetailPageProps extends PageProps {

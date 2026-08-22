@@ -1,5 +1,11 @@
 const URLS = {
-    'announcement_attachment': (announcement_id: number) => `/announcements/${announcement_id}/attachment`,
+    'announcement_media_remove': (media_id: number) => `/operations/announcements/media/${media_id}/remove`,
+    'announcement_media_replace': (media_id: number) => `/operations/announcements/media/${media_id}/replace`,
+    'announcement_media_reorder': (announcement_id: number) => `/operations/announcements/${announcement_id}/media/reorder`,
+    'announcement_media_upload': (announcement_id: number) => `/operations/announcements/${announcement_id}/media/upload`,
+    'announcement_media_manager': (announcement_id: number) => `/operations/announcements/${announcement_id}/media`,
+    'announcement_media_variant': (media_id: number, variant: string) => `/announcements/media/${media_id}/${variant}`,
+    'announcement_media': (media_id: number) => `/announcements/media/${media_id}`,
     'announcement_detail': (announcement_id: number) => `/announcements/${announcement_id}`,
     'announcement_recipient_search': () => `/announcements/recipients`,
     'announcements': () => `/announcements`,

@@ -35,38 +35,43 @@ A profile stores ids and nothing else — no component name, no import path, no
 query, no expression. An id that is not in the registry, or not a `case` in
 `DashboardWidgetSlot`, renders nothing at all. That is the allowlist.
 
-### The top band
+### The top of the page
 
-Every profile opens with the same two widgets, sharing one twelve-column row:
-`announcements` (span 8) and `quickAccess` (span 4). Brokerage news is the one
-thing everybody is meant to have read, and a panel two columns down in a rail is
-a panel nobody reads.
+Every profile leads with `performance` — the four-figure metrics row is the
+first thing after the greeting, before any other widget. It is followed by the
+same adjacent pair in every profile: `announcements` (span 8) and `quickAccess`
+(span 4), sharing one twelve-column row. Brokerage news is the one thing
+everybody is meant to have read, and a panel two columns down in a rail is a
+panel nobody reads.
 
-The news band shows one story at a time as a hero — the picture fills the frame
-and the headline sits over it on a scrim built from the page's own background
-tokens, so it reads in both themes. The track is moved with a transform rather
-than by scrolling a snap container: a programmatic scroll inside
-`scroll-snap-type: mandatory` is not dependable, because Chrome re-snaps to the
-slide it is already on the moment the animation starts, and a profile with
-smooth scrolling switched off drops the scroll entirely. It never advances on
-its own.
+The news band renders one story at a time as a full-bleed hero — the picture
+fills the card and the headline sits over it on a scrim built from the page's
+own background tokens, so it reads in both themes. The track is moved with a
+transform rather than by scrolling a snap container: a programmatic scroll
+inside `scroll-snap-type: mandatory` is not dependable, because Chrome re-snaps
+to the slide it is already on the moment the animation starts, and a profile
+with smooth scrolling switched off drops the scroll entirely. It never advances
+on its own.
 
-Two consequences the tests pin down, because both are easy to break by
+Three consequences the tests pin down, because all are easy to break by
 reordering a profile:
 
-- Both widgets lead every profile's list, and in that order. A widget between
-  them wraps the band into three rows.
+- Every profile's list starts `performance`, `announcements`, `quickAccess`,
+  in that order. A widget between the news pair wraps the band into three rows.
 - Everything stacks below `xl`; `span` is only honored once there is a
   twelve-column grid to divide.
+- The metrics row shows every measured figure the reader is entitled to, with
+  no cap and nothing folded away (see below).
 
 ### Figures without a data source
 
-`MetricCards` folds unmeasured figures away behind one line. A brokerage-wide
-leader is entitled to a dozen metrics and most have no provider yet, which turns
-the top of their dashboard into a grid of dashes and pushes the real numbers
-below the fold. Nothing is dropped — the fold opens, and a group whose every
-figure is unmeasured reappears with it. Which figures a reader is *entitled* to
-remains entirely the server's decision.
+`MetricCards` renders only figures that actually have a data source. A
+brokerage-wide leader is entitled to a dozen metrics and most have no provider
+yet; a figure with no source is not a number anyone can act on, so it is left
+out entirely rather than counted, promised behind a disclosure, or shown as a
+placeholder dash. When a reader has no measured figures at all the row says so
+in a sentence. Which figures a reader is *entitled* to remains entirely the
+server's decision.
 
 ## Resolution
 

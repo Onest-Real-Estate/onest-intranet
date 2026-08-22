@@ -329,6 +329,149 @@ pretending the row was always normal.
   tone, and its `NotificationBehavior`, and update this document's tables —
   `test_taxonomy.py` fails if the priority tone or policy map is incomplete.
 
+## Media: hero image and attachments
+
+One optional hero image plus up to 10 ordered attachments per announcement,
+each a row on `AnnouncementMedia`. The row — not the file path — is the record:
+it carries the display name, detected type, byte size, SHA-256 checksum,
+uploader, dimensions, generated variants, and processing state, which is what
+makes retention answerable after the fact.
+
+### Allowed file matrix
+
+| Extension | Stored type | Max | Hero? |
+| --- | --- | --- | --- |
+| `.png` | `image/png` | 8 MB | yes |
+| `.jpg` / `.jpeg` | `image/jpeg` | 8 MB | yes |
+| `.webp` | `image/webp` | 8 MB | yes |
+| `.pdf` | `application/pdf` | 20 MB | no |
+| `.docx` | Word (OOXML) | 20 MB | no |
+| `.xlsx` | Excel (OOXML) | 20 MB | no |
+| `.txt` | `text/plain` | 2 MB | no |
+| `.csv` | `text/csv` | 5 MB | no |
+
+A hero must additionally be at least 600px wide. Images are capped at
+8000×8000 and 40 million pixels.
+
+### Three checks, all of which must agree
+
+Nothing about an upload is taken on trust — not the filename, not the
+`Content-Type` header, not the extension:
+
+1. **Extension** must be in the matrix.
+2. **Detected type**, sniffed from the leading bytes, must be one the extension
+   is allowed to carry. This is what catches a disguised upload: a `.png` whose
+   bytes are `MZ…` is refused, and the error says what was actually found.
+3. **Shape** — byte size always; dimensions and total pixel count for images.
+
+The pixel-count ceiling is applied to the **header, before any decode**.
+`Image.open` parses only the header, so a decompression bomb — a few kilobytes
+of PNG claiming a 7000×7000 canvas — is refused while it is still a few
+kilobytes. Decoding first and asking afterwards is how that attack works.
+
+Detection uses a local signature table rather than `libmagic`, so there is no
+system dependency to be present in one environment and missing in another.
+
+### Storage keys
+
+`storage_key()` returns `announcements/<uuid4-hex><ext>`. The submitted
+filename never reaches the path — only the extension survives, and only after
+the matrix accepted it. `../../etc/passwd.png`, an absolute path, and a NUL
+byte all produce an ordinary random key. The original name is kept separately
+as `display_name`, for display only.
+
+### Processing
+
+An upload lands `PENDING` and is **not readable by anyone but an
+administrator**. `process_announcement_media` then, after the transaction
+commits:
+
+1. re-reads the stored bytes and **verifies the checksum** — if storage holds
+   something other than what was validated, the row is quarantined;
+2. for images, **strips metadata** by copying the raw bitmap into a fresh image
+   (nothing but pixels crosses over, so there is no EXIF, XMP, or ICC block
+   left to enumerate) — an announcement hero has no use for GPS coordinates or
+   a camera serial, and it is about to be served to the whole brokerage;
+3. generates **responsive variants** at 320 / 768 / 1600px, skipping any width
+   that would upscale the source;
+4. lands on `READY`, `QUARANTINED`, or `FAILED`.
+
+The pass is idempotent: re-running it produces the same variants and the same
+state. Queuing happens in `transaction.on_commit`, so a rolled-back upload
+never leaves a worker chasing a row that does not exist.
+
+**Publication is gated on it.** `media_publish_debt()` blocks publish while any
+active file is not `READY`, and `processingState` / `processingNote` appear
+only in administrator payloads — telling a recipient that a file was
+quarantined tells them a file exists, which is more than they are entitled to
+know.
+
+### Access: no presigned URLs, deliberately
+
+A presigned S3 link is an *escape* from the audience predicate for the length
+of its TTL: once issued it works for whoever holds it, and a reader who leaves
+the audience the next minute keeps it until it expires.
+
+Every file — hero, attachment, and every generated variant — is therefore
+streamed through a view that re-runs `audience.visible_to()` **on each
+request**, and additionally refuses anything that is not `READY`. Responses
+carry `Cache-Control: private, no-store`.
+
+That is what the acceptance criterion is really after: guessing a storage key
+gets you nothing (the key is random and the bucket is private), and a
+previously issued URL is just the view path, which authorizes again on arrival.
+`test_the_same_url_stops_working_when_the_reader_leaves_the_audience` pins it.
+
+### Retention and orphan cleanup
+
+| Situation | What happens to the file |
+| --- | --- |
+| Removed or replaced on a **draft** | Row and bytes deleted — a draft has no readers, so its discards are storage nobody needs. |
+| Removed or replaced on a **published** announcement | Row deactivated, bytes kept. Anything a recipient could already have seen stays reconstructable. |
+| Announcement **archived** | Nothing. Media stays active and stored. |
+
+`sweep_orphan_media()` is the counterweight that stops retention becoming
+storage nobody can account for. It handles two distinct leaks:
+
+- **Rolled-back writes.** The file is written inside the transaction that
+  creates its row; if that rolls back, the row is gone and the object is not.
+  Unreferenced objects under the announcements prefix, older than a 6-hour
+  grace period, are swept. The grace period is what keeps an upload in flight
+  in another request from looking like an orphan.
+- **Abandoned drafts.** A draft untouched for 30 days is not history worth
+  retaining, so its media rows and bytes both go.
+
+Run it with `uv run python manage.py sweep_announcement_media`
+(`--dry-run` to see the thresholds), or schedule
+`sweep_announcement_media_orphans` through Celery beat — this project uses the
+database scheduler, so the periodic entry is created in the Django admin rather
+than in settings.
+
+### Management
+
+`/operations/announcements/<id>/media` — hero uploader and attachment list,
+gated by `web.manage_announcements` on the server *and* `PermissionRequired` in
+the page, scoped to the actor's publishing offices.
+
+Upload progress comes from `XMLHttpRequest` rather than `fetch`, which has no
+upload-progress event; a large hero with no feedback reads as a frozen page.
+Rejections surface the server's own sentence, since it is the only party that
+knows whether a file was the wrong type, too large, or disguised.
+
+Reordering is **buttons, not drag-and-drop**: a drag target is unreachable from
+the keyboard without building a parallel control anyway, and two buttons are
+that control. Each move persists immediately, so there is no separate save step
+to forget.
+
+### Missing hero degrades to text
+
+`heroSources()` returns `null` when there is no hero, when it is not an image,
+or when nothing renderable exists — and the page treats that identically to an
+image that fails at runtime, via `onError`. In every case the hero simply is not
+there; the headline and body stand on their own. The hero's `alt` is empty
+because the headline above it already carries the meaning, and a description
+would be read out twice.
+
 ## Local demo data
 
 ```bash

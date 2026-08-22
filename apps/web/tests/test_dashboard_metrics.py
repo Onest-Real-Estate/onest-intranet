@@ -580,7 +580,11 @@ def test_zero_new_agents_is_available_zero_not_unavailable():
     assert metric["rawValue"] == 0
     assert metric["unit"] == "count"
     assert metric["asOf"] == at.isoformat()
-    assert metric["trend"] == "flat"
+    # The prior window holds the aged-out manager, so the period-over-period
+    # comparison is a real decline — reported honestly rather than flattened.
+    assert metric["trend"] == "down"
+    assert metric["delta"] == "-100%"
+    assert metric["comparedTo"] == "1"
 
 
 @pytest.mark.django_db

@@ -1,14 +1,12 @@
 import { Link } from "@inertiajs/react";
 import { format } from "date-fns";
-import { ChevronDown } from "lucide-react";
-import { useState } from "react";
 
-import { MetricCard, MetricGroup } from "@/components/design-system/metric-card";
-import { Button } from "@/components/ui/button";
-import type { DashboardMetric, DashboardMetricGroup, DashboardMetrics } from "@/types";
+import { MetricCard } from "@/components/design-system/metric-card";
+import { metricIcon } from "@/lib/metric-icons";
+import type { DashboardMetric, DashboardMetrics } from "@/types";
 
 /**
- * The dashboard's headline figures.
+ * The dashboard's headline figures — one responsive row of stat cards.
  *
  * Which cards a reader is entitled to is decided by the registry in
  * `apps/web/metrics.py` from their effective permissions and scope. This
@@ -16,18 +14,20 @@ import type { DashboardMetric, DashboardMetricGroup, DashboardMetrics } from "@/
  * its own — every drill-down it offers is guarded by the same permission on
  * the server.
  *
- * What it does decide is *emphasis*. A brokerage-wide leader is entitled to a
- * dozen figures and most of them have no data source yet, which turns the top
- * of their dashboard into a grid of dashes. Unmeasured figures are folded away
- * behind one line, so what is left above the fold is the numbers that exist.
- * Nothing is dropped: the fold opens.
+ * Only figures that actually have a data source are rendered. A metric whose
+ * source module is not connected yet is not a number the reader can act on, so
+ * it is left out rather than counted, promised, or shown as a placeholder.
  */
 
-/** Placeholder for a figure that has no data source yet. */
+/** Placeholder for a figure that is still loading. */
 const NO_VALUE = "—";
 
 function isMeasured(metric: DashboardMetric): boolean {
   return metric.availability === "available";
+}
+
+function flatten(metrics: DashboardMetrics): DashboardMetric[] {
+  return metrics.groups.flatMap((group) => group.metrics);
 }
 
 function sectionAsOf(metrics: DashboardMetrics): string | null {
@@ -49,8 +49,20 @@ function formatAsOf(iso: string): string {
   return format(date, "PPP p");
 }
 
-function Metric({ metric }: { metric: DashboardMetric }) {
+/** "vs. 12 last period" when a comparison arrived; otherwise the hint. */
+function sublineFor(metric: DashboardMetric): string | undefined {
+  if (!isMeasured(metric)) {
+    return metric.unavailableReason;
+  }
+  if (metric.comparedTo != null && metric.comparedTo !== "") {
+    return `vs. ${metric.comparedTo} last period`;
+  }
+  return metric.hint || undefined;
+}
+
+function StatCard({ metric }: { metric: DashboardMetric }) {
   const unavailable = !isMeasured(metric);
+  const Icon = metricIcon(metric.icon);
   const card = (
     <MetricCard
       className={
@@ -60,9 +72,11 @@ function Metric({ metric }: { metric: DashboardMetric }) {
       }
       label={metric.label}
       value={unavailable ? NO_VALUE : (metric.value ?? NO_VALUE)}
-      hint={unavailable ? metric.unavailableReason : metric.hint}
+      subline={sublineFor(metric)}
+      delta={unavailable ? null : (metric.delta ?? null)}
       trend={unavailable ? "flat" : metric.trend}
       tone={unavailable ? "neutral" : metric.tone}
+      icon={<Icon />}
       // The calculation definition travels with the figure so a leader can
       // check what a number means without leaving the page.
       title={metric.definition}
@@ -81,89 +95,33 @@ function Metric({ metric }: { metric: DashboardMetric }) {
     <Link
       href={metric.drillDown.href}
       aria-label={`${metric.label} — ${metric.drillDown.label}`}
-      className="focus-visible:ring-ring focus-visible:ring-offset-background group rounded-lg focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
+      className="focus-visible:ring-ring focus-visible:ring-offset-background group rounded-xl focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
     >
       {card}
     </Link>
   );
 }
 
-function Group({
-  group,
-  metrics,
-  scopeLabel,
-}: {
-  group: DashboardMetricGroup;
-  metrics: DashboardMetric[];
-  scopeLabel: string;
-}) {
-  return (
-    <MetricGroup
-      title={group.title}
-      // Team figures are ambiguous without the scope they cover, so the group
-      // says it once rather than every card repeating it.
-      description={group.key.startsWith("team") ? scopeLabel : group.description}
-    >
-      {metrics.map((metric) => (
-        <Metric key={metric.key} metric={metric} />
-      ))}
-    </MetricGroup>
-  );
-}
-
 export function MetricCards({ metrics }: { metrics: DashboardMetrics }) {
-  const [expanded, setExpanded] = useState(false);
-
   if (metrics.groups.length === 0) {
     return null;
   }
 
-  const unmeasuredCount = metrics.groups.reduce(
-    (total, group) => total + group.metrics.filter((m) => !isMeasured(m)).length,
-    0,
-  );
-  const visible = metrics.groups
-    .map((group) => ({
-      group,
-      metrics: expanded ? group.metrics : group.metrics.filter(isMeasured),
-    }))
-    .filter((entry) => entry.metrics.length > 0);
-
+  const visible = flatten(metrics).filter(isMeasured);
   const asOf = sectionAsOf(metrics);
   const asOfLabel = asOf ? formatAsOf(asOf) : "";
-
-  const toggle =
-    unmeasuredCount === 0 ? null : (
-      <Button
-        variant="ghost"
-        size="sm"
-        className="text-muted-foreground -ms-2 h-auto min-h-9 max-w-full w-fit justify-start whitespace-normal py-2 text-left leading-5"
-        aria-expanded={expanded}
-        onClick={() => setExpanded((open) => !open)}
-      >
-        <ChevronDown
-          className={
-            expanded ? "rotate-180 transition-transform" : "transition-transform"
-          }
-          aria-hidden
-        />
-        {expanded
-          ? "Hide figures without a data source"
-          : `Show ${unmeasuredCount} ${unmeasuredCount === 1 ? "figure" : "figures"} without a data source yet`}
-      </Button>
-    );
+  // Team figures are ambiguous without the scope they cover, so the row says
+  // it once rather than every card repeating it. A self-scoped book of
+  // business needs no caption: it covers exactly one person, obviously.
+  const scopeCaption =
+    metrics.scope.level === "self" ? null : `Team figures cover ${metrics.scope.label}`;
 
   return (
     <div className="arrive @container grid gap-3">
       {visible.length > 0 ? (
-        <div className="grid grid-cols-1 gap-4 @3xl:grid-cols-2">
-          {visible.map((entry) => (
-            <Group
-              key={entry.group.key}
-              group={entry.group}
-              metrics={entry.metrics}
-              scopeLabel={metrics.scope.label}
-            />
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {visible.map((metric) => (
+            <StatCard key={metric.key} metric={metric} />
           ))}
         </div>
       ) : (
@@ -171,10 +129,12 @@ export function MetricCards({ metrics }: { metrics: DashboardMetrics }) {
           None of your figures have a data source yet.
         </p>
       )}
+      {scopeCaption ? (
+        <p className="text-muted-foreground text-xs">{scopeCaption}</p>
+      ) : null}
       {asOfLabel ? (
         <p className="text-muted-foreground text-xs">As of {asOfLabel}</p>
       ) : null}
-      {toggle}
     </div>
   );
 }
@@ -182,12 +142,9 @@ export function MetricCards({ metrics }: { metrics: DashboardMetrics }) {
 export function MetricCardsSkeleton() {
   return (
     <div className="@container grid gap-3">
-      <div className="grid grid-cols-1 gap-4 @3xl:grid-cols-2">
-        {["first", "second"].map((group) => (
-          <MetricGroup key={group} title="Loading metrics">
-            <MetricCard label="Loading" value={NO_VALUE} loading />
-            <MetricCard label="Loading" value={NO_VALUE} loading />
-          </MetricGroup>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {["first", "second", "third", "fourth"].map((slot) => (
+          <MetricCard key={slot} label="Loading" value={NO_VALUE} loading />
         ))}
       </div>
     </div>

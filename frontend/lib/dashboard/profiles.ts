@@ -42,8 +42,10 @@ export interface DashboardProfile {
   /**
    * Layout order. Duplicates are dropped during resolution.
    *
-   * Every profile opens with `announcements` and `quickAccess`: they share the
-   * twelve-column top band, so they have to be adjacent for the row to close.
+   * Every profile leads with `performance` — the four-figure metrics row is
+   * the first thing after the greeting, in every role. `announcements` and
+   * `quickAccess` follow as an adjacent pair: they share the twelve-column
+   * band, so they have to be adjacent for the row to close.
    */
   widgets: readonly DashboardWidgetId[];
 }
@@ -54,9 +56,9 @@ export interface DashboardProfile {
  * catalogued role still opens a working dashboard rather than a blank page.
  */
 const AUTHENTICATED_WIDGETS: readonly DashboardWidgetId[] = [
+  "performance",
   "announcements",
   "quickAccess",
-  "performance",
   "myDay",
   "training",
   "quickDocuments",
@@ -70,9 +72,9 @@ export const DASHBOARD_PROFILES: readonly DashboardProfile[] = [
     roleCodes: ["system_admin"],
     priority: 0,
     widgets: [
+      "performance",
       "announcements",
       "quickAccess",
-      "performance",
       "operationalActivity",
       "agentOnboarding",
       "complianceExceptions",
@@ -91,9 +93,9 @@ export const DASHBOARD_PROFILES: readonly DashboardProfile[] = [
     roleCodes: ["principal_broker", "broker_admin"],
     priority: 1,
     widgets: [
+      "performance",
       "announcements",
       "quickAccess",
-      "performance",
       "closingPipeline",
       "complianceExceptions",
       "agentOnboarding",
@@ -110,9 +112,9 @@ export const DASHBOARD_PROFILES: readonly DashboardProfile[] = [
     roleCodes: ["regional_manager", "regional_admin"],
     priority: 3,
     widgets: [
+      "performance",
       "announcements",
       "quickAccess",
-      "performance",
       "closingPipeline",
       "agentOnboarding",
       "operationalActivity",
@@ -129,9 +131,9 @@ export const DASHBOARD_PROFILES: readonly DashboardProfile[] = [
     roleCodes: ["regional_transaction_coordinator", "transaction_coordinator"],
     priority: 5,
     widgets: [
+      "performance",
       "announcements",
       "quickAccess",
-      "performance",
       "closingPipeline",
       "activeTransactions",
       "contractsAwaitingSignature",
@@ -147,9 +149,9 @@ export const DASHBOARD_PROFILES: readonly DashboardProfile[] = [
     roleCodes: ["branch_manager"],
     priority: 6,
     widgets: [
+      "performance",
       "announcements",
       "quickAccess",
-      "performance",
       "closingPipeline",
       "agentOnboarding",
       "operationalActivity",
@@ -166,6 +168,7 @@ export const DASHBOARD_PROFILES: readonly DashboardProfile[] = [
     roleCodes: ["branch_admin"],
     priority: 7,
     widgets: [
+      "performance",
       "announcements",
       "quickAccess",
       "agentOnboarding",
@@ -184,9 +187,9 @@ export const DASHBOARD_PROFILES: readonly DashboardProfile[] = [
     roleCodes: ["realtor"],
     priority: 9,
     widgets: [
+      "performance",
       "announcements",
       "quickAccess",
-      "performance",
       "activeTransactions",
       "training",
       "myDay",
@@ -202,6 +205,7 @@ export const DASHBOARD_PROFILES: readonly DashboardProfile[] = [
     roleCodes: ["marketing_team"],
     priority: 10,
     widgets: [
+      "performance",
       "announcements",
       "quickAccess",
       "feedbackSignals",
@@ -217,9 +221,9 @@ export const DASHBOARD_PROFILES: readonly DashboardProfile[] = [
     roleCodes: ["accountant"],
     priority: 11,
     widgets: [
+      "performance",
       "announcements",
       "quickAccess",
-      "performance",
       "closingPipeline",
       "operationalActivity",
       "contractsAwaitingSignature",
@@ -234,6 +238,7 @@ export const DASHBOARD_PROFILES: readonly DashboardProfile[] = [
     roleCodes: ["compliance"],
     priority: 12,
     widgets: [
+      "performance",
       "announcements",
       "quickAccess",
       "complianceExceptions",
@@ -251,6 +256,7 @@ export const DASHBOARD_PROFILES: readonly DashboardProfile[] = [
     roleCodes: ["it_support"],
     priority: 13,
     widgets: [
+      "performance",
       "announcements",
       "quickAccess",
       "supportQueue",

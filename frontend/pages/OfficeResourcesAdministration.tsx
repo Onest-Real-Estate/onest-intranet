@@ -6,6 +6,8 @@ import {
   DataTable,
   FilterControls,
   FilterField,
+  FormSheet,
+  FormSheetBody,
   PageHeader,
   Pagination,
   SearchControl,
@@ -14,6 +16,7 @@ import {
   SurfaceCardContent,
 } from "@/components/design-system";
 import { HubLayout } from "@/components/HubLayout";
+import { ResourceFormFields } from "@/components/office/ResourceFormFields";
 import { PermissionRequired } from "@/components/PermissionRequired";
 import { Button } from "@/components/ui/button";
 import {
@@ -25,6 +28,7 @@ import {
 } from "@/components/ui/select";
 import { buildListUrl } from "@/lib/list-query";
 import { routes } from "@/lib/routes";
+import { hasValidationErrors } from "@/lib/validation";
 import type {
   AdminOfficeResourceRow,
   FilterOption,
@@ -82,13 +86,26 @@ const STATE_TONES: Record<
 /**
  * Scoped administration console for the Office Resources catalog. Every row
  * shown already passed the server's grant-boundary filter — the page never
- * asks for a wider set.
+ * asks for a wider set. Creating happens in a right-side sheet so the list
+ * stays in context; a failed create re-opens the sheet with inline errors.
  */
 export default function OfficeResourcesAdministration() {
-  const { resources, filterOptions, capabilities, scope } =
-    usePage<OfficeResourcesAdministrationPageProps>().props;
+  const {
+    resources,
+    filterOptions,
+    capabilities,
+    scope,
+    validation,
+    createSheet,
+    writableOffices,
+    csrfToken,
+  } = usePage<OfficeResourcesAdministrationPageProps>().props;
   const [query, setQuery] = useState(resources.filters.q ?? "");
+  const [createOpen, setCreateOpen] = useState(
+    Boolean(createSheet?.open) || hasValidationErrors(validation),
+  );
   const filters = resources.filters as OfficeResourceListFilters;
+  const draft = (createSheet?.draft ?? {}) as Record<string, string>;
 
   function visit(next: Partial<Record<string, string>>, page?: number) {
     const merged = { ...filters, ...next } as OfficeResourceListFilters;
@@ -126,12 +143,57 @@ export default function OfficeResourcesAdministration() {
           }
           actions={
             capabilities.canManage ? (
-              <Button asChild>
-                <Link href={routes.admin_office_resource_new()}>New resource</Link>
+              <Button type="button" onClick={() => setCreateOpen(true)}>
+                New resource
               </Button>
             ) : undefined
           }
         />
+
+        {capabilities.canManage && createOpen ? (
+          <FormSheet
+            open={createOpen}
+            onOpenChange={setCreateOpen}
+            title="New resource"
+            description="Publish an instruction, link, or file to a branch in your scope."
+            footer={
+              <div className="flex items-center justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setCreateOpen(false)}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" form="office-resource-create-form">
+                  Create resource
+                </Button>
+              </div>
+            }
+          >
+            <form
+              id="office-resource-create-form"
+              method="post"
+              action={routes.admin_office_resource_create()}
+              encType="multipart/form-data"
+              className="flex min-h-0 flex-1 flex-col overflow-hidden"
+            >
+              <input type="hidden" name="csrfmiddlewaretoken" value={csrfToken} />
+              <input type="hidden" name="context" value="sheet" />
+              <FormSheetBody>
+                <div className="grid gap-4">
+                  <ResourceFormFields
+                    defaults={draft}
+                    categories={filterOptions.categories}
+                    types={filterOptions.types}
+                    writableOffices={writableOffices}
+                    includeFile
+                  />
+                </div>
+              </FormSheetBody>
+            </form>
+          </FormSheet>
+        ) : null}
 
         <SurfaceCard>
           <SurfaceCardContent className="grid gap-4">

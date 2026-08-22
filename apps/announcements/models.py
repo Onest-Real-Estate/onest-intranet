@@ -168,20 +168,6 @@ class Announcement(models.Model):
     title = models.CharField(_("title"), max_length=180)
     summary = models.CharField(_("summary"), max_length=280, blank=True)
     body = models.TextField(_("body"), blank=True)
-    attachment = models.FileField(
-        _("attachment"),
-        max_length=255,
-        blank=True,
-        storage=private_storage,
-        upload_to="announcements/%Y/%m/",
-        help_text=_(
-            "Stored in protected storage and only reachable through the "
-            "download view, which re-evaluates the audience on every request."
-        ),
-    )
-    attachment_name = models.CharField(
-        _("original file name"), max_length=255, blank=True
-    )
     category = models.ForeignKey(
         AnnouncementCategory,
         verbose_name=_("category"),
@@ -464,3 +450,172 @@ class AnnouncementAudience(models.Model):
         if self.user is not None:
             return self.user.get_full_name() or self.user.email
         return ""
+
+
+def _media_upload_to(instance, filename):
+    """Storage key for one upload.
+
+    ``filename`` is whatever the client sent and is deliberately discarded:
+    :func:`apps.announcements.media.storage_key` builds a random key and keeps
+    only an extension the allowed matrix already accepted. Django calls this
+    with the name passed to ``save()``, so nothing user-controlled can steer
+    the path.
+    """
+    from apps.announcements.media import storage_key
+
+    return storage_key(filename)
+
+
+class AnnouncementMediaQuerySet(models.QuerySet["AnnouncementMedia"]):
+    def readable(self) -> AnnouncementMediaQuerySet:
+        """What a recipient may be shown: active, processed, not quarantined."""
+        return self.filter(
+            is_active=True,
+            processing_state=AnnouncementMedia.ProcessingState.READY,
+        )
+
+    def hero(self) -> AnnouncementMediaQuerySet:
+        return self.filter(role=AnnouncementMedia.Role.HERO)
+
+    def attachments(self) -> AnnouncementMediaQuerySet:
+        return self.filter(role=AnnouncementMedia.Role.ATTACHMENT)
+
+
+class AnnouncementMedia(models.Model):
+    """One stored file belonging to an announcement — hero image or attachment.
+
+    The row is the record of the upload, not a convenience wrapper around a
+    path: it carries the checksum, the detected type, the byte size, who
+    uploaded it, and what processing decided. That is what makes retention
+    answerable after the fact — an archived announcement keeps its media rows
+    and its bytes, so history stays reconstructable.
+
+    Nothing here is reachable by URL. The file lives in protected storage under
+    a random key, and the only read path is a view that re-runs the parent
+    announcement's audience predicate on every request.
+    """
+
+    class Role(models.TextChoices):
+        HERO = "hero", _("Hero image")
+        ATTACHMENT = "attachment", _("Attachment")
+
+    class ProcessingState(models.TextChoices):
+        PENDING = "pending", _("Processing")
+        READY = "ready", _("Ready")
+        QUARANTINED = "quarantined", _("Quarantined")
+        FAILED = "failed", _("Processing failed")
+
+    announcement = models.ForeignKey(
+        "Announcement",
+        verbose_name=_("announcement"),
+        related_name="media",
+        on_delete=models.CASCADE,
+    )
+    role = models.CharField(_("role"), max_length=16, choices=Role.choices)
+    display_name = models.CharField(
+        _("display name"),
+        max_length=180,
+        help_text=_("The uploader's filename, shown to readers. Never a path."),
+    )
+    file = models.FileField(
+        _("file"),
+        max_length=255,
+        storage=private_storage,
+        upload_to=_media_upload_to,
+    )
+    media_type = models.CharField(_("media type"), max_length=120)
+    byte_size = models.PositiveBigIntegerField(_("size in bytes"))
+    checksum = models.CharField(
+        _("checksum"),
+        max_length=64,
+        help_text=_("SHA-256 of the stored bytes, verified before processing."),
+    )
+    width = models.PositiveIntegerField(_("width"), null=True, blank=True)
+    height = models.PositiveIntegerField(_("height"), null=True, blank=True)
+    variants = models.JSONField(
+        _("variants"),
+        default=dict,
+        blank=True,
+        help_text=_(
+            "Generated responsive derivatives, keyed by label. Served through "
+            "the same audience check as the original."
+        ),
+    )
+    processing_state = models.CharField(
+        _("processing state"),
+        max_length=16,
+        choices=ProcessingState.choices,
+        default=ProcessingState.PENDING,
+    )
+    processing_note = models.CharField(
+        _("processing note"),
+        max_length=255,
+        blank=True,
+        help_text=_("Why a file was quarantined or failed. Shown to admins only."),
+    )
+    is_active = models.BooleanField(
+        _("active"),
+        default=True,
+        help_text=_(
+            "Cleared instead of deleting once an announcement has been "
+            "published, so retained history keeps its files."
+        ),
+    )
+    sort_order = models.PositiveSmallIntegerField(_("sort order"), default=0)
+    uploaded_by = models.ForeignKey(
+        "user.User",
+        verbose_name=_("uploaded by"),
+        related_name="announcement_media_uploaded",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        editable=False,
+    )
+    created_at = models.DateTimeField(_("created at"), auto_now_add=True)
+    updated_at = models.DateTimeField(_("updated at"), auto_now=True)
+
+    objects = AnnouncementMediaQuerySet.as_manager()
+
+    class Meta:
+        ordering = ["role", "sort_order", "pk"]
+        verbose_name = _("announcement media")
+        verbose_name_plural = _("announcement media")
+        constraints = [
+            # One hero, and only while it is the live one. A replaced hero is
+            # deactivated rather than deleted, so the partial condition has to
+            # exclude the retained ones or a replacement could never be saved.
+            models.UniqueConstraint(
+                fields=["announcement"],
+                condition=Q(role="hero", is_active=True),
+                name="announcement_one_active_hero",
+            ),
+            models.CheckConstraint(
+                condition=Q(byte_size__gt=0), name="announcement_media_has_bytes"
+            ),
+            models.CheckConstraint(
+                # A hero is an image, so it always knows its shape. Requiring it
+                # here means the detail template never has to guess.
+                condition=~Q(role="hero")
+                | Q(width__isnull=False, height__isnull=False),
+                name="announcement_hero_has_dimensions",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["announcement", "role", "sort_order"],
+                name="announcement_media_order",
+            ),
+            models.Index(fields=["processing_state"], name="announcement_media_state"),
+        ]
+
+    def __str__(self):
+        return f"{self.display_name} ({self.role})"
+
+    @property
+    def is_readable(self) -> bool:
+        """Whether a recipient may be shown this file at all."""
+        return self.is_active and self.processing_state == self.ProcessingState.READY
+
+    @property
+    def is_image(self) -> bool:
+        return self.media_type.startswith("image/")

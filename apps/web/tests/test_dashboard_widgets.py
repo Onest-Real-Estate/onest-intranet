@@ -719,8 +719,9 @@ def test_widget_providers_are_bounded_in_queries():
     assign(user, BRANCH_MANAGER, ScopeType.OFFICE, office)
     context = build_context(user)
 
-    # The live provider reads one scoped count plus the scope's display name.
-    with assert_application_queries(2):
+    # The live provider reads two scoped counts — the trailing window and the
+    # preceding one its delta compares against — plus the scope's display name.
+    with assert_application_queries(3):
         widget_payload(WIDGET_BY_KEY["performance"], context)
 
     # Providers awaiting their module must not touch the database at all.

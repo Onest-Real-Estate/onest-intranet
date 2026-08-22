@@ -40,12 +40,13 @@ The preferred UI face is **Plus Jakarta Sans** (self-hosted variable cut), falli
 | Style | Tailwind recipe | Typical use |
 | --- | --- | --- |
 | Display | `text-[40px] font-bold leading-12 tracking-[-0.02em]` | Rare hero copy |
-| Page title | `text-[clamp(1.5rem,2.4vw,1.875rem)] font-semibold tracking-[-0.02em]` | One per page, via `PageHeader` |
-| Section title | `text-base font-semibold tracking-[-0.01em]` | Page sections and panel headings |
+| Page title | `text-[clamp(1.625rem,2.6vw,2rem)] font-bold tracking-[-0.03em]` | One per page, via `PageHeader` |
+| Section title | `text-lg font-bold tracking-[-0.02em]` | Page sections and panel headings (`PanelHeader`) |
 | Card title | `font-semibold leading-none` | Nested card headings |
 | Body | `text-sm` or `text-base leading-6` | Interface and long-form copy |
 | Supporting | `text-sm text-muted-foreground` | Descriptions and metadata |
 | Label | `text-xs font-semibold tracking-[0.02em]` | Form and data labels |
+| Metric figure | `text-[1.75rem] font-bold tracking-[-0.02em] tabular-nums` | Stat cards, via `MetricCard` |
 
 Use sentence case. Reserve all caps for the compact ONEST wordmark. Keep paragraphs near 65 characters per line when possible.
 
@@ -72,13 +73,13 @@ Forms should be one column by default. Data-heavy views can expand to a responsi
 
 ## Shape and elevation
 
-- Base radius: 12 px (`--radius: 0.75rem`). Buttons and inputs use the derived medium radius; cards use large or extra-large radii.
-- Borders establish structure. Shadows should communicate elevation, not decorate every container.
-- Use `shadow-sm` for ordinary cards and popovers. Reserve larger soft shadows for focused flows such as sign-in.
+- Base radius: 14 px (`--radius: 0.875rem`); cards sit a step above at 20 px (`--radius-card: 1.25rem`). Buttons, badges, and pills are fully rounded — the pill is the control shape.
+- Borders establish structure. Shadows communicate elevation with soft, layered ambient light (`shadow-card`: two layers, low opacity, large blur) rather than hard offsets or dark halos. Popovers step up to `shadow-popover`.
+- Ordinary cards carry `shadow-card`; interactive surfaces may lift one step (`shadow-card-hover`, `-translate-y-px`, 150 ms). Reserve heavier treatment for focused flows such as sign-in.
 
 ## Components and interaction
 
-- **Buttons:** one primary action per region. Use `secondary` for a safe alternative, `outline` for lower-emphasis actions, `ghost` in navigation/toolbars, and `destructive` only for destructive work.
+- **Buttons:** one primary action per region. The primary is the signature gold pill — a vertical gold gradient (`brand-gold → brand-gold-deep`) with dark on-gold ink, fully rounded. Use `secondary` for a safe alternative, `outline` for lower-emphasis actions, `ghost` in navigation/toolbars, and `destructive` only for destructive work.
 - **Forms:** labels remain visible above fields. Place validation messages directly below the field with `text-destructive`. Do not use placeholder text as a label.
 - **Cards:** group one concept or task. Avoid nesting cards unless hierarchy would otherwise be ambiguous.
 - **Badges:** use for short states or categories, not sentences. Pair semantic colors with explicit words such as “Approved” or “Overdue.”

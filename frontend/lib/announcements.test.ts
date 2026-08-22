@@ -5,14 +5,21 @@ import {
   audienceIcon,
   audienceSummary,
   categoryPresentation,
+  fileRejectionReason,
+  formatBytes,
+  hasBlockingMedia,
   hasUnknownClassification,
+  heroSources,
   priorityPresentation,
+  processingPresentation,
   rejectedFilterMessage,
 } from "@/lib/announcements";
 import type {
   AnnouncementAudienceEntry,
   AnnouncementBadge,
   AnnouncementFilters,
+  AnnouncementMedia,
+  AnnouncementMediaAdmin,
 } from "@/types";
 
 function badge(overrides: Partial<AnnouncementBadge> = {}): AnnouncementBadge {
@@ -146,5 +153,115 @@ describe("audienceIcon", () => {
     const kinds = ["company", "role", "region", "office", "user"] as const;
     const icons = kinds.map((kind) => audienceIcon(kind));
     expect(new Set(icons).size).toBe(kinds.length);
+  });
+});
+
+describe("heroSources", () => {
+  const hero: AnnouncementMedia = {
+    id: 9,
+    role: "hero",
+    displayName: "hero.png",
+    mediaType: "image/png",
+    byteSize: 500_000,
+    width: 1600,
+    height: 900,
+    isImage: true,
+    url: "/announcements/media/9",
+    variants: {
+      thumb: "/announcements/media/9/thumb",
+      card: "/announcements/media/9/card",
+      hero: "/announcements/media/9/hero",
+    },
+  };
+
+  it("prefers the largest variant and offers the rest as srcset", () => {
+    const sources = heroSources(hero);
+    expect(sources?.src).toBe("/announcements/media/9/hero");
+    expect(sources?.srcSet).toContain("320w");
+    expect(sources?.srcSet).toContain("768w");
+  });
+
+  it("falls back to the original when processing produced no variants", () => {
+    const sources = heroSources({ ...hero, variants: {} });
+    expect(sources?.src).toBe("/announcements/media/9");
+    expect(sources?.srcSet).toBeUndefined();
+  });
+
+  it("returns nothing when there is no hero, so the caller renders text only", () => {
+    expect(heroSources(null)).toBeNull();
+    expect(heroSources(undefined)).toBeNull();
+  });
+
+  it("refuses a non-image, which could never render as a hero", () => {
+    expect(heroSources({ ...hero, isImage: false })).toBeNull();
+  });
+
+  it("ignores a variant label the server does not generate", () => {
+    const sources = heroSources({
+      ...hero,
+      variants: { ...hero.variants, bogus: "/announcements/media/9/bogus" },
+    });
+    expect(sources?.srcSet).not.toContain("bogus");
+  });
+});
+
+describe("fileRejectionReason", () => {
+  const limits = { extensions: [".pdf", ".png"], maxBytes: 1024 };
+
+  it("names a type that is not allowed", () => {
+    const reason = fileRejectionReason({ name: "x.exe", size: 10 }, limits);
+    expect(reason).toContain(".exe");
+  });
+
+  it("names the size limit", () => {
+    const reason = fileRejectionReason({ name: "x.pdf", size: 2048 }, limits);
+    expect(reason).toContain("1 KB");
+  });
+
+  it("accepts an allowed file, letting the server make the real decision", () => {
+    expect(fileRejectionReason({ name: "x.pdf", size: 100 }, limits)).toBeNull();
+  });
+
+  it("is case-insensitive about the extension", () => {
+    expect(fileRejectionReason({ name: "X.PDF", size: 100 }, limits)).toBeNull();
+  });
+});
+
+describe("hasBlockingMedia", () => {
+  function admin(state: AnnouncementMediaAdmin["processingState"]) {
+    return { processingState: state } as AnnouncementMediaAdmin;
+  }
+
+  it("blocks while anything is unfinished or rejected", () => {
+    expect(hasBlockingMedia([admin("ready"), admin("pending")])).toBe(true);
+    expect(hasBlockingMedia([admin("quarantined")])).toBe(true);
+    expect(hasBlockingMedia([admin("failed")])).toBe(true);
+  });
+
+  it("does not block when everything passed", () => {
+    expect(hasBlockingMedia([admin("ready"), admin("ready")])).toBe(false);
+    expect(hasBlockingMedia([])).toBe(false);
+  });
+});
+
+describe("processingPresentation", () => {
+  it("gives failure states a destructive tone and success a positive one", () => {
+    expect(processingPresentation("quarantined").tone).toBe("destructive");
+    expect(processingPresentation("failed").tone).toBe("destructive");
+    expect(processingPresentation("ready").tone).toBe("success");
+  });
+
+  it("always carries a readable label, never tone alone", () => {
+    for (const state of ["pending", "ready", "quarantined", "failed"] as const) {
+      expect(processingPresentation(state).label).toBeTruthy();
+    }
+  });
+});
+
+describe("formatBytes", () => {
+  it("scales the unit to the size", () => {
+    expect(formatBytes(512)).toBe("512 B");
+    expect(formatBytes(2048)).toBe("2 KB");
+    expect(formatBytes(3_500_000)).toBe("3.3 MB");
   });
 });

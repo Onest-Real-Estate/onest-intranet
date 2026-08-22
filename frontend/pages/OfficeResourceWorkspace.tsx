@@ -9,7 +9,6 @@ import {
 import {
   FormActionBar,
   FormErrorSummary,
-  FormField,
   FormLabel,
   PageHeader,
   StatusBadge,
@@ -17,10 +16,10 @@ import {
   SurfaceCardContent,
 } from "@/components/design-system";
 import { HubLayout } from "@/components/HubLayout";
+import { ResourceFormFields } from "@/components/office/ResourceFormFields";
 import { PermissionRequired } from "@/components/PermissionRequired";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { routes } from "@/lib/routes";
 import type { OfficeResourceWorkspacePageProps } from "@/types";
 
@@ -40,13 +39,6 @@ const ERROR_LABELS: Record<string, string> = {
   ends_at: "Expires after",
   file: "File",
 };
-
-const SELECT_CLASS =
-  "bg-background border-border text-foreground h-9 w-full rounded-md border px-3 text-sm";
-
-function HelpText({ children }: { children: string }) {
-  return <p className="text-muted-foreground text-xs">{children}</p>;
-}
 
 function ResourcePreview({
   preview,
@@ -215,185 +207,25 @@ function Workspace() {
 
               <SurfaceCard>
                 <SurfaceCardContent className="grid gap-4 pt-5">
-                  <FormField>
-                    <FormLabel htmlFor="title" required>
-                      Title
-                    </FormLabel>
-                    <Input
-                      id="title"
-                      name="title"
-                      defaultValue={resource?.title ?? ""}
-                      required
-                      maxLength={150}
-                    />
-                  </FormField>
-
-                  <FormField>
-                    <FormLabel htmlFor="slug">Slug</FormLabel>
-                    <Input
-                      id="slug"
-                      name="slug"
-                      defaultValue={resource?.slug ?? ""}
-                      maxLength={80}
-                      pattern="[a-z0-9\-]*"
-                    />
-                    <HelpText>
-                      Identity across scopes — a closer-scope slug overrides a wider
-                      one. Blank derives from the title.
-                    </HelpText>
-                  </FormField>
-
-                  <FormField>
-                    <FormLabel htmlFor="summary">Summary</FormLabel>
-                    <Input
-                      id="summary"
-                      name="summary"
-                      defaultValue={resource?.summary ?? ""}
-                      maxLength={255}
-                    />
-                  </FormField>
-
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <FormField>
-                      <FormLabel htmlFor="category" required>
-                        Category
-                      </FormLabel>
-                      <select
-                        id="category"
-                        name="category"
-                        defaultValue={resource?.category ?? "general"}
-                        className={SELECT_CLASS}
-                      >
-                        {categories.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
-                    </FormField>
-                    <FormField>
-                      <FormLabel htmlFor="resource_type" required>
-                        Type
-                      </FormLabel>
-                      <select
-                        id="resource_type"
-                        name="resource_type"
-                        defaultValue={resource?.resourceType ?? "content"}
-                        className={SELECT_CLASS}
-                      >
-                        {types.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
-                    </FormField>
-                  </div>
-
-                  <FormField>
-                    <FormLabel htmlFor="body">Content</FormLabel>
-                    <Textarea
-                      id="body"
-                      name="body"
-                      rows={5}
-                      defaultValue={resource?.body ?? ""}
-                    />
-                    <HelpText>Required for content resources.</HelpText>
-                  </FormField>
-
-                  <FormField>
-                    <FormLabel htmlFor="url">Destination URL</FormLabel>
-                    <Input
-                      id="url"
-                      name="url"
-                      type="url"
-                      defaultValue={resource?.url ?? ""}
-                      placeholder="https://"
-                    />
-                    <HelpText>Link resources only. Must start with https://</HelpText>
-                  </FormField>
-
-                  {!isEdit ? (
-                    <FormField>
-                      <FormLabel htmlFor="file">File</FormLabel>
-                      <Input
-                        id="file"
-                        name="file"
-                        type="file"
-                        accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.txt,.csv"
-                      />
-                      <HelpText>
-                        File resources only. Protected storage; up to 10 MB.
-                      </HelpText>
-                    </FormField>
-                  ) : null}
-
-                  <div className="grid gap-4 sm:grid-cols-3">
-                    <FormField>
-                      <FormLabel htmlFor="owner_office" required>
-                        Owning office
-                      </FormLabel>
-                      {/* Native select so the value posts with the form; the
-                        server re-validates the boundary either way. */}
-                      <select
-                        id="owner_office"
-                        name="owner_office"
-                        defaultValue={String(
-                          resource?.ownerId ?? writableOffices[0]?.id ?? "",
-                        )}
-                        className={SELECT_CLASS}
-                      >
-                        {writableOffices.map((option) => (
-                          <option key={option.id} value={String(option.id)}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
-                    </FormField>
-                    <FormField>
-                      <FormLabel htmlFor="sort_order">Sort order</FormLabel>
-                      <Input
-                        id="sort_order"
-                        name="sort_order"
-                        type="number"
-                        min={0}
-                        defaultValue={resource?.sortOrder ?? 0}
-                      />
-                    </FormField>
-                    <FormField>
-                      <FormLabel htmlFor="is_active">State</FormLabel>
-                      <label className="border-border flex h-9 items-center gap-2 rounded-md border px-3 text-sm">
-                        <input
-                          type="checkbox"
-                          name="is_active"
-                          defaultChecked={resource ? resource.isActive : false}
-                          className="accent-primary size-4"
-                        />
-                        Active
-                      </label>
-                    </FormField>
-                  </div>
-
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <FormField>
-                      <FormLabel htmlFor="starts_at">Publishes on</FormLabel>
-                      <Input
-                        id="starts_at"
-                        name="starts_at"
-                        type="date"
-                        defaultValue={resource?.startsAt ?? ""}
-                      />
-                    </FormField>
-                    <FormField>
-                      <FormLabel htmlFor="ends_at">Expires after</FormLabel>
-                      <Input
-                        id="ends_at"
-                        name="ends_at"
-                        type="date"
-                        defaultValue={resource?.endsAt ?? ""}
-                      />
-                    </FormField>
-                  </div>
+                  <ResourceFormFields
+                    defaults={{
+                      slug: resource?.slug,
+                      title: resource?.title,
+                      summary: resource?.summary,
+                      category: resource?.category,
+                      resourceType: resource?.resourceType,
+                      body: resource?.body,
+                      url: resource?.url,
+                      ownerId: resource?.ownerId ?? null,
+                      sortOrder: resource?.sortOrder,
+                      isActive: resource?.isActive,
+                      startsAt: resource?.startsAt,
+                      endsAt: resource?.endsAt,
+                    }}
+                    categories={categories}
+                    types={types}
+                    writableOffices={writableOffices}
+                  />
                 </SurfaceCardContent>
               </SurfaceCard>
 

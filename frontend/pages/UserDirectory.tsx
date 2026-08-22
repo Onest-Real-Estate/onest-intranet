@@ -292,7 +292,7 @@ export default function UserDirectory() {
             label="Disabled accounts"
             value={summary.disabled}
             tone={summary.disabled > 0 ? "warning" : "neutral"}
-            hint={
+            subline={
               summary.disabled > 0 ? "Signed out on their next request." : undefined
             }
           />

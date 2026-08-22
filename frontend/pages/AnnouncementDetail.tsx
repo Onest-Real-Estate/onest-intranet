@@ -1,5 +1,6 @@
 import { Head, Link, usePage } from "@inertiajs/react";
 import { ArrowLeft, Download } from "lucide-react";
+import { useState } from "react";
 
 import {
   PageHeader,
@@ -13,6 +14,8 @@ import {
   audienceIcon,
   audienceSummary,
   categoryPresentation,
+  formatBytes,
+  heroSources,
   priorityPresentation,
 } from "@/lib/announcements";
 import { routes } from "@/lib/routes";
@@ -39,6 +42,8 @@ function formatPublished(value: string | null): string {
  */
 export default function AnnouncementDetail() {
   const { announcement } = usePage<AnnouncementDetailPageProps>().props;
+  const hero = heroSources(announcement.hero);
+  const [heroBroken, setHeroBroken] = useState(false);
 
   return (
     <>
@@ -62,6 +67,23 @@ export default function AnnouncementDetail() {
           }
         />
 
+        {hero && !heroBroken ? (
+          <img
+            src={hero.src}
+            srcSet={hero.srcSet}
+            sizes="(min-width: 1024px) 60rem, 100vw"
+            width={hero.width ?? undefined}
+            height={hero.height ?? undefined}
+            // Decorative: the headline above already carries the meaning, so a
+            // description here would be read out twice.
+            alt=""
+            // A hero that fails to load must not leave a broken-image icon in
+            // its place; the layout below stands on its own without it.
+            onError={() => setHeroBroken(true)}
+            className="bg-muted max-h-96 w-full rounded-xl border object-cover"
+          />
+        ) : null}
+
         <div className="flex flex-wrap items-center gap-2">
           <StatusBadge status={priorityPresentation(announcement.priority)} />
           <StatusBadge status={categoryPresentation(announcement.category)} />
@@ -75,22 +97,30 @@ export default function AnnouncementDetail() {
             <div className="text-sm leading-6 whitespace-pre-line">
               {announcement.body}
             </div>
-            {announcement.hasAttachment ? (
-              <div className="mt-5">
-                <Button variant="outline" size="sm" asChild>
-                  {/* Plain anchor: an Inertia visit would XHR the bytes rather
-                      than hand them to the browser's download flow. The URL is
-                      re-authorized server-side on every request. */}
-                  <a href={routes.announcement_attachment(announcement.id)} download>
-                    <Download className="size-3.5 shrink-0" aria-hidden />
-                    <span className="max-w-64 truncate">
-                      {announcement.attachmentName
-                        ? `Download (${announcement.attachmentName})`
-                        : "Download attachment"}
-                    </span>
-                  </a>
-                </Button>
-              </div>
+            {announcement.attachments.length > 0 ? (
+              <section aria-labelledby="files-heading" className="mt-6 grid gap-2">
+                <h2 id="files-heading" className="text-sm font-semibold">
+                  Files
+                </h2>
+                <ul className="grid gap-2">
+                  {announcement.attachments.map((file) => (
+                    <li key={file.id}>
+                      <Button variant="outline" size="sm" asChild>
+                        {/* Plain anchor: an Inertia visit would XHR the bytes
+                            rather than hand them to the browser's download
+                            flow. The path re-authorizes on every request. */}
+                        <a href={file.url} download>
+                          <Download className="size-3.5 shrink-0" aria-hidden />
+                          <span className="max-w-64 truncate">{file.displayName}</span>
+                          <span className="text-muted-foreground text-xs">
+                            {formatBytes(file.byteSize)}
+                          </span>
+                        </a>
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
             ) : null}
           </SurfaceCardContent>
         </SurfaceCard>

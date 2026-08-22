@@ -703,26 +703,32 @@ def test_an_out_of_audience_detail_request_is_recorded(seeded, client):
     assert entry.reason == "detail_out_of_audience"
 
 
-def test_the_attachment_url_enforces_the_same_predicate(
-    seeded, client, settings, tmp_path
-):
+def test_a_media_url_enforces_the_same_predicate(seeded, client, settings, tmp_path):
+    """Files are audience-gated exactly like the announcement that owns them."""
     from django.core.files.base import ContentFile
 
-    settings.MEDIA_ROOT = str(tmp_path)
+    from apps.announcements.models import AnnouncementMedia
 
+    settings.MEDIA_ROOT = str(tmp_path)
     row = announcement("with-file")
     target(row, Kind.OFFICE, office=office("fairfax-va"))
-    row.attachment.save("memo.txt", ContentFile(b"hello"), save=False)
-    row.attachment_name = "memo.txt"
-    row.save(update_fields=["attachment", "attachment_name"])
+    media = AnnouncementMedia(
+        announcement=row,
+        role=AnnouncementMedia.Role.ATTACHMENT,
+        display_name="memo.txt",
+        media_type="text/plain",
+        byte_size=5,
+        checksum="x" * 64,
+        processing_state=AnnouncementMedia.ProcessingState.READY,
+    )
+    media.file.save("memo.txt", ContentFile(b"hello"), save=False)
+    media.save()
 
     client.force_login(person("out@example.com", "charlottesville-va"))
-    assert (
-        client.get(reverse("announcement_attachment", args=[row.pk])).status_code == 403
-    )
+    assert client.get(reverse("announcement_media", args=[media.pk])).status_code == 403
 
     client.force_login(person("in@example.com", "fairfax-va"))
-    response = client.get(reverse("announcement_attachment", args=[row.pk]))
+    response = client.get(reverse("announcement_media", args=[media.pk]))
     assert response.status_code == 200
     assert b"".join(response.streaming_content) == b"hello"
 
