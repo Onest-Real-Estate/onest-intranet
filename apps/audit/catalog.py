@@ -153,6 +153,60 @@ registry.register(
         "a materialized recipient list; consumers re-evaluate it with "
         "apps.announcements.audience.recipients_for. category_code is null "
         "only on legacy rows that predate the published-requires-taxonomy "
-        "constraint."
+        "constraint. visible_from is when the window opens — equal to the "
+        "publication stamp for an immediate publish."
+    ),
+)
+
+registry.register(
+    name="announcement.scheduled",
+    version=1,
+    required_payload_keys={
+        "announcement_id",
+        "category_code",
+        "priority_code",
+        "owner_office_id",
+        "scope_level",
+        "audience",
+        "notify",
+        "notification_priority",
+    },
+    description=(
+        "Emitted instead of announcement.published when the row is published "
+        "with a publish_at still in the future. Same payload contract, so a "
+        "consumer can handle both with one schema; visible_from is when the "
+        "announcement actually becomes readable. Nothing should notify "
+        "recipients on this event — the announcement is not open to them yet."
+    ),
+)
+
+registry.register(
+    name="announcement.unpublished",
+    version=1,
+    required_payload_keys={"announcement_id", "owner_office_id", "status"},
+    description=(
+        "An announcement was pulled back to draft by an authorized publisher. "
+        "Consumers holding derived state should treat it as no longer "
+        "readable from this moment."
+    ),
+)
+
+registry.register(
+    name="announcement.archived",
+    version=1,
+    required_payload_keys={"announcement_id", "owner_office_id", "status"},
+    description=(
+        "An announcement left the feed for good. The row, its media, and its "
+        "history are retained; only visibility ends."
+    ),
+)
+
+registry.register(
+    name="announcement.restored",
+    version=1,
+    required_payload_keys={"announcement_id", "owner_office_id", "status"},
+    description=(
+        "An archived announcement was returned to draft. It is not readable "
+        "again until it is deliberately republished."
     ),
 )

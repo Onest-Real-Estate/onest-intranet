@@ -1,5 +1,13 @@
 from django.urls import path
 
+from .administration_views import (
+    announcement_create,
+    announcement_edit,
+    announcement_lifecycle,
+    announcement_new,
+    announcement_pin,
+    announcement_update,
+)
 from .views import (
     announcement_detail,
     announcement_media,
@@ -36,6 +44,38 @@ urlpatterns = [
         "announcements/media/<int:media_id>/<slug:variant>",
         announcement_media_variant,
         name="announcement_media_variant",
+    ),
+    # Workspace. Every one of these loads through the actor's scoped queryset,
+    # so an out-of-scope id is a 404 rather than a 403.
+    path(
+        "operations/announcements/new",
+        announcement_new,
+        name="announcement_new",
+    ),
+    path(
+        "operations/announcements/create",
+        announcement_create,
+        name="announcement_create",
+    ),
+    path(
+        "operations/announcements/<int:announcement_id>/edit",
+        announcement_edit,
+        name="announcement_edit",
+    ),
+    path(
+        "operations/announcements/<int:announcement_id>/save",
+        announcement_update,
+        name="announcement_update",
+    ),
+    path(
+        "operations/announcements/<int:announcement_id>/lifecycle",
+        announcement_lifecycle,
+        name="announcement_lifecycle",
+    ),
+    path(
+        "operations/announcements/<int:announcement_id>/pin",
+        announcement_pin,
+        name="announcement_pin",
     ),
     # Media management.
     path(

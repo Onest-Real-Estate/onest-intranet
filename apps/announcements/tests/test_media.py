@@ -1115,3 +1115,95 @@ def test_a_field_error_is_not_republished_at_form_level(seeded, client):
     validation = response.json()["validation"]
     assert validation["fields"]["file"]
     assert validation["form"] == []
+
+
+# --------------------------------------------------------------------------- #
+# Draining a backlog no worker consumed
+# --------------------------------------------------------------------------- #
+
+
+def test_media_stays_pending_and_blocks_publish_when_no_worker_runs(seeded):
+    """The failure the command exists to undo, stated as a fact.
+
+    ``attach_media`` queues the processing task on commit. With nothing
+    consuming the queue the row never leaves ``PENDING``, and the publish
+    checklist reports it for ever — which is honest, but nothing in the product
+    changes it on its own.
+    """
+    from apps.announcements.media_service import media_publish_debt
+
+    row = draft()
+    media = attach_media(
+        publisher(), row, upload("hero.png", png_bytes(), "image/png"), role="hero"
+    )
+
+    assert media.processing_state == AnnouncementMedia.ProcessingState.PENDING
+    debt = dict(media_publish_debt(row))
+    assert "media" in debt
+    assert "still being processed" in str(debt["media"])
+
+
+def test_the_command_clears_a_pending_backlog_in_process(seeded):
+    from django.core.management import call_command
+
+    from apps.announcements.media_service import media_publish_debt
+
+    row = draft()
+    media = attach_media(
+        publisher(), row, upload("hero.png", png_bytes(), "image/png"), role="hero"
+    )
+    assert media.processing_state == AnnouncementMedia.ProcessingState.PENDING
+
+    call_command("process_announcement_media")
+
+    media.refresh_from_db()
+    assert media.processing_state == AnnouncementMedia.ProcessingState.READY
+    # And the publish blocker it was causing is gone.
+    assert media_publish_debt(row) == []
+
+
+def test_the_command_is_idempotent_and_reports_nothing_to_do(seeded, capsys):
+    from django.core.management import call_command
+
+    row = draft()
+    attach_media(
+        publisher(), row, upload("hero.png", png_bytes(), "image/png"), role="hero"
+    )
+    call_command("process_announcement_media")
+    capsys.readouterr()
+
+    call_command("process_announcement_media")
+
+    assert "Nothing is waiting" in capsys.readouterr().out
+
+
+def test_the_command_leaves_a_quarantined_row_alone(seeded):
+    """Quarantine is a security verdict, not a transient error to retry."""
+    from django.core.management import call_command
+
+    row = draft()
+    media = attach_media(publisher(), row, upload("memo.txt", b"words"))
+    media.processing_state = AnnouncementMedia.ProcessingState.QUARANTINED
+    media.processing_note = "Disguised file."
+    media.save(update_fields=["processing_state", "processing_note"])
+
+    call_command("process_announcement_media", "--retry-failed")
+
+    media.refresh_from_db()
+    assert media.processing_state == AnnouncementMedia.ProcessingState.QUARANTINED
+
+
+def test_the_command_can_be_limited_to_one_announcement(seeded):
+    from django.core.management import call_command
+
+    mine = draft("mine")
+    theirs = draft("theirs")
+    a = attach_media(publisher(), mine, upload("a.png", png_bytes(), "image/png"))
+    b = attach_media(publisher(), theirs, upload("b.png", png_bytes(), "image/png"))
+
+    call_command("process_announcement_media", f"--announcement={mine.pk}")
+
+    a.refresh_from_db()
+    b.refresh_from_db()
+    assert a.processing_state == AnnouncementMedia.ProcessingState.READY
+    assert b.processing_state == AnnouncementMedia.ProcessingState.PENDING

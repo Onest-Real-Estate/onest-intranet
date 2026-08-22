@@ -2,6 +2,9 @@ from django.http import Http404
 from django.utils import timezone
 from inertia import inertia, render
 
+from apps.announcements.administration_views import (
+    announcement_administration_index,
+)
 from apps.user.services.role_assignments import get_effective_access
 from apps.user.views.directory_views import user_directory
 from apps.user.views.office_administration_views import office_administration_index
@@ -101,6 +104,7 @@ OPERATIONS_VIEWS = {
     destination.route_name: _operations_view(destination)
     for destination in OPERATIONS_DESTINATIONS
 }
+OPERATIONS_VIEWS["admin_announcements"] = announcement_administration_index
 OPERATIONS_VIEWS["admin_users"] = user_directory
 OPERATIONS_VIEWS["admin_new_agents"] = new_agent_list
 OPERATIONS_VIEWS["admin_quick_access"] = quick_access_index

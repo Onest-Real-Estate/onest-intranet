@@ -36,6 +36,11 @@ class OperationsPermission(models.Model):
             ("view_inventory", _("Can view scoped inventory")),
             ("view_reservations", _("Can view scoped reservations")),
             ("manage_announcements", _("Can manage announcements")),
+            (
+                "publish_announcements",
+                _("Can publish, schedule, and archive announcements"),
+            ),
+            ("pin_announcements", _("Can pin announcements")),
             ("manage_training", _("Can manage training")),
             ("manage_documents", _("Can manage documents")),
             ("view_compliance", _("Can view scoped compliance items")),

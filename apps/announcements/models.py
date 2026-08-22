@@ -208,6 +208,32 @@ class Announcement(models.Model):
     published_at = models.DateTimeField(
         _("published at"), null=True, blank=True, editable=False
     )
+    archived_at = models.DateTimeField(
+        _("archived at"), null=True, blank=True, editable=False
+    )
+    is_pinned = models.BooleanField(
+        _("pinned"),
+        default=False,
+        help_text=_(
+            "Pinned announcements sort above everything else in the feed and "
+            "the dashboard band. Pinning never widens the audience."
+        ),
+    )
+    pinned_at = models.DateTimeField(
+        _("pinned at"), null=True, blank=True, editable=False
+    )
+    cta_label = models.CharField(
+        _("call to action label"),
+        max_length=60,
+        blank=True,
+        help_text=_("Button text. Required whenever a link is given."),
+    )
+    cta_url = models.URLField(
+        _("call to action link"),
+        max_length=500,
+        blank=True,
+        help_text=_("https destination opened by the button."),
+    )
     created_by = models.ForeignKey(
         "user.User",
         verbose_name=_("created by"),
@@ -216,6 +242,16 @@ class Announcement(models.Model):
         null=True,
         blank=True,
         editable=False,
+    )
+    updated_by = models.ForeignKey(
+        "user.User",
+        verbose_name=_("last edited by"),
+        related_name="announcements_edited",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        editable=False,
+        help_text=_("Whoever last wrote to the row, shown beside the timestamp."),
     )
     created_at = models.DateTimeField(_("created at"), auto_now_add=True)
     updated_at = models.DateTimeField(_("updated at"), auto_now=True)
@@ -247,6 +283,13 @@ class Announcement(models.Model):
                 | Q(expires_at__gt=F("publish_at")),
                 name="announcement_window_ordered",
             ),
+            # A button with no destination, or a destination with no words on
+            # it, is not something a renderer can draw. Both or neither.
+            models.CheckConstraint(
+                condition=(Q(cta_label="") & Q(cta_url=""))
+                | (~Q(cta_label="") & ~Q(cta_url="")),
+                name="announcement_cta_is_complete",
+            ),
         ]
         indexes = [
             models.Index(
@@ -256,6 +299,12 @@ class Announcement(models.Model):
             models.Index(
                 fields=["status", "priority", "-published_at"],
                 name="announcement_feed_order",
+            ),
+            # The feed sorts pinned rows first, so the leading columns match
+            # what ``services.order_for_feed`` asks the database for.
+            models.Index(
+                fields=["status", "is_pinned", "-published_at"],
+                name="announcement_pinned_order",
             ),
         ]
 
@@ -286,6 +335,12 @@ class Announcement(models.Model):
         errors: dict[str, object] = {}
         if self.expires_at and self.publish_at and self.expires_at <= self.publish_at:
             errors["expires_at"] = _("Expiry must be after the publish time.")
+        # Mirrors ``announcement_cta_is_complete`` so a form reports the missing
+        # half by name instead of surfacing an IntegrityError.
+        if self.cta_url and not self.cta_label.strip():
+            errors["cta_label"] = _("Give the button some words.")
+        if self.cta_label.strip() and not self.cta_url:
+            errors["cta_url"] = _("Give the button somewhere to go.")
         # Only blocks *assigning* a retired category; rows that already carry
         # one validate unchanged because they are not re-assigning it.
         if (

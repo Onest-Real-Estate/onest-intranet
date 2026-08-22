@@ -69,6 +69,15 @@ services:
       DB_PORT: "5432"
       # Redis (cache + sessions)
       REDIS_URL: redis://redis:6379/0
+      # Celery — the *web* process is a producer: every task queued from a
+      # request (announcement media processing, notification fan-out, audit
+      # event dispatch) is enqueued here. Without these it falls back to the
+      # settings default of redis://localhost:6379/1, which inside this
+      # container is nothing at all, and `.delay()` dies on connection
+      # refused. Must match the celery service's values or the worker consumes
+      # a different queue than the one being written to.
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/1}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/2}
       # Email via Mailpit (web UI: http://localhost:8025)
       EMAIL_BACKEND: django.core.mail.backends.smtp.EmailBackend
       EMAIL_HOST: mailpit

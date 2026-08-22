@@ -44,6 +44,8 @@ function row(overrides: Partial<AnnouncementRow> = {}): AnnouncementRow {
       rank: 3,
     },
     scope: { level: "office", label: "Office", officeName: "Fairfax, VA" },
+    isPinned: false,
+    cta: null,
     ...overrides,
   };
 }

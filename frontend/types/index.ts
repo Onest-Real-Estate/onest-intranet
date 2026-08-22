@@ -1790,6 +1790,16 @@ export interface AnnouncementAudienceEntry {
   userId: number | null;
 }
 
+/**
+ * The optional call-to-action button. Both halves are required by a database
+ * constraint, so a payload that exists can always be drawn — there is no
+ * "label without a link" state for a renderer to guess about.
+ */
+export interface AnnouncementCta {
+  label: string;
+  url: string;
+}
+
 export interface AnnouncementRow {
   id: number;
   slug: string;
@@ -1801,6 +1811,9 @@ export interface AnnouncementRow {
   category: AnnouncementBadge;
   priority: AnnouncementPriorityBadge;
   scope: { level: string; label: string; officeName: string };
+  /** Sorted above everything else in the feed. Ordering only, never audience. */
+  isPinned: boolean;
+  cta: AnnouncementCta | null;
 }
 
 /**
@@ -1878,4 +1891,177 @@ export interface AnnouncementsPageProps extends PageProps {
     categories: FilterOption[];
     priorities: FilterOption[];
   };
+}
+
+/**
+ * The administration workspace.
+ *
+ * Three grants reach this surface and they are deliberately separate:
+ * `canAuthor` writes drafts, `canPublish` moves the lifecycle, `canPin`
+ * changes feed order. The page mirrors the server's answer so a control is
+ * never offered for an action the save would refuse — and mirroring is all it
+ * does. Every one of these is re-derived on the server for every write.
+ */
+export interface AnnouncementCapabilities {
+  canAuthor: boolean;
+  canPublish: boolean;
+  canPin: boolean;
+}
+
+/**
+ * The state an administrator reads. Richer than the stored status: "Scheduled",
+ * "Live", and "Expired" are all `status: "published"` plus a window test, and
+ * the server derives all three from the same predicate the feed applies.
+ */
+export interface AnnouncementLifecycle {
+  code: "draft" | "scheduled" | "live" | "expired" | "archived";
+  label: string;
+  tone: StatusTone;
+}
+
+export interface AnnouncementAdminRow {
+  id: number;
+  slug: string;
+  title: string;
+  summary: string;
+  lifecycle: AnnouncementLifecycle;
+  status: "draft" | "published" | "archived";
+  category: AnnouncementBadge;
+  priority: AnnouncementPriorityBadge;
+  isPinned: boolean;
+  ownerOffice: { id: number; name: string };
+  scopeLevel: string;
+  audience: AnnouncementAudienceEntry[];
+  publishAt: string | null;
+  expiresAt: string | null;
+  publishedAt: string | null;
+  updatedAt: string | null;
+  updatedBy: string;
+  createdBy: string;
+  /** Opaque concurrency token. Sent back on every write; a mismatch is a 409. */
+  version: string;
+}
+
+/** One outstanding item between the draft and publication. */
+export interface AnnouncementValidationItem {
+  field: string;
+  message: string;
+}
+
+export interface AnnouncementValidation {
+  isPublishable: boolean;
+  items: AnnouncementValidationItem[];
+}
+
+/** One lifecycle entry, read from the audit trail rather than a second table. */
+export interface AnnouncementHistoryEntry {
+  id: string;
+  action: string;
+  label: string;
+  tone: StatusTone;
+  actor: string;
+  occurredAt: string;
+}
+
+export interface AnnouncementAdminDetail extends AnnouncementAdminRow {
+  body: string;
+  categoryCode: string;
+  priorityCode: string;
+  cta: AnnouncementCta | null;
+  validation: AnnouncementValidation;
+  history: AnnouncementHistoryEntry[];
+  mediaHref: string;
+}
+
+/** An office picker entry. `value` is the office id, not a stable code. */
+export interface AnnouncementOfficeOption {
+  value: number;
+  label: string;
+}
+
+export interface AnnouncementAudienceOptions {
+  canTargetCompany: boolean;
+  regions: AnnouncementOfficeOption[];
+  offices: AnnouncementOfficeOption[];
+  roles: FilterOption[];
+}
+
+export interface AnnouncementWorkspaceFilters {
+  q: string;
+  lifecycle: string;
+  category: string;
+  priority: string;
+  audience: string;
+  author: string;
+  office: string;
+  publishedFrom: string;
+  publishedTo: string;
+  [key: string]: string | string[];
+}
+
+/**
+ * State of the create drawer on the queue page.
+ *
+ * `null` on a normal visit. A rejected create answers with this page instead of
+ * the standalone form, flagged open and carrying back what was typed, so the
+ * author fixes the field they were already looking at.
+ */
+export interface AnnouncementCreateSheet {
+  open: boolean;
+  draft: Record<string, string | string[]>;
+}
+
+export interface AnnouncementAdministrationPageProps extends PageProps {
+  announcements: ListResponse<AnnouncementAdminRow, AnnouncementWorkspaceFilters>;
+  filterOptions: {
+    categories: FilterOption[];
+    priorities: FilterOption[];
+    offices: AnnouncementOfficeOption[];
+  };
+  /** Everything the create drawer renders, so opening it costs no round trip. */
+  createOptions: {
+    offices: AnnouncementOfficeOption[];
+    categories: FilterOption[];
+    priorities: FilterOption[];
+    audience: AnnouncementAudienceOptions;
+  };
+  createSheet: AnnouncementCreateSheet | null;
+  capabilities: AnnouncementCapabilities;
+  errors: ValidationErrors;
+}
+
+/**
+ * Whether a chosen effective audience would actually receive the draft.
+ *
+ * `matched` answers for an office-and-role reader. A person named individually
+ * cannot be stood in for by that pair, so `hasNamedRecipients` is reported
+ * separately rather than folded into a misleading "no".
+ */
+export interface AnnouncementPreviewReach {
+  chosen: boolean;
+  matched: boolean;
+  officeId: number | null;
+  officeName: string;
+  roleCode: string;
+  hasNamedRecipients: boolean;
+}
+
+export interface AnnouncementPreview {
+  article: AnnouncementDetail;
+  reach: AnnouncementPreviewReach;
+  roleCode: string;
+  officeId: number | null;
+}
+
+export interface AnnouncementWorkspacePageProps extends PageProps {
+  announcement: AnnouncementAdminDetail | null;
+  officeOptions: AnnouncementOfficeOption[];
+  categoryOptions: FilterOption[];
+  priorityOptions: FilterOption[];
+  audienceOptions: AnnouncementAudienceOptions;
+  capabilities: AnnouncementCapabilities;
+  preview: AnnouncementPreview | null;
+  errors: ValidationErrors;
+  /** What was submitted, echoed back so a rejected save loses no typing. */
+  posted: Record<string, string[]> | null;
 }
