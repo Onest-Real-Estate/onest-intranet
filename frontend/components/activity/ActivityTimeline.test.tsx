@@ -58,12 +58,15 @@ describe("ActivityTimeline", () => {
     expect(screen.getByText("Administrative record updated")).toBeVisible();
     expect(screen.getByText(/Ada Admin/)).toBeVisible();
     expect(screen.getByText("Headshot updated")).toBeVisible();
-    expect(screen.getByText(/System/)).toBeVisible();
+    expect(screen.getByText(/System \(automated\)/)).toBeVisible();
     expect(screen.getByText(/headshot.jpg/)).toBeVisible();
+    expect(screen.getByText(/Some details hidden/)).toBeVisible();
     expect(screen.getByText("America/New_York")).toBeVisible();
   });
 
-  it("shows empty and error states", () => {
+  it("shows empty and error states with recovery", async () => {
+    const onRetry = vi.fn();
+    const user = userEvent.setup();
     const { rerender } = render(
       <ActivityTimeline
         page={{ entries: [], nextCursor: null, hasMore: false, timezone: "UTC" }}
@@ -71,9 +74,11 @@ describe("ActivityTimeline", () => {
     );
     expect(screen.getByText("No activity yet")).toBeVisible();
 
-    rerender(<ActivityTimeline state="error" errorMessage="Boom" />);
+    rerender(<ActivityTimeline state="error" errorMessage="Boom" onRetry={onRetry} />);
     expect(screen.getByText("Activity unavailable")).toBeVisible();
     expect(screen.getByText("Boom")).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Try again" }));
+    expect(onRetry).toHaveBeenCalledOnce();
   });
 
   it("loads older activity when asked", async () => {

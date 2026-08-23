@@ -200,7 +200,12 @@ def test_page_and_download_flow(client, settings, tmp_path, seeded_offices):
         resource_type="file",
         body="",
     )
-    resource.file.save("packet.pdf", ContentFile(b"%PDF-1.4 test"), save=True)
+    # original_file_name is the download display name. Under MinIO
+    # (file_overwrite=False) a leftover key renames storage to
+    # packet_XXXXXXX.pdf; do not let the model fallback capture that.
+    resource.file.save("packet.pdf", ContentFile(b"%PDF-1.4 test"), save=False)
+    resource.original_file_name = "packet.pdf"
+    resource.save()
 
     client.force_login(agent)
     response = client.get(reverse("office_resources"), HTTP_X_INERTIA="true")

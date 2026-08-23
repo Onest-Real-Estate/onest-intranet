@@ -54,16 +54,19 @@ DocuSeal, Celery worker + beat. Use when the task needs a real database, S3, mai
 or background tasks. Management commands go through `make manage cmd="..."`,
 `make migrate`, `make makemigrations`, `make shell`, `make test`.
 
-**The gate — run before every commit** (identical to `.husky/pre-commit` and CI):
+**Pre-commit gate** (`.husky/pre-commit` — lint, types, migration drift; no tests):
 
 ```bash
 uv run ruff check . && uv run ruff format --check . && uv run ty check \
-  && uv run pytest && uv run python manage.py makemigrations --check --dry-run \
-  && pnpm typecheck && pnpm test && pnpm exec biome check .
+  && uv run python manage.py makemigrations --check --dry-run \
+  && pnpm typecheck && pnpm exec biome check .
 ```
 
-The `/checks` skill runs this in the right order and auto-fixes what is safely
-fixable.
+**CI** still runs the above plus `uv run pytest` and `pnpm test`. Run those
+locally when you want a full gate before pushing.
+
+The `/checks` skill runs the pre-commit set in the right order and auto-fixes
+what is safely fixable.
 
 ## Layout
 
