@@ -62,17 +62,23 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name="office",
             name="internal_email",
-            field=models.EmailField(blank=True, max_length=254, verbose_name="internal email"),
+            field=models.EmailField(
+                blank=True, max_length=254, verbose_name="internal email"
+            ),
         ),
         migrations.AddField(
             model_name="office",
             name="main_phone",
-            field=models.CharField(blank=True, max_length=30, verbose_name="main phone"),
+            field=models.CharField(
+                blank=True, max_length=30, verbose_name="main phone"
+            ),
         ),
         migrations.AddField(
             model_name="office",
             name="office_hours",
-            field=models.JSONField(blank=True, default=list, verbose_name="office hours"),
+            field=models.JSONField(
+                blank=True, default=list, verbose_name="office hours"
+            ),
         ),
         migrations.AddField(
             model_name="office",
@@ -82,7 +88,9 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name="office",
             name="public_email",
-            field=models.EmailField(blank=True, max_length=254, verbose_name="public email"),
+            field=models.EmailField(
+                blank=True, max_length=254, verbose_name="public email"
+            ),
         ),
         migrations.AddField(
             model_name="office",
@@ -172,13 +180,17 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name="office",
             name="street_address",
-            field=models.CharField(blank=True, max_length=255, verbose_name="street address"),
+            field=models.CharField(
+                blank=True, max_length=255, verbose_name="street address"
+            ),
         ),
         migrations.AddField(
             model_name="office",
             name="updated_at",
             field=models.DateTimeField(
-                auto_now=True, default=django.utils.timezone.now, verbose_name="updated at"
+                auto_now=True,
+                default=django.utils.timezone.now,
+                verbose_name="updated at",
             ),
             preserve_default=False,
         ),
@@ -190,13 +202,57 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name="OfficeContactAssignment",
             fields=[
-                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
-                ("assignment_type", models.CharField(choices=[("manager", "Manager"), ("admin", "Admin"), ("broker_contact", "Broker contact")], max_length=32, verbose_name="assignment type")),
-                ("is_primary", models.BooleanField(default=False, verbose_name="primary")),
-                ("starts_at", models.DateField(blank=True, null=True, verbose_name="starts at")),
-                ("ends_at", models.DateField(blank=True, null=True, verbose_name="ends at")),
-                ("office", models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name="contact_assignments", to="user.office", verbose_name="office")),
-                ("user", models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name="office_contact_assignments", to="user.user", verbose_name="user")),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                (
+                    "assignment_type",
+                    models.CharField(
+                        choices=[
+                            ("manager", "Manager"),
+                            ("admin", "Admin"),
+                            ("broker_contact", "Broker contact"),
+                        ],
+                        max_length=32,
+                        verbose_name="assignment type",
+                    ),
+                ),
+                (
+                    "is_primary",
+                    models.BooleanField(default=False, verbose_name="primary"),
+                ),
+                (
+                    "starts_at",
+                    models.DateField(blank=True, null=True, verbose_name="starts at"),
+                ),
+                (
+                    "ends_at",
+                    models.DateField(blank=True, null=True, verbose_name="ends at"),
+                ),
+                (
+                    "office",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="contact_assignments",
+                        to="user.office",
+                        verbose_name="office",
+                    ),
+                ),
+                (
+                    "user",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="office_contact_assignments",
+                        to="user.user",
+                        verbose_name="user",
+                    ),
+                ),
             ],
             options={
                 "verbose_name": "office contact assignment",
@@ -204,11 +260,15 @@ class Migration(migrations.Migration):
                 "ordering": ["assignment_type", "-is_primary", "user__email"],
             },
         ),
-        migrations.RunPython(backfill_office_identity_and_region, migrations.RunPython.noop),
+        migrations.RunPython(
+            backfill_office_identity_and_region, migrations.RunPython.noop
+        ),
         migrations.AlterField(
             model_name="office",
             name="stable_key",
-            field=models.SlugField(max_length=80, unique=True, verbose_name="stable key"),
+            field=models.SlugField(
+                max_length=80, unique=True, verbose_name="stable key"
+            ),
         ),
         migrations.AddIndex(
             model_name="office",

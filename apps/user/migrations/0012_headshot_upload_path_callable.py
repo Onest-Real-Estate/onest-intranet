@@ -5,15 +5,20 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('user', '0011_agent_profile_fields'),
+        ("user", "0011_agent_profile_fields"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='user',
-            name='headshot',
-            field=models.ImageField(blank=True, help_text='Profile photo. Must be JPEG/PNG, ≤5 MB, at least 200×200 px.', null=True, upload_to=apps.user.headshot.headshot_upload_path, verbose_name='headshot'),
+            model_name="user",
+            name="headshot",
+            field=models.ImageField(
+                blank=True,
+                help_text="Profile photo. Must be JPEG/PNG, ≤5 MB, at least 200×200 px.",
+                null=True,
+                upload_to=apps.user.headshot.headshot_upload_path,
+                verbose_name="headshot",
+            ),
         ),
     ]

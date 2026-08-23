@@ -4,18 +4,24 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('user', '0009_user_role_assignments'),
+        ("user", "0009_user_role_assignments"),
     ]
 
     operations = [
         migrations.RemoveConstraint(
-            model_name='userroleassignment',
-            name='user_role_assignment_company_scope_empty',
+            model_name="userroleassignment",
+            name="user_role_assignment_company_scope_empty",
         ),
         migrations.AddConstraint(
-            model_name='userroleassignment',
-            constraint=models.CheckConstraint(condition=models.Q(models.Q(('scope_office__isnull', True), ('scope_type', 'company')), models.Q(('scope_type', 'company'), _negated=True), _connector='OR'), name='user_role_assignment_company_scope_empty'),
+            model_name="userroleassignment",
+            constraint=models.CheckConstraint(
+                condition=models.Q(
+                    models.Q(("scope_office__isnull", True), ("scope_type", "company")),
+                    models.Q(("scope_type", "company"), _negated=True),
+                    _connector="OR",
+                ),
+                name="user_role_assignment_company_scope_empty",
+            ),
         ),
     ]

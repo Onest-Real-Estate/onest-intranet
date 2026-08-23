@@ -1188,6 +1188,48 @@ export interface QuickCreate {
   searchable: boolean;
 }
 
+/**
+ * Global search.
+ *
+ * Every hit was authorized by the domain that produced it, and `snippet` /
+ * `title` are **plain text** — no markup crosses the wire, so highlighting is a
+ * client-side match against the string and there is nothing to sanitize.
+ */
+export interface SearchHit {
+  id: string;
+  title: string;
+  href: string;
+  snippet: string;
+  meta: string;
+}
+
+export interface SearchGroup {
+  key: string;
+  label: string;
+  icon: string;
+  hits: SearchHit[];
+  /** This source errored; its results are missing rather than empty. */
+  failed: boolean;
+  /** More matches exist than the cap returned. */
+  truncated: boolean;
+  allResultsHref: string;
+}
+
+export interface SearchResults {
+  query: string;
+  groups: SearchGroup[];
+  total: number;
+  /** The query was below the minimum length and was not run. */
+  tooShort: boolean;
+  minLength: number;
+  /** At least one source failed or was skipped; the answer is incomplete. */
+  partial: boolean;
+}
+
+export interface SearchPageProps extends PageProps {
+  results: SearchResults;
+}
+
 export interface FilterOption {
   value: string;
   label: string;

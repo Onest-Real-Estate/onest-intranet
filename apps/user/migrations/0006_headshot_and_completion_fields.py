@@ -5,25 +5,36 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('user', '0005_management_role_groups'),
+        ("user", "0005_management_role_groups"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='user',
-            name='headshot',
-            field=models.ImageField(blank=True, help_text='Profile photo. Must be JPEG/PNG, ≤5 MB, at least 200×200 px.', null=True, upload_to=apps.user.headshot.headshot_upload_path, verbose_name='headshot'),
+            model_name="user",
+            name="headshot",
+            field=models.ImageField(
+                blank=True,
+                help_text="Profile photo. Must be JPEG/PNG, ≤5 MB, at least 200×200 px.",
+                null=True,
+                upload_to=apps.user.headshot.headshot_upload_path,
+                verbose_name="headshot",
+            ),
         ),
         migrations.AddField(
-            model_name='user',
-            name='onboarding_version',
-            field=models.PositiveSmallIntegerField(default=0, help_text='Incremented on each admin reset so historical completions remain distinguishable from re-onboardings.', verbose_name='onboarding version'),
+            model_name="user",
+            name="onboarding_version",
+            field=models.PositiveSmallIntegerField(
+                default=0,
+                help_text="Incremented on each admin reset so historical completions remain distinguishable from re-onboardings.",
+                verbose_name="onboarding version",
+            ),
         ),
         migrations.AddField(
-            model_name='user',
-            name='profile_completed_at',
-            field=models.DateTimeField(blank=True, null=True, verbose_name='profile completed at'),
+            model_name="user",
+            name="profile_completed_at",
+            field=models.DateTimeField(
+                blank=True, null=True, verbose_name="profile completed at"
+            ),
         ),
     ]

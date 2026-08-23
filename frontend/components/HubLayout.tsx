@@ -15,9 +15,9 @@ import {
 import { type CSSProperties, type ReactNode, useEffect, useRef, useState } from "react";
 
 import { BrandMark } from "@/components/BrandMark";
-import { SearchControl } from "@/components/design-system/search-control";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { QuickCreateMenu } from "@/components/QuickCreateMenu";
+import { GlobalSearch } from "@/components/search/GlobalSearch";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -555,20 +555,9 @@ function ShellWorkspace({
           </Button>
         ) : null}
         <PageContext context={context} />
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <div className="hidden w-full max-w-sm min-w-0 xl:block">
-              <SearchControl
-                label="Search across ONEST"
-                placeholder="Search clients, properties, and documents"
-                disabled
-                tone="subtle"
-                size="sm"
-              />
-            </div>
-          </TooltipTrigger>
-          <TooltipContent>Search arrives with the next release</TooltipContent>
-        </Tooltip>
+        {/* Live global search. Results are authorized and scoped server-side
+            before serialization — see apps/web/search. */}
+        <GlobalSearch />
         <div className="ml-auto flex shrink-0 items-center gap-0.5">
           {helpUrl ? (
             <Tooltip>
