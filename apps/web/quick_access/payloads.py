@@ -221,6 +221,8 @@ def index_props(
     page: int = 1,
     preview_role: str = "",
     preview_office: int | None = None,
+    create_sheet: dict[str, Any] | None = None,
+    errors: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     at = timezone.now()
     status = status if status in STATUS_FILTERS else ""
@@ -274,6 +276,29 @@ def index_props(
             ),
             "scopeLevel": "brokerage" if scope.company_wide else "scoped",
         },
+        # Everything the create drawer renders, so opening it costs no round
+        # trip. Quick Create links straight here with ``?create=1``.
+        "createOptions": create_field_options(),
+        "createSheet": create_sheet,
+        "errors": errors or empty_validation_errors(),
+    }
+
+
+def create_field_options() -> dict[str, Any]:
+    """Static choice lists both the full-page form and the create drawer need.
+
+    Extracted so the two surfaces cannot drift: a new icon or destination type
+    appears in both the moment it is added to the catalog.
+    """
+    return {
+        "iconOptions": icon_options(),
+        "internalDestinations": internal_destination_options(),
+        "destinationTypeOptions": _choice_options(
+            QuickAccessLink.DestinationType.choices
+        ),
+        "ssoOptions": _choice_options(QuickAccessLink.SsoCapability.choices),
+        "healthOptions": _choice_options(QuickAccessLink.IntegrationHealth.choices),
+        "setupOptions": _choice_options(QuickAccessLink.SetupBehavior.choices),
     }
 
 
@@ -294,14 +319,7 @@ def form_props(
         "errors": errors or empty_validation_errors(),
         "posted": {key: posted.getlist(key) for key in posted} if posted else None,
         "pendingConfirmation": pending_confirmation or [],
-        "iconOptions": icon_options(),
-        "internalDestinations": internal_destination_options(),
-        "destinationTypeOptions": _choice_options(
-            QuickAccessLink.DestinationType.choices
-        ),
-        "ssoOptions": _choice_options(QuickAccessLink.SsoCapability.choices),
-        "healthOptions": _choice_options(QuickAccessLink.IntegrationHealth.choices),
-        "setupOptions": _choice_options(QuickAccessLink.SetupBehavior.choices),
+        **create_field_options(),
         "roleOptions": [
             {"value": definition.code, "label": definition.label}
             for definition in ROLE_DEFINITIONS

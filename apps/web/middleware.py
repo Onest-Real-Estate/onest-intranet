@@ -16,6 +16,7 @@ from apps.web.authorization import (
 )
 from apps.web.navigation import hub_feature_states, primary_office_payload
 from apps.web.permission_catalog import CATALOG_VERSION
+from apps.web.quick_actions import quick_create_payload
 from apps.web.shell import authorization_version, help_configuration
 
 logger = logging.getLogger("apps.authorization")
@@ -145,6 +146,12 @@ class InertiaShareMiddleware:
                 ),
             ),
             primaryOffice=lambda: primary_office_payload(request.user),
+            # Quick Create. Filtered to what the actor may actually start —
+            # unavailable actions are absent from the payload, not hidden in
+            # the client. See apps/web/quick_actions.py.
+            quickCreate=lambda: quick_create_payload(
+                request.user, access=self.access_context(request)
+            ),
             # Header badge counts — the reader's own unread total, never
             # an office aggregate. See apps/notifications/shell.py.
             notifications=lambda: notification_shell_payload(request.user),
