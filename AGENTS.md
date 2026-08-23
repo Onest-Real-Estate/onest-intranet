@@ -23,11 +23,17 @@ registration, and deployment; don't duplicate it here.
 7. **Ask before touching** `config/settings.py` auth/CSRF settings,
    `deployment/`, `.github/workflows/`, or anything under `migrations/` that is
    already applied.
-8. If there is a requirement only if create a new apps under `apps/` folder add it to `settings.py`
-9. Do not use plain <a href> tag use inertia's <Link></Link> tag for all the movement 
-10. select_for_update() with select_related("owner_office").
-     owner_office is nullable → Postgres LEFT OUTER JOIN → FOR UPDATE cannot be
-     applied to the nullable side of an outer join. SQLite hides this.
+8. **Register new apps.** If a requirement needs a new Django app, create it
+   under `apps/` and add it to `INSTALLED_APPS`.
+9. **Use Inertia navigation.** Use Inertia's `<Link>` for in-app navigation,
+   never a plain `<a href>`.
+10. **Beware nullable joins when locking.** Do not combine
+    `select_for_update()` with `select_related("owner_office")`:
+    `owner_office` is nullable, so PostgreSQL creates a `LEFT OUTER JOIN` and
+    cannot apply `FOR UPDATE` to its nullable side. SQLite hides this.
+11. **Check dependency blocks when requested.** If a prompt says to check
+    dependencies, inspect its blocking GitHub issues with `gh`. Stop when an
+    unresolved blocker is open and report the required work in dependency order.
 ## Commands
 
 Two ways to run things. Pick one and stay consistent within a task.
@@ -48,16 +54,19 @@ DocuSeal, Celery worker + beat. Use when the task needs a real database, S3, mai
 or background tasks. Management commands go through `make manage cmd="..."`,
 `make migrate`, `make makemigrations`, `make shell`, `make test`.
 
-**The gate — run before every commit** (identical to `.husky/pre-commit` and CI):
+**Pre-commit gate** (`.husky/pre-commit` — lint, types, migration drift; no tests):
 
 ```bash
 uv run ruff check . && uv run ruff format --check . && uv run ty check \
-  && uv run pytest && uv run python manage.py makemigrations --check --dry-run \
-  && pnpm typecheck && pnpm test && pnpm exec biome check .
+  && uv run python manage.py makemigrations --check --dry-run \
+  && pnpm typecheck && pnpm exec biome check .
 ```
 
-The `/checks` skill runs this in the right order and auto-fixes what is safely
-fixable.
+**CI** still runs the above plus `uv run pytest` and `pnpm test`. Run those
+locally when you want a full gate before pushing.
+
+The `/checks` skill runs the pre-commit set in the right order and auto-fixes
+what is safely fixable.
 
 ## Layout
 
@@ -101,6 +110,68 @@ so the shell paints first. Page: default-exported component, props read via
 **URLs.** Reverse with the typed map, never string literals:
 `routes.dashboard()`, `routes.coming_soon("my-contract")`.
 
+### Django best practices
+
+- Keep views thin: authorize, validate input, call a domain service or query
+  helper, and construct the response. Put multi-step business rules and writes
+  in the owning app's service layer, not in views, templates, or signals.
+- Treat every request value as untrusted. Use Django forms or explicit typed
+  parsers, return the repository's standard validation shape, and never pass
+  unchecked client values into filters, ordering, redirects, or file paths.
+- Apply permission and office-scope filters in the queryset before fetching
+  objects. A later Python check can leak existence or fields and is not an
+  authorization boundary. Use `get_object_or_404` or `PermissionDenied` according
+  to the feature's documented disclosure policy.
+- Prevent N+1 queries deliberately: use `select_related()` for required
+  single-valued relations and `prefetch_related()` for collections. Paginate
+  unbounded lists, use deterministic ordering, and add indexes only after
+  checking real query plans or measurements.
+- Keep write transactions short. Lock only the rows being changed with
+  `select_for_update(of=("self",))`, acquire multiple locks in a stable order,
+  and schedule email, storage, cache, and Celery side effects with
+  `transaction.on_commit()` when they depend on a successful commit.
+- Enforce durable invariants in models and database constraints, not only in
+  React or form code. Use timezone-aware datetimes and avoid `save()` overrides
+  or signals for workflows that need explicit ordering, actors, or audit data.
+- Use safe HTTP semantics: GET/HEAD are read-only; state changes require
+  POST/PUT/PATCH/DELETE, CSRF protection, and a redirect after success. Do not
+  expose raw exception text, secrets, tokens, or unnecessary personal data in
+  responses, logs, tasks, or audit metadata.
+- Test authorization, validation, scope boundaries, transactions, and query
+  behavior at the layer that owns them. Any locking or PostgreSQL-specific
+  behavior needs a PostgreSQL-backed test; SQLite is not proof of correctness.
+
+### Inertia.js best practices
+
+- Treat an Inertia page as a server-owned protocol, not a client-side API. Props
+  must be minimal, JSON-serializable presentation data with stable camelCase
+  keys; never serialize model objects wholesale or include data merely because
+  the current UI hides it.
+- Keep global shared props small and genuinely global. Compute request-wide data
+  once in middleware, use lazy callables for expensive values, and update the
+  corresponding `PageProps` type whenever the shared contract changes.
+- Use typed `routes.*` URLs with `<Link>` or `router`; do not hard-code internal
+  paths or use `window.location` for normal visits. Use `replace`,
+  `preserveState`, and `preserveScroll` only when the interaction requires them,
+  not as blanket defaults.
+- Submit mutations with Inertia's router/form helpers and this repository's
+  validation contract (`fields` plus `form`). Disable duplicate submissions,
+  surface server errors accessibly, and redirect after a successful mutation so
+  refresh/back navigation does not repeat the write.
+- Defer only independent, expensive props. Deferred values are `undefined`
+  initially, so render a stable skeleton/empty state and keep prop types honest.
+  For partial reloads, request only documented prop keys and wrap expensive
+  server computations in callables so omitted props are not evaluated.
+- Keep canonical filter, search, sort, and pagination state in the URL. Debounce
+  noisy searches, cancel or ignore stale visits, and prefer `replace: true` for
+  transient filter changes so browser history remains useful.
+- Never rely on a hidden component or `<PermissionRequired>` as authorization.
+  The Django endpoint must independently authenticate, authorize, scope, and
+  validate every full visit, partial reload, and mutation.
+- Give every page a meaningful `<Head title>`, keyboard-safe focus behavior,
+  loading/empty/error states, and tests for the Inertia visit options and props
+  that drive important behavior.
+
 **Roles.** Catalog codes in `apps/user/roles.py` (`system_admin`, `realtor`, …)
 map to Django Groups for permissions. Assignments store stable codes; display
 names are presentation only. Scope follows the user's office tree and
@@ -134,4 +205,3 @@ indent. Types: `ty` on the backend, `tsc --noEmit` on the frontend — both must
   That is supply-chain hardening, not a bug; don't disable it to unblock yourself.
 - **Secrets live in `.env`** (python-decouple). Never commit them, never print
   them into logs, output, or artifacts.
-

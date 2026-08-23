@@ -240,6 +240,10 @@ class AuditEvent(models.Model):
         permissions = [
             ("can_view_audit_events", "Can view audit events"),
             ("can_export_audit_events", "Can export audit events"),
+            (
+                "can_view_activity_timeline",
+                "Can view user-facing activity timelines",
+            ),
         ]
         indexes = [
             models.Index(fields=["occurred_at"], name="audit_ae_occurred"),

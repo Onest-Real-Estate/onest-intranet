@@ -5,16 +5,11 @@ on:
     branches: [main, staging, development]
   pull_request:
 
-# Mirrors the checks in .husky/pre-commit (minus lint-staged, which only
-# auto-fixes staged files):
-#   uv run ruff check .
-#   uv run ruff format --check .
-#   uv run ty check
+# Pre-commit (.husky/pre-commit) runs lint, types, and migration drift only.
+# This workflow adds the slow suites that stay out of the local hook:
 #   uv run pytest
-#   uv run python manage.py makemigrations --check --dry-run
-#   pnpm typecheck
 #   pnpm test
-#   pnpm exec biome check .
+# Plus the same lint/type/migration checks as pre-commit (minus lint-staged).
 
 jobs:
   backend:

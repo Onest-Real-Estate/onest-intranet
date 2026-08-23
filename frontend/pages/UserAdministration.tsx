@@ -1,7 +1,7 @@
 import { Head, Link, usePage } from "@inertiajs/react";
-import { ArrowRight, History, Lock, ShieldAlert } from "lucide-react";
+import { ArrowRight, Lock, ShieldAlert } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-
+import { ActivityTimeline } from "@/components/activity/ActivityTimeline";
 import {
   type AccessChange,
   AccessChangeDialog,
@@ -21,7 +21,6 @@ import {
   StatusBadge,
   SurfaceCard,
   SurfaceCardContent,
-  Timeline,
 } from "@/components/design-system";
 import { HubLayout } from "@/components/HubLayout";
 import { SelectField, TextField } from "@/components/profile/profile-fields";
@@ -31,7 +30,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { hasPermission } from "@/lib/permissions";
 import { routes } from "@/lib/routes";
 import { hasValidationErrors } from "@/lib/validation";
-import type { UserAdministrationPageProps } from "@/types";
+import type { ActivityTimelinePage, UserAdministrationPageProps } from "@/types";
 
 function initials(name: string): string {
   return name
@@ -475,49 +474,55 @@ export default function UserAdministration() {
             </SurfaceCardContent>
           </SurfaceCard>
 
-          <SurfaceCard>
-            <PanelHeader
-              divided
+          <div className="grid gap-4">
+            <SurfaceCard>
+              <PanelHeader divided title="Last change" />
+              <SurfaceCardContent>
+                <dl className="grid gap-4">
+                  <ReadOnlyValue label="When">
+                    {formatMoment(provenance.lastChangedAt)}
+                  </ReadOnlyValue>
+                  <ReadOnlyValue label="By">
+                    {provenance.lastChangedBy ?? "—"}
+                  </ReadOnlyValue>
+                </dl>
+              </SurfaceCardContent>
+            </SurfaceCard>
+            <ActivityTimeline
               title="Recent activity"
-              meta={
-                <span className="text-muted-foreground flex items-center gap-1 text-xs font-medium">
-                  <History className="size-3.5" aria-hidden />
-                  Audited
-                </span>
+              compactEmpty
+              page={
+                {
+                  entries: history.map((entry) => ({
+                    id: entry.id,
+                    eventType: entry.action,
+                    summary: entry.label,
+                    occurredAt: entry.occurredAt,
+                    occurredAtDisplay: formatMoment(entry.occurredAt),
+                    actorLabel: entry.actor || "Unknown actor",
+                    actorKind: entry.actor ? "user" : "unknown",
+                    target: {
+                      type: "user",
+                      id: String(subject.id),
+                      label: subject.displayName,
+                    },
+                    related: [],
+                    source: "app",
+                    visibility: "summary",
+                    outcome: entry.outcome,
+                    reason: entry.reason,
+                    metadata: {},
+                    typedAction: null,
+                    files: [],
+                    changeSummary: entry.fields,
+                  })),
+                  nextCursor: null,
+                  hasMore: false,
+                  timezone: "Audited",
+                } satisfies ActivityTimelinePage
               }
             />
-            <SurfaceCardContent className="grid gap-4">
-              <dl className="grid gap-4">
-                <ReadOnlyValue label="When">
-                  {formatMoment(provenance.lastChangedAt)}
-                </ReadOnlyValue>
-                <ReadOnlyValue label="By">
-                  {provenance.lastChangedBy ?? "—"}
-                </ReadOnlyValue>
-              </dl>
-              {history.length > 0 ? (
-                <Timeline
-                  className="border-t pt-4"
-                  items={history.map((entry) => ({
-                    id: entry.id,
-                    title: entry.label,
-                    meta: formatMoment(entry.occurredAt),
-                    description:
-                      entry.actor +
-                      (entry.reason
-                        ? ` · ${entry.reason}`
-                        : entry.fields.length
-                          ? ` · ${entry.fields.join(", ")}`
-                          : ""),
-                  }))}
-                />
-              ) : (
-                <p className="text-muted-foreground border-t pt-4 text-sm">
-                  Nothing has been changed on this record yet.
-                </p>
-              )}
-            </SurfaceCardContent>
-          </SurfaceCard>
+          </div>
         </aside>
       </div>
 

@@ -851,6 +851,55 @@ export interface AdministrationHistoryEntry {
   reason: string;
 }
 
+// ---------------------------------------------------------------------------
+// Activity timeline (P1-080)
+// ---------------------------------------------------------------------------
+
+export type ActivityActorKind = "user" | "system" | "service" | "anonymous" | "unknown";
+
+export type ActivityVisibility = "full" | "redacted" | "summary";
+
+export interface ActivityRecordRef {
+  type: string;
+  id: string;
+  label: string;
+}
+
+export interface ActivityFileRef {
+  id: string;
+  name: string;
+  contentType: string;
+}
+
+export interface ActivityTimelineEntry {
+  id: string;
+  eventType: string;
+  summary: string;
+  occurredAt: string;
+  occurredAtDisplay: string;
+  actorLabel: string;
+  actorKind: ActivityActorKind;
+  target: ActivityRecordRef;
+  related: ActivityRecordRef[];
+  source: string;
+  visibility: ActivityVisibility;
+  outcome: string;
+  reason: string;
+  metadata: Record<string, unknown>;
+  typedAction: string | null;
+  files: ActivityFileRef[];
+  changeSummary: string[];
+}
+
+export interface ActivityTimelinePage {
+  entries: ActivityTimelineEntry[];
+  nextCursor: string | null;
+  hasMore: boolean;
+  timezone: string;
+}
+
+// ---------------------------------------------------------------------------
+
 export interface AdministrationRoleScope {
   value: string;
   label: string;

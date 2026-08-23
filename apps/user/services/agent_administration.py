@@ -636,32 +636,16 @@ HISTORY_LABELS: dict[str, str] = {
 }
 
 
-def administration_history(user: User, *, limit: int = 8) -> list[dict]:
+def administration_history(viewer: User, user: User, *, limit: int = 8) -> list[dict]:
     """Recent authorized activity on this record, newest first.
 
-    Scoped by the target rather than by the reader's audit permission: an
-    administrator authorized to change this record is authorized to see what
-    was changed on it. Reasons are carried through because "who and when"
-    without "why" is not an answer anybody can act on.
+    Projects from append-only audit events via the shared activity timeline
+    module. Record access is already enforced by the caller; timeline permission
+    is not re-checked here so administration embeds keep working.
     """
-    events = AuditEvent.objects.filter(
-        target_type=User._meta.label_lower,
-        target_id=str(user.pk),
-        action__in=HISTORY_ACTIONS,
-    ).order_by("-occurred_at")[:limit]
-    return [
-        {
-            "id": str(event.id),
-            "action": event.action,
-            "label": HISTORY_LABELS.get(event.action, event.action),
-            "occurredAt": event.occurred_at.isoformat(),
-            "actor": event.actor_label,
-            "outcome": event.outcome,
-            "fields": sorted(event.changes.keys()),
-            "reason": event.reason,
-        }
-        for event in events
-    ]
+    from apps.audit.activity import project_user_administration_history
+
+    return project_user_administration_history(viewer, user, limit=limit)
 
 
 def _assignment_payload(assignment: UserRoleAssignment, *, can_revoke: bool) -> dict:
@@ -817,7 +801,7 @@ def administration_page_payload(actor: User, target: User) -> dict:
                 else None
             ),
         },
-        "history": administration_history(target),
+        "history": administration_history(actor, target),
         "assignments": role_assignment_payloads(actor, target),
         "effectiveAccess": effective_access_payload(target),
         "options": {

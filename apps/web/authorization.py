@@ -812,6 +812,17 @@ ROUTE_POLICIES: dict[str, AuthorizationPolicy] = {
         route_names=("coming_soon",),
         scope_rule="self_only",
     ),
+    "activity_timeline": AuthorizationPolicy(
+        key="activity_timeline",
+        access="permission_protected",
+        description="Cursor-paginated activity timeline for one authorized record.",
+        methods=("GET",),
+        route_names=("activity_timeline",),
+        all_permissions=("audit.can_view_activity_timeline",),
+        scope_rule="none",
+        auth_behavior="json",
+        surface_type="route",
+    ),
 }
 
 ROUTE_POLICIES.update(
