@@ -247,12 +247,24 @@ describe("RoleAssignmentWorkspace", () => {
     expect(screen.getByTestId("hub-layout")).toHaveTextContent("Page content");
   });
 
-  it("renders assignments and explains unavailable roles", () => {
+  it("renders the subject and their assignments without the grant form", () => {
     render(<RoleAssignmentWorkspace />);
     expect(screen.getByText("Alex Agent")).toBeInTheDocument();
-    expect(screen.getByText(/assigned records/i)).toBeInTheDocument();
-    expect(screen.getByText(/system admin unavailable/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /revoke/i })).toBeInTheDocument();
+    // Granting moved into a drawer, so its choices are not on the page until
+    // somebody asks for them. Asserting the absence keeps this test honest
+    // about *why* the checks below need a click first.
+    expect(screen.queryByText(/assigned records/i)).not.toBeInTheDocument();
+  });
+
+  it("explains unavailable roles once the grant drawer is open", async () => {
+    const user = userEvent.setup();
+    render(<RoleAssignmentWorkspace />);
+
+    await user.click(screen.getByRole("button", { name: /grant a role/i }));
+
+    expect(await screen.findByText(/assigned records/i)).toBeInTheDocument();
+    expect(screen.getByText(/system admin unavailable/i)).toBeInTheDocument();
   });
 
   it("opens the revoke dialog", async () => {
