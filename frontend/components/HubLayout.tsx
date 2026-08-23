@@ -7,7 +7,6 @@ import {
   CircleHelp,
   LogOut,
   Palette,
-  Plus,
   RefreshCw,
   Settings,
   UserRound,
@@ -18,6 +17,7 @@ import { type CSSProperties, type ReactNode, useEffect, useRef, useState } from 
 import { BrandMark } from "@/components/BrandMark";
 import { SearchControl } from "@/components/design-system/search-control";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
+import { QuickCreateMenu } from "@/components/QuickCreateMenu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -443,6 +443,7 @@ function ShellWorkspace({
   context,
   helpUrl,
   notifications,
+  quickCreate,
   primaryOffice,
   role,
   user,
@@ -454,6 +455,7 @@ function ShellWorkspace({
   context: HubPageContext;
   helpUrl: string | null;
   notifications: PageProps["notifications"];
+  quickCreate: PageProps["quickCreate"];
   primaryOffice: PageProps["primaryOffice"];
   role: string;
   user: User | null;
@@ -590,9 +592,9 @@ function ShellWorkspace({
             </PendingAction>
           )}
           <NotificationBell summary={notifications} />
-          <PendingAction label="Create new" note="Quick create is not wired up yet">
-            <Plus className="size-5" strokeWidth={1.5} />
-          </PendingAction>
+          {/* One registry, both entry points: this header is the mobile header
+              too, so desktop and mobile can never offer different actions. */}
+          <QuickCreateMenu quickCreate={quickCreate} />
           {user ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -676,7 +678,7 @@ function ShellWorkspace({
 
 export function HubLayout({ children, context, variant = "standard" }: HubLayoutProps) {
   const page = usePage<PageProps>();
-  const { user, features, primaryOffice, notifications } = page.props;
+  const { user, features, primaryOffice, notifications, quickCreate } = page.props;
   const current = page.url.split("?")[0];
   const navGroups = resolveHubNav(user, features, primaryOffice);
   const [expandedSections, setExpandedSections] = useState<Set<HubNavSectionKey>>(() =>
@@ -790,6 +792,7 @@ export function HubLayout({ children, context, variant = "standard" }: HubLayout
         context={resolvedContext}
         helpUrl={page.props.shell?.help.url ?? null}
         notifications={notifications}
+        quickCreate={quickCreate}
         primaryOffice={primaryOffice}
         role={role}
         user={user}

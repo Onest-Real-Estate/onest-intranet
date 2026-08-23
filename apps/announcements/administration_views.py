@@ -178,7 +178,16 @@ def index_props(
 @inertia(INDEX_PAGE)
 def announcement_administration_index(request: HttpRequest):
     actor = cast(User, request.user)
-    return index_props(actor, params=request.GET, page=_page_param(request))
+    # ``?create=1`` is how Quick Create opens the drawer here instead of sending
+    # the author to a standalone form. It only opens a drawer — the create
+    # endpoint still applies every permission and scope check on submit.
+    opening = request.GET.get("create") == "1"
+    return index_props(
+        actor,
+        params=request.GET,
+        page=_page_param(request),
+        create_sheet={"open": True, "draft": {}} if opening else None,
+    )
 
 
 def _render_index_with_sheet_errors(
