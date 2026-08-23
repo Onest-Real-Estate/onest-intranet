@@ -506,6 +506,28 @@ PERMISSION_DEFINITIONS: tuple[PermissionDefinition, ...] = (
     ),
     # --- Audit ---
     PermissionDefinition(
+        codename="audit.can_view_activity_timeline",
+        name="Can view activity timelines",
+        domain="activity",
+        action="view",
+        description=(
+            "View the permission-aware activity timeline projected from audit "
+            "events for records in scope. Distinct from raw audit-log access."
+        ),
+        default_roles=(
+            *_MANAGERS,
+            BRANCH_ADMIN,
+            REGIONAL_ADMIN,
+            TRANSACTION_COORDINATOR,
+            REGIONAL_TRANSACTION_COORDINATOR,
+            COMPLIANCE,
+            IT_SUPPORT,
+            ACCOUNTANT,
+        ),
+        risk="medium",
+        sensitive=True,
+    ),
+    PermissionDefinition(
         codename="audit.can_view_audit_events",
         name="Can view audit events",
         domain="audit",
@@ -556,7 +578,7 @@ PERMISSION_BY_CODENAME: dict[str, PermissionDefinition] = {
     item.codename: item for item in PERMISSION_DEFINITIONS
 }
 CATALOG_CODENAMES: frozenset[str] = frozenset(PERMISSION_BY_CODENAME)
-CATALOG_VERSION = "p0-permissions-v1"
+CATALOG_VERSION = "p1-activity-timeline-v1"
 
 
 def is_cataloged_permission(codename: str) -> bool:

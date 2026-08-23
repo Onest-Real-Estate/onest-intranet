@@ -25,6 +25,7 @@ Use stable `domain.action` style Django codenames, for example:
 - `web.view_users`, `web.add_users`, `web.assign_user_roles`
 - `user.view_user_administration`, `user.change_user_administration`,
   `user.manage_account_state`
+- `audit.can_view_activity_timeline` (user-facing timelines; distinct from raw audit)
 - `audit.can_view_audit_events`, `audit.can_export_audit_events`
 
 Sensitive actions split read / export / approve / manage rather than bundling

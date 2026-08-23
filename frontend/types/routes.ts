@@ -1,4 +1,5 @@
 const URLS = {
+    'activity_timeline': (record_type: string, record_id: string) => `/activity/${record_type}/${record_id}`,
     'announcement_media_remove': (media_id: number) => `/operations/announcements/media/${media_id}/remove`,
     'announcement_media_replace': (media_id: number) => `/operations/announcements/media/${media_id}/replace`,
     'announcement_media_reorder': (announcement_id: number) => `/operations/announcements/${announcement_id}/media/reorder`,
