@@ -107,7 +107,10 @@ A permission can gate a *column* as well as a route. The people directory and
 the administrative record omit keys the reader may not have — `agentStatus`,
 `agentIdentifier`, and `startDate` behind `user.view_user_administration`;
 `contractStatus` behind `web.view_agent_contracts`; operational notes behind
-`user.change_user_administration`. Keys are absent rather than null: a key
+`user.change_user_administration`. Contract commission terms and contract
+internal notes use `contract.view_commission_terms` and
+`contract.view_internal_notes` (see [agent-contracts.md](agent-contracts.md)).
+Keys are absent rather than null: a key
 present but empty still discloses that the field exists.
 
 Direct user permission exceptions are not a product feature in P0. If added

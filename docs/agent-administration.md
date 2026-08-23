@@ -49,9 +49,10 @@ Roles workspace ([role-assignment-administration.md](role-assignment-administrat
 linked from this panel when they may open it.
 
 Contract status has no column at all. It is read from the contract domain by
-`agent_administration.contract_status()` and reported as unavailable until that
-module is connected. A status an administrator can type into a profile is a
-status that drifts from the contract it claims to describe.
+`agent_administration.contract_status()` → `apps.contract.services.agent_contract_status`
+once the contract app is installed. See [agent-contracts.md](agent-contracts.md).
+A status an administrator can type into a profile is a status that drifts from
+the contract it claims to describe.
 
 ## What nobody may change here
 

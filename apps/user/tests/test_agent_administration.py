@@ -354,7 +354,8 @@ def test_profile_shows_the_administrative_record_read_only(client):
     administrative = identity["administrative"]
     assert administrative["agentStatus"]["value"] == "on_leave"
     assert administrative["agentIdentifier"] == "ON-4412"
-    assert administrative["contractStatus"]["available"] is False
+    assert administrative["contractStatus"]["available"] is True
+    assert administrative["contractStatus"]["status"] is None
     assert "internalNotes" not in administrative
 
 
@@ -766,7 +767,8 @@ def test_contract_status_is_derived_and_cannot_be_typed_in(client):
     target.refresh_from_db()
     assert not hasattr(target, "contract_status")
     payload = page(client, User.objects.get(pk=target.pk))
-    assert payload["contractStatus"]["available"] is False
+    assert payload["contractStatus"]["available"] is True
+    assert payload["contractStatus"]["status"] is None
     assert payload["contractStatus"]["source"] == "contract"
 
 

@@ -1,0 +1,93 @@
+"""Read-only Django admin registration for ops debugging.
+
+Product workflows for contract creation, signing, and lifecycle live outside
+Django admin. These registrations exist so support can inspect rows without
+treating admin as the authoring surface.
+"""
+
+from django.contrib import admin
+
+from apps.contract.models import (
+    AgentContract,
+    ContractArtifact,
+    ContractTemplate,
+    ContractTemplateVersion,
+)
+
+
+@admin.register(ContractTemplate)
+class ContractTemplateAdmin(admin.ModelAdmin):
+    list_display = ("name", "stable_key", "status", "updated_at")
+    search_fields = ("name", "stable_key")
+    readonly_fields = ("public_id", "created_at", "updated_at")
+
+
+@admin.register(ContractTemplateVersion)
+class ContractTemplateVersionAdmin(admin.ModelAdmin):
+    list_display = ("template", "version_label", "status", "published_at")
+    list_filter = ("status",)
+    search_fields = ("template__stable_key", "version_label")
+    readonly_fields = ("public_id", "created_at")
+
+
+class ContractArtifactInline(admin.TabularInline):
+    model = ContractArtifact
+    extra = 0
+    readonly_fields = (
+        "public_id",
+        "kind",
+        "display_name",
+        "media_type",
+        "byte_size",
+        "checksum",
+        "created_at",
+    )
+    can_delete = False
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(AgentContract)
+class AgentContractAdmin(admin.ModelAdmin):
+    list_display = (
+        "public_id",
+        "recipient",
+        "office",
+        "status",
+        "effective_on",
+        "version_number",
+    )
+    list_filter = ("status",)
+    search_fields = (
+        "public_id",
+        "recipient__email",
+        "recipient__display_name",
+        "office__name",
+    )
+    readonly_fields = (
+        "public_id",
+        "family_id",
+        "party_snapshot",
+        "office_snapshot",
+        "terms_snapshot",
+        "created_at",
+        "updated_at",
+        "viewed_at",
+        "sent_at",
+        "signed_at",
+        "activated_at",
+        "superseded_at",
+        "expired_at",
+        "terminated_at",
+    )
+    inlines = [ContractArtifactInline]
+    autocomplete_fields = ("recipient", "office", "created_by", "template_version")
+
+
+@admin.register(ContractArtifact)
+class ContractArtifactAdmin(admin.ModelAdmin):
+    list_display = ("display_name", "kind", "contract", "byte_size", "created_at")
+    list_filter = ("kind",)
+    search_fields = ("public_id", "display_name", "checksum")
+    readonly_fields = ("public_id", "checksum", "byte_size", "created_at")

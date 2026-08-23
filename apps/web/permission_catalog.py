@@ -141,6 +141,44 @@ PERMISSION_DEFINITIONS: tuple[PermissionDefinition, ...] = (
         ),
     ),
     PermissionDefinition(
+        codename="contract.manage_agent_contracts",
+        name="Can manage scoped agent contracts",
+        domain="people",
+        action="manage",
+        description="Create and edit agent contract drafts within office scope.",
+        default_roles=(*_BROKERAGE_ADMINS, REGIONAL_MANAGER, BRANCH_MANAGER),
+        risk="high",
+        sensitive=True,
+    ),
+    PermissionDefinition(
+        codename="contract.view_commission_terms",
+        name="Can view contract commission terms",
+        domain="people",
+        action="view",
+        description=(
+            "Read agent/office splits, mentor and referral terms, fees, and "
+            "caps on scoped contracts."
+        ),
+        default_roles=(
+            *_BROKERAGE_ADMINS,
+            REGIONAL_MANAGER,
+            BRANCH_MANAGER,
+            ACCOUNTANT,
+            COMPLIANCE,
+        ),
+        sensitive=True,
+    ),
+    PermissionDefinition(
+        codename="contract.view_internal_notes",
+        name="Can view contract internal notes",
+        domain="people",
+        action="view",
+        description="Read broker-only internal notes on scoped agent contracts.",
+        default_roles=(*_BROKERAGE_ADMINS, REGIONAL_MANAGER, COMPLIANCE),
+        risk="high",
+        sensitive=True,
+    ),
+    PermissionDefinition(
         codename="user.view_user_administration",
         name="Can view administrative profile fields",
         domain="people",
@@ -620,7 +658,7 @@ PERMISSION_BY_CODENAME: dict[str, PermissionDefinition] = {
     item.codename: item for item in PERMISSION_DEFINITIONS
 }
 CATALOG_CODENAMES: frozenset[str] = frozenset(PERMISSION_BY_CODENAME)
-CATALOG_VERSION = "p1-activity-timeline-v1"
+CATALOG_VERSION = "p1-agent-contract-model-v1"
 
 
 def is_cataloged_permission(codename: str) -> bool:
