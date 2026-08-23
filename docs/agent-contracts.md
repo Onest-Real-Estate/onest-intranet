@@ -14,6 +14,7 @@ foundational schema.
 | `ContractTemplate` / `ContractTemplateVersion` | Originating template family and version (`PROTECT`). Full template admin is a separate issue. |
 | `AgentContract` | One agreement version for one recipient at one owning office. |
 | `ContractArtifact` | Protected file (generated/signed PDF, addendum) with SHA-256 checksum. |
+| `CommissionCalculation` | Immutable mentor/referral worksheet for one GCI input (rule version + snapshots). |
 
 `AgentContract.public_id` (UUID) is the client-facing identity. The integer PK
 is internal. Family history uses shared `family_id` + monotonic
@@ -41,8 +42,13 @@ All money and percentage fields are `DecimalField` (no floats):
 
 Mentor and referral are **separate structured blocks** (percent, fixed amount,
 cap, basis, payee, notes) so calculation services cannot conflate them.
+Financial mentor/referral terms require both a supported `basis` and a `payee`.
 
 Agent and office splits are both-or-neither and must sum to 100 when set.
+
+Each contract stores `calculation_rule_version` (default `1.0.0`). Issued
+contracts always calculate under that frozen version; callers cannot pass a
+newer policy to reinterpret historical terms.
 
 ### Snapshots
 
@@ -72,6 +78,47 @@ signed PDFs are pointed at by nullable FKs on the contract.
 
 Serialization (`serialize_contract`) **omits** gated keys rather than nulling
 them.
+
+## Mentor / referral commission calculations
+
+Pure math lives in `apps.contract.calculations` (`Decimal` only — never float).
+Persistence and scope checks live in `apps.contract.calculation_service`.
+
+### Rule version `1.0.0` (brokerage/legal sign-off)
+
+Documented in `apps.contract.calculations.rules`. Summary:
+
+| Step | Behavior |
+| --- | --- |
+| Rounding | `ROUND_HALF_EVEN` to cents (`0.01`) at every money step; percents to `0.001` |
+| Currency | USD only in v1 |
+| Order | Validate → quantize GCI → agent/office split → transaction fee → **mentor** → **referral** (parallel bases) → agent net |
+| Parallelism | Mentor and referral each resolve their own basis from shared intermediates; neither reduces the other's base |
+
+### Supported bases (stable codes)
+
+| Code | Meaning |
+| --- | --- |
+| `gross_commission` | Gross commission income (GCI) |
+| `agent_side_before_fees` | Agent share of GCI before transaction fee |
+| `agent_side_after_fees` | Agent share after transaction fee |
+| `fixed_only` | Fixed amount only (percent must be unset) |
+
+Unknown bases, missing payees, out-of-range percents, negative GCI, conflicting
+`fixed_only`+percent, agent-side bases without a split, and deductions that
+drive agent net negative all **fail validation** — the engine never guesses.
+
+### Persistence
+
+`persist_commission_calculation` stores input/terms/intermediate/result
+snapshots, explanation lines (mentor and referral labeled separately), money
+totals, and a SHA-256 fingerprint of rule+input+terms. Identical worksheets
+reuse the same row (idempotent). Changing `CURRENT_RULE_VERSION` later does
+not recalculate issued contracts; new drafts pick up the new default.
+
+Preview helpers and PDF/commission UIs should share
+`serialize_commission_calculation` / `summarize_terms_for_display` so labels
+stay consistent.
 
 ## Query services
 

@@ -18,6 +18,7 @@ from django.db.models import F, Q
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
+from apps.contract.calculations.rules import CURRENT_RULE_VERSION
 from apps.contract.statuses import ContractStatus
 from apps.contract.terms import (
     HUNDRED,
@@ -274,6 +275,16 @@ class AgentContract(models.Model):
     party_snapshot = models.JSONField(_("party snapshot"), default=dict, blank=True)
     office_snapshot = models.JSONField(_("office snapshot"), default=dict, blank=True)
     terms_snapshot = models.JSONField(_("terms snapshot"), default=dict, blank=True)
+    calculation_rule_version = models.CharField(
+        _("calculation rule version"),
+        max_length=16,
+        default=CURRENT_RULE_VERSION,
+        help_text=_(
+            "Commission policy version frozen on this contract. Issued "
+            "calculations use this value so later policy bumps do not "
+            "silently reinterpret historical terms."
+        ),
+    )
 
     # --- Family relationships --------------------------------------------
     root_agreement = models.ForeignKey(
@@ -551,17 +562,37 @@ class AgentContract(models.Model):
                 str(_("Agent and office splits must both be set or both omitted."))
             )
 
+        if self.mentor_percent is not None or self.mentor_fixed_amount is not None:
+            if not self.mentor_basis:
+                errors.setdefault("mentor_basis", []).append(
+                    str(_("Mentor terms require a calculation basis."))
+                )
+            if self.mentor_payee_id is None:
+                errors.setdefault("mentor_payee", []).append(
+                    str(_("Mentor terms require a payee."))
+                )
+        if self.referral_percent is not None or self.referral_fixed_amount is not None:
+            if not self.referral_basis:
+                errors.setdefault("referral_basis", []).append(
+                    str(_("Referral terms require a calculation basis."))
+                )
+            if self.referral_payee_id is None:
+                errors.setdefault("referral_payee", []).append(
+                    str(_("Referral terms require a payee."))
+                )
         if (
-            self.mentor_percent is not None or self.mentor_fixed_amount is not None
-        ) and not self.mentor_basis:
-            errors.setdefault("mentor_basis", []).append(
-                str(_("Mentor terms require a calculation basis."))
+            self.mentor_basis == CommissionBasis.FIXED_ONLY
+            and self.mentor_percent is not None
+        ):
+            errors.setdefault("mentor_percent", []).append(
+                str(_("fixed_only basis cannot include a percentage."))
             )
         if (
-            self.referral_percent is not None or self.referral_fixed_amount is not None
-        ) and not self.referral_basis:
-            errors.setdefault("referral_basis", []).append(
-                str(_("Referral terms require a calculation basis."))
+            self.referral_basis == CommissionBasis.FIXED_ONLY
+            and self.referral_percent is not None
+        ):
+            errors.setdefault("referral_percent", []).append(
+                str(_("fixed_only basis cannot include a percentage."))
             )
 
         if not isinstance(self.addenda_references, list):
@@ -680,3 +711,92 @@ class ContractArtifact(models.Model):
             raise ValidationError(
                 {"checksum": _("Checksum must be a 64-character SHA-256 hex digest.")}
             )
+
+
+def _required_money(**kwargs):
+    """Non-null USD money field for persisted calculation results."""
+    return models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        help_text=_("US dollars with cents. Currency: USD. Nonnegative."),
+        **kwargs,
+    )
+
+
+class CommissionCalculation(models.Model):
+    """Persisted, explainable outcome of one mentor/referral commission run.
+
+    Core math lives in :mod:`apps.contract.calculations`. This row freezes the
+    rule version, input, terms, intermediates, results, and explanation so a
+    later policy change cannot reinterpret issued figures.
+    """
+
+    public_id = models.UUIDField(
+        _("public id"), default=uuid.uuid4, unique=True, editable=False
+    )
+    contract = models.ForeignKey(
+        AgentContract,
+        verbose_name=_("contract"),
+        related_name="commission_calculations",
+        on_delete=models.PROTECT,
+    )
+    rule_version = models.CharField(_("rule version"), max_length=16)
+    currency = models.CharField(_("currency"), max_length=3, default="USD")
+    fingerprint = models.CharField(
+        _("fingerprint"),
+        max_length=64,
+        db_index=True,
+        help_text=_(
+            "SHA-256 of rule version + input + terms snapshots. Identical "
+            "requests reuse the same row (idempotent)."
+        ),
+    )
+    input_snapshot = models.JSONField(_("input snapshot"), default=dict)
+    terms_snapshot = models.JSONField(_("terms snapshot"), default=dict)
+    intermediate_snapshot = models.JSONField(_("intermediate snapshot"), default=dict)
+    result_snapshot = models.JSONField(_("result snapshot"), default=dict)
+    explanation = models.JSONField(
+        _("explanation"),
+        default=list,
+        help_text=_(
+            "Ordered human-readable lines; mentor and referral labeled separately."
+        ),
+    )
+    mentor_amount = _required_money(verbose_name=_("mentor amount"))
+    referral_amount = _required_money(verbose_name=_("referral amount"))
+    agent_net_amount = _required_money(verbose_name=_("agent net amount"))
+    office_net_amount = _required_money(verbose_name=_("office net amount"))
+    transaction_fee_amount = _required_money(verbose_name=_("transaction fee amount"))
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        verbose_name=_("created by"),
+        related_name="commission_calculations_created",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+    )
+    created_at = models.DateTimeField(_("created at"), default=timezone.now)
+
+    if TYPE_CHECKING:
+        contract_id: int
+        created_by_id: int | None
+
+    class Meta:
+        ordering = ["-created_at", "-pk"]
+        verbose_name = _("commission calculation")
+        verbose_name_plural = _("commission calculations")
+        constraints = [
+            models.UniqueConstraint(
+                fields=["contract", "fingerprint"],
+                name="contract_calculation_idempotent",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["contract", "-created_at"],
+                name="contract_calc_contract_time",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.public_id}@{self.rule_version}"

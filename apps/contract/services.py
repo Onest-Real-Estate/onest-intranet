@@ -18,6 +18,7 @@ from django.utils.translation import gettext_lazy as _
 
 from apps.audit.models import AuditEvent
 from apps.audit.service import AuditTarget, actor_from_user, log_event
+from apps.contract.calculations.rules import CURRENT_RULE_VERSION
 from apps.contract.models import (
     AgentContract,
     ContractArtifact,
@@ -510,6 +511,7 @@ def create_draft_contract(
         supersedes=supersedes,
         amends=amends,
         root_agreement=root_agreement,
+        calculation_rule_version=CURRENT_RULE_VERSION,
     )
     if root_agreement is not None:
         contract.family_id = root_agreement.family_id
