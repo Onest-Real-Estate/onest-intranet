@@ -28,9 +28,7 @@ export function AnnouncementBody({
   return (
     <div className={className ?? "grid gap-4 text-sm leading-6"}>
       {blocks.map((block, index) => (
-        // Blocks have no stable identity of their own — they are a rendering of
-        // one text field — so position is the honest key. The list is replaced
-        // wholesale whenever the body changes, never reordered in place.
+        // biome-ignore lint/suspicious/noArrayIndexKey: a body is a pure rendering of one immutable text field: the tree is rebuilt wholesale on change and never reordered, inserted into, or given state, so position is the stable identity
         <Block key={index} block={block} />
       ))}
     </div>
@@ -58,6 +56,7 @@ function Block({ block }: { block: AnnouncementBlock }) {
           }
         >
           {(block.items ?? []).map((item, index) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: a body is a pure rendering of one immutable text field: the tree is rebuilt wholesale on change and never reordered, inserted into, or given state, so position is the stable identity
             <li key={index}>
               <Spans spans={item} />
             </li>
@@ -83,37 +82,38 @@ function Block({ block }: { block: AnnouncementBlock }) {
 function Spans({ spans }: { spans: AnnouncementInlineSpan[] }) {
   return (
     <>
-      {spans.map((span, index) => {
-        if (span.type === "strong") {
-          return (
-            <strong key={index} className="font-semibold">
-              {span.value}
-            </strong>
-          );
-        }
-        if (span.type === "em") {
-          return <em key={index}>{span.value}</em>;
-        }
-        if (span.type === "link" && span.href) {
-          const external = !span.href.startsWith("/");
-          return (
-            <a
-              key={index}
-              href={span.href}
-              // Plain anchor rather than an Inertia Link: an external
-              // destination is not a hub page, and a hub-relative body link is
-              // rare enough that a full navigation is the honest behaviour.
-              target={external ? "_blank" : undefined}
-              rel={external ? "noopener noreferrer" : undefined}
-              className="text-primary underline underline-offset-2"
-            >
-              {span.value}
-              {external ? <span className="sr-only"> (opens in a new tab)</span> : null}
-            </a>
-          );
-        }
-        return <span key={index}>{span.value}</span>;
-      })}
+      {spans.map((span, index) => (
+        // biome-ignore lint/suspicious/noArrayIndexKey: a body is a pure rendering of one immutable text field: the tree is rebuilt wholesale on change and never reordered, inserted into, or given state, so position is the stable identity
+        <SpanNode key={index} span={span} />
+      ))}
     </>
   );
+}
+
+/** One inline run. Split out so the key is set once, at the single map site. */
+function SpanNode({ span }: { span: AnnouncementInlineSpan }) {
+  if (span.type === "strong") {
+    return <strong className="font-semibold">{span.value}</strong>;
+  }
+  if (span.type === "em") {
+    return <em>{span.value}</em>;
+  }
+  if (span.type === "link" && span.href) {
+    const external = !span.href.startsWith("/");
+    return (
+      <a
+        href={span.href}
+        // Plain anchor rather than an Inertia Link: an external destination is
+        // not a hub page, and a hub-relative body link is rare enough that a
+        // full navigation is the honest behaviour.
+        target={external ? "_blank" : undefined}
+        rel={external ? "noopener noreferrer" : undefined}
+        className="text-primary underline underline-offset-2"
+      >
+        {span.value}
+        {external ? <span className="sr-only"> (opens in a new tab)</span> : null}
+      </a>
+    );
+  }
+  return <span>{span.value}</span>;
 }
