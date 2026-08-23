@@ -292,6 +292,19 @@
 }
 
 /*
+ * The command palette is anchored near the top of the viewport rather than
+ * centred, so it rises from slightly above its resting place — the same
+ * gesture as a dialog, without the -50% vertical offset a centred surface
+ * carries in its transform.
+ */
+@keyframes palette-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -10px) scale(0.98);
+  }
+}
+
+/*
  * Sheets slide in from a viewport edge over the page, the way dialogs rise:
  * one motion language across every surface that covers the page. The panel
  * travels on the standard easing so it settles instead of stopping; the exit
@@ -360,6 +373,10 @@
 @layer utilities {
   .arrive {
     animation: arrive var(--motion-base) var(--ease-standard);
+  }
+
+  .animate-palette {
+    animation: palette-in var(--motion-base) var(--ease-standard);
   }
 
   .animate-dialog-overlay-in {
