@@ -554,3 +554,129 @@ def test_the_query_count_is_bounded_by_the_provider_set(
     run_search(user, "warmup")
     with django_assert_num_queries(6):
         run_search(user, "countable")
+
+
+# --------------------------------------------------------------------------- #
+# Ranking: two backends, one contract
+# --------------------------------------------------------------------------- #
+
+
+def test_the_ranking_path_is_chosen_from_the_live_connection(seeded):
+    """A setting can disagree with the database; ``connection.vendor`` cannot."""
+    from django.db import connection
+
+    from apps.web.search.ranking import ranking_debug, supports_full_text
+
+    assert supports_full_text() is (connection.vendor == "postgresql")
+    assert ranking_debug()["vendor"] == connection.vendor
+
+
+def test_matching_returns_the_same_rows_on_whichever_backend(seeded):
+    """The fallback is not dead code — it is the path CI runs."""
+    from apps.web.search.ranking import search_ranked
+
+    announcement("ranked-alpha", body="distinctive marker text")
+    announcement("ranked-beta", body="nothing relevant here")
+
+    rows = search_ranked(
+        Announcement.objects.all(),
+        "distinctive",
+        fields=("title", "summary", "body"),
+        trigram_field="title",
+        order=("-published_at",),
+    )
+
+    assert [row.slug for row in rows] == ["ranked-alpha"]
+
+
+def test_the_order_is_total_so_equal_rows_never_swap(seeded):
+    """Two rows of equal relevance must not come back in a different order on
+    a second query — that is how a row appears on two pages of one result set."""
+    from apps.web.search.ranking import search_ranked
+
+    for index in range(5):
+        announcement(f"tied-{index}", body="identical body text")
+
+    def run():
+        return [
+            row.slug
+            for row in search_ranked(
+                Announcement.objects.all(),
+                "identical",
+                fields=("title", "summary", "body"),
+                trigram_field="title",
+            )
+        ]
+
+    assert run() == run()
+
+
+def test_ranking_only_narrows_the_queryset_it_was_given(seeded):
+    """The scope guarantee: no path here can add a row a domain withheld."""
+    from apps.web.search.ranking import search_ranked
+
+    announcement("in-scope-notice", body="shared word")
+    announcement("withheld-notice", body="shared word")
+    scoped = Announcement.objects.filter(slug="in-scope-notice")
+
+    rows = search_ranked(
+        scoped, "shared", fields=("title", "summary", "body"), trigram_field="title"
+    )
+
+    assert [row.slug for row in rows] == ["in-scope-notice"]
+
+
+def test_a_query_full_of_operators_does_not_raise(seeded):
+    """``websearch`` treats a stray operator as text; ``raw`` would 500."""
+    from apps.web.search.ranking import search_ranked
+
+    announcement("operator-notice", body="ordinary words")
+
+    for hostile in ['"unclosed', "-", "&|!()", "a & b", "'; DROP TABLE x; --"]:
+        rows = search_ranked(
+            Announcement.objects.all(),
+            hostile,
+            fields=("title", "summary", "body"),
+            trigram_field="title",
+        )
+        assert list(rows) is not None
+
+
+def test_a_hostile_query_cannot_reach_the_database_as_sql(seeded, client):
+    """End to end: injection-shaped input is a query string, never SQL."""
+    announcement("safe-notice", body="ordinary words")
+    client.force_login(reader())
+
+    response = client.get(
+        reverse("search_suggestions"), {"q": "'; DROP TABLE user_user; --"}
+    )
+
+    assert response.status_code == 200
+    # The table is still there, which is the assertion that matters.
+    assert User.objects.exists()
+
+
+def test_the_index_migrations_are_a_no_op_away_from_postgres(seeded):
+    """They must not fail on SQLite, and must not enter migration state."""
+    from django.db import connection
+    from django.db.migrations.loader import MigrationLoader
+
+    from apps.web.search.operations import AddIndexIfPostgres
+
+    loader = MigrationLoader(connection)
+    migration = loader.disk_migrations[
+        ("announcements", "0008_announcement_search_indexes")
+    ]
+    index_ops = [
+        operation
+        for operation in migration.operations
+        if isinstance(operation, AddIndexIfPostgres)
+    ]
+
+    assert index_ops
+    # State is untouched, which is why ``makemigrations --check`` stays clean
+    # on a backend where the index does not exist.
+    before = {}
+    for operation in index_ops:
+        operation.state_forwards("announcements", before)
+    assert before == {}

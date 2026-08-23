@@ -14,10 +14,9 @@ def backfill_role_assignments(apps, schema_editor):
         group.name: group
         for group in Group.objects.filter(name__in=group_names).only("id", "name")
     }
-    membership_rows = (
-        User.groups.through.objects.filter(group_id__in=[group.id for group in groups.values()])
-        .values_list("user_id", "group_id")
-    )
+    membership_rows = User.groups.through.objects.filter(
+        group_id__in=[group.id for group in groups.values()]
+    ).values_list("user_id", "group_id")
     memberships_by_user = {}
     for user_id, group_id in membership_rows:
         memberships_by_user.setdefault(user_id, []).append(group_id)
@@ -37,7 +36,9 @@ def backfill_role_assignments(apps, schema_editor):
                     scope_type = "region"
                     scope_office_id = user.office.region_id
                 else:
-                    detail = "Legacy region manager is missing a resolvable region scope."
+                    detail = (
+                        "Legacy region manager is missing a resolvable region scope."
+                    )
             elif legacy_role in {"Branch Managers", "Users"}:
                 if user.office_id:
                     scope_type = "office"
@@ -75,20 +76,114 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name="UserRoleAssignment",
             fields=[
-                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
                 ("role", models.CharField(max_length=64, verbose_name="role")),
-                ("scope_type", models.CharField(choices=[("company", "Company"), ("region", "Region"), ("office", "Office")], max_length=32, verbose_name="scope type")),
-                ("status", models.CharField(choices=[("scheduled", "Scheduled"), ("active", "Active"), ("expired", "Expired"), ("revoked", "Revoked")], default="active", max_length=16, verbose_name="status")),
-                ("starts_at", models.DateTimeField(blank=True, null=True, verbose_name="starts at")),
-                ("ends_at", models.DateTimeField(blank=True, null=True, verbose_name="ends at")),
-                ("revoked_at", models.DateTimeField(blank=True, null=True, verbose_name="revoked at")),
-                ("business_reason", models.TextField(blank=True, verbose_name="business reason")),
-                ("created_at", models.DateTimeField(default=django.utils.timezone.now, verbose_name="created at")),
-                ("updated_at", models.DateTimeField(auto_now=True, verbose_name="updated at")),
-                ("assigned_by", models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name="granted_role_assignments", to="user.user", verbose_name="assigned by")),
-                ("revoked_by", models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name="revoked_role_assignments", to="user.user", verbose_name="revoked by")),
-                ("scope_office", models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name="role_assignments", to="user.office", verbose_name="scope office")),
-                ("user", models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name="role_assignments", to="user.user", verbose_name="user")),
+                (
+                    "scope_type",
+                    models.CharField(
+                        choices=[
+                            ("company", "Company"),
+                            ("region", "Region"),
+                            ("office", "Office"),
+                        ],
+                        max_length=32,
+                        verbose_name="scope type",
+                    ),
+                ),
+                (
+                    "status",
+                    models.CharField(
+                        choices=[
+                            ("scheduled", "Scheduled"),
+                            ("active", "Active"),
+                            ("expired", "Expired"),
+                            ("revoked", "Revoked"),
+                        ],
+                        default="active",
+                        max_length=16,
+                        verbose_name="status",
+                    ),
+                ),
+                (
+                    "starts_at",
+                    models.DateTimeField(
+                        blank=True, null=True, verbose_name="starts at"
+                    ),
+                ),
+                (
+                    "ends_at",
+                    models.DateTimeField(blank=True, null=True, verbose_name="ends at"),
+                ),
+                (
+                    "revoked_at",
+                    models.DateTimeField(
+                        blank=True, null=True, verbose_name="revoked at"
+                    ),
+                ),
+                (
+                    "business_reason",
+                    models.TextField(blank=True, verbose_name="business reason"),
+                ),
+                (
+                    "created_at",
+                    models.DateTimeField(
+                        default=django.utils.timezone.now, verbose_name="created at"
+                    ),
+                ),
+                (
+                    "updated_at",
+                    models.DateTimeField(auto_now=True, verbose_name="updated at"),
+                ),
+                (
+                    "assigned_by",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="granted_role_assignments",
+                        to="user.user",
+                        verbose_name="assigned by",
+                    ),
+                ),
+                (
+                    "revoked_by",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="revoked_role_assignments",
+                        to="user.user",
+                        verbose_name="revoked by",
+                    ),
+                ),
+                (
+                    "scope_office",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="role_assignments",
+                        to="user.office",
+                        verbose_name="scope office",
+                    ),
+                ),
+                (
+                    "user",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="role_assignments",
+                        to="user.user",
+                        verbose_name="user",
+                    ),
+                ),
             ],
             options={
                 "verbose_name": "user role assignment",
@@ -99,11 +194,35 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name="UserRoleAssignmentMigrationConflict",
             fields=[
-                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
-                ("legacy_role", models.CharField(max_length=64, verbose_name="legacy role")),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                (
+                    "legacy_role",
+                    models.CharField(max_length=64, verbose_name="legacy role"),
+                ),
                 ("detail", models.TextField(verbose_name="detail")),
-                ("created_at", models.DateTimeField(default=django.utils.timezone.now, verbose_name="created at")),
-                ("user", models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name="role_assignment_migration_conflicts", to="user.user", verbose_name="user")),
+                (
+                    "created_at",
+                    models.DateTimeField(
+                        default=django.utils.timezone.now, verbose_name="created at"
+                    ),
+                ),
+                (
+                    "user",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="role_assignment_migration_conflicts",
+                        to="user.user",
+                        verbose_name="user",
+                    ),
+                ),
             ],
             options={
                 "verbose_name": "user role assignment migration conflict",
@@ -114,7 +233,11 @@ class Migration(migrations.Migration):
         migrations.AddConstraint(
             model_name="userroleassignment",
             constraint=models.CheckConstraint(
-                condition=models.Q(("ends_at__isnull", True), ("starts_at__isnull", True), _connector="OR")
+                condition=models.Q(
+                    ("ends_at__isnull", True),
+                    ("starts_at__isnull", True),
+                    _connector="OR",
+                )
                 | models.Q(("ends_at__gte", models.F("starts_at"))),
                 name="user_role_assignment_valid_dates",
             ),
@@ -122,7 +245,9 @@ class Migration(migrations.Migration):
         migrations.AddConstraint(
             model_name="userroleassignment",
             constraint=models.CheckConstraint(
-                condition=models.Q(("scope_type", "company"), ("scope_office__isnull", True))
+                condition=models.Q(
+                    ("scope_type", "company"), ("scope_office__isnull", True)
+                )
                 | ~models.Q(("scope_type", "company")),
                 name="user_role_assignment_company_scope_empty",
             ),
@@ -145,11 +270,17 @@ class Migration(migrations.Migration):
         ),
         migrations.AddIndex(
             model_name="userroleassignment",
-            index=models.Index(fields=["user", "status", "starts_at", "ends_at"], name="user_role_asgn_user_idx"),
+            index=models.Index(
+                fields=["user", "status", "starts_at", "ends_at"],
+                name="user_role_asgn_user_idx",
+            ),
         ),
         migrations.AddIndex(
             model_name="userroleassignment",
-            index=models.Index(fields=["scope_type", "scope_office", "status"], name="user_role_asgn_scope_idx"),
+            index=models.Index(
+                fields=["scope_type", "scope_office", "status"],
+                name="user_role_asgn_scope_idx",
+            ),
         ),
         migrations.RunPython(backfill_role_assignments, migrations.RunPython.noop),
     ]

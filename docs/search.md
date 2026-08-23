@@ -47,6 +47,72 @@ domain's rules, and that copy would drift.
   full results page is deliberately **not** limited: it is one navigation, and
   somebody following "see all" must never meet a 429.
 
+## Ranking
+
+`apps/web/search/ranking.py` has one implementation per database that has one,
+chosen from `connection.vendor` rather than a setting — a setting can disagree
+with the database it points at, and the cost of being wrong is a 500 on every
+search.
+
+**PostgreSQL.** A weighted `tsvector` (title A, summary B, body C, so a title
+hit outranks a body hit), matched with `websearch_to_tsquery` so quoted phrases
+and `-exclusions` work and a stray operator is text rather than an error.
+Trigram similarity widens it, so `Fairfx` still finds Fairfax.
+
+**Everything else.** Substring matching. Not dead code — the test suite runs on
+SQLite, so this is the path CI exercises, and it has to return the same rows in
+the same order.
+
+### Filter with operators, rank with functions
+
+The only two filters an index can answer:
+
+```
+vector @@ query   → the GIN full-text index
+field % 'text'    → the GIN trigram index
+```
+
+`ts_rank(...) > 0` and `similarity(...) > 0.3` express the same intent and are
+**not** index-usable: PostgreSQL computes them per row, so an index built for
+them is never chosen. This shipped wrong once — the first version filtered on
+`ts_rank`, and `EXPLAIN` with `enable_seqscan = off` still showed a sequential
+scan, meaning the indexes were dead weight. Ranking functions now appear only
+in `ORDER BY`, over rows the operators already narrowed.
+
+`django.contrib.postgres` is in `INSTALLED_APPS` for exactly one reason: it
+registers `__trigram_similar`, which compiles to `%`.
+
+### Indexes
+
+Created by `announcements/0008` and `user/0025` through the conditional
+operations in `apps/web/search/operations.py`, which no-op away from
+PostgreSQL — the test database is SQLite and would fail on `CREATE EXTENSION`.
+They stay **out of migration state** (`state_forwards` is a no-op), so models
+need not declare PostgreSQL index classes and `makemigrations --check` is clean
+on both backends.
+
+| Index | Kind |
+| --- | --- |
+| `announcement_search_fts`, `office_resource_search_fts` | GIN over the weighted vector |
+| `announcement_search_trgm`, `office_resource_search_trgm` | GIN trigram on title |
+| `user_search_name_trgm` | GIN trigram on first/last name |
+| `office_search_name_trgm` | GIN trigram on name |
+
+The GIN expression must match what `search_ranked` builds, weights included, or
+the planner ignores it. To check after a change:
+
+```python
+qs = search_ranked(Model.objects.all(), "term", fields=(...), trigram_field="title")
+sql, params = qs.query.sql_with_params()
+cursor.execute("SET enable_seqscan = off")
+cursor.execute("EXPLAIN " + sql, params)  # look for the index name
+```
+
+Turning `enable_seqscan` off is what makes this meaningful at small row counts:
+Postgres would sequential-scan a handful of rows whatever indexes exist, so a
+plan that *still* refuses the index is telling you the expression does not
+match.
+
 ## Why not Elasticsearch
 
 The specification says to use PostgreSQL at current scale and avoid external

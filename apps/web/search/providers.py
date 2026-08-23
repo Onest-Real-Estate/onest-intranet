@@ -19,7 +19,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from django.db.models import Q
 from django.urls import reverse
 
 from apps.web.search.contract import (
@@ -27,6 +26,7 @@ from apps.web.search.contract import (
     SearchProvider,
     snippet_from,
 )
+from apps.web.search.ranking import search_ranked
 
 if TYPE_CHECKING:
     from apps.user.models import User
@@ -58,23 +58,26 @@ def search_people(actor: User, query: str, limit: int) -> list[SearchHit]:
     groups = visible_field_groups(actor)
     may_read_contact = FieldGroup.ADMINISTRATION in groups
 
-    predicate = (
-        Q(first_name__icontains=query)
-        | Q(last_name__icontains=query)
-        | Q(display_name__icontains=query)
-        | Q(preferred_name__icontains=query)
-        | Q(office__name__icontains=query)
+    # Names are matched by trigram on PostgreSQL rather than full text: there
+    # is no document to rank, and the failure worth fixing is a half-remembered
+    # spelling. ``search_ranked`` falls back to substring matching elsewhere.
+    fields: tuple[str, ...] = (
+        "first_name",
+        "last_name",
+        "display_name",
+        "preferred_name",
+        "office__name",
     )
     if may_read_contact:
-        predicate |= Q(email__icontains=query)
+        fields = (*fields, "email")
 
-    rows = (
-        directory_queryset(actor)
-        .filter(predicate)
-        .filter(is_active=True)
-        .select_related("office")
-        .order_by("first_name", "last_name", "pk")[:limit]
-    )
+    rows = search_ranked(
+        directory_queryset(actor).filter(is_active=True).select_related("office"),
+        query,
+        fields=fields,
+        trigram_field="last_name",
+        order=("first_name", "last_name"),
+    )[:limit]
     return [
         SearchHit(
             id=str(row.pk),
@@ -104,15 +107,13 @@ def search_announcements(actor: User, query: str, limit: int) -> list[SearchHit]
     """
     from apps.announcements.audience import visible_announcements
 
-    rows = (
-        visible_announcements(actor)
-        .filter(
-            Q(title__icontains=query)
-            | Q(summary__icontains=query)
-            | Q(body__icontains=query)
-        )
-        .order_by("-published_at", "-pk")[:limit]
-    )
+    rows = search_ranked(
+        visible_announcements(actor),
+        query,
+        fields=("title", "summary", "body"),
+        trigram_field="title",
+        order=("-published_at",),
+    )[:limit]
     return [
         SearchHit(
             id=str(row.pk),
@@ -140,12 +141,13 @@ def search_offices(actor: User, query: str, limit: int) -> list[SearchHit]:
     """
     from apps.user.models import Office
 
-    rows = (
-        Office.objects.filter(is_active=True)
-        .filter(Q(name__icontains=query) | Q(city__icontains=query))
-        .select_related("region")
-        .order_by("sort_order", "name")[:limit]
-    )
+    rows = search_ranked(
+        Office.objects.filter(is_active=True).select_related("region"),
+        query,
+        fields=("name", "city"),
+        trigram_field="name",
+        order=("sort_order", "name"),
+    )[:limit]
     return [
         SearchHit(
             id=str(row.pk),
@@ -177,11 +179,13 @@ def search_office_resources(actor: User, query: str, limit: int) -> list[SearchH
     queryset = effective_resources_queryset(actor)
     if queryset is None:
         return []
-    rows = queryset.filter(
-        Q(title__icontains=query)
-        | Q(summary__icontains=query)
-        | Q(body__icontains=query)
-    ).order_by("title", "pk")[:limit]
+    rows = search_ranked(
+        queryset,
+        query,
+        fields=("title", "summary", "body"),
+        trigram_field="title",
+        order=("title",),
+    )[:limit]
     return [
         SearchHit(
             id=str(row.pk),

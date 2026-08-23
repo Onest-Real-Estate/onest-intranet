@@ -12,21 +12,26 @@ def mark_existing_users_complete(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('user', '0002_default_user_group'),
+        ("user", "0002_default_user_group"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='user',
-            name='phone_number',
-            field=models.CharField(blank=True, max_length=30, verbose_name='phone number'),
+            model_name="user",
+            name="phone_number",
+            field=models.CharField(
+                blank=True, max_length=30, verbose_name="phone number"
+            ),
         ),
         migrations.AddField(
-            model_name='user',
-            name='profile_completed',
-            field=models.BooleanField(default=False, help_text='Whether the user finished the post-signup details flow (onboarding). New SSO users are redirected to /onboarding until this is true.', verbose_name='profile completed'),
+            model_name="user",
+            name="profile_completed",
+            field=models.BooleanField(
+                default=False,
+                help_text="Whether the user finished the post-signup details flow (onboarding). New SSO users are redirected to /onboarding until this is true.",
+                verbose_name="profile completed",
+            ),
         ),
         migrations.RunPython(mark_existing_users_complete, migrations.RunPython.noop),
     ]

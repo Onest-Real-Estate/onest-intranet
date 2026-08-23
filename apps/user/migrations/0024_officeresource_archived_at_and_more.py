@@ -4,20 +4,30 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('user', '0023_officeresource'),
+        ("user", "0023_officeresource"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='officeresource',
-            name='archived_at',
-            field=models.DateTimeField(blank=True, help_text='Archived resources remain for audit but never display.', null=True, verbose_name='archived at'),
+            model_name="officeresource",
+            name="archived_at",
+            field=models.DateTimeField(
+                blank=True,
+                help_text="Archived resources remain for audit but never display.",
+                null=True,
+                verbose_name="archived at",
+            ),
         ),
         migrations.AddField(
-            model_name='officeresource',
-            name='processing_state',
-            field=models.CharField(choices=[('ready', 'Ready'), ('quarantined', 'Quarantined')], default='ready', help_text='Files that failed validation are quarantined and cannot be published until replaced.', max_length=16, verbose_name='processing state'),
+            model_name="officeresource",
+            name="processing_state",
+            field=models.CharField(
+                choices=[("ready", "Ready"), ("quarantined", "Quarantined")],
+                default="ready",
+                help_text="Files that failed validation are quarantined and cannot be published until replaced.",
+                max_length=16,
+                verbose_name="processing state",
+            ),
         ),
     ]

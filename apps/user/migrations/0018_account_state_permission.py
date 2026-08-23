@@ -4,14 +4,27 @@ from django.db import migrations
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('user', '0017_brokerage_role_catalog'),
+        ("user", "0017_brokerage_role_catalog"),
     ]
 
     operations = [
         migrations.AlterModelOptions(
-            name='user',
-            options={'permissions': (('view_user_administration', 'Can view administrative profile fields'), ('change_user_administration', 'Can change administrative profile fields'), ('manage_account_state', 'Can disable or reactivate user accounts')), 'verbose_name': 'user', 'verbose_name_plural': 'users'},
+            name="user",
+            options={
+                "permissions": (
+                    (
+                        "view_user_administration",
+                        "Can view administrative profile fields",
+                    ),
+                    (
+                        "change_user_administration",
+                        "Can change administrative profile fields",
+                    ),
+                    ("manage_account_state", "Can disable or reactivate user accounts"),
+                ),
+                "verbose_name": "user",
+                "verbose_name_plural": "users",
+            },
         ),
     ]

@@ -7,40 +7,177 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('user', '0022_alter_officecontactassignment_assignment_type'),
+        ("user", "0022_alter_officecontactassignment_assignment_type"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='OfficeResource',
+            name="OfficeResource",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('slug', models.SlugField(help_text='Identity within the visibility chain. A same-slug resource at a closer scope (office over region over company) overrides this one.', max_length=80, verbose_name='slug')),
-                ('title', models.CharField(max_length=150, verbose_name='title')),
-                ('summary', models.CharField(blank=True, max_length=255, verbose_name='summary')),
-                ('body', models.TextField(blank=True, help_text='Required for content resources; shown on the page.', verbose_name='body')),
-                ('category', models.CharField(choices=[('printer_wifi', 'Printer / Wi-Fi / copier'), ('conference_rooms', 'Conference rooms'), ('building_access', 'Building access'), ('vendor_contacts', 'Vendor contacts'), ('local_forms', 'Local forms'), ('procedures', 'Procedures'), ('shipping', 'Shipping'), ('supplies', 'Supplies'), ('service_providers', 'Service providers'), ('general', 'General')], max_length=32, verbose_name='category')),
-                ('resource_type', models.CharField(choices=[('content', 'Content'), ('link', 'Link'), ('file', 'File')], max_length=16, verbose_name='resource type')),
-                ('url', models.URLField(blank=True, help_text='Required for link resources. Must be HTTPS.', max_length=500, verbose_name='URL')),
-                ('file', models.FileField(blank=True, help_text='Required for file resources. Stored in protected storage.', max_length=255, storage=apps.user.storage.private_storage, upload_to='office-resources/%Y/%m/', verbose_name='file')),
-                ('original_file_name', models.CharField(blank=True, max_length=255, verbose_name='original file name')),
-                ('is_active', models.BooleanField(default=True, verbose_name='active')),
-                ('sort_order', models.PositiveSmallIntegerField(default=0, verbose_name='sort order')),
-                ('starts_at', models.DateField(blank=True, null=True, verbose_name='publishes on')),
-                ('ends_at', models.DateField(blank=True, null=True, verbose_name='expires after')),
-                ('created_at', models.DateTimeField(auto_now_add=True, verbose_name='created at')),
-                ('updated_at', models.DateTimeField(auto_now=True, verbose_name='updated at')),
-                ('created_by', models.ForeignKey(blank=True, editable=False, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='office_resources_created', to=settings.AUTH_USER_MODEL, verbose_name='created by')),
-                ('owner_office', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='resources', to='user.office', verbose_name='owning office')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                (
+                    "slug",
+                    models.SlugField(
+                        help_text="Identity within the visibility chain. A same-slug resource at a closer scope (office over region over company) overrides this one.",
+                        max_length=80,
+                        verbose_name="slug",
+                    ),
+                ),
+                ("title", models.CharField(max_length=150, verbose_name="title")),
+                (
+                    "summary",
+                    models.CharField(
+                        blank=True, max_length=255, verbose_name="summary"
+                    ),
+                ),
+                (
+                    "body",
+                    models.TextField(
+                        blank=True,
+                        help_text="Required for content resources; shown on the page.",
+                        verbose_name="body",
+                    ),
+                ),
+                (
+                    "category",
+                    models.CharField(
+                        choices=[
+                            ("printer_wifi", "Printer / Wi-Fi / copier"),
+                            ("conference_rooms", "Conference rooms"),
+                            ("building_access", "Building access"),
+                            ("vendor_contacts", "Vendor contacts"),
+                            ("local_forms", "Local forms"),
+                            ("procedures", "Procedures"),
+                            ("shipping", "Shipping"),
+                            ("supplies", "Supplies"),
+                            ("service_providers", "Service providers"),
+                            ("general", "General"),
+                        ],
+                        max_length=32,
+                        verbose_name="category",
+                    ),
+                ),
+                (
+                    "resource_type",
+                    models.CharField(
+                        choices=[
+                            ("content", "Content"),
+                            ("link", "Link"),
+                            ("file", "File"),
+                        ],
+                        max_length=16,
+                        verbose_name="resource type",
+                    ),
+                ),
+                (
+                    "url",
+                    models.URLField(
+                        blank=True,
+                        help_text="Required for link resources. Must be HTTPS.",
+                        max_length=500,
+                        verbose_name="URL",
+                    ),
+                ),
+                (
+                    "file",
+                    models.FileField(
+                        blank=True,
+                        help_text="Required for file resources. Stored in protected storage.",
+                        max_length=255,
+                        storage=apps.user.storage.private_storage,
+                        upload_to="office-resources/%Y/%m/",
+                        verbose_name="file",
+                    ),
+                ),
+                (
+                    "original_file_name",
+                    models.CharField(
+                        blank=True, max_length=255, verbose_name="original file name"
+                    ),
+                ),
+                ("is_active", models.BooleanField(default=True, verbose_name="active")),
+                (
+                    "sort_order",
+                    models.PositiveSmallIntegerField(
+                        default=0, verbose_name="sort order"
+                    ),
+                ),
+                (
+                    "starts_at",
+                    models.DateField(
+                        blank=True, null=True, verbose_name="publishes on"
+                    ),
+                ),
+                (
+                    "ends_at",
+                    models.DateField(
+                        blank=True, null=True, verbose_name="expires after"
+                    ),
+                ),
+                (
+                    "created_at",
+                    models.DateTimeField(auto_now_add=True, verbose_name="created at"),
+                ),
+                (
+                    "updated_at",
+                    models.DateTimeField(auto_now=True, verbose_name="updated at"),
+                ),
+                (
+                    "created_by",
+                    models.ForeignKey(
+                        blank=True,
+                        editable=False,
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        related_name="office_resources_created",
+                        to=settings.AUTH_USER_MODEL,
+                        verbose_name="created by",
+                    ),
+                ),
+                (
+                    "owner_office",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="resources",
+                        to="user.office",
+                        verbose_name="owning office",
+                    ),
+                ),
             ],
             options={
-                'verbose_name': 'office resource',
-                'verbose_name_plural': 'office resources',
-                'ordering': ['category', 'sort_order', 'title'],
-                'indexes': [models.Index(fields=['owner_office', 'category'], name='user_office_resource_scope')],
-                'constraints': [models.UniqueConstraint(fields=('owner_office', 'slug'), name='user_office_resource_unique'), models.CheckConstraint(condition=models.Q(models.Q(('url', ''), _negated=True), ('resource_type', 'content'), ('resource_type', 'file'), _connector='OR'), name='user_office_resource_link_needs_url')],
+                "verbose_name": "office resource",
+                "verbose_name_plural": "office resources",
+                "ordering": ["category", "sort_order", "title"],
+                "indexes": [
+                    models.Index(
+                        fields=["owner_office", "category"],
+                        name="user_office_resource_scope",
+                    )
+                ],
+                "constraints": [
+                    models.UniqueConstraint(
+                        fields=("owner_office", "slug"),
+                        name="user_office_resource_unique",
+                    ),
+                    models.CheckConstraint(
+                        condition=models.Q(
+                            models.Q(("url", ""), _negated=True),
+                            ("resource_type", "content"),
+                            ("resource_type", "file"),
+                            _connector="OR",
+                        ),
+                        name="user_office_resource_link_needs_url",
+                    ),
+                ],
             },
         ),
     ]

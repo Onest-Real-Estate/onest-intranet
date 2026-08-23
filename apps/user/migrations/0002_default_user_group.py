@@ -23,7 +23,6 @@ def remove_default_group(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("user", "0001_initial"),
     ]
