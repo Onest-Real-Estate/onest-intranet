@@ -1800,6 +1800,33 @@ export interface AnnouncementCta {
   url: string;
 }
 
+/**
+ * One inline run inside a body block.
+ *
+ * The server's block tree is the *only* representation an announcement body
+ * takes on the way to a reader — there is no HTML in this payload, so there is
+ * nothing to sanitize on arrival and no `dangerouslySetInnerHTML` anywhere in
+ * the renderer. Link hrefs already passed the server's scheme allowlist; a
+ * refused one arrives as a plain `text` span.
+ */
+export interface AnnouncementInlineSpan {
+  type: "text" | "strong" | "em" | "link";
+  value: string;
+  href?: string;
+}
+
+export interface AnnouncementBlock {
+  type: "paragraph" | "heading" | "list" | "quote";
+  /** Heading depth, 2 or 3. Present on headings only. */
+  level?: number;
+  /** Ordered list rather than bulleted. Present on lists only. */
+  ordered?: boolean;
+  /** Inline content for paragraphs, headings, and quotes. */
+  spans?: AnnouncementInlineSpan[];
+  /** One span list per list item. Present on lists only. */
+  items?: AnnouncementInlineSpan[][];
+}
+
 export interface AnnouncementRow {
   id: number;
   slug: string;
@@ -1811,9 +1838,11 @@ export interface AnnouncementRow {
   category: AnnouncementBadge;
   priority: AnnouncementPriorityBadge;
   scope: { level: string; label: string; officeName: string };
-  /** Sorted above everything else in the feed. Ordering only, never audience. */
+  /** Promotes the row to the important tier when sorting. Never audience. */
   isPinned: boolean;
   cta: AnnouncementCta | null;
+  /** The body as structured blocks. The only form a reader is shown. */
+  bodyBlocks: AnnouncementBlock[];
 }
 
 /**

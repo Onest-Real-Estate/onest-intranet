@@ -1207,3 +1207,77 @@ def test_the_command_can_be_limited_to_one_announcement(seeded):
     b.refresh_from_db()
     assert a.processing_state == AnnouncementMedia.ProcessingState.READY
     assert b.processing_state == AnnouncementMedia.ProcessingState.PENDING
+
+
+# --------------------------------------------------------------------------- #
+# The dashboard band's artwork
+# --------------------------------------------------------------------------- #
+
+
+def test_the_dashboard_band_carries_the_hero_artwork(seeded):
+    """`imageUrl` is in the card contract, so the provider has to fill it.
+
+    It shipped absent once, and the band silently rendered its placeholder
+    icon for every story instead — a missing key looks exactly like an
+    announcement with no artwork.
+    """
+    from apps.web.dashboard.envelope import WidgetStatus
+    from apps.web.dashboard.providers import announcements as band
+
+    row = published("with-art")
+    media = attach_media(
+        publisher(), row, upload("hero.png", png_bytes(), "image/png"), role="hero"
+    )
+    process_announcement_media(media.pk)
+
+    result = band(_context(_reader()))
+    featured = (result.data or {})["featured"]
+
+    assert result.status == WidgetStatus.READY
+    assert featured["imageUrl"]
+    assert str(media.pk) in featured["imageUrl"]
+
+
+def test_a_story_without_artwork_reports_no_image_rather_than_a_broken_one(seeded):
+    from apps.web.dashboard.providers import announcements as band
+
+    published("no-art")
+    result = band(_context(_reader()))
+
+    assert (result.data or {})["featured"]["imageUrl"] is None
+
+
+def test_unprocessed_hero_art_never_reaches_the_dashboard(seeded):
+    """Pending art is not readable, so the band shows its placeholder."""
+    from apps.web.dashboard.providers import announcements as band
+
+    row = published("pending-art")
+    attach_media(
+        publisher(), row, upload("hero.png", png_bytes(), "image/png"), role="hero"
+    )
+
+    result = band(_context(_reader()))
+
+    assert (result.data or {})["featured"]["imageUrl"] is None
+
+
+def _reader():
+    from apps.user.models import User
+
+    existing = User.objects.filter(email="band.reader@example.com").first()
+    if existing:
+        return existing
+    from apps.user.tests.test_profile import completed_user
+
+    return completed_user(email="band.reader@example.com", office=office("fairfax-va"))
+
+
+def _context(user):
+    from django.utils import timezone
+
+    from apps.user.services.role_assignments import get_effective_access
+    from apps.web.dashboard.providers import DashboardContext
+
+    return DashboardContext(
+        user=user, access=get_effective_access(user), now=timezone.now()
+    )

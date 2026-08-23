@@ -21,6 +21,7 @@ from django.db.models import F, Q
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
+from apps.announcements.richtext import safe_url, unsafe_links
 from apps.announcements.taxonomy import (
     PRIORITY_CHOICES,
     SYSTEM_CATEGORY_CODES,
@@ -228,11 +229,14 @@ class Announcement(models.Model):
         blank=True,
         help_text=_("Button text. Required whenever a link is given."),
     )
-    cta_url = models.URLField(
+    cta_url = models.CharField(
         _("call to action link"),
         max_length=500,
         blank=True,
-        help_text=_("https destination opened by the button."),
+        help_text=_(
+            "https:// or mailto: address, or a hub path starting with /. "
+            "Validated against the same allowlist body links use."
+        ),
     )
     created_by = models.ForeignKey(
         "user.User",
@@ -341,6 +345,20 @@ class Announcement(models.Model):
             errors["cta_label"] = _("Give the button some words.")
         if self.cta_label.strip() and not self.cta_url:
             errors["cta_url"] = _("Give the button somewhere to go.")
+        # One allowlist for every destination an announcement can carry — the
+        # button and the links inside the body — so the two cannot disagree
+        # about what counts as a safe scheme.
+        if self.cta_url and safe_url(self.cta_url) is None:
+            errors["cta_url"] = _(
+                "Use an https:// address, a mailto: address, or a link inside "
+                "the hub starting with /."
+            )
+        refused = unsafe_links(self.body)
+        if refused:
+            errors["body"] = _(
+                "These links are not allowed: %(links)s. Use https://, "
+                "mailto:, or a hub path starting with /."
+            ) % {"links": ", ".join(refused[:3])}
         # Only blocks *assigning* a retired category; rows that already carry
         # one validate unchanged because they are not re-assigning it.
         if (

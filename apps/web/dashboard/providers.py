@@ -156,16 +156,36 @@ def announcements(context: DashboardContext) -> ProviderResult:
             action_label="Open announcements",
             action_href=reverse("announcements"),
         )
-    cards = [
-        {
-            "id": row.pk,
-            "tag": row.category.label if row.category else "Announcement",
-            "title": row.title,
-            "excerpt": row.summary,
-            "href": reverse("announcement_detail", args=[row.pk]),
-        }
-        for row in rows
-    ]
+    # Hero artwork for the whole band in one query rather than one per card:
+    # the band is five rows on every dashboard render, so a per-row lookup here
+    # is a per-row cost on the hottest page in the hub.
+    from apps.announcements.media_service import media_url
+    from apps.announcements.models import AnnouncementMedia
+
+    heroes = {
+        media.announcement_id: media
+        for media in AnnouncementMedia.objects.readable()
+        .hero()
+        .filter(announcement_id__in=[row.pk for row in rows])
+    }
+    cards = []
+    for row in rows:
+        hero = heroes.get(row.pk)
+        cards.append(
+            {
+                "id": row.pk,
+                "tag": row.category.label if row.category else "Announcement",
+                "title": row.title,
+                "excerpt": row.summary,
+                "href": reverse("announcement_detail", args=[row.pk]),
+                # A view path, not a durable link: it re-runs the announcement's
+                # audience check on every request, so the band cannot hand out
+                # artwork that outlives the reader's place in the audience. The
+                # ``card`` derivative degrades to the original when processing
+                # has not produced one, so a just-uploaded hero still renders.
+                "imageUrl": media_url(hero, variant="card") if hero else None,
+            }
+        )
     return ready({"featured": cards[0], "items": cards[1:]})
 
 

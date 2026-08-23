@@ -118,6 +118,12 @@ function article(overrides: Partial<AnnouncementDetail> = {}): AnnouncementDetai
     scope: { level: "office", label: "Office", officeName: "Fairfax VA" },
     isPinned: false,
     cta: null,
+    bodyBlocks: [
+      {
+        type: "paragraph",
+        spans: [{ type: "text", value: "As a recipient would read it." }],
+      },
+    ],
     audience: AUDIENCE,
     hero: null,
     attachments: [],

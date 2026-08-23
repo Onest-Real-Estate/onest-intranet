@@ -46,6 +46,12 @@ function row(overrides: Partial<AnnouncementRow> = {}): AnnouncementRow {
     scope: { level: "office", label: "Office", officeName: "Fairfax, VA" },
     isPinned: false,
     cta: null,
+    bodyBlocks: [
+      {
+        type: "paragraph",
+        spans: [{ type: "text", value: "Full text of the notice." }],
+      },
+    ],
     ...overrides,
   };
 }

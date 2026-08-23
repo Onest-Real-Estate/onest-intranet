@@ -28,8 +28,21 @@ function Slide({
       aria-hidden={current ? undefined : true}
       className="w-full shrink-0"
     >
-      {/* Every frame carries the same responsive box, so the band holds its
-          height whichever story — with artwork or without — is on it. */}
+      {/*
+        Copy sits directly on the photograph — no scrim, no gradient, no panel
+        behind it, so the image is shown exactly as uploaded. Legibility comes
+        from `on-media-ink`: a fixed light ink with a shadow on the glyphs
+        themselves rather than a wash over the picture.
+
+        That is a weaker guarantee than a scrim, and deliberately so. It holds
+        because the artwork is decorative and the same headline, summary, and
+        category are available as ordinary text on the announcements feed and
+        the detail page — nothing here is the only copy of anything.
+
+        Every frame carries the same fixed box and the same clamped copy, so the
+        band holds its height whichever story — with artwork or without — is on
+        it.
+      */}
       <div className="bg-muted relative aspect-[4/3] w-full overflow-hidden sm:aspect-[16/8]">
         {announcement.imageUrl ? (
           <img
@@ -44,14 +57,8 @@ function Slide({
             <Newspaper className="size-10" aria-hidden />
           </span>
         )}
-        {/*
-          The scrim is the page's own background rather than black, so the
-          overlay reads in both themes and the copy on it can stay on the
-          ordinary foreground tokens — white text over an arbitrary photograph
-          is a contrast bet we would lose eventually.
-        */}
-        <div className="from-background via-background/90 absolute inset-x-0 bottom-0 grid gap-1.5 bg-linear-to-t px-5 pt-20 pb-5 to-transparent sm:px-6 sm:pb-6">
-          <p className="text-primary text-xs font-bold tracking-[0.08em] uppercase">
+        <div className="on-media-ink absolute inset-x-0 bottom-0 grid gap-1.5 px-5 pb-5 sm:px-6 sm:pb-6">
+          <p className="text-xs font-bold tracking-[0.08em] uppercase">
             {announcement.tag}
           </p>
           <h3 className="line-clamp-2 text-xl leading-snug font-bold tracking-[-0.02em] text-balance sm:text-2xl">
@@ -60,13 +67,13 @@ function Slide({
             <Link
               href={announcement.href}
               tabIndex={current ? undefined : -1}
-              className="hover:text-primary focus-visible:ring-ring rounded-sm focus-visible:ring-2 focus-visible:outline-none"
+              className="focus-visible:ring-on-media rounded-sm hover:underline focus-visible:ring-2 focus-visible:outline-none"
             >
               {announcement.title}
             </Link>
           </h3>
           {announcement.excerpt ? (
-            <p className="text-muted-foreground line-clamp-2 max-w-2xl text-sm leading-6">
+            <p className="line-clamp-2 max-w-2xl text-sm leading-6">
               {announcement.excerpt}
             </p>
           ) : null}
