@@ -2,6 +2,7 @@ from django.urls import path
 
 from . import views
 from .quick_access import views as quick_access_views
+from .reporting import views as reporting_views
 
 urlpatterns = [
     path("dashboard", views.dashboard, name="dashboard"),
@@ -12,6 +13,27 @@ urlpatterns = [
     ),
     path("design-system", views.design_system, name="design_system"),
     path("hub/<slug:section>", views.coming_soon, name="coming_soon"),
+    path("reports", reporting_views.report_catalog, name="report_catalog"),
+    path(
+        "reports/<slug:report_key>",
+        reporting_views.report_detail,
+        name="report_detail",
+    ),
+    path(
+        "reports/<slug:report_key>/exports",
+        reporting_views.report_export_create,
+        name="report_export_create",
+    ),
+    path(
+        "reports/exports/<int:job_id>",
+        reporting_views.report_export_status,
+        name="report_export_status",
+    ),
+    path(
+        "reports/exports/<int:job_id>/download",
+        reporting_views.report_export_download,
+        name="report_export_download",
+    ),
     # The dashboard panel's fire-and-forget click beacon. Not administrative:
     # it answers 204 to any signed-in reader and never says what it recorded.
     path(

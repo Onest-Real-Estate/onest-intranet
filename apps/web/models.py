@@ -8,6 +8,7 @@ from django.urls import NoReverseMatch
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
+from apps.user.storage import private_storage
 from apps.web.quick_access.catalog import (
     DEFAULT_ICON,
     ICON_KEYS,
@@ -56,6 +57,8 @@ class OperationsPermission(models.Model):
                 "manage_company_quick_access",
                 _("Can manage company-wide Quick Access links"),
             ),
+            ("view_reports", _("Can view the operational reports catalog")),
+            ("export_reports", _("Can export operational reports")),
         )
 
 
@@ -468,3 +471,96 @@ class QuickAccessLinkClick(models.Model):
 
     def __str__(self) -> str:
         return f"{self.link_stable_key}@{self.occurred_at.isoformat()}"
+
+
+def _report_export_upload_to(instance: "ReportExportJob", filename: str) -> str:
+    return f"report-exports/{instance.requested_by_id}/{filename}"
+
+
+class ReportExportJob(models.Model):
+    """One async (or queued) report file for a single requestor.
+
+    Interactive pages never store files. Large or explicit exports land here
+    with idempotency, progress, failure state, and a hard expiry. Bytes live in
+    protected storage and are streamed only through the authorized download
+    view — never via a permanent public URL.
+    """
+
+    class Status(models.TextChoices):
+        QUEUED = "queued", _("Queued")
+        RUNNING = "running", _("Running")
+        READY = "ready", _("Ready")
+        FAILED = "failed", _("Failed")
+        EXPIRED = "expired", _("Expired")
+
+    class ExportFormat(models.TextChoices):
+        CSV = "csv", _("CSV")
+        JSON = "json", _("JSON")
+
+    report_key = models.SlugField(_("report key"), max_length=64)
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="report_export_jobs",
+        verbose_name=_("requested by"),
+    )
+    filters = models.JSONField(_("filters"), default=dict, blank=True)
+    export_format = models.CharField(
+        _("format"),
+        max_length=8,
+        choices=ExportFormat.choices,
+        default=ExportFormat.CSV,
+    )
+    idempotency_key = models.CharField(
+        _("idempotency key"),
+        max_length=80,
+        db_index=True,
+        help_text=_(
+            "Hash of requestor + report + filters + format. Duplicate requests "
+            "within the idempotency window reuse the same job."
+        ),
+    )
+    status = models.CharField(
+        _("status"),
+        max_length=16,
+        choices=Status.choices,
+        default=Status.QUEUED,
+        db_index=True,
+    )
+    progress = models.PositiveSmallIntegerField(_("progress"), default=0)
+    error_message = models.CharField(_("error"), max_length=500, blank=True)
+    scope_level = models.CharField(_("scope level"), max_length=16, blank=True)
+    calculation_version = models.PositiveSmallIntegerField(
+        _("calculation version"), default=1
+    )
+    file = models.FileField(
+        _("file"),
+        upload_to=_report_export_upload_to,
+        storage=private_storage,
+        max_length=255,
+        blank=True,
+    )
+    content_type = models.CharField(_("content type"), max_length=128, blank=True)
+    byte_size = models.PositiveIntegerField(_("byte size"), default=0)
+    requested_at = models.DateTimeField(_("requested at"), default=timezone.now)
+    completed_at = models.DateTimeField(_("completed at"), null=True, blank=True)
+    data_as_of = models.DateTimeField(_("data as of"), null=True, blank=True)
+    expires_at = models.DateTimeField(_("expires at"), db_index=True)
+    updated_at = models.DateTimeField(_("updated at"), auto_now=True)
+
+    if TYPE_CHECKING:
+        requested_by_id: int
+
+    class Meta:
+        ordering = ["-requested_at"]
+        verbose_name = _("report export job")
+        verbose_name_plural = _("report export jobs")
+        indexes = [
+            models.Index(
+                fields=["requested_by", "report_key", "-requested_at"],
+                name="web_rex_user_report",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.report_key}:{self.status}:{self.pk}"

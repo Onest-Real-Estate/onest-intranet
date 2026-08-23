@@ -131,6 +131,8 @@ _OPS_ALL = (
     "web.view_own_commission",
     "web.view_own_leads",
     "web.view_office_tasks",
+    "web.view_reports",
+    "web.export_reports",
 )
 _OPS_REGIONAL = (
     "web.manage_quick_access",
@@ -156,6 +158,8 @@ _OPS_REGIONAL = (
     "web.view_own_commission",
     "web.view_own_leads",
     "web.view_office_tasks",
+    "web.view_reports",
+    "web.export_reports",
 )
 _OPS_BRANCH = (
     "web.manage_quick_access",
@@ -179,6 +183,8 @@ _OPS_BRANCH = (
     "web.view_own_commission",
     "web.view_own_leads",
     "web.view_office_tasks",
+    "web.view_reports",
+    "web.export_reports",
 )
 _OPS_TC = (
     "web.view_users",
@@ -187,6 +193,8 @@ _OPS_TC = (
     "web.manage_documents",
     "web.view_own_transactions",
     "web.view_own_tasks",
+    "web.view_reports",
+    "web.export_reports",
 )
 _OPS_OFFICE_ADMIN = (
     "web.manage_quick_access",
@@ -201,12 +209,15 @@ _OPS_OFFICE_ADMIN = (
     "user.view_user_administration",
     "web.view_own_tasks",
     "web.view_office_tasks",
+    "web.view_reports",
+    "web.export_reports",
 )
 _OPS_REALTOR = (
     "web.view_own_transactions",
     "web.view_own_tasks",
     "web.view_own_commission",
     "web.view_own_leads",
+    "web.view_reports",
 )
 
 ROLE_DEFINITIONS: tuple[RoleDefinition, ...] = (
@@ -381,6 +392,8 @@ ROLE_DEFINITIONS: tuple[RoleDefinition, ...] = (
             "web.view_users",
             "web.view_agent_contracts",
             "web.view_own_commission",
+            "web.view_reports",
+            "web.export_reports",
         ),
     ),
     RoleDefinition(
@@ -401,6 +414,8 @@ ROLE_DEFINITIONS: tuple[RoleDefinition, ...] = (
             "web.publish_announcements",
             "web.manage_documents",
             "user.view_user_administration",
+            "web.view_reports",
+            "web.export_reports",
         ),
     ),
     RoleDefinition(

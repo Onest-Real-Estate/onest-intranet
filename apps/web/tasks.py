@@ -2,6 +2,13 @@
 
 from celery import shared_task
 
+# Reporting export tasks live in apps.web.reporting.tasks; import so the
+# worker registers them via this app's autodiscovered tasks module.
+from apps.web.reporting.tasks import (  # noqa: F401
+    expire_report_exports,
+    run_report_export,
+)
+
 
 @shared_task
 def ping(message: str = "pong") -> str:

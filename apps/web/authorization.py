@@ -823,6 +823,59 @@ ROUTE_POLICIES: dict[str, AuthorizationPolicy] = {
         auth_behavior="json",
         surface_type="route",
     ),
+    "report_catalog": AuthorizationPolicy(
+        key="report_catalog",
+        access="permission_protected",
+        description="List operational reports the actor is entitled to.",
+        methods=("GET",),
+        route_names=("report_catalog",),
+        all_permissions=("web.view_reports",),
+        scope_rule="user_office_scope",
+    ),
+    "report_detail": AuthorizationPolicy(
+        key="report_detail",
+        access="permission_protected",
+        description=(
+            "Render one operational report. Per-report permissions and scope "
+            "are enforced again inside the calculator."
+        ),
+        methods=("GET",),
+        route_names=("report_detail",),
+        all_permissions=("web.view_reports",),
+        scope_rule="user_office_scope",
+    ),
+    "report_export_create": AuthorizationPolicy(
+        key="report_export_create",
+        access="permission_protected",
+        description="Queue a scoped report export job.",
+        methods=("POST",),
+        route_names=("report_export_create",),
+        all_permissions=("web.view_reports", "web.export_reports"),
+        scope_rule="user_office_scope",
+        auth_behavior="json",
+    ),
+    "report_export_status": AuthorizationPolicy(
+        key="report_export_status",
+        access="permission_protected",
+        description="Poll progress for a report export the actor requested.",
+        methods=("GET",),
+        route_names=("report_export_status",),
+        all_permissions=("web.view_reports", "web.export_reports"),
+        scope_rule="self_only",
+        auth_behavior="json",
+    ),
+    "report_export_download": AuthorizationPolicy(
+        key="report_export_download",
+        access="permission_protected",
+        description=(
+            "Stream a ready report export from protected storage after "
+            "re-checking entitlement and expiry."
+        ),
+        methods=("GET",),
+        route_names=("report_export_download",),
+        all_permissions=("web.view_reports", "web.export_reports"),
+        scope_rule="self_only",
+    ),
 }
 
 ROUTE_POLICIES.update(
