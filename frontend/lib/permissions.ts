@@ -27,6 +27,11 @@ export function hasPermission(
   if (!user) {
     return false;
   }
+  // Match backend ``has_capability``: Django superuser is break-glass and
+  // bypasses capability checks. Production System Admin still uses role grants.
+  if (user.isSuperuser) {
+    return true;
+  }
   const permissions = new Set(user.permissions);
   if (
     required.all &&

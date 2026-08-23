@@ -32,6 +32,13 @@ HUB_FEATURES: dict[str, bool] = {
 HUB_FEATURES["announcements"] = True
 HUB_FEATURES["office-info"] = True
 HUB_FEATURES["office-resources"] = True
+HUB_FEATURES["reports"] = True
+
+# Live destinations that are not Coming Soon ops stubs and are not agent
+# HUB_SECTIONS. Shared only when the actor holds the matching permission.
+STANDALONE_FEATURES: dict[str, str] = {
+    "reports": "web.view_reports",
+}
 
 
 class PrimaryOffice(TypedDict):
@@ -57,6 +64,11 @@ def hub_feature_states(user=None, *, permissions=None) -> dict[str, bool]:
             if destination.permission in effective_permissions
         }
     )
+    for feature, permission in STANDALONE_FEATURES.items():
+        if not HUB_FEATURES.get(feature):
+            continue
+        if permission in effective_permissions or getattr(user, "is_superuser", False):
+            states[feature] = True
     return states
 
 

@@ -66,6 +66,17 @@ describe("hasPermission", () => {
   it("ignores empty `any`/`all` lists", () => {
     expect(hasPermission(user([]), { any: [], all: [] })).toBe(true);
   });
+
+  it("lets Django superuser bypass capability checks", () => {
+    const superuser = { ...user([]), isSuperuser: true, roleLabel: "Superadmin" };
+    expect(hasPermission(superuser, { all: ["web.view_reports"] })).toBe(true);
+    expect(
+      hasPermission(superuser, {
+        any: ["web.export_reports"],
+        all: ["web.view_reports"],
+      }),
+    ).toBe(true);
+  });
 });
 
 describe("isAuthorizationStale", () => {

@@ -44,7 +44,9 @@ def branch_office():
 
 
 def test_every_hub_section_declares_its_availability():
-    assert set(HUB_FEATURES) == set(HUB_SECTIONS) | set(OPERATIONS_FEATURES)
+    assert set(HUB_FEATURES) == (
+        set(HUB_SECTIONS) | set(OPERATIONS_FEATURES) | {"reports"}
+    )
 
 
 def test_only_the_live_destinations_are_enabled():
@@ -57,6 +59,7 @@ def test_only_the_live_destinations_are_enabled():
             "announcements": True,
             "office-info": True,
             "office-resources": True,
+            "reports": True,
         }.items()
         if enabled
     }
@@ -70,6 +73,7 @@ def test_only_the_live_destinations_are_enabled():
     assert HUB_FEATURES["announcements"] is True
     assert HUB_FEATURES["office-info"] is True
     assert HUB_FEATURES["office-resources"] is True
+    assert HUB_FEATURES["reports"] is True
 
 
 def test_feature_states_are_a_copy_callers_cannot_corrupt():
