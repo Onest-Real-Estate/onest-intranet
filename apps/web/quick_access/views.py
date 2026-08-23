@@ -107,6 +107,9 @@ def quick_access_index(request: HttpRequest):
         page = max(1, int(request.GET.get("page", "1")))
     except ValueError:
         page = 1
+    # ``?create=1`` is how Quick Create opens the drawer here rather than
+    # sending the administrator to the standalone form. It opens a drawer and
+    # nothing else — the create endpoint applies every check on submit.
     return index_props(
         actor,
         query=request.GET.get("q", "").strip(),
@@ -114,6 +117,11 @@ def quick_access_index(request: HttpRequest):
         page=page,
         preview_role=request.GET.get("previewRole", "").strip(),
         preview_office=_int_param(request, "previewOffice"),
+        create_sheet=(
+            {"open": True, "draft": {}, "pendingConfirmation": []}
+            if request.GET.get("create") == "1"
+            else None
+        ),
     )
 
 
@@ -138,14 +146,20 @@ def quick_access_edit(request: HttpRequest, link_id: int):
 
 def _submit(request: HttpRequest, link: QuickAccessLink | None) -> HttpResponse:
     actor = cast(User, request.user)
+    # The drawer on the queue page posts here too. It differs only in where a
+    # rejection renders, so validation and authorization stay one path.
+    from_sheet = link is None and request.POST.get("context") == "sheet"
     form = QuickAccessLinkForm(
         request.POST, instance=link or QuickAccessLink(), actor=actor
     )
     if not form.is_valid():
+        errors = validation_errors(form)
+        if from_sheet:
+            return _render_index_with_sheet(request, errors=errors)
         return _render_form(
             request,
             link=link,
-            errors=validation_errors(form),
+            errors=errors,
             posted=request.POST,
             status=422,
         )
@@ -175,6 +189,12 @@ def _submit(request: HttpRequest, link: QuickAccessLink | None) -> HttpResponse:
         # 422 with the diff attached: the page shows the confirmation dialog
         # and resubmits with the acknowledgement, so a widening change is never
         # applied by a single click.
+        if from_sheet:
+            return _render_index_with_sheet(
+                request,
+                errors={"fields": {}, "form": [str(exc.messages[0])]},
+                pending_confirmation=exc.changes,
+            )
         return _render_form(
             request,
             link=link,
@@ -193,19 +213,22 @@ def _submit(request: HttpRequest, link: QuickAccessLink | None) -> HttpResponse:
             status=409,
         )
     except ValidationError as exc:
+        errors = {
+            "fields": {
+                key: [str(item) for item in value]
+                for key, value in (exc.message_dict or {}).items()
+                if key != "__all__"
+            },
+            "form": [str(item) for item in exc.messages]
+            if not getattr(exc, "message_dict", None)
+            else [str(item) for item in exc.message_dict.get("__all__", [])],
+        }
+        if from_sheet:
+            return _render_index_with_sheet(request, errors=errors)
         return _render_form(
             request,
             link=link,
-            errors={
-                "fields": {
-                    key: [str(item) for item in value]
-                    for key, value in (exc.message_dict or {}).items()
-                    if key != "__all__"
-                },
-                "form": [str(item) for item in exc.messages]
-                if not getattr(exc, "message_dict", None)
-                else [str(item) for item in exc.message_dict.get("__all__", [])],
-            },
+            errors=errors,
             posted=request.POST,
             status=422,
         )
@@ -254,6 +277,42 @@ def quick_access_reorder(request: HttpRequest):
     except ValidationError as exc:
         return _render_index_with_error(request, "; ".join(exc.messages))
     return redirect(INDEX_ROUTE)
+
+
+def _sheet_draft(posted) -> dict:
+    return {key: posted.getlist(key) for key in posted}
+
+
+def _render_index_with_sheet(
+    request: HttpRequest,
+    *,
+    errors: dict,
+    pending_confirmation: list[dict[str, str]] | None = None,
+    status: int = 422,
+) -> HttpResponse:
+    """Re-render the queue with the create drawer reopened and repopulated.
+
+    A rejected create comes back as the page the administrator was on, so they
+    fix the field they were already looking at. The exposure confirmation rides
+    the same path: the first submit returns the diff, the second carries the
+    acknowledgement — a widening change is still never applied by one click.
+    """
+    actor = cast(User, request.user)
+    response = render(
+        request,
+        "QuickAccessAdministration",
+        index_props(
+            actor,
+            errors=errors,
+            create_sheet={
+                "open": True,
+                "draft": _sheet_draft(request.POST),
+                "pendingConfirmation": pending_confirmation or [],
+            },
+        ),
+    )
+    response.status_code = status
+    return response
 
 
 def _render_index_with_error(request: HttpRequest, message: str) -> HttpResponse:

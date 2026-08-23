@@ -796,6 +796,34 @@ ROUTE_POLICIES: dict[str, AuthorizationPolicy] = {
         scope_rule="self_only",
         auth_behavior="json",
     ),
+    "search_suggestions": AuthorizationPolicy(
+        key="search_suggestions",
+        access="authenticated",
+        description=(
+            "Grouped global-search results for the header dialog. Every source "
+            "is asked through its own domain's scoped queryset, so a result "
+            "the reader could not open on its own page cannot appear here — "
+            "including in a snippet or a count. Sources whose permission the "
+            "reader lacks are never queried and never named. Rate limited per "
+            "actor; answers JSON because it is polled while typing."
+        ),
+        methods=("GET",),
+        route_names=("search_suggestions",),
+        scope_rule="search_provider_scope",
+        auth_behavior="json",
+    ),
+    "search_page": AuthorizationPolicy(
+        key="search_page",
+        access="authenticated",
+        description=(
+            "Full global-search results. Same aggregator as the dialog, so the "
+            "two cannot disagree about what this reader may see; every "
+            "destination still re-enforces its own policy when followed."
+        ),
+        methods=("GET",),
+        route_names=("search",),
+        scope_rule="search_provider_scope",
+    ),
     "design_system": AuthorizationPolicy(
         key="design_system",
         access="authenticated",

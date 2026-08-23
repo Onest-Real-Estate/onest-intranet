@@ -7,7 +7,6 @@ import {
   CircleHelp,
   LogOut,
   Palette,
-  Plus,
   RefreshCw,
   Settings,
   UserRound,
@@ -16,8 +15,9 @@ import {
 import { type CSSProperties, type ReactNode, useEffect, useRef, useState } from "react";
 
 import { BrandMark } from "@/components/BrandMark";
-import { SearchControl } from "@/components/design-system/search-control";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
+import { QuickCreateMenu } from "@/components/QuickCreateMenu";
+import { GlobalSearch } from "@/components/search/GlobalSearch";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -443,6 +443,7 @@ function ShellWorkspace({
   context,
   helpUrl,
   notifications,
+  quickCreate,
   primaryOffice,
   role,
   user,
@@ -454,6 +455,7 @@ function ShellWorkspace({
   context: HubPageContext;
   helpUrl: string | null;
   notifications: PageProps["notifications"];
+  quickCreate: PageProps["quickCreate"];
   primaryOffice: PageProps["primaryOffice"];
   role: string;
   user: User | null;
@@ -553,20 +555,9 @@ function ShellWorkspace({
           </Button>
         ) : null}
         <PageContext context={context} />
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <div className="hidden w-full max-w-sm min-w-0 xl:block">
-              <SearchControl
-                label="Search across ONEST"
-                placeholder="Search clients, properties, and documents"
-                disabled
-                tone="subtle"
-                size="sm"
-              />
-            </div>
-          </TooltipTrigger>
-          <TooltipContent>Search arrives with the next release</TooltipContent>
-        </Tooltip>
+        {/* Live global search. Results are authorized and scoped server-side
+            before serialization — see apps/web/search. */}
+        <GlobalSearch />
         <div className="ml-auto flex shrink-0 items-center gap-0.5">
           {helpUrl ? (
             <Tooltip>
@@ -590,9 +581,9 @@ function ShellWorkspace({
             </PendingAction>
           )}
           <NotificationBell summary={notifications} />
-          <PendingAction label="Create new" note="Quick create is not wired up yet">
-            <Plus className="size-5" strokeWidth={1.5} />
-          </PendingAction>
+          {/* One registry, both entry points: this header is the mobile header
+              too, so desktop and mobile can never offer different actions. */}
+          <QuickCreateMenu quickCreate={quickCreate} />
           {user ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -676,7 +667,7 @@ function ShellWorkspace({
 
 export function HubLayout({ children, context, variant = "standard" }: HubLayoutProps) {
   const page = usePage<PageProps>();
-  const { user, features, primaryOffice, notifications } = page.props;
+  const { user, features, primaryOffice, notifications, quickCreate } = page.props;
   const current = page.url.split("?")[0];
   const navGroups = resolveHubNav(user, features, primaryOffice);
   const [expandedSections, setExpandedSections] = useState<Set<HubNavSectionKey>>(() =>
@@ -790,6 +781,7 @@ export function HubLayout({ children, context, variant = "standard" }: HubLayout
         context={resolvedContext}
         helpUrl={page.props.shell?.help.url ?? null}
         notifications={notifications}
+        quickCreate={quickCreate}
         primaryOffice={primaryOffice}
         role={role}
         user={user}

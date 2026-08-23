@@ -28,6 +28,12 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    # Registers the PostgreSQL lookups global search ranks with — notably
+    # ``__trigram_similar``, which compiles to the ``%`` operator the trigram
+    # index can answer. Harmless on SQLite: the app only attaches behaviour to
+    # PostgreSQL connections, and the search code takes its substring path
+    # there anyway. See apps/web/search/ranking.py.
+    "django.contrib.postgres",
     # Third-party
     "django_vite",
     "inertia",

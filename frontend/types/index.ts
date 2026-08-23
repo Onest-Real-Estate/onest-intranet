@@ -356,6 +356,8 @@ export interface PageProps {
   shell: ShellSharedProps;
   /** Header badge counts for the signed-in reader; null when signed out. */
   notifications: NotificationShell | null;
+  /** Quick Create actions, already filtered to what this actor may start. */
+  quickCreate?: QuickCreate;
   [key: string]: unknown;
 }
 
@@ -1158,6 +1160,76 @@ export interface NewAgentFilters {
   trainingStatus: string;
 }
 
+/**
+ * One Quick Create action.
+ *
+ * The list arrives already filtered to what the actor may start — permission,
+ * scope, and feature are all decided server-side, so an unavailable action is
+ * *absent* rather than hidden here. `href` was reversed from a registered route
+ * name; the registry never stores URL strings. See `apps/web/quick_actions.py`.
+ */
+export interface QuickCreateAction {
+  key: string;
+  label: string;
+  description: string;
+  group: string;
+  /** Lucide icon name, mapped to a component by the menu. */
+  icon: string;
+  href: string;
+  /** Leaves the hub; the menu discloses this before the click. */
+  external: boolean;
+}
+
+export interface QuickCreate {
+  actions: QuickCreateAction[];
+  /** Which offices these actions apply to, shown so the actor knows their hat. */
+  scope: { level: string; label: string };
+  /** The server decided the set is large enough to deserve a search box. */
+  searchable: boolean;
+}
+
+/**
+ * Global search.
+ *
+ * Every hit was authorized by the domain that produced it, and `snippet` /
+ * `title` are **plain text** — no markup crosses the wire, so highlighting is a
+ * client-side match against the string and there is nothing to sanitize.
+ */
+export interface SearchHit {
+  id: string;
+  title: string;
+  href: string;
+  snippet: string;
+  meta: string;
+}
+
+export interface SearchGroup {
+  key: string;
+  label: string;
+  icon: string;
+  hits: SearchHit[];
+  /** This source errored; its results are missing rather than empty. */
+  failed: boolean;
+  /** More matches exist than the cap returned. */
+  truncated: boolean;
+  allResultsHref: string;
+}
+
+export interface SearchResults {
+  query: string;
+  groups: SearchGroup[];
+  total: number;
+  /** The query was below the minimum length and was not run. */
+  tooShort: boolean;
+  minLength: number;
+  /** At least one source failed or was skipped; the answer is incomplete. */
+  partial: boolean;
+}
+
+export interface SearchPageProps extends PageProps {
+  results: SearchResults;
+}
+
 export interface FilterOption {
   value: string;
   label: string;
@@ -1286,6 +1358,24 @@ export interface QuickAccessCapabilities {
   scopeLevel: "brokerage" | "scoped";
 }
 
+/** Static choice lists the create drawer renders without a round trip. */
+export interface QuickAccessCreateOptions {
+  iconOptions: QuickAccessChoice[];
+  internalDestinations: QuickAccessChoice[];
+  destinationTypeOptions: QuickAccessChoice[];
+  ssoOptions: QuickAccessChoice[];
+  healthOptions: QuickAccessChoice[];
+  setupOptions: QuickAccessChoice[];
+}
+
+export interface QuickAccessCreateSheet {
+  open: boolean;
+  /** Echoed submission, shaped for the field set's `defaults`. */
+  draft: Record<string, unknown>;
+  /** Widening changes the server refused until they are acknowledged. */
+  pendingConfirmation: QuickAccessExposureChange[];
+}
+
 export interface QuickAccessAdministrationPageProps extends PageProps {
   links: ListResponse<QuickAccessLinkRow, { q: string; status: string }>;
   statusOptions: QuickAccessChoice[];
@@ -1293,6 +1383,8 @@ export interface QuickAccessAdministrationPageProps extends PageProps {
   officeOptions: QuickAccessOfficeChoice[];
   preview: QuickAccessPreview | null;
   capabilities: QuickAccessCapabilities;
+  createOptions: QuickAccessCreateOptions;
+  createSheet: QuickAccessCreateSheet | null;
   errors?: ValidationErrors;
 }
 

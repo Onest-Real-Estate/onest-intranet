@@ -175,7 +175,5 @@ class Migration(migrations.Migration):
                 name="user_office_membership_one_active_primary",
             ),
         ),
-        migrations.RunPython(
-            backfill_primary_memberships, migrations.RunPython.noop
-        ),
+        migrations.RunPython(backfill_primary_memberships, migrations.RunPython.noop),
     ]

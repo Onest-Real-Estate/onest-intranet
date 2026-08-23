@@ -110,6 +110,15 @@ function setPage(overrides: Partial<QuickAccessAdministrationPageProps> = {}) {
     officeOptions: [{ value: 4, label: "Mid-Atlantic / Virginia / Fairfax VA" }],
     preview: null,
     capabilities: { companyWide: false, scopeLevel: "scoped" },
+    createOptions: {
+      iconOptions: [{ value: "app-window", label: "App window" }],
+      internalDestinations: [{ value: "dashboard", label: "Dashboard" }],
+      destinationTypeOptions: [{ value: "external_url", label: "External URL" }],
+      ssoOptions: [{ value: "none", label: "None" }],
+      healthOptions: [{ value: "unknown", label: "Unknown" }],
+      setupOptions: [{ value: "self_service", label: "Self service" }],
+    },
+    createSheet: null,
     ...overrides,
   } as QuickAccessAdministrationPageProps;
 }

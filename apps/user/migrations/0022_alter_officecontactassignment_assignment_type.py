@@ -4,15 +4,30 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('user', '0021_office_contact_assignment_types'),
+        ("user", "0021_office_contact_assignment_types"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='officecontactassignment',
-            name='assignment_type',
-            field=models.CharField(choices=[('manager', 'Branch manager'), ('admin', 'Branch admin'), ('broker_contact', 'Broker contact'), ('transaction_coordinator', 'Transaction coordinator'), ('it_support', 'IT support'), ('principal_broker', 'Principal broker'), ('associate_broker', 'Associate broker'), ('tc_manager', 'TC manager'), ('marketing_manager', 'Marketing manager'), ('it_manager', 'IT manager'), ('accounting', 'Accounting')], max_length=32, verbose_name='assignment type'),
+            model_name="officecontactassignment",
+            name="assignment_type",
+            field=models.CharField(
+                choices=[
+                    ("manager", "Branch manager"),
+                    ("admin", "Branch admin"),
+                    ("broker_contact", "Broker contact"),
+                    ("transaction_coordinator", "Transaction coordinator"),
+                    ("it_support", "IT support"),
+                    ("principal_broker", "Principal broker"),
+                    ("associate_broker", "Associate broker"),
+                    ("tc_manager", "TC manager"),
+                    ("marketing_manager", "Marketing manager"),
+                    ("it_manager", "IT manager"),
+                    ("accounting", "Accounting"),
+                ],
+                max_length=32,
+                verbose_name="assignment type",
+            ),
         ),
     ]

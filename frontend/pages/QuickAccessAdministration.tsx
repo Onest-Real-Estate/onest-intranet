@@ -1,8 +1,9 @@
 import { Head, Link, router, usePage } from "@inertiajs/react";
 import { ArrowDown, ArrowUp, Building2, Eye, Globe2, Pencil, Plus } from "lucide-react";
 import { useState } from "react";
-
+import { QuickAccessLinkFields } from "@/components/administration/QuickAccessLinkFields";
 import {
+  CreateSheet,
   DataTable,
   EmptyState,
   FilterControls,
@@ -28,6 +29,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { routes } from "@/lib/routes";
+import { hasValidationErrors } from "@/lib/validation";
 import type {
   QuickAccessAdministrationPageProps,
   QuickAccessAudience,
@@ -67,10 +69,19 @@ function QuickAccessAdministrationPage() {
     officeOptions,
     preview,
     capabilities,
+    createOptions,
+    createSheet,
     errors,
+    csrfToken,
   } = usePage<QuickAccessAdministrationPageProps>().props;
   const [query, setQuery] = useState(links.filters.q ?? "");
   const [reordering, setReordering] = useState(false);
+  // Quick Create links here with ?create=1; a rejected create comes back with
+  // the drawer flagged open so nothing typed is lost.
+  const [createOpen, setCreateOpen] = useState(
+    Boolean(createSheet?.open) || hasValidationErrors(errors),
+  );
+  const pendingConfirmation = createSheet?.pendingConfirmation ?? [];
 
   const rows = links.items;
   const status = links.filters.status ?? "";
@@ -149,14 +160,65 @@ function QuickAccessAdministrationPage() {
           </span>
         }
         actions={
-          <Button asChild>
-            <Link href={routes.quick_access_new()}>
-              <Plus className="size-4" aria-hidden />
-              New link
-            </Link>
+          <Button type="button" onClick={() => setCreateOpen(true)}>
+            <Plus className="size-4" aria-hidden />
+            New link
           </Button>
         }
       />
+
+      <CreateSheet
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        title="New Quick Access link"
+        description="A launcher on every dashboard in its audience. Destinations must be https, or one of the approved in-app pages."
+        action={routes.quick_access_create()}
+        csrfToken={csrfToken}
+        formId="quick-access-create-form"
+        submitLabel={
+          pendingConfirmation.length > 0 ? "Publish the change" : "Create link"
+        }
+      >
+        {pendingConfirmation.length > 0 ? (
+          // The exposure diff, shown before the link reaches anybody. The
+          // acknowledgement rides the next submit, so a widening change is
+          // still never applied by a single click.
+          <div className="border-warning/40 bg-warning/10 grid gap-2 rounded-lg border p-3 text-sm">
+            <p className="font-semibold">This change widens who can see the tool</p>
+            <ul className="grid gap-1">
+              {pendingConfirmation.map((change) => (
+                <li key={change.label} className="text-muted-foreground text-xs">
+                  <strong className="text-foreground">{change.label}:</strong>{" "}
+                  {change.from} → {change.to}. {change.impact}
+                </li>
+              ))}
+            </ul>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                name="acknowledge_exposure"
+                value="on"
+                defaultChecked
+                className="accent-primary size-4"
+              />
+              I have checked the audience and destination
+            </label>
+          </div>
+        ) : null}
+        <QuickAccessLinkFields
+          defaults={createSheet?.draft}
+          errors={errors}
+          iconOptions={createOptions.iconOptions}
+          internalDestinations={createOptions.internalDestinations}
+          destinationTypeOptions={createOptions.destinationTypeOptions}
+          ssoOptions={createOptions.ssoOptions}
+          healthOptions={createOptions.healthOptions}
+          setupOptions={createOptions.setupOptions}
+          roleOptions={roleOptions}
+          officeOptions={officeOptions}
+          capabilities={capabilities}
+        />
+      </CreateSheet>
 
       {errors ? <FormErrorSummary errors={errors} /> : null}
 

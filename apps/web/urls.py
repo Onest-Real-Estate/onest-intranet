@@ -3,6 +3,7 @@ from django.urls import path
 from . import views
 from .quick_access import views as quick_access_views
 from .reporting import views as reporting_views
+from .search import views as search_views
 
 urlpatterns = [
     path("dashboard", views.dashboard, name="dashboard"),
@@ -12,6 +13,14 @@ urlpatterns = [
         name="action_items_queue",
     ),
     path("design-system", views.design_system, name="design_system"),
+    # Global search. The dialog polls the JSON endpoint; the page is a real
+    # linkable destination for "see all results".
+    path("search", search_views.search_page, name="search"),
+    path(
+        "search/suggestions",
+        search_views.search_suggestions,
+        name="search_suggestions",
+    ),
     path("hub/<slug:section>", views.coming_soon, name="coming_soon"),
     path("reports", reporting_views.report_catalog, name="report_catalog"),
     path(
