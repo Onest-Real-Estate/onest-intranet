@@ -76,6 +76,21 @@ definitions. Revoking the wider one then never depends on reading a scope
 field, and a scoped administrator cannot be widened by accident. See
 `docs/quick-access.md`.
 
+### Writing a notice vs sending it
+
+Announcements split three ways rather than one:
+`web.manage_announcements` opens the workspace and saves drafts,
+`web.publish_announcements` moves a record between draft, scheduled,
+published, and archived, and `web.pin_announcements` lifts a published one to
+the top of the feed. The split follows what each action can actually do to a
+reader: a draft reaches nobody, so authoring is the cheap grant and defaults
+widely (office and regional administrators, compliance, IT support);
+publication is the step that puts words in front of people and defaults to
+managers and brokerage administrators. Pinning changes ordering only and never
+who can read a notice, which is why it is neither of the other two. Every one
+of the three is still bounded by the actor's office scope. See
+`docs/announcements.md`.
+
 ### Reading a record vs ending its access
 
 `user.change_user_administration` maintains somebody's record;
@@ -124,3 +139,4 @@ Helpers: `hasPermission`, `isAuthorizationStale`, `isAccessRevoked`, and
 - `docs/roles.md` — brokerage role catalog
 - `docs/dashboard-metrics.md` — metric-level permissions
 - `docs/quick-access.md` — administered dashboard launchers and their grants
+- `docs/announcements.md` — announcement authoring, publication, and pinning

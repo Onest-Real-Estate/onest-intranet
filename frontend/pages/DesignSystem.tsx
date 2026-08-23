@@ -10,6 +10,7 @@ import {
 import { type ReactNode, useState } from "react";
 import {
   CardStateMessage,
+  CreateSheet,
   DataTable,
   type DataTableColumn,
   DateField,
@@ -143,6 +144,7 @@ export default function DesignSystem() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [sort, setSort] = useState(contracts.sort);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [createSheetOpen, setCreateSheetOpen] = useState(false);
   const [catalogDate, setCatalogDate] = useState("2026-08-20");
 
   const [pathname, search = ""] = page.url.split("?");
@@ -459,6 +461,57 @@ export default function DesignSystem() {
             </SurfaceCardContent>
           </SurfaceCard>
         </div>
+      </CatalogSection>
+
+      <CatalogSection
+        title="Create drawers"
+        description="One slide-over vocabulary for making a single new thing. A create button on a list page opens the drawer in place rather than navigating; the list stays visible behind it, and a rejected save comes back with the drawer reopened and repopulated."
+      >
+        <SurfaceCard>
+          <SurfaceCardHeader>
+            <SurfaceCardTitle>CreateSheet</SurfaceCardTitle>
+            <SurfaceCardDescription>
+              Posts as a native form, not through the Inertia router: multipart uploads
+              need no second code path, and nothing typed lives in client state that a
+              failed save could lose. The server branches on the hidden{" "}
+              <code>context=sheet</code> field to answer 422 with the list page instead
+              of the standalone form.
+            </SurfaceCardDescription>
+          </SurfaceCardHeader>
+          <SurfaceCardContent className="grid gap-2">
+            <Button type="button" onClick={() => setCreateSheetOpen(true)}>
+              <Plus className="size-4" aria-hidden />
+              New contract
+            </Button>
+            <p className="text-muted-foreground text-sm">
+              Ask for what the record needs to exist, then hand off to its own page for
+              previews, lifecycle, and anything needing full width.
+            </p>
+            <CreateSheet
+              open={createSheetOpen}
+              onOpenChange={setCreateSheetOpen}
+              title="New contract"
+              description="Save a draft and land on its page, where you can review and submit it."
+              action="#"
+              csrfToken="catalog-token"
+              formId="catalog-create-form"
+              submitLabel="Save draft"
+            >
+              <FormField>
+                <FormLabel htmlFor="catalog-create-title" required>
+                  Title
+                </FormLabel>
+                <Input id="catalog-create-title" name="title" />
+              </FormField>
+              <FormField>
+                <FormLabel htmlFor="catalog-create-notes" optional>
+                  Notes
+                </FormLabel>
+                <Input id="catalog-create-notes" name="notes" />
+              </FormField>
+            </CreateSheet>
+          </SurfaceCardContent>
+        </SurfaceCard>
       </CatalogSection>
 
       <CatalogSection

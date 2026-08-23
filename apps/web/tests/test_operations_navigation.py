@@ -120,6 +120,7 @@ def test_registry_has_exact_destinations_order_routes_and_permissions():
                 "admin_assign_roles",
                 "admin_office_resources",
                 "admin_offices",
+                "admin_announcements",
             }
         )
 
@@ -156,6 +157,7 @@ def test_scoped_management_role_permission_matrix():
             "Transactions",
             "Inventory",
             "Reservations",
+            "Announcements",
             "Training",
             "Documents",
             "Quick Access",
@@ -168,6 +170,7 @@ def test_scoped_management_role_permission_matrix():
             "New Agent List",
             "Inventory",
             "Reservations",
+            "Announcements",
             "Training",
             "Documents",
             "Quick Access",
@@ -237,6 +240,11 @@ def test_brokerage_admin_can_reach_every_registered_destination(client):
             continue
         if destination.route_name == "admin_office_resources":
             assert "resources" in props
+            assert "filterOptions" in props
+            assert "capabilities" in props
+            continue
+        if destination.route_name == "admin_announcements":
+            assert "announcements" in props
             assert "filterOptions" in props
             assert "capabilities" in props
             continue
@@ -338,11 +346,15 @@ def test_permission_revocation_takes_effect_on_the_next_nested_visit(client):
             "admin_transactions",
         ),
         (
+            # Announcements has a real workspace now, so the marketing persona
+            # is checked against a destination that still renders the
+            # placeholder. Its scoped workspace access is covered by
+            # ``apps/announcements/tests/test_administration.py``.
             "marketing",
             AGENT,
             ScopeType.OFFICE,
-            "web.manage_announcements",
-            "admin_announcements",
+            "web.manage_documents",
+            "admin_documents",
         ),
         (
             "it-support",

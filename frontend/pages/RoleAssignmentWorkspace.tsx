@@ -1,5 +1,5 @@
 import { Head, Link, router, usePage } from "@inertiajs/react";
-import { CalendarClock, ShieldOff } from "lucide-react";
+import { CalendarClock, Plus, ShieldOff } from "lucide-react";
 import { useId, useMemo, useState } from "react";
 
 import {
@@ -21,6 +21,8 @@ import {
   FormErrorSummary,
   FormField,
   FormLabel,
+  FormSheet,
+  FormSheetBody,
   PageHeader,
   PanelHeader,
   RoleBadge,
@@ -121,6 +123,7 @@ function RoleAssignmentWorkspacePage() {
   const [preview, setPreview] = useState<RoleAssignmentPreview | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [confirmingGrant, setConfirmingGrant] = useState(false);
+  const [grantOpen, setGrantOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   const [revoking, setRevoking] = useState<RoleAssignmentWorkspaceAssignment | null>(
@@ -141,6 +144,28 @@ function RoleAssignmentWorkspacePage() {
   const canOpenAdmin = hasPermission(user, {
     all: ["user.view_user_administration"],
   });
+  const canGrant = editable && availableRoles.length > 0;
+
+  /** Back to a clean draft: only a successful grant clears the form. */
+  function resetGrantDraft() {
+    const firstRole = availableRoles[0];
+    setRole(firstRole?.value ?? "");
+    setScopeType(
+      (firstRole?.scopes ?? []).filter((scope) => scope.available !== false)[0]
+        ?.value ?? "office",
+    );
+    setScopeOffice("");
+    setReason("");
+    setStartsAt("");
+    setEndsAt("");
+    setPreview(null);
+  }
+
+  function closeGrantSheet() {
+    resetGrantDraft();
+    setConfirmingGrant(false);
+    setGrantOpen(false);
+  }
 
   async function requestPreview(body: FormData): Promise<RoleAssignmentPreview | null> {
     setPreviewError(null);
@@ -176,6 +201,7 @@ function RoleAssignmentWorkspacePage() {
     data.set("confirmed", "1");
     setSubmitting(true);
     router.post(routes.admin_assign_roles_mutate(subject.id), data, {
+      onSuccess: () => closeGrantSheet(),
       onFinish: () => setSubmitting(false),
     });
   }
@@ -193,6 +219,7 @@ function RoleAssignmentWorkspacePage() {
     data.set("confirmed", "1");
     setSubmitting(true);
     router.post(routes.admin_assign_roles_mutate(subject.id), data, {
+      onSuccess: () => closeGrantSheet(),
       onFinish: () => {
         setSubmitting(false);
         setConfirmingGrant(false);
@@ -282,11 +309,19 @@ function RoleAssignmentWorkspacePage() {
             </span>
           }
           actions={
-            canOpenAdmin ? (
-              <Button asChild variant="outline" size="sm">
-                <Link href={administrationHref}>Administrative record</Link>
-              </Button>
-            ) : null
+            <div className="flex items-center gap-2">
+              {canGrant ? (
+                <Button type="button" onClick={() => setGrantOpen(true)}>
+                  <Plus className="size-4" aria-hidden />
+                  Grant a role
+                </Button>
+              ) : null}
+              {canOpenAdmin ? (
+                <Button asChild variant="outline">
+                  <Link href={administrationHref}>Administrative record</Link>
+                </Button>
+              ) : null}
+            </div>
           }
         />
 
@@ -338,7 +373,7 @@ function RoleAssignmentWorkspacePage() {
               rows={assignments}
               rowKey={(row) => String(row.id)}
               emptyTitle="No role assignments"
-              emptyDescription="Grant a role below to define what they may reach."
+              emptyDescription="Grant a role to define what they may reach."
               columns={[
                 {
                   id: "role",
@@ -425,18 +460,59 @@ function RoleAssignmentWorkspacePage() {
           </SurfaceCardContent>
         </SurfaceCard>
 
-        {editable && availableRoles.length > 0 ? (
-          <SurfaceCard>
-            <PanelHeader
-              divided
-              title="Grant a role"
-              description="Preview effective access before anything high-impact is saved."
-            />
-            <SurfaceCardContent>
-              <form method="post" onSubmit={onGrantSubmit} className="grid gap-4">
-                <input type="hidden" name="csrfmiddlewaretoken" value={csrfToken} />
-                <input type="hidden" name="action" value="grant" />
-                <input type="hidden" name="expected_version" value={grantVersion} />
+        {!canGrant ? (
+          <p className="text-muted-foreground text-sm leading-6">
+            {subject.isSelf
+              ? "You cannot change your own role assignments."
+              : editable
+                ? "Your own scope does not let you delegate any role."
+                : "You can see these assignments but not change them."}
+          </p>
+        ) : null}
+      </div>
+
+      {canGrant ? (
+        <FormSheet
+          open={grantOpen}
+          onOpenChange={setGrantOpen}
+          title="Grant a role"
+          description="Preview effective access before anything high-impact is saved."
+          footer={
+            <div className="flex items-center justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setGrantOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                form="role-grant-form"
+                disabled={submitting || reason.trim().length === 0}
+                aria-busy={submitting || undefined}
+              >
+                Preview and grant
+              </Button>
+            </div>
+          }
+        >
+          <form
+            id="role-grant-form"
+            onSubmit={onGrantSubmit}
+            className="flex min-h-0 flex-col overflow-hidden"
+          >
+            <input type="hidden" name="csrfmiddlewaretoken" value={csrfToken} />
+            <input type="hidden" name="action" value="grant" />
+            <input type="hidden" name="expected_version" value={grantVersion} />
+            <FormSheetBody>
+              <div className="grid gap-4">
+                {hasValidationErrors(validation) ? (
+                  <FormErrorSummary errors={validation} labels={ERROR_LABELS} />
+                ) : null}
+                {previewError ? (
+                  <CardStateMessage state="error">{previewError}</CardStateMessage>
+                ) : null}
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="grid gap-2">
                     <SelectField
@@ -544,27 +620,11 @@ function RoleAssignmentWorkspacePage() {
                 {preview && !confirmingGrant ? (
                   <PreviewSummary preview={preview} />
                 ) : null}
-                <div>
-                  <Button
-                    type="submit"
-                    disabled={submitting || reason.trim().length === 0}
-                  >
-                    Preview and grant
-                  </Button>
-                </div>
-              </form>
-            </SurfaceCardContent>
-          </SurfaceCard>
-        ) : (
-          <p className="text-muted-foreground text-sm leading-6">
-            {subject.isSelf
-              ? "You cannot change your own role assignments."
-              : editable
-                ? "Your own scope does not let you delegate any role."
-                : "You can see these assignments but not change them."}
-          </p>
-        )}
-      </div>
+              </div>
+            </FormSheetBody>
+          </form>
+        </FormSheet>
+      ) : null}
 
       <AccessChangeDialog
         open={confirmingGrant}

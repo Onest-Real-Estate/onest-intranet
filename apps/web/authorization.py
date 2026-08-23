@@ -470,6 +470,86 @@ ROUTE_POLICIES: dict[str, AuthorizationPolicy] = {
         all_permissions=("web.manage_announcements",),
         scope_rule="office_tree_scope",
     ),
+    "announcement_new": AuthorizationPolicy(
+        key="announcement_new",
+        access="permission_protected",
+        description=(
+            "Open an empty announcement workspace. Every choice the form "
+            "offers — owning office, region, office, role, person — is built "
+            "from the actor's own grant."
+        ),
+        methods=("GET",),
+        route_names=("announcement_new",),
+        all_permissions=("web.manage_announcements",),
+        scope_rule="publication_scope",
+    ),
+    "announcement_edit": AuthorizationPolicy(
+        key="announcement_edit",
+        access="permission_protected",
+        description=(
+            "Open one announcement in the workspace. Loaded through the "
+            "actor's scoped queryset, so an out-of-scope id is a 404 and not a "
+            "confirmation that the record exists."
+        ),
+        methods=("GET",),
+        route_names=("announcement_edit",),
+        all_permissions=("web.manage_announcements",),
+        scope_rule="publication_scope",
+    ),
+    "announcement_create": AuthorizationPolicy(
+        key="announcement_create",
+        access="permission_protected",
+        description=(
+            "Create one announcement draft. A draft reaches nobody; "
+            "publication is a separate action behind a separate grant."
+        ),
+        methods=("POST",),
+        route_names=("announcement_create",),
+        all_permissions=("web.manage_announcements",),
+        scope_rule="publication_scope",
+    ),
+    "announcement_update": AuthorizationPolicy(
+        key="announcement_update",
+        access="permission_protected",
+        description=(
+            "Save one announcement's copy, window, call to action, and "
+            "audience. Guarded by an update-timestamp token, so a concurrent "
+            "edit is a 409 rather than a lost update."
+        ),
+        methods=("POST",),
+        route_names=("announcement_update",),
+        all_permissions=("web.manage_announcements",),
+        scope_rule="publication_scope",
+    ),
+    "announcement_lifecycle": AuthorizationPolicy(
+        key="announcement_lifecycle",
+        access="permission_protected",
+        description=(
+            "Publish, schedule, unpublish, archive, or restore one "
+            "announcement. Needs the publication grant on top of authoring, "
+            "and re-authorizes every stored audience selector before the "
+            "state changes."
+        ),
+        methods=("POST",),
+        route_names=("announcement_lifecycle",),
+        all_permissions=(
+            "web.manage_announcements",
+            "web.publish_announcements",
+        ),
+        scope_rule="publication_scope",
+    ),
+    "announcement_pin": AuthorizationPolicy(
+        key="announcement_pin",
+        access="permission_protected",
+        description=(
+            "Pin or unpin one published announcement. Ordering only — pinning "
+            "never changes who can read it."
+        ),
+        methods=("POST",),
+        route_names=("announcement_pin",),
+        all_permissions=("web.manage_announcements", "web.pin_announcements"),
+        scope_rule="publication_scope",
+    ),
     "announcement_recipient_search": AuthorizationPolicy(
         key="announcement_recipient_search",
         access="permission_protected",

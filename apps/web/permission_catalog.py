@@ -244,9 +244,55 @@ PERMISSION_DEFINITIONS: tuple[PermissionDefinition, ...] = (
         name="Can manage announcements",
         domain="content",
         action="manage",
-        description="Create and publish brokerage announcements.",
-        default_roles=(*_BROKERAGE_ADMINS, MARKETING_TEAM),
+        description=(
+            "Open the announcement workspace and write drafts for offices in "
+            "scope. Drafts reach nobody, so this grant alone cannot change "
+            "what any reader sees."
+        ),
+        default_roles=(
+            *_BROKERAGE_ADMINS,
+            MARKETING_TEAM,
+            REGIONAL_MANAGER,
+            BRANCH_MANAGER,
+            REGIONAL_ADMIN,
+            BRANCH_ADMIN,
+            COMPLIANCE,
+            IT_SUPPORT,
+        ),
+        risk="medium",
+    ),
+    PermissionDefinition(
+        codename="web.publish_announcements",
+        name="Can publish, schedule, and archive announcements",
+        domain="content",
+        action="approve",
+        description=(
+            "Move an announcement between draft, scheduled, published, and "
+            "archived. Held apart from authoring because publication is the "
+            "step that puts words in front of people; the audience is still "
+            "bounded by the actor's own office grant."
+        ),
+        default_roles=(
+            *_BROKERAGE_ADMINS,
+            MARKETING_TEAM,
+            REGIONAL_MANAGER,
+            BRANCH_MANAGER,
+            COMPLIANCE,
+        ),
         risk="high",
+    ),
+    PermissionDefinition(
+        codename="web.pin_announcements",
+        name="Can pin announcements",
+        domain="content",
+        action="manage",
+        description=(
+            "Lift a published announcement to the top of the feed and the "
+            "dashboard band. Ordering only — pinning never widens who can "
+            "read it."
+        ),
+        default_roles=(*_BROKERAGE_ADMINS, MARKETING_TEAM, REGIONAL_MANAGER),
+        risk="medium",
     ),
     PermissionDefinition(
         codename="web.manage_training",

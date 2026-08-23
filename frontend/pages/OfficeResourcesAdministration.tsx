@@ -3,11 +3,10 @@ import { ArrowRight } from "lucide-react";
 import { useState } from "react";
 
 import {
+  CreateSheet,
   DataTable,
   FilterControls,
   FilterField,
-  FormSheet,
-  FormSheetBody,
   PageHeader,
   Pagination,
   SearchControl,
@@ -151,48 +150,27 @@ export default function OfficeResourcesAdministration() {
         />
 
         {capabilities.canManage && createOpen ? (
-          <FormSheet
+          <CreateSheet
             open={createOpen}
             onOpenChange={setCreateOpen}
             title="New resource"
             description="Publish an instruction, link, or file to a branch in your scope."
-            footer={
-              <div className="flex items-center justify-end gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setCreateOpen(false)}
-                >
-                  Cancel
-                </Button>
-                <Button type="submit" form="office-resource-create-form">
-                  Create resource
-                </Button>
-              </div>
-            }
+            action={routes.admin_office_resource_create()}
+            csrfToken={csrfToken}
+            formId="office-resource-create-form"
+            submitLabel="Create resource"
+            // File resources upload their bytes with the create, so the drawer
+            // carries a multipart form rather than a second endpoint.
+            encType="multipart/form-data"
           >
-            <form
-              id="office-resource-create-form"
-              method="post"
-              action={routes.admin_office_resource_create()}
-              encType="multipart/form-data"
-              className="flex min-h-0 flex-1 flex-col overflow-hidden"
-            >
-              <input type="hidden" name="csrfmiddlewaretoken" value={csrfToken} />
-              <input type="hidden" name="context" value="sheet" />
-              <FormSheetBody>
-                <div className="grid gap-4">
-                  <ResourceFormFields
-                    defaults={draft}
-                    categories={filterOptions.categories}
-                    types={filterOptions.types}
-                    writableOffices={writableOffices}
-                    includeFile
-                  />
-                </div>
-              </FormSheetBody>
-            </form>
-          </FormSheet>
+            <ResourceFormFields
+              defaults={draft}
+              categories={filterOptions.categories}
+              types={filterOptions.types}
+              writableOffices={writableOffices}
+              includeFile
+            />
+          </CreateSheet>
         ) : null}
 
         <SurfaceCard>

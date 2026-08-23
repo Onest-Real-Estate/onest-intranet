@@ -46,6 +46,8 @@ function detail(
       rank: 1,
     },
     scope: { level: "office", label: "Office", officeName: "Fairfax, VA" },
+    isPinned: false,
+    cta: null,
     audience: [
       {
         kind: "office",

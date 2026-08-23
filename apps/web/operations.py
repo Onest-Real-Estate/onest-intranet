@@ -246,6 +246,7 @@ OPERATIONS_FEATURES["admin-quick-access"] = True
 OPERATIONS_FEATURES["admin-assign-roles"] = True
 OPERATIONS_FEATURES["admin-offices"] = True
 OPERATIONS_FEATURES["admin-office-resources"] = True
+OPERATIONS_FEATURES["admin-announcements"] = True
 
 _OPS_SURFACE_PERMISSIONS = frozenset(
     destination.permission for destination in OPERATIONS_DESTINATIONS

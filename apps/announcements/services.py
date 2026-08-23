@@ -160,13 +160,14 @@ _RANK_EXPRESSION = Case(
 
 
 def order_for_feed(queryset: QuerySet[Announcement]) -> QuerySet[Announcement]:
-    """Priority rank, then recency, then a stable identity tiebreak.
+    """Pinned first, then priority rank, recency, and a stable identity tiebreak.
 
     Documented in ``docs/announcements.md``. Sorting only — the row set is
-    whatever the caller already narrowed it to.
+    whatever the caller already narrowed it to, so pinning lifts an
+    announcement within the reader's own set and never adds one to it.
     """
     return queryset.annotate(priority_rank=_RANK_EXPRESSION).order_by(
-        "priority_rank", "-published_at", "-pk"
+        "-is_pinned", "priority_rank", "-published_at", "-pk"
     )
 
 
@@ -201,7 +202,21 @@ def feed_row(announcement: Announcement) -> dict[str, Any]:
         "category": present_category(announcement.category),
         "priority": present_priority(announcement.priority),
         "scope": _scope_payload(announcement),
+        "isPinned": announcement.is_pinned,
+        "cta": cta_payload(announcement),
     }
+
+
+def cta_payload(announcement: Announcement) -> dict[str, str] | None:
+    """The optional call-to-action button, or nothing.
+
+    Both halves are required by ``announcement_cta_is_complete``, so a renderer
+    that receives a payload here can draw it without checking for a missing
+    label or a missing destination.
+    """
+    if not (announcement.cta_label and announcement.cta_url):
+        return None
+    return {"label": announcement.cta_label, "url": announcement.cta_url}
 
 
 def category_filter_options(*, include_codes=()) -> list[dict[str, str]]:
@@ -339,6 +354,9 @@ def _snapshot(announcement: Announcement) -> dict[str, Any]:
         "category": announcement.category.code if announcement.category else None,
         "priority": announcement.priority,
         "owner_office_id": announcement.owner_office.pk,
+        "is_pinned": announcement.is_pinned,
+        "publish_at": announcement.publish_at,
+        "expires_at": announcement.expires_at,
         "audience": describe_audience(announcement),
     }
 
@@ -382,12 +400,22 @@ def publish_announcement(actor: User, announcement: Announcement, *, now=None):
 
     announcement.status = Announcement.Status.PUBLISHED
     announcement.published_at = announcement.published_at or (now or timezone.now())
+    announcement.archived_at = None
+    announcement.updated_by = actor
     announcement.full_clean()
     announcement.save()
 
     behavior = notification_behavior(announcement.priority)
+    # A future ``publish_at`` means the row is published but not yet visible, so
+    # the event says *scheduled*. A consumer that fans notifications out on
+    # ``announcement.published`` would otherwise interrupt people about news
+    # they cannot open until next week.
+    moment = now or timezone.now()
+    visible_from = announcement.publish_at or announcement.published_at
+    scheduled = announcement.publish_at is not None and announcement.publish_at > moment
+    event_name = "announcement.scheduled" if scheduled else "announcement.published"
     log_event(
-        "announcement.published",
+        event_name,
         actor=actor_from_user(actor),
         target=AuditTarget(
             target_type=Announcement._meta.label_lower,
@@ -398,7 +426,7 @@ def publish_announcement(actor: User, announcement: Announcement, *, now=None):
         after=_snapshot(announcement),
     )
     publish_event(
-        "announcement.published",
+        event_name,
         actor_id=str(actor.pk),
         subject=str(announcement.pk),
         payload={
@@ -412,6 +440,10 @@ def publish_announcement(actor: User, announcement: Announcement, *, now=None):
             "audience": describe_audience(announcement),
             "notify": behavior.notify,
             "notification_priority": behavior.priority,
+            "visible_from": visible_from.isoformat() if visible_from else None,
+            "expires_at": announcement.expires_at.isoformat()
+            if announcement.expires_at
+            else None,
         },
     )
     return announcement

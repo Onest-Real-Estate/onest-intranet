@@ -96,9 +96,14 @@ from the row.
 
 The feed's documented order, applied in `services.order_for_feed()`:
 
-1. **priority rank** ascending — urgent, important, normal
-2. **`published_at`** descending
-3. **`pk`** descending, as a stable tiebreak
+1. **pinned** first — `is_pinned` descending
+2. **priority rank** ascending — urgent, important, normal
+3. **`published_at`** descending
+4. **`pk`** descending, as a stable tiebreak
+
+Pinning is ordering and nothing else. It lifts an announcement *within* the
+set step 1 of the pipeline below already produced, so it can never put one in
+front of somebody the audience does not reach.
 
 Rank is computed with a `Case`/`When` expression built from the code catalog
 rather than stored, so the database never holds a second copy of the ranking
@@ -406,6 +411,39 @@ only in administrator payloads — telling a recipient that a file was
 quarantined tells them a file exists, which is more than they are entitled to
 know.
 
+#### When nothing consumes the queue
+
+The pass runs on a **Celery worker**. With no worker — a local run without
+`make up`, or an outage in production — the task is queued and never executed,
+the row stays `PENDING` for ever, and the publish checklist reports *"Files are
+still being processed. Try again shortly."* indefinitely. That message is
+accurate and useless: nothing in the product will change that state on its own.
+
+Two ways out, and they solve different halves:
+
+```bash
+# Clear a backlog that already exists. Runs the real task in-process, so there
+# is no second implementation of the pass. Idempotent; safe to re-run.
+uv run python manage.py process_announcement_media
+uv run python manage.py process_announcement_media --dry-run
+uv run python manage.py process_announcement_media --announcement 12
+uv run python manage.py process_announcement_media --retry-failed
+```
+
+`--retry-failed` also redoes `FAILED` rows, which usually mean storage was
+briefly unreadable. **Quarantined rows are never retried** — that verdict is a
+security decision about the bytes, not a transient error.
+
+For local development, set this in `.env` so uploads process inline and no
+backlog accumulates in the first place:
+
+```
+CELERY_TASK_ALWAYS_EAGER=1
+```
+
+It defaults to off, so production always goes through the broker and a slow
+image job never blocks an upload request.
+
 ### Access: no presigned URLs, deliberately
 
 A presigned S3 link is an *escape* from the audience predicate for the length
@@ -471,6 +509,121 @@ image that fails at runtime, via `onError`. In every case the hero simply is not
 there; the headline and body stand on their own. The hero's `alt` is empty
 because the headline above it already carries the meaning, and a description
 would be read out twice.
+
+## The administration workspace
+
+`/operations/announcements` is the work queue; `/operations/announcements/new`
+and `/operations/announcements/<id>/edit` are the composer. Both load through
+`administration.manageable_queryset()`, which is bounded by the actor's office
+grant — a record outside it is a **404, not a 403**, because confirming that an
+id exists is itself a disclosure across a scope boundary.
+
+### Three grants, not one
+
+| Grant | What it does |
+| --- | --- |
+| `web.manage_announcements` | Open the workspace, write and save drafts |
+| `web.publish_announcements` | Publish, schedule, unpublish, archive, restore |
+| `web.pin_announcements` | Pin or unpin a published announcement |
+
+A draft reaches nobody, which is why authoring is the cheap grant. Publication
+is the step that changes what a reader sees, so it is held separately and
+checked on top of authoring — `assert_can_publish()` calls
+`assert_can_author()` first, so somebody who may not open the record learns
+nothing more specific than that. All three are still bounded by office scope,
+and the audience selectors are re-authorized independently by
+`audience.assert_can_target()` on every write.
+
+### Lifecycle
+
+`draft → published → archived`, with two shapes of publication and two ways
+back:
+
+| Action | Effect |
+| --- | --- |
+| `publish` | Live immediately. Refused when `publish_at` is in the future. |
+| `schedule` | Live at a future `publish_at`. Refused without one. |
+| `unpublish` | Back to `draft`; the publication stamp is cleared. |
+| `archive` | Out of the feed for good. Row, media, and history retained; the pin is removed. |
+| `restore` | `archived → draft`. Never straight back to live. |
+
+A **scheduled** announcement is stored as `status="published"` with a future
+window start — there is no fourth status column. That is deliberate: the feed
+already filters on `within_window()`, so scheduling reuses the predicate that
+decides visibility rather than adding a second one to keep in step with it.
+
+The state an administrator *reads* is therefore richer than the state stored.
+`administration.lifecycle_state()` derives **Draft / Scheduled / Live / Expired
+/ Archived** from the same window test the feed applies, so the workspace can
+never claim a notice is live while the feed is hiding it. The lifecycle filter
+on the list is written the same way, for the same reason.
+
+### Concurrency
+
+Every write carries an opaque `expected_version` token —
+`announcement.updated_at` in ISO form. The service takes the row under
+`select_for_update(of=("self",))`, compares the token, and raises
+`StaleAnnouncementVersion` on a mismatch; the view answers **409** and
+re-renders with the *current* stored values beside what was typed, so the
+recovery path is "read theirs, then reapply mine" rather than a lost update.
+
+`of=("self",)` is load-bearing: `category` is nullable, so `select_related`
+reaches it through a LEFT OUTER JOIN and PostgreSQL refuses a bare `FOR UPDATE`
+spanning the nullable side of an outer join. SQLite drops row locking
+altogether, so a local sqlite run never sees this.
+
+### Preview
+
+The workspace mounts `components/announcements/AnnouncementArticle.tsx` — the
+**same component the reader-facing detail page uses** — over the draft's
+payload, which `administration.preview_payload()` builds with the same
+`services.feed_row()` the feed calls. "Preview matches the user-facing
+rendering" is therefore a property of the code shape, not two templates
+somebody has to keep in step.
+
+Previewing makes nothing reachable: the payload is assembled for one authorized
+administrator inside their own page response, and the draft is still excluded
+from every reader's queryset by `visible_announcements()`.
+
+Picking an office and/or a role builds an `AudienceContext` for a hypothetical
+reader and runs the real `selector_q()` against the stored selectors, so the
+verdict comes from the predicate that will actually decide. `user_id` stays
+`None` — an individually named recipient is not something an office-and-role
+preview can stand in for, and the panel says so rather than reporting a
+misleading "no".
+
+### Validation and history
+
+`services.validation_debt()` is shown as a checklist *while there is still time
+to fix it*, not only as a rejection at publish. Publishing re-runs the same
+list, plus the audience re-authorization, before any state changes.
+
+Publication history is read from the audit trail (`AuditEvent` rows for this
+target) rather than from a second table of its own. The audit rows are already
+written for every transition and are the record governance answers from; a
+separate history table could only ever be a copy that drifts.
+
+### Events, after commit
+
+| Event | When |
+| --- | --- |
+| `announcement.published` | Published and readable now |
+| `announcement.scheduled` | Published with a future `publish_at` |
+| `announcement.unpublished` / `announcement.archived` / `announcement.restored` | The corresponding transition |
+
+`announcement.scheduled` carries the same payload contract as
+`announcement.published` so a consumer can handle both with one schema, and it
+exists so nothing notifies people about news they cannot open yet. All of them
+go through `apps.audit.events.publish`, which defers to `on_commit` — an event
+is never emitted for a transaction that rolled back.
+
+### Call to action and pinning
+
+`cta_label` and `cta_url` are both-or-neither, enforced by the
+`announcement_cta_is_complete` check constraint and mirrored in `clean()` so a
+form reports the missing half by name instead of surfacing an `IntegrityError`.
+Pinning requires a published row, is removed automatically on archive, and
+appears in the audit trail as its own action.
 
 ## Local demo data
 
