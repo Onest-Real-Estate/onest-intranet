@@ -326,7 +326,7 @@ describe("HubLayout navigation", () => {
       within(sidebar)
         .getAllByRole("region")
         .map((group) => group.getAttribute("aria-label")),
-    ).toEqual(["People", "Operations", "Content", "Governance & support"]);
+    ).toEqual(["People", "Reporting", "Operations", "Content", "Governance & support"]);
     const hrefs = within(sidebar)
       .getAllByRole("link")
       .map((link) => link.getAttribute("href"));

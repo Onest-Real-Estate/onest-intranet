@@ -504,6 +504,48 @@ PERMISSION_DEFINITIONS: tuple[PermissionDefinition, ...] = (
         default_roles=(*_MANAGERS, BRANCH_ADMIN, REGIONAL_ADMIN),
         risk="low",
     ),
+    PermissionDefinition(
+        codename="web.view_reports",
+        name="Can view the operational reports catalog",
+        domain="reporting",
+        action="view",
+        description=(
+            "Open the reports hub. Individual reports still require their own "
+            "domain permissions and effective scope."
+        ),
+        default_roles=(
+            *_MANAGERS,
+            BRANCH_ADMIN,
+            REGIONAL_ADMIN,
+            TRANSACTION_COORDINATOR,
+            REGIONAL_TRANSACTION_COORDINATOR,
+            ACCOUNTANT,
+            COMPLIANCE,
+            REALTOR,
+        ),
+        risk="low",
+    ),
+    PermissionDefinition(
+        codename="web.export_reports",
+        name="Can export operational reports",
+        domain="reporting",
+        action="export",
+        description=(
+            "Request and download scoped report exports. Files expire and are "
+            "served only through an authorized download view."
+        ),
+        default_roles=(
+            *_MANAGERS,
+            BRANCH_ADMIN,
+            REGIONAL_ADMIN,
+            TRANSACTION_COORDINATOR,
+            REGIONAL_TRANSACTION_COORDINATOR,
+            ACCOUNTANT,
+            COMPLIANCE,
+        ),
+        risk="high",
+        sensitive=True,
+    ),
     # --- Audit ---
     PermissionDefinition(
         codename="audit.can_view_activity_timeline",

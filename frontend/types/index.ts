@@ -2235,3 +2235,116 @@ export interface AnnouncementWorkspacePageProps extends PageProps {
   /** What was submitted, echoed back so a rejected save loses no typing. */
   posted: Record<string, string[]> | null;
 }
+
+export interface ReportScopePayload {
+  level: string;
+  label: string;
+}
+
+export interface ReportExportMeta {
+  formats: string[];
+  syncRowLimit: number;
+  ttlHours: number;
+  requiresPermission: string;
+}
+
+export interface ReportCatalogItem {
+  key: string;
+  title: string;
+  description: string;
+  category: string;
+  order: number;
+  scopes: string[];
+  timeGrain: string;
+  calculationVersion: number;
+  definition: string;
+  available: boolean;
+  scope: ReportScopePayload;
+  export: ReportExportMeta;
+  canExport: boolean;
+}
+
+export interface ReportsPageProps extends PageProps {
+  reports: ReportCatalogItem[];
+  scope: ReportScopePayload;
+  timezone: string;
+  currency: string;
+  canExport: boolean;
+}
+
+export interface ReportFilterOption {
+  value: string;
+  label: string;
+}
+
+export interface ReportFilterField {
+  key: string;
+  label: string;
+  kind: "text" | "select" | "date" | "office";
+  options: ReportFilterOption[];
+}
+
+export interface ReportColumnMeta {
+  key: string;
+  label: string;
+  numeric: boolean;
+  currency: boolean;
+}
+
+export interface ReportSeriesPoint {
+  key: string;
+  label: string;
+  value: number;
+}
+
+export interface ReportDetailPayload {
+  key: string;
+  title: string;
+  description: string;
+  category: string;
+  order: number;
+  scopes: string[];
+  timeGrain: string;
+  calculationVersion: number;
+  definition: string;
+  available: boolean;
+  scope: ReportScopePayload;
+  export: ReportExportMeta;
+  filters: ReportFilterField[];
+  appliedFilters: Record<string, string>;
+  rejectedFilters: string[];
+  columns: ReportColumnMeta[];
+  aggregates: Record<string, unknown>;
+  rows: Record<string, unknown>[];
+  series: ReportSeriesPoint[];
+  chartKind: "bar" | "none";
+  emptyReason: string | null;
+  dataAsOf: string | null;
+  comparisonNote: string;
+  canExport: boolean;
+  syncRowLimit: number;
+  timezone: string;
+  currency: string;
+  generatedAt: string;
+}
+
+export interface ReportDetailPageProps extends PageProps {
+  report: ReportDetailPayload;
+}
+
+export interface ReportExportJobPayload {
+  id: number;
+  reportKey: string;
+  status: "queued" | "running" | "ready" | "failed" | "expired";
+  progress: number;
+  format: string;
+  filters: Record<string, string>;
+  requestedAt: string;
+  completedAt: string | null;
+  expiresAt: string;
+  dataAsOf: string | null;
+  calculationVersion: number;
+  errorMessage: string | null;
+  downloadReady: boolean;
+  byteSize: number;
+}

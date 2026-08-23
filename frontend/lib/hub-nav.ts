@@ -7,6 +7,7 @@ import {
   Building2,
   CalendarCheck,
   CalendarDays,
+  ChartColumn,
   ClipboardList,
   FileText,
   FileUser,
@@ -45,6 +46,7 @@ export type HubNavGroupKey =
 
 export type HubNavSectionKey =
   | "admin-people"
+  | "admin-reporting"
   | "admin-operations"
   | "admin-content"
   | "admin-governance-support";
@@ -158,6 +160,13 @@ export const HUB_NAV_SECTIONS: HubNavSectionDefinition[] = [
     label: "People",
     group: "administration",
     order: 10,
+    defaultExpanded: true,
+  },
+  {
+    key: "admin-reporting",
+    label: "Reporting",
+    group: "administration",
+    order: 15,
     defaultExpanded: true,
   },
   {
@@ -456,6 +465,19 @@ export const HUB_NAV_REGISTRY: HubNavItem[] = [
     permissions: { all: ["web.view_agent_contracts"] },
     feature: "admin-agent-contracts",
     activeMatch: active(routes.admin_agent_contracts()),
+  },
+  {
+    key: "reports",
+    label: "Reports",
+    route: route("report_catalog", routes.report_catalog()),
+    icon: ChartColumn,
+    group: "administration",
+    section: "admin-reporting",
+    order: 10,
+    access: "permission-protected",
+    permissions: { all: ["web.view_reports"] },
+    feature: "reports",
+    activeMatch: active(routes.report_catalog()),
   },
   {
     key: "admin-transactions",
