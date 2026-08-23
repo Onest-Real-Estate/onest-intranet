@@ -24,7 +24,8 @@ from typing import Any
 
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
-from django.db.models import Case, IntegerField, Q, QuerySet, When
+from django.db.models import Case, IntegerField, Q, QuerySet, Value, When
+from django.db.models.functions import Least
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
@@ -42,9 +43,12 @@ from apps.announcements.models import (
 )
 from apps.announcements.policy import notification_behavior
 from apps.announcements.presentation import present_category, present_priority
+from apps.announcements.richtext import body_payload
 from apps.announcements.taxonomy import (
     PRIORITIES,
+    PRIORITY_BY_CODE,
     PRIORITY_CODES,
+    PRIORITY_IMPORTANT,
     SYSTEM_CATEGORY_CODES,
     is_known_priority,
     resolve_priority,
@@ -158,17 +162,43 @@ _RANK_EXPRESSION = Case(
     output_field=IntegerField(),
 )
 
+#: The best rank a pin can buy. Pinning **promotes** an announcement to the
+#: *important* tier — it does not lift it above everything.
+#:
+#: This is the rule that stops an old pinned notice burying newer critical
+#: content. A pinned routine notice sorts with important news; a genuinely
+#: urgent announcement published this morning still sorts above it, because
+#: urgent outranks important and no amount of pinning changes that. Without the
+#: cap, "pinned" would be an ordering trump card and the only way to be heard
+#: over a stale pin would be to un-pin it.
+PIN_PROMOTED_RANK: int = PRIORITY_BY_CODE[PRIORITY_IMPORTANT].rank
+
+_EFFECTIVE_RANK = Case(
+    When(is_pinned=True, then=Least(_RANK_EXPRESSION, Value(PIN_PROMOTED_RANK))),
+    default=_RANK_EXPRESSION,
+    output_field=IntegerField(),
+)
+
 
 def order_for_feed(queryset: QuerySet[Announcement]) -> QuerySet[Announcement]:
-    """Pinned first, then priority rank, recency, and a stable identity tiebreak.
+    """The documented feed order.
 
-    Documented in ``docs/announcements.md``. Sorting only — the row set is
-    whatever the caller already narrowed it to, so pinning lifts an
-    announcement within the reader's own set and never adds one to it.
+    1. **effective rank** — priority rank, with a pin promoting the row to at
+       most :data:`PIN_PROMOTED_RANK` (see there for why it is a cap and not a
+       trump card);
+    2. **``published_at``** descending — recency inside a tier;
+    3. **``pk``** descending — a stable tiebreak, so two announcements
+       published in the same instant always order the same way.
+
+    Step 3 is what makes pagination stable: the sort is a *total* order, so
+    page 2 cannot repeat or skip a row that page 1 already showed just because
+    two rows compared equal. Sorting only — the row set is whatever the caller
+    already narrowed it to, so pinning lifts an announcement within the
+    reader's own set and never adds one to it.
     """
-    return queryset.annotate(priority_rank=_RANK_EXPRESSION).order_by(
-        "-is_pinned", "priority_rank", "-published_at", "-pk"
-    )
+    return queryset.annotate(
+        priority_rank=_RANK_EXPRESSION, effective_rank=_EFFECTIVE_RANK
+    ).order_by("effective_rank", "-published_at", "-pk")
 
 
 # --------------------------------------------------------------------------- #
@@ -204,6 +234,10 @@ def feed_row(announcement: Announcement) -> dict[str, Any]:
         "scope": _scope_payload(announcement),
         "isPinned": announcement.is_pinned,
         "cta": cta_payload(announcement),
+        # The body as a structured block tree. The raw source travels too, for
+        # the workspace's editor; the reader-facing renderer only ever walks
+        # ``bodyBlocks``, so no announcement text reaches the browser as markup.
+        "bodyBlocks": body_payload(announcement.body),
     }
 
 

@@ -33,6 +33,20 @@ x-celery-service: &celery-service
     REDIS_URL: redis://redis:6379/0
     CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/1}
     CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/2}
+    # Object storage — must match the web service exactly. Tasks read back the
+    # bytes a request wrote: announcement media is uploaded by web and then
+    # verified, stripped, and resized here. Without these the worker falls back
+    # to local-disk storage, looks for a key that only exists in MinIO, and
+    # fails every file with "The stored file could not be read".
+    USE_S3: "1"
+    AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
+    AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    AWS_STORAGE_BUCKET_NAME: onest
+    AWS_S3_ENDPOINT_URL: http://minio:9000
+    AWS_S3_CUSTOM_DOMAIN: localhost:${MINIO_S3_PORT:-9000}
+    AWS_S3_URL_PROTOCOL: "http:"
+    AWS_S3_REGION_NAME: us-east-1
+    AWS_S3_ADDRESSING_STYLE: path
     # Error tracking (Sentry SDK)
     SENTRY_DSN: ${SENTRY_DSN:-}
     SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-development}

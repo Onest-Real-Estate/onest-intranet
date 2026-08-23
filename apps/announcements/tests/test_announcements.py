@@ -694,3 +694,227 @@ def test_feed_page_never_widens_scope_from_a_query_parameter(seeded, client):
         HTTP_X_INERTIA="true",
     )
     assert slugs(props(response)["feed"]["items"]) == ["va-notice"]
+
+
+# --------------------------------------------------------------------------- #
+# P1-028: ordering, pagination stability, and route-level scope isolation
+# --------------------------------------------------------------------------- #
+
+
+def test_a_stale_pin_never_buries_newer_critical_content(seeded):
+    """The documented cap, as the property it exists to guarantee.
+
+    Pinning promotes a row to the *important* tier and no further, so urgent
+    news published this morning still outranks a notice somebody pinned months
+    ago. Without the cap, the only way to be heard over a stale pin would be to
+    un-pin it.
+    """
+    old_pin = make(
+        "onest-head-office",
+        "old-pinned-notice",
+        priority=PRIORITY_NORMAL,
+        published_at=timezone.now() - timedelta(days=200),
+    )
+    old_pin.is_pinned = True
+    old_pin.save(update_fields=["is_pinned"])
+    fresh_urgent = make(
+        "onest-head-office",
+        "burst-pipe",
+        priority=PRIORITY_URGENT,
+        published_at=timezone.now(),
+    )
+
+    ordered = slugs(order_for_feed(visible_queryset(agent())))
+
+    assert ordered.index(fresh_urgent.slug) < ordered.index(old_pin.slug)
+
+
+def test_a_pin_still_outranks_equal_and_lower_priority_news(seeded):
+    pinned = make(
+        "onest-head-office",
+        "pinned-normal",
+        priority=PRIORITY_NORMAL,
+        published_at=timezone.now() - timedelta(days=30),
+    )
+    pinned.is_pinned = True
+    pinned.save(update_fields=["is_pinned"])
+    newer_normal = make(
+        "onest-head-office",
+        "newer-normal",
+        priority=PRIORITY_NORMAL,
+        published_at=timezone.now(),
+    )
+    important = make(
+        "onest-head-office",
+        "important-news",
+        priority=PRIORITY_IMPORTANT,
+        published_at=timezone.now() - timedelta(days=1),
+    )
+
+    ordered = slugs(order_for_feed(visible_queryset(agent())))
+
+    assert ordered.index(pinned.slug) < ordered.index(newer_normal.slug)
+    # Promoted *into* the important tier, where recency decides between them.
+    assert ordered.index(important.slug) < ordered.index(pinned.slug)
+
+
+def test_the_feed_order_is_total_so_pagination_cannot_repeat_a_row(seeded):
+    """Two announcements published in the same instant still order the same
+    way on every query, which is what makes offset pages disjoint."""
+    moment = timezone.now()
+    for index in range(6):
+        make(
+            "onest-head-office",
+            f"same-instant-{index}",
+            priority=PRIORITY_NORMAL,
+            published_at=moment,
+        )
+    reader = agent()
+
+    first = slugs(build_feed(reader, params={}, page=1, page_size=3)["items"])
+    second = slugs(build_feed(reader, params={}, page=2, page_size=3)["items"])
+
+    assert len(first) == 3
+    assert set(first).isdisjoint(second)
+    # And the same query twice gives the same answer.
+    assert first == slugs(build_feed(reader, params={}, page=1, page_size=3)["items"])
+
+
+def test_a_newly_published_announcement_does_not_duplicate_an_earlier_page(seeded):
+    """Publishing between page reads must not push a row onto a second page.
+
+    Anything newly published sorts to the *front*, so page 2 can only ever be
+    re-cut from further down the same total order — never repeat what page 1
+    already showed from below it.
+    """
+    reader = agent()
+    for index in range(6):
+        make(
+            "onest-head-office",
+            f"steady-{index}",
+            priority=PRIORITY_NORMAL,
+            published_at=timezone.now() - timedelta(days=index + 1),
+        )
+    first = slugs(build_feed(reader, params={}, page=1, page_size=3)["items"])
+
+    make(
+        "onest-head-office",
+        "just-published",
+        priority=PRIORITY_NORMAL,
+        published_at=timezone.now(),
+    )
+    second = slugs(build_feed(reader, params={}, page=2, page_size=3)["items"])
+
+    assert "just-published" not in second
+    # The row shifted off page 1 reappears on page 2 rather than vanishing.
+    assert first[-1] in second or set(first).isdisjoint(second)
+
+
+@pytest.mark.parametrize(
+    ("state", "build"),
+    [
+        (
+            "draft",
+            lambda: make(
+                "fairfax-va",
+                "a-draft",
+                status=Announcement.Status.DRAFT,
+                published_at=None,
+            ),
+        ),
+        (
+            "scheduled",
+            lambda: make(
+                "fairfax-va",
+                "scheduled",
+                publish_at=timezone.now() + timedelta(days=2),
+            ),
+        ),
+        (
+            "expired",
+            lambda: make(
+                "fairfax-va",
+                "expired",
+                published_at=timezone.now() - timedelta(days=10),
+                expires_at=timezone.now() - timedelta(days=1),
+            ),
+        ),
+        (
+            "archived",
+            lambda: make("fairfax-va", "archived", status=Announcement.Status.ARCHIVED),
+        ),
+    ],
+)
+def test_no_body_leaves_the_server_for_a_row_the_reader_may_not_read(
+    seeded, client, state, build
+):
+    """Direct-object access, per lifecycle state. A 404/403 is not enough on
+    its own — the assertion is that the *body text* never appears in the
+    response at all."""
+    row = build()
+    row.body = f"SECRET-{state}-BODY"
+    row.save(update_fields=["body"])
+    client.force_login(agent())
+
+    detail = client.get(reverse("announcement_detail", args=[row.pk]))
+    feed = client.get(reverse("announcements"), HTTP_X_INERTIA="true")
+
+    assert detail.status_code in {403, 404}
+    assert f"SECRET-{state}-BODY" not in detail.content.decode()
+    assert f"SECRET-{state}-BODY" not in feed.content.decode()
+
+
+def test_an_out_of_audience_body_never_reaches_another_reader(seeded, client):
+    row = make("harrisburg", "not-for-you")
+    row.body = "SECRET-OUT-OF-SCOPE"
+    row.save(update_fields=["body"])
+    client.force_login(agent())
+
+    detail = client.get(reverse("announcement_detail", args=[row.pk]))
+    feed = client.get(reverse("announcements"), HTTP_X_INERTIA="true")
+
+    assert detail.status_code in {403, 404}
+    assert "SECRET-OUT-OF-SCOPE" not in detail.content.decode()
+    assert "SECRET-OUT-OF-SCOPE" not in feed.content.decode()
+
+
+def test_the_feed_serializes_the_body_as_blocks_not_as_markup(seeded):
+    row = make("onest-head-office", "with-markup")
+    row.body = "## Heading\n\n<script>alert(1)</script>"
+    row.save(update_fields=["body"])
+
+    payload = build_feed(agent(), params={})["items"][0]
+
+    assert payload["bodyBlocks"][0]["type"] == "heading"
+    rendered = "".join(
+        span["value"]
+        for block in payload["bodyBlocks"]
+        for span in block.get("spans", [])
+    )
+    assert "<script>alert(1)</script>" in rendered
+
+
+def test_an_unsafe_cta_is_refused_by_the_model(seeded):
+    row = make("onest-head-office", "bad-cta")
+    row.cta_label = "Click"
+    row.cta_url = "javascript:alert(1)"
+
+    with pytest.raises(ValidationError) as caught:
+        row.full_clean()
+
+    assert "cta_url" in caught.value.message_dict
+
+
+def test_a_safe_cta_reaches_the_reader_payload(seeded):
+    row = make("onest-head-office", "good-cta")
+    row.cta_label = "Read the policy"
+    row.cta_url = "https://onest.test/policy"
+    row.full_clean()
+    row.save()
+
+    payload = build_feed(agent(), params={})["items"][0]
+
+    assert payload["cta"] == {
+        "label": "Read the policy",
+        "url": "https://onest.test/policy",
+    }

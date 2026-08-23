@@ -1,6 +1,6 @@
 import { Download, ExternalLink, Pin } from "lucide-react";
 import { useState } from "react";
-
+import { AnnouncementBody } from "@/components/announcements/AnnouncementBody";
 import {
   StatusBadge,
   SurfaceCard,
@@ -79,9 +79,10 @@ export function AnnouncementArticle({
 
       <SurfaceCard>
         <SurfaceCardContent>
-          <div className="text-sm leading-6 whitespace-pre-line">
-            {announcement.body}
-          </div>
+          {/* The block tree, never the raw source: see AnnouncementBody. A
+              long notice simply flows — no clamp, no "read more", because an
+              announcement that has been truncated has not been announced. */}
+          <AnnouncementBody blocks={announcement.bodyBlocks} />
 
           {announcement.cta ? (
             <div className="mt-6">

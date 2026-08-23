@@ -17,6 +17,10 @@
   --brand-gold-soft: #fbf5df;
   /* Ink that stays readable on a gold surface in either theme. */
   --brand-on-gold: #231a00;
+  /* Ink for text laid directly over a photograph. Fixed in both themes on
+     purpose: the backdrop is an uploaded image, not a themed surface, so
+     flipping this to dark in light mode would put dark text on a dark photo. */
+  --on-media: #ffffff;
   --brand-ink: #0d0d0d;
 
   --radius: 0.875rem;
@@ -81,6 +85,10 @@
   --brand-gold-deep: #b98733;
   --brand-gold-soft: #493719;
   --brand-on-gold: #231a00;
+  /* Ink for text laid directly over a photograph. Fixed in both themes on
+     purpose: the backdrop is an uploaded image, not a themed surface, so
+     flipping this to dark in light mode would put dark text on a dark photo. */
+  --on-media: #ffffff;
   --brand-ink: #fff8eb;
 
   --background: oklch(0.17 0.012 72);
@@ -182,6 +190,7 @@
   --color-brand-gold-deep: var(--brand-gold-deep);
   --color-brand-gold-soft: var(--brand-gold-soft);
   --color-brand-on-gold: var(--brand-on-gold);
+  --color-on-media: var(--on-media);
   --color-brand-ink: var(--brand-ink);
 }
 
@@ -431,5 +440,18 @@
   /* Gold-tinted well behind Lucide marks — see IconWell. */
   .brand-well {
     background: color-mix(in oklab, var(--brand-gold) 18%, transparent);
+  }
+
+  /* Text laid over a photograph, with no scrim, box, or gradient beneath it.
+     The legibility comes from a shadow on the glyphs themselves, so the image
+     is shown exactly as uploaded. A shadow is weaker than a scrim — a very
+     bright photograph can still crowd the headline — which is why this is
+     reserved for decorative hero art with the same words available as text
+     elsewhere on the page. */
+  .on-media-ink {
+    color: var(--on-media);
+    text-shadow:
+      0 1px 2px rgb(0 0 0 / 0.55),
+      0 2px 12px rgb(0 0 0 / 0.4);
   }
 }

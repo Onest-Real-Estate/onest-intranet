@@ -48,6 +48,15 @@ function detail(
     scope: { level: "office", label: "Office", officeName: "Fairfax, VA" },
     isPinned: false,
     cta: null,
+    // Mirrors `body` above: the server derives the blocks from that source,
+    // so a fixture where they disagree would be testing a payload that cannot
+    // occur.
+    bodyBlocks: [
+      {
+        type: "paragraph",
+        spans: [{ type: "text", value: "The Fairfax office is closed Monday." }],
+      },
+    ],
     audience: [
       {
         kind: "office",

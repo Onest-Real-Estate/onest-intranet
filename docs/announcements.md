@@ -96,14 +96,41 @@ from the row.
 
 The feed's documented order, applied in `services.order_for_feed()`:
 
-1. **pinned** first — `is_pinned` descending
-2. **priority rank** ascending — urgent, important, normal
-3. **`published_at`** descending
-4. **`pk`** descending, as a stable tiebreak
+1. **effective rank** ascending — the priority rank, with a pin promoting the
+   row to at most the **important** tier
+2. **`published_at`** descending
+3. **`pk`** descending, as a stable tiebreak
 
-Pinning is ordering and nothing else. It lifts an announcement *within* the
-set step 1 of the pipeline below already produced, so it can never put one in
-front of somebody the audience does not reach.
+### A pin is a promotion, not a trump card
+
+`PIN_PROMOTED_RANK` caps what pinning buys: a pinned row sorts *as if* it were
+important, and no higher. That is the rule that stops an old pinned notice
+burying newer critical content — an urgent announcement published this morning
+still outranks a notice somebody pinned months ago, because urgent beats
+important and pinning cannot cross that line. Without the cap, "pinned" would
+be an ordering trump card and the only way to be heard over a stale pin would
+be to un-pin it.
+
+Within a tier, recency decides, so a pinned notice still floats above equal- and
+lower-priority news exactly as an author expects.
+
+Pinning is ordering and nothing else. It lifts an announcement *within* the set
+the audience predicate already produced, so it can never put one in front of
+somebody the audience does not reach.
+
+### Why the order is total
+
+Step 3 is not decoration. Two announcements published in the same instant would
+otherwise compare equal, and a database is free to return equal rows in any
+order — which is how the same row appears on page 1 and page 2 of the same
+feed. Ordering by `pk` last makes the sort a *total* order: every pair of rows
+has a defined winner, the same one on every query, so offset pages are disjoint
+and a direct link stays valid.
+
+Publishing between two page reads shifts rows *down* the order, never up past
+what a reader already saw: anything newly published sorts to the front by
+recency, so page 2 is re-cut from further down rather than repeating page 1.
+`test_announcements.py` asserts both properties.
 
 Rank is computed with a `Case`/`When` expression built from the code catalog
 rather than stored, so the database never holds a second copy of the ranking
@@ -333,6 +360,80 @@ pretending the row was always normal.
 - **New priority:** a deliberate deploy. Add the `PriorityDefinition`, its
   tone, and its `NotificationBehavior`, and update this document's tables —
   `test_taxonomy.py` fails if the priority tone or policy map is incomplete.
+
+## Body: the approved rich-text representation
+
+An announcement body is **a restricted plain-text markup source**, stored as
+written in `Announcement.body`, and delivered to the browser as a **structured
+block tree** — never as HTML. `apps/announcements/richtext.py` owns both ends.
+
+### Why there is no sanitizer
+
+There is no HTML pipeline to sanitize. No parser, no allowlist, no
+`dangerouslySetInnerHTML` on the React side. A `<script>` in a body is not
+*stripped* — it is never interpreted as markup at all. It survives as the
+literal characters the author typed, arrives as
+`{"type": "text", "value": "<script>…"}`, and React renders it as text.
+
+That is the security argument, and it is structural rather than diligent.
+Sanitizing an allowlist of HTML is the usual approach and it is a permanent
+liability: every parser quirk and mutation-XSS trick is a new bug against the
+allowlist, forever. Not accepting HTML has no such surface — `<iframe>`,
+`onclick=`, `<object>`, and whatever is invented next are not in the grammar,
+so none of them have a code path.
+
+### The grammar
+
+| Source | Block |
+| --- | --- |
+| `## text` / `### text` | Heading (deeper is literal text) |
+| `- item` | Unordered list; consecutive lines make one list |
+| `1. item` | Ordered list |
+| `> text` | Quote |
+| anything else | Paragraph |
+
+Inline: `**bold**`, `*italic*`, `[label](url)`. Anything unmatched is literal
+text — a stray `*` or an unclosed bracket degrades to what was typed rather
+than swallowing the rest of the notice.
+
+### One URL allowlist, two callers
+
+`safe_url()` accepts **https**, **mailto**, and site-relative paths (`/…`). It
+refuses `javascript:`, `data:`, `vbscript:`, `file:`, bare `http:`, and
+protocol-relative `//host` — the last because it looks relative and is not, and
+inherits the page's scheme.
+
+`http` is absent deliberately: sending the whole brokerage to a cleartext page
+is a downgrade nobody asked for, and every internal tool is TLS.
+
+Both the **call to action** and **body links** validate through that one
+function, so the two can never disagree about what counts as safe. An unsafe
+link inside a body renders as the words the author wrote with no destination —
+dropping it silently would hide that a link was intended; rendering it would be
+the bug. At authoring time `unsafe_links()` reports them so the workspace can
+say so before saving.
+
+`MAX_BLOCKS` bounds one body, so a runaway paste cannot turn a single
+announcement into a payload that costs every reader's feed render.
+
+## Read and acknowledgement state
+
+**Not implemented, deliberately, and nothing in the UI claims otherwise.**
+
+Nothing persists whether a reader has opened an announcement, so no surface
+labels one "read", "new", or "unread" — a badge backed by no storage is a claim
+the system cannot support, and it decays into a lie the moment a second device
+is involved.
+
+Announcements that need a recorded response go through **notifications**
+instead, which do persist per-recipient state
+(`apps.notifications`, `docs/notifications.md`). Priority is what routes an
+announcement there: urgent and important publishes notify, routine ones do not
+(`apps/announcements/policy.py`).
+
+If acknowledgement is ever required — a compliance notice needing a per-person
+record — it is a new model with its own audit trail and its own permission, not
+a boolean bolted onto the feed.
 
 ## Media: hero image and attachments
 
