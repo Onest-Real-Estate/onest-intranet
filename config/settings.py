@@ -51,6 +51,7 @@ INSTALLED_APPS = [
     "apps.audit",
     "apps.notifications",
     "apps.announcements",
+    "apps.contract",
 ]
 
 # Silk (SQL profiling, N+1 detection) is dev-only: its web UI lives at

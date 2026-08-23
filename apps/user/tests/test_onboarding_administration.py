@@ -85,7 +85,7 @@ def test_state_is_derived_from_profile_sso_and_source_domains():
 
     assert by_key["profile"].status == "pending"
     assert by_key["microsoft_login"].status == "pending"
-    assert by_key["contract_generated"].status == "unavailable"
+    assert by_key["contract_generated"].status == "pending"
     assert by_key["required_training"].status == "unavailable"
     assert state.overall_status == OverallStatus.BLOCKED
 
@@ -169,13 +169,13 @@ def test_filters_run_on_derived_state_and_preserve_scoped_count(client):
 
     response = client.get(
         reverse("admin_new_agents"),
-        {"overallStatus": "blocked", "contractStatus": "unavailable"},
+        {"overallStatus": "blocked", "contractStatus": "pending"},
         HTTP_X_INERTIA="true",
     )
     rows = props(response)["agents"]["items"]
     assert rows
     assert all(row["overallStatus"] == "blocked" for row in rows)
-    assert all(row["contractStatus"] == "unavailable" for row in rows)
+    assert all(row["contractStatus"] == "pending" for row in rows)
 
 
 @pytest.mark.django_db
@@ -300,7 +300,7 @@ def test_derived_milestones_ignore_crafted_manual_completion_fields(client):
     state = build_onboarding_states([target])[0]
     assert {item.key: item.status for item in state.milestones}[
         "contract_active"
-    ] == "unavailable"
+    ] == "pending"
 
 
 @pytest.mark.django_db
