@@ -1,0 +1,4 @@
+# report=officeHeadcount; calculationVersion=1; generatedAt=2026-08-23T16:44:51.847350+00:00; dataAsOf=2026-08-23T16:44:51.845741+00:00
+name,email,office,accountState
+mgr-export@example.com,mgr-export@example.com,Charlottesville VA,active
+person@example.com,person@example.com,Charlottesville VA,active

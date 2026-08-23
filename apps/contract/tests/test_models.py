@@ -35,6 +35,7 @@ def test_draft_contract_persists_decimal_precision(seeded_offices):
         transaction_fee_amount="150.50",
         mentor_percent="5",
         mentor_basis="gross_commission",
+        mentor_payee=admin,
     )
     contract.refresh_from_db()
     assert contract.agent_split_percent == Decimal("70.125")
@@ -269,5 +270,21 @@ def test_mentor_terms_require_basis(seeded_offices):
             recipient=recipient,
             effective_on=date.today(),
             mentor_percent="10",
+            mentor_payee=admin,
         )
     assert "mentor_basis" in exc.value.message_dict
+
+
+@pytest.mark.django_db
+def test_mentor_terms_require_payee(seeded_offices):
+    admin = company_admin(seeded_offices)
+    recipient = agent(seeded_offices)
+    with pytest.raises(ValidationError) as exc:
+        create_draft_contract(
+            admin,
+            recipient=recipient,
+            effective_on=date.today(),
+            mentor_percent="10",
+            mentor_basis="gross_commission",
+        )
+    assert "mentor_payee" in exc.value.message_dict

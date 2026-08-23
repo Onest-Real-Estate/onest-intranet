@@ -9,6 +9,7 @@ from django.contrib import admin
 
 from apps.contract.models import (
     AgentContract,
+    CommissionCalculation,
     ContractArtifact,
     ContractTemplate,
     ContractTemplateVersion,
@@ -71,6 +72,7 @@ class AgentContractAdmin(admin.ModelAdmin):
         "party_snapshot",
         "office_snapshot",
         "terms_snapshot",
+        "calculation_rule_version",
         "created_at",
         "updated_at",
         "viewed_at",
@@ -91,3 +93,43 @@ class ContractArtifactAdmin(admin.ModelAdmin):
     list_filter = ("kind",)
     search_fields = ("public_id", "display_name", "checksum")
     readonly_fields = ("public_id", "checksum", "byte_size", "created_at")
+
+
+@admin.register(CommissionCalculation)
+class CommissionCalculationAdmin(admin.ModelAdmin):
+    list_display = (
+        "public_id",
+        "contract",
+        "rule_version",
+        "mentor_amount",
+        "referral_amount",
+        "agent_net_amount",
+        "created_at",
+    )
+    list_filter = ("rule_version", "currency")
+    search_fields = ("public_id", "fingerprint", "contract__public_id")
+    readonly_fields = (
+        "public_id",
+        "contract",
+        "rule_version",
+        "currency",
+        "fingerprint",
+        "input_snapshot",
+        "terms_snapshot",
+        "intermediate_snapshot",
+        "result_snapshot",
+        "explanation",
+        "mentor_amount",
+        "referral_amount",
+        "agent_net_amount",
+        "office_net_amount",
+        "transaction_fee_amount",
+        "created_by",
+        "created_at",
+    )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
