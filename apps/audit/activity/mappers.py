@@ -185,6 +185,8 @@ CONTRACT_MAPPER = DomainMapper(
         "contract.viewed": "Contract viewed",
         "contract.generation_error": "Contract generation error",
         "contract.generation_retried": "Contract generation retried",
+        "contract.pdf_generated": "Contract PDF generated",
+        "contract.artifact.downloaded": "Contract artifact downloaded",
     },
     typed_actions={
         "contract.signed": "contract.sign",

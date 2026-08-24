@@ -78,8 +78,9 @@ vi.mock("@inertiajs/react", () => ({
         units: {},
       },
       statusOptions: [],
-      errors: { fields: {}, form: [] },
       agreementPreview: null,
+      generatedPdfUrl: null,
+      errors: { fields: {}, form: [] },
     },
   }),
 }));

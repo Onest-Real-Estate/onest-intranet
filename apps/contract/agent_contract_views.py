@@ -9,7 +9,7 @@ from typing import Any, cast
 
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db.models import Q
-from django.http import HttpRequest, HttpResponse, JsonResponse
+from django.http import FileResponse, HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 from inertia import inertia, render
@@ -27,6 +27,7 @@ from apps.contract.administration import (
     update_draft_contract,
     workspace_payload,
 )
+from apps.contract.artifact_delivery import stream_contract_artifact
 from apps.contract.lifecycle import (
     ConfirmationRequired,
     StaleContractVersion,
@@ -419,6 +420,20 @@ def agent_contract_preview(request: HttpRequest, public_id: uuid.UUID):
         "errors": empty_validation_errors(),
         "agreementPreview": preview,
     }
+
+
+@enforce_policy("agent_contract_artifact_download")
+@require_GET
+def agent_contract_artifact_download(
+    request: HttpRequest,
+    public_id: uuid.UUID,
+    artifact_public_id: uuid.UUID,
+) -> FileResponse:
+    return stream_contract_artifact(
+        _actor(request),
+        contract_public_id=public_id,
+        artifact_public_id=artifact_public_id,
+    )
 
 
 def _render_workspace_error(

@@ -100,11 +100,40 @@ def account_reactivated(envelope: EventEnvelope) -> list[NotificationRequest]:
     ]
 
 
+def contract_pdf_ready(envelope: EventEnvelope) -> list[NotificationRequest]:
+    """Tell the recipient agent their review PDF is ready.
+
+    Dedupe on contract identity (not event id) so a retried generation that
+    somehow re-emitted would still collapse — the publisher already avoids
+    duplicate events; this is belt-and-suspenders.
+    """
+    agent_id = _int_or_none(envelope.payload.get("agent_id"))
+    contract_id = str(envelope.payload.get("contract_id") or "").strip()
+    if agent_id is None or not contract_id:
+        return []
+    return [
+        NotificationRequest(
+            recipient_id=agent_id,
+            notification_type=NotificationType.CONTRACT,
+            event_key=envelope.name,
+            title="Your agent contract is ready to review",
+            dedupe_key=f"contract.pdf_ready:{contract_id}",
+            priority=NotificationPriority.HIGH,
+            source_module="contract",
+            source_record_type="agent_contract",
+            source_record_id=contract_id,
+            action_key="open_dashboard",
+            action_args=(),
+        )
+    ]
+
+
 EventBuilder = Callable[[EventEnvelope], list[NotificationRequest]]
 
 EVENT_PRODUCERS: dict[str, EventBuilder] = {
     "user.onboarding.owner_assigned": onboarding_owner_assigned,
     "user.account.state_changed": account_reactivated,
+    "contract.pdf_ready": contract_pdf_ready,
 }
 
 

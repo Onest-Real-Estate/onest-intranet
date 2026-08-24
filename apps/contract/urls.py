@@ -8,6 +8,7 @@ from apps.contract.administration_views import (
     contract_template_workspace,
 )
 from apps.contract.agent_contract_views import (
+    agent_contract_artifact_download,
     agent_contract_create,
     agent_contract_lifecycle,
     agent_contract_new,
@@ -89,5 +90,11 @@ urlpatterns = [
         "operations/agent-contracts/<uuid:public_id>/preview",
         agent_contract_preview,
         name="agent_contract_preview",
+    ),
+    path(
+        "operations/agent-contracts/<uuid:public_id>/artifacts/"
+        "<uuid:artifact_public_id>/download",
+        agent_contract_artifact_download,
+        name="agent_contract_artifact_download",
     ),
 ]

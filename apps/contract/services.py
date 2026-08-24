@@ -224,15 +224,7 @@ def _onboarding_state_for_contract(contract: AgentContract | None):
         if contract.status == ContractStatus.GENERATION_ERROR:
             blocked = True
             detail = "Contract PDF generation failed and needs attention."
-        generated_done = contract.generated_pdf_id is not None or contract.status in {
-            ContractStatus.SENT,
-            ContractStatus.VIEWED,
-            ContractStatus.SIGNED,
-            ContractStatus.ACTIVE,
-            ContractStatus.SUPERSEDED,
-            ContractStatus.EXPIRED,
-            ContractStatus.TERMINATED,
-        }
+        generated_done = contract.generated_pdf_id is not None
         signed_done = contract.signed_at is not None or contract.status in {
             ContractStatus.SIGNED,
             ContractStatus.ACTIVE,
@@ -393,6 +385,9 @@ def _artifact_meta(artifact: ContractArtifact | None) -> dict[str, Any] | None:
         "mediaType": artifact.media_type,
         "byteSize": artifact.byte_size,
         "checksum": artifact.checksum,
+        "rendererVersion": artifact.renderer_version or None,
+        "ruleVersion": artifact.rule_version or None,
+        "generatedAt": artifact.created_at.isoformat() if artifact.created_at else None,
         # Deliberately no URL — downloads go through an authorized view.
     }
 

@@ -2389,6 +2389,7 @@ export interface AgentContractWorkspacePageProps extends PageProps {
   expectedVersion: string;
   capabilities: AgentContractCapabilities;
   allowedActions: string[];
+  generatedPdfUrl?: string | null;
   recipient: AgentContractRecipientResult & { agentStatus?: string };
   office: Record<string, unknown>;
   templateOptions: AgentContractTemplateOption[];

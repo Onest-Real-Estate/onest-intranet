@@ -41,6 +41,10 @@ class ContractArtifactInline(admin.TabularInline):
         "media_type",
         "byte_size",
         "checksum",
+        "renderer_version",
+        "rule_version",
+        "input_fingerprint",
+        "generation_metadata",
         "created_at",
     )
     can_delete = False
@@ -101,7 +105,16 @@ class ContractArtifactAdmin(admin.ModelAdmin):
     list_display = ("display_name", "kind", "contract", "byte_size", "created_at")
     list_filter = ("kind",)
     search_fields = ("public_id", "display_name", "checksum")
-    readonly_fields = ("public_id", "checksum", "byte_size", "created_at")
+    readonly_fields = (
+        "public_id",
+        "checksum",
+        "byte_size",
+        "renderer_version",
+        "rule_version",
+        "input_fingerprint",
+        "generation_metadata",
+        "created_at",
+    )
 
 
 @admin.register(CommissionCalculation)

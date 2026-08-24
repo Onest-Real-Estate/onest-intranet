@@ -67,9 +67,46 @@ def resolve_onboarding_cases(
     return resolutions
 
 
+CONTRACT_MODULE = "contract"
+
+
+def resolve_contracts(user, notifications: Sequence) -> dict[UUID, SourceResolution]:
+    """Detail for contract PDF-ready notifications."""
+    from apps.contract.services import accessible_contract_queryset
+
+    by_notification: dict[UUID, str] = {}
+    for notification in notifications:
+        raw = str(notification.source_record_id or "").strip()
+        if raw:
+            by_notification[notification.public_id] = raw
+    if not by_notification:
+        return {}
+
+    contracts = {
+        str(row.public_id): row
+        for row in accessible_contract_queryset(user).filter(
+            public_id__in=list(by_notification.values())
+        )
+    }
+    resolutions: dict[UUID, SourceResolution] = {}
+    for note_id, contract_id in by_notification.items():
+        contract = contracts.get(contract_id)
+        if contract is None:
+            continue
+        if contract.generated_pdf_id is None:
+            continue
+        resolutions[note_id] = SourceResolution(
+            available=True,
+            detail="Review PDF is ready",
+            action_available=True,
+        )
+    return resolutions
+
+
 def register_default_resolvers() -> None:
     from apps.notifications.sources import register_resolver, registered_modules
 
-    if ONBOARDING_MODULE in registered_modules():
-        return
-    register_resolver(ONBOARDING_MODULE, resolve_onboarding_cases)
+    if ONBOARDING_MODULE not in registered_modules():
+        register_resolver(ONBOARDING_MODULE, resolve_onboarding_cases)
+    if CONTRACT_MODULE not in registered_modules():
+        register_resolver(CONTRACT_MODULE, resolve_contracts)
