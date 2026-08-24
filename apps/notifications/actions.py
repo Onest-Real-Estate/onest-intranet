@@ -60,6 +60,12 @@ ACTION_DEFINITIONS: tuple[NotificationAction, ...] = (
         route_name="admin_users",
         label="Open the people directory",
     ),
+    NotificationAction(
+        key="open_agent_contract",
+        route_name="agent_contract_workspace",
+        label="Open contract",
+        arg_types=(str,),
+    ),
 )
 
 ACTION_BY_KEY: dict[str, NotificationAction] = {

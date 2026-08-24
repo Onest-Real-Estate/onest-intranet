@@ -159,6 +159,23 @@ registry.register(
     description="Emitted when an active contract expires by policy date.",
 )
 
+registry.register(
+    name="contract.pdf_ready",
+    version=1,
+    required_payload_keys={
+        "contract_id",
+        "office_id",
+        "agent_id",
+        "artifact_id",
+        "checksum",
+        "occurred_at",
+    },
+    description=(
+        "Emitted once when the authoritative review PDF is stored for an "
+        "issued contract. Idempotent retries must not emit a second event."
+    ),
+)
+
 # ---------------------------------------------------------------------------
 # transaction domain  (publisher: apps.transaction — future)
 # ---------------------------------------------------------------------------

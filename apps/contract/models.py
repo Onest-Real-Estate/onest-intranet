@@ -1077,6 +1077,34 @@ class ContractArtifact(models.Model):
         max_length=64,
         help_text=_("SHA-256 hex digest of the stored bytes."),
     )
+    renderer_version = models.CharField(
+        _("renderer version"),
+        max_length=32,
+        blank=True,
+        help_text=_("PDF renderer/pipeline version that produced this artifact."),
+    )
+    rule_version = models.CharField(
+        _("calculation rule version"),
+        max_length=32,
+        blank=True,
+        help_text=_("Frozen calculation rule version at generation time."),
+    )
+    input_fingerprint = models.CharField(
+        _("input fingerprint"),
+        max_length=64,
+        blank=True,
+        db_index=True,
+        help_text=_(
+            "SHA-256 of frozen snapshots + template source + renderer version. "
+            "Used for idempotent retries."
+        ),
+    )
+    generation_metadata = models.JSONField(
+        _("generation metadata"),
+        default=dict,
+        blank=True,
+        help_text=_("Page count, validated markers, and other non-PII render facts."),
+    )
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         verbose_name=_("created by"),
@@ -1123,6 +1151,23 @@ class ContractArtifact(models.Model):
         ):
             raise ValidationError(
                 {"checksum": _("Checksum must be a 64-character SHA-256 hex digest.")}
+            )
+        if self.input_fingerprint and (
+            len(self.input_fingerprint) != 64
+            or any(ch not in "0123456789abcdef" for ch in self.input_fingerprint)
+        ):
+            raise ValidationError(
+                {
+                    "input_fingerprint": _(
+                        "Input fingerprint must be a 64-character SHA-256 hex digest."
+                    )
+                }
+            )
+        if self.generation_metadata is None or not isinstance(
+            self.generation_metadata, dict
+        ):
+            raise ValidationError(
+                {"generation_metadata": _("Generation metadata must be an object.")}
             )
 
 

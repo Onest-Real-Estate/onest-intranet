@@ -65,6 +65,7 @@ export default function AgentContractWorkspace() {
     commercialPreview,
     errors,
     agreementPreview,
+    generatedPdfUrl,
     csrfToken,
   } = usePage<AgentContractWorkspacePageProps>().props;
   const commission = contract.commission as Record<string, unknown> | undefined;
@@ -418,6 +419,31 @@ export default function AgentContractWorkspace() {
                 <Button type="button" onClick={() => setIssueOpen(true)}>
                   Issue / send
                 </Button>
+              ) : null}
+              {allowedActions.includes("retry_generation") ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => postLifecycle("retry_generation")}
+                >
+                  Retry PDF generation
+                </Button>
+              ) : null}
+              {generatedPdfUrl ? (
+                <Button type="button" variant="outline" asChild>
+                  <a href={generatedPdfUrl}>Download review PDF</a>
+                </Button>
+              ) : null}
+              {contract.status === "sent" && !generatedPdfUrl ? (
+                <p className="text-sm text-muted-foreground">
+                  Review PDF generation is in progress.
+                </p>
+              ) : null}
+              {contract.status === "generation_error" ? (
+                <p className="text-sm text-destructive" role="alert">
+                  PDF generation failed. Retry after checking the template and
+                  snapshots.
+                </p>
               ) : null}
               {capabilities.canManage ? (
                 <Button

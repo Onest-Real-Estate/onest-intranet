@@ -19,6 +19,7 @@ from django.utils.translation import gettext_lazy as _
 
 from apps.audit.models import AuditEvent
 from apps.audit.service import AuditTarget, actor_from_user, log_event
+from apps.contract.artifact_delivery import generated_pdf_download_url
 from apps.contract.calculation_service import (
     preview_commission,
     terms_input_from_contract,
@@ -464,33 +465,38 @@ def agreement_preview_payload(actor: User, contract: AgentContract) -> dict[str,
             {"template_version": _("Choose a template before previewing.")}
         )
     version = contract.template_version
-    party = contract.party_snapshot or {}
-    office = contract.office_snapshot or {}
-    merge_values = {
-        "party.legalFirstName": party.get("legalFirstName") or "",
-        "party.legalLastName": party.get("legalLastName") or "",
-        "party.email": party.get("email") or "",
-        "party.licenseNumber": party.get("licenseNumber") or "",
-        "party.licenseState": party.get("licenseState") or "",
-        "office.name": office.get("name") or "",
-        "office.state": office.get("state") or "",
-        "office.city": office.get("city") or "",
-        "office.streetAddress": office.get("streetAddress") or "",
-        "terms.agentSplitPercent": (contract.terms_snapshot or {}).get(
-            "agentSplitPercent"
-        )
-        or "",
-        "terms.officeSplitPercent": (contract.terms_snapshot or {}).get(
-            "officeSplitPercent"
-        )
-        or "",
-        "contract.effectiveOn": contract.effective_on.isoformat(),
-        "contract.expiresOn": (
-            contract.expires_on.isoformat() if contract.expires_on else ""
-        ),
-        "contract.publicId": str(contract.public_id),
-        "template.versionLabel": version.version_label if version else "",
-    }
+    try:
+        from apps.contract.pdf_generation import build_merge_values
+
+        merge_values = build_merge_values(contract)
+    except Exception:  # noqa: BLE001 - preview falls back to a static key set
+        party = contract.party_snapshot or {}
+        office = contract.office_snapshot or {}
+        merge_values = {
+            "party.legalFirstName": party.get("legalFirstName") or "",
+            "party.legalLastName": party.get("legalLastName") or "",
+            "party.email": party.get("email") or "",
+            "party.licenseNumber": party.get("licenseNumber") or "",
+            "party.licenseState": party.get("licenseState") or "",
+            "office.name": office.get("name") or "",
+            "office.state": office.get("state") or "",
+            "office.city": office.get("city") or "",
+            "office.streetAddress": office.get("streetAddress") or "",
+            "terms.agentSplitPercent": (contract.terms_snapshot or {}).get(
+                "agentSplitPercent"
+            )
+            or "",
+            "terms.officeSplitPercent": (contract.terms_snapshot or {}).get(
+                "officeSplitPercent"
+            )
+            or "",
+            "contract.effectiveOn": contract.effective_on.isoformat(),
+            "contract.expiresOn": (
+                contract.expires_on.isoformat() if contract.expires_on else ""
+            ),
+            "contract.publicId": str(contract.public_id),
+            "template.versionLabel": version.version_label if version else "",
+        }
     return {
         "status": "ready",
         "templateVersionId": version.pk if version else None,
@@ -567,6 +573,9 @@ def workspace_payload(actor: User, contract: AgentContract) -> dict[str, Any]:
         "expectedVersion": contract_version(contract),
         "capabilities": caps,
         "allowedActions": allowed_actions(actor, contract),
+        "generatedPdfUrl": generated_pdf_download_url(contract)
+        if contract.generated_pdf_id
+        else None,
         "recipient": {
             "id": recipient.pk,
             "name": recipient.preferred_display_name(),

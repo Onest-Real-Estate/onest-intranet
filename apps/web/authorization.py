@@ -1020,6 +1020,17 @@ ROUTE_POLICIES["agent_contract_manage"] = AuthorizationPolicy(
     all_permissions=("contract.manage_agent_contracts",),
     scope_rule="user_office_scope",
 )
+ROUTE_POLICIES["agent_contract_artifact_download"] = AuthorizationPolicy(
+    key="agent_contract_artifact_download",
+    access="authenticated",
+    description=(
+        "Stream a protected contract PDF after re-checking recipient or "
+        "scoped admin access. No durable URL is issued."
+    ),
+    methods=("GET",),
+    route_names=("agent_contract_artifact_download",),
+    scope_rule="assigned_or_self",
+)
 
 NON_ROUTE_SURFACES: tuple[AuthorizationPolicy, ...] = (
     AuthorizationPolicy(

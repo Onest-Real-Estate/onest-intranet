@@ -43,16 +43,22 @@ timestamps read-only.
 | `mark_signed` | sent / viewed | signed | |
 | `activate` | signed | active | Supersedes prior active for same recipient |
 | `supersede` / `terminate` / `expire` | (see service) | terminal | High-impact actions need confirmation where configured |
-| `mark_generation_error` / `retry_generation` | sent ↔ generation_error | | Retry re-queues PDF stub |
+| `mark_generation_error` / `retry_generation` | sent ↔ generation_error | | Retry re-queues PDF generation |
 
 Concurrency uses `select_for_update(of=("self",))` plus an `expected_version`
 token from `updated_at`. Already-at-target retries are no-ops (no duplicate
 audit or domain events). Scheduled expiry: Celery task
 `apps.contract.tasks.expire_due_contracts` (safe to re-run).
 
-PDF generation after issue is currently a **stub**
-(`generate_contract_pdf` returns `"stubbed"`) until the dedicated PDF pipeline
-issue lands.
+PDF generation after issue runs through Celery
+(`generate_contract_pdf` → `apps.contract.pdf_generation`): frozen snapshots and
+the immutable published template version are merged, the PDF is validated
+(openable, page count, document-id markers, merge fields), stored privately as
+a `ContractArtifact`, and `contract.pdf_ready` is emitted once after commit.
+Retries are idempotent on the input fingerprint + checksum. Failures move the
+contract to `generation_error` without falsely marking the agreement ready.
+Authorized download streams through
+`agent_contract_artifact_download` (no durable/presigned URL).
 
 ### Commercial terms
 
@@ -84,8 +90,12 @@ Later edits to the user or office row do **not** rewrite these JSON blobs.
 ### Artifacts
 
 Files use `private_storage` (no public URL). Each artifact carries `kind`,
-`checksum` (SHA-256 hex), `byte_size`, and `media_type`. Current generated and
-signed PDFs are pointed at by nullable FKs on the contract.
+`checksum` (SHA-256 hex), `byte_size`, `media_type`, plus generation metadata
+(`renderer_version`, `rule_version`, `input_fingerprint`, page/marker facts).
+Current generated and signed PDFs are pointed at by nullable FKs on the
+contract. Downloads re-check `accessible_contract_queryset` and stream with
+`Cache-Control: private, no-store`. Orphan generated objects (never current)
+are cleaned by `cleanup_orphan_contract_artifacts`.
 
 ## Permissions
 
@@ -167,8 +177,10 @@ Operations → Agent Contracts (`/operations/agent-contracts`):
 3. Workspace: multi-section terms, commercial breakdown, agreement preview,
    submit-for-review / reopen / confirm-issue.
 
-Issuance freezes snapshots and queues `generate_contract_pdf` (stub until the
-PDF pipeline issue). Double-submit is idempotent via lifecycle locks.
+Issuance freezes snapshots and queues `generate_contract_pdf`. Double-submit is
+idempotent via lifecycle locks. When the PDF lands, the workspace exposes a
+scoped download link; DocuSeal e-sign integration is a later issue and consumes
+this stored review PDF rather than re-rendering terms.
 
 ## Constraints and indexes
 

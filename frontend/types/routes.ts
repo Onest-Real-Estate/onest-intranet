@@ -22,6 +22,7 @@ const URLS = {
     'notification_preferences_submit': () => `/notifications/preferences/submit`,
     'notification_preferences': () => `/notifications/preferences`,
     'notifications': () => `/notifications`,
+    'agent_contract_artifact_download': (public_id: string, artifact_public_id: string) => `/operations/agent-contracts/${public_id}/artifacts/${artifact_public_id}/download`,
     'agent_contract_preview': (public_id: string) => `/operations/agent-contracts/${public_id}/preview`,
     'agent_contract_validate': (public_id: string) => `/operations/agent-contracts/${public_id}/validate`,
     'agent_contract_lifecycle': (public_id: string) => `/operations/agent-contracts/${public_id}/lifecycle`,

@@ -282,7 +282,7 @@ def _refresh_issuance_snapshots(contract: AgentContract) -> None:
     )
 
 
-def _queue_pdf_stub(contract_id: int) -> None:
+def _queue_pdf_generation(contract_id: int) -> None:
     def _enqueue() -> None:
         from apps.contract.tasks import generate_contract_pdf
 
@@ -521,7 +521,7 @@ def _transition(
         _emit_domain(domain_name, actor=actor, contract=locked, now=moment)
 
     if action in {"issue", "retry_generation"}:
-        _queue_pdf_stub(locked.pk)
+        _queue_pdf_generation(locked.pk)
 
     return locked
 
