@@ -69,6 +69,7 @@ class AgentContractAdmin(admin.ModelAdmin):
     readonly_fields = (
         "public_id",
         "family_id",
+        "status",
         "party_snapshot",
         "office_snapshot",
         "terms_snapshot",
@@ -85,6 +86,14 @@ class AgentContractAdmin(admin.ModelAdmin):
     )
     inlines = [ContractArtifactInline]
     autocomplete_fields = ("recipient", "office", "created_by", "template_version")
+
+    def has_add_permission(self, request):
+        return False
+
+    def get_readonly_fields(self, request, obj=None):
+        # Status and lifecycle stamps are always read-only; product transitions
+        # go through apps.contract.lifecycle, not Django admin field edits.
+        return self.readonly_fields
 
 
 @admin.register(ContractArtifact)

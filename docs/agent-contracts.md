@@ -3,9 +3,9 @@
 Brokerage agreements for recipient agents: commercial terms, lifecycle status,
 protected PDF artifacts, and immutable issuance snapshots.
 
-Product authoring, signing, and state-machine transitions land in later issues.
-This document covers the **data model and query services** shipped with the
-foundational schema.
+Admin authoring (create / validate / preview / issue) and the lifecycle
+transition service are documented below. Agent-facing signing UI lands in a
+later issue.
 
 ## Models
 
@@ -30,8 +30,29 @@ Stable machine codes in `apps.contract.statuses.ContractStatus`:
 Terminal / alternate: `superseded`, `expired`, `terminated`,
 `generation_error`.
 
-Allowed transitions are enforced by a later lifecycle service — the model
-stores codes and timestamps only.
+All status changes go through `apps.contract.lifecycle.transition`. The model
+refuses unguarded `status` writes. Django admin keeps status and lifecycle
+timestamps read-only.
+
+| Action | From | To | Notes |
+| --- | --- | --- | --- |
+| `submit_for_review` | draft | ready_for_review | Validates terms; refreshes `terms_snapshot` |
+| `reopen` | ready_for_review | draft | |
+| `issue` | ready_for_review | sent | Requires `confirmed=True`; re-validates sources; freezes snapshots; queues PDF stub |
+| `mark_viewed` | sent | viewed | Recipient or manage |
+| `mark_signed` | sent / viewed | signed | |
+| `activate` | signed | active | Supersedes prior active for same recipient |
+| `supersede` / `terminate` / `expire` | (see service) | terminal | High-impact actions need confirmation where configured |
+| `mark_generation_error` / `retry_generation` | sent ↔ generation_error | | Retry re-queues PDF stub |
+
+Concurrency uses `select_for_update(of=("self",))` plus an `expected_version`
+token from `updated_at`. Already-at-target retries are no-ops (no duplicate
+audit or domain events). Scheduled expiry: Celery task
+`apps.contract.tasks.expire_due_contracts` (safe to re-run).
+
+PDF generation after issue is currently a **stub**
+(`generate_contract_pdf` returns `"stubbed"`) until the dedicated PDF pipeline
+issue lands.
 
 ### Commercial terms
 
@@ -125,12 +146,29 @@ stay consistent.
 - `recipient_contract_queryset(user)` — self-only
 - `scoped_contract_queryset(actor)` — office/region/company from effective access
 - `create_draft_contract(...)` — validates active recipient, active assignable
-  office, in-scope assignment, decimal bounds, and published template version
+  office, in-scope assignment, decimal bounds, published **and applicable**
+  template version
+- `apps.contract.administration` — admin authoring: `update_draft_contract`,
+  `applicable_template_versions`, `search_contract_recipients`, commercial and
+  agreement preview, `issue_contract` (wraps lifecycle `issue`)
 - `agent_contract_status(user)` / `contract_status_options()` — directory and
   admin standing (wired from `apps.user` via `apps.contract.services`)
 
 Cross-scope create attempts raise `ValidationError`. Missing manage permission
 raises `PermissionDenied`.
+
+### Admin authoring UI
+
+Operations → Agent Contracts (`/operations/agent-contracts`):
+
+1. List scoped contracts (`web.view_agent_contracts`).
+2. New draft: scoped agent typeahead + applicable template picker
+   (`contract.manage_agent_contracts`).
+3. Workspace: multi-section terms, commercial breakdown, agreement preview,
+   submit-for-review / reopen / confirm-issue.
+
+Issuance freezes snapshots and queues `generate_contract_pdf` (stub until the
+PDF pipeline issue). Double-submit is idempotent via lifecycle locks.
 
 ## Constraints and indexes
 

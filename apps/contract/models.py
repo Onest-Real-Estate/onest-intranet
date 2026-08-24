@@ -1007,6 +1007,32 @@ class AgentContract(models.Model):
         if errors:
             raise ValidationError(errors)
 
+    def save(self, *args, **kwargs):
+        """Refuse unguarded status mutations outside the lifecycle service."""
+        if self.pk:
+            from apps.contract.lifecycle import status_write_allowed
+
+            previous = (
+                type(self)
+                .objects.filter(pk=self.pk)
+                .values_list("status", flat=True)
+                .first()
+            )
+            if (
+                previous is not None
+                and previous != self.status
+                and not status_write_allowed()
+            ):
+                raise ValidationError(
+                    {
+                        "status": _(
+                            "Contract status may only change through the "
+                            "lifecycle transition service."
+                        )
+                    }
+                )
+        super().save(*args, **kwargs)
+
 
 class ContractArtifact(models.Model):
     """Protected file belonging to a contract — generated PDF, signed PDF, etc.

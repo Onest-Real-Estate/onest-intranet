@@ -101,7 +101,12 @@ def test_all_catalog_events_registered():
     expected = {
         "user.onboarded",
         "contract.created",
+        "contract.issued",
         "contract.signed",
+        "contract.activated",
+        "contract.superseded",
+        "contract.terminated",
+        "contract.expired",
         "transaction.created",
         "lead.created",
         "reservation.created",

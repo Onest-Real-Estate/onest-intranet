@@ -172,13 +172,24 @@ CONTRACT_MAPPER = DomainMapper(
     record_type="contract",
     action_labels={
         "contract.created": "Contract created",
+        "contract.issued": "Contract issued",
         "contract.signed": "Contract signed",
+        "contract.activated": "Contract activated",
+        "contract.superseded": "Contract superseded",
+        "contract.terminated": "Contract terminated",
+        "contract.expired": "Contract expired",
         "contract.updated": "Contract updated",
         "contract.cancelled": "Contract cancelled",
+        "contract.submitted_for_review": "Contract submitted for review",
+        "contract.reopened": "Contract reopened",
+        "contract.viewed": "Contract viewed",
+        "contract.generation_error": "Contract generation error",
+        "contract.generation_retried": "Contract generation retried",
     },
     typed_actions={
         "contract.signed": "contract.sign",
         "contract.cancelled": "contract.cancel",
+        "contract.issued": "contract.issue",
     },
 )
 

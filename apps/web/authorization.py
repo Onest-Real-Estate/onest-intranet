@@ -982,6 +982,45 @@ ROUTE_POLICIES["contract_template_action"] = AuthorizationPolicy(
     scope_rule="user_office_scope",
 )
 
+ROUTE_POLICIES["agent_contract_admin"] = AuthorizationPolicy(
+    key="agent_contract_admin",
+    access="permission_protected",
+    description="Render the agent-contract administration list.",
+    methods=("GET",),
+    route_names=("admin_agent_contracts",),
+    all_permissions=("web.view_agent_contracts",),
+    scope_rule="user_office_scope",
+)
+ROUTE_POLICIES["agent_contract_workspace"] = AuthorizationPolicy(
+    key="agent_contract_workspace",
+    access="permission_protected",
+    description="Render one agent-contract workspace.",
+    methods=("GET",),
+    route_names=("agent_contract_workspace", "agent_contract_preview"),
+    any_permissions=(
+        "web.view_agent_contracts",
+        "contract.manage_agent_contracts",
+    ),
+    scope_rule="user_office_scope",
+)
+ROUTE_POLICIES["agent_contract_manage"] = AuthorizationPolicy(
+    key="agent_contract_manage",
+    access="permission_protected",
+    description="Create, update, validate, preview, or issue agent contracts.",
+    methods=("GET", "POST"),
+    route_names=(
+        "agent_contract_new",
+        "agent_contract_create",
+        "agent_contract_update",
+        "agent_contract_lifecycle",
+        "agent_contract_recipient_search",
+        "agent_contract_template_options",
+        "agent_contract_validate",
+    ),
+    all_permissions=("contract.manage_agent_contracts",),
+    scope_rule="user_office_scope",
+)
+
 NON_ROUTE_SURFACES: tuple[AuthorizationPolicy, ...] = (
     AuthorizationPolicy(
         key="admin_prefix",
