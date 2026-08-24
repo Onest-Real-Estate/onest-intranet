@@ -154,13 +154,18 @@ def test_protect_blocks_deleting_template_version_in_use(seeded_offices):
     admin = company_admin(seeded_offices)
     recipient = agent(seeded_offices)
     template = ContractTemplate.objects.create(
-        stable_key="standard-ica", name="Standard ICA", status="active"
+        stable_key="standard-ica",
+        name="Standard ICA",
+        status="active",
+        company_wide=True,
     )
     version = ContractTemplateVersion.objects.create(
         template=template,
         version_label="1.0.0",
         status=ContractTemplateVersion.Status.PUBLISHED,
     )
+    template.active_version = version
+    template.save(update_fields=["active_version"])
     create_draft_contract(
         admin,
         recipient=recipient,
@@ -177,10 +182,13 @@ def test_protect_blocks_deleting_template_version_in_use(seeded_offices):
 def test_one_active_contract_per_recipient(seeded_offices):
     admin = company_admin(seeded_offices)
     recipient = agent(seeded_offices)
+    from apps.contract.lifecycle import allow_status_write
+
     first = create_draft_contract(admin, recipient=recipient, effective_on=date.today())
     first.status = ContractStatus.ACTIVE
     first.activated_at = first.created_at
-    first.save()
+    with allow_status_write():
+        first.save()
 
     second = create_draft_contract(
         admin,
@@ -188,7 +196,7 @@ def test_one_active_contract_per_recipient(seeded_offices):
         effective_on=date.today() + timedelta(days=30),
     )
     second.status = ContractStatus.ACTIVE
-    with pytest.raises(IntegrityError), transaction.atomic():
+    with pytest.raises(IntegrityError), transaction.atomic(), allow_status_write():
         second.save()
 
 

@@ -71,8 +71,11 @@ def test_issued_contract_rejects_foreign_rule_version(seeded_offices):
         mentor_basis=CommissionBasis.AGENT_SIDE_BEFORE_FEES,
         mentor_payee=mentor,
     )
+    from apps.contract.lifecycle import allow_status_write
+
     contract.status = ContractStatus.SENT
-    contract.save(update_fields=["status"])
+    with allow_status_write():
+        contract.save(update_fields=["status"])
     assert contract.calculation_rule_version == CURRENT_RULE_VERSION
     with pytest.raises(ValidationError) as exc:
         persist_commission_calculation(

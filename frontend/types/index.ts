@@ -2302,6 +2302,108 @@ export interface ContractTemplateWorkspacePageProps extends PageProps {
   posted: Record<string, string[]> | null;
 }
 
+export interface AgentContractCapabilities {
+  canView: boolean;
+  canManage: boolean;
+  canViewCommission: boolean;
+  canViewNotes: boolean;
+}
+
+export interface AgentContractListRow {
+  publicId: string;
+  status: string;
+  statusLabel: string;
+  statusTone: string;
+  effectiveOn: string;
+  expiresOn: string | null;
+  recipientName: string;
+  recipientEmail: string;
+  officeName: string;
+  templateLabel: string;
+  updatedAt: string | null;
+}
+
+export interface AgentContractAdministrationPageProps extends PageProps {
+  contracts: ListResponse<AgentContractListRow, { q: string; status: string }>;
+  capabilities: AgentContractCapabilities;
+  statusOptions: Array<{ value: string; label: string; tone: string }>;
+  errors: ValidationErrors;
+}
+
+export interface AgentContractRecipientResult {
+  id: number;
+  name: string;
+  email: string;
+  officeId: number | null;
+  officeName: string;
+  licenseState: string;
+  agentIdentifier: string;
+}
+
+export interface AgentContractTemplateOption {
+  id: number;
+  publicId: string;
+  versionLabel: string;
+  displayName: string;
+  templateName: string;
+  templateStableKey: string;
+  jurisdictionStateCodes: string[];
+}
+
+export interface AgentContractCommercialPreview {
+  summaryLines: string[];
+  breakdown: {
+    ruleVersion: string;
+    currency: string;
+    grossCommission: string | null;
+    agentNet: string;
+    officeNet: string;
+    transactionFee: string;
+    mentorAmount: string | null;
+    referralAmount: string | null;
+    explanation: string[];
+  } | null;
+  units: Record<string, string>;
+}
+
+export interface AgentContractAgreementPreview {
+  status: string;
+  html?: string;
+  message?: string;
+  mergeValues?: Record<string, string>;
+  templateName?: string;
+}
+
+export interface AgentContractWorkspacePageProps extends PageProps {
+  contract: Record<string, unknown> & {
+    publicId: string;
+    status: string;
+    statusLabel: string;
+    statusTone: string;
+    effectiveOn: string;
+    expiresOn: string | null;
+    templateVersionId: number | null;
+    commission?: Record<string, unknown>;
+    internalNotes?: string;
+  };
+  expectedVersion: string;
+  capabilities: AgentContractCapabilities;
+  allowedActions: string[];
+  recipient: AgentContractRecipientResult & { agentStatus?: string };
+  office: Record<string, unknown>;
+  templateOptions: AgentContractTemplateOption[];
+  commercialPreview: AgentContractCommercialPreview | null;
+  statusOptions: Array<{ value: string; label: string; tone: string }>;
+  errors: ValidationErrors;
+  agreementPreview: AgentContractAgreementPreview | null;
+}
+
+export interface AgentContractNewPageProps extends PageProps {
+  capabilities: AgentContractCapabilities;
+  errors: ValidationErrors;
+  draft: Record<string, string>;
+}
+
 export interface ReportScopePayload {
   level: string;
   label: string;

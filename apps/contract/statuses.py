@@ -1,9 +1,9 @@
 """Stable Agent Contract lifecycle codes and presentation metadata.
 
-The state *machine* (allowed transitions, side effects, locking) lands in a
-later issue. This module owns the vocabulary every surface must share so a
-directory filter, an admin badge, and a future transition service never
-disagree about what ``active`` means.
+Allowed transitions, side effects, locking, and idempotency live in
+``apps.contract.lifecycle``. This module owns the vocabulary every surface
+must share so a directory filter, an admin badge, and the transition service
+never disagree about what ``active`` means.
 """
 
 from __future__ import annotations

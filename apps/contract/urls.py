@@ -7,6 +7,17 @@ from apps.contract.administration_views import (
     contract_template_update,
     contract_template_workspace,
 )
+from apps.contract.agent_contract_views import (
+    agent_contract_create,
+    agent_contract_lifecycle,
+    agent_contract_new,
+    agent_contract_preview,
+    agent_contract_recipient_search,
+    agent_contract_template_options,
+    agent_contract_update,
+    agent_contract_validate,
+    agent_contract_workspace,
+)
 
 urlpatterns = [
     path(
@@ -33,5 +44,50 @@ urlpatterns = [
         "operations/contract-templates/templates/<int:version_id>/action",
         contract_template_action,
         name="contract_template_action",
+    ),
+    path(
+        "operations/agent-contracts/new",
+        agent_contract_new,
+        name="agent_contract_new",
+    ),
+    path(
+        "operations/agent-contracts/create",
+        agent_contract_create,
+        name="agent_contract_create",
+    ),
+    path(
+        "operations/agent-contracts/recipients",
+        agent_contract_recipient_search,
+        name="agent_contract_recipient_search",
+    ),
+    path(
+        "operations/agent-contracts/template-options",
+        agent_contract_template_options,
+        name="agent_contract_template_options",
+    ),
+    path(
+        "operations/agent-contracts/<uuid:public_id>",
+        agent_contract_workspace,
+        name="agent_contract_workspace",
+    ),
+    path(
+        "operations/agent-contracts/<uuid:public_id>/save",
+        agent_contract_update,
+        name="agent_contract_update",
+    ),
+    path(
+        "operations/agent-contracts/<uuid:public_id>/lifecycle",
+        agent_contract_lifecycle,
+        name="agent_contract_lifecycle",
+    ),
+    path(
+        "operations/agent-contracts/<uuid:public_id>/validate",
+        agent_contract_validate,
+        name="agent_contract_validate",
+    ),
+    path(
+        "operations/agent-contracts/<uuid:public_id>/preview",
+        agent_contract_preview,
+        name="agent_contract_preview",
     ),
 ]

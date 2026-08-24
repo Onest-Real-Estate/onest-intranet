@@ -75,7 +75,7 @@ registry.register(
 )
 
 # ---------------------------------------------------------------------------
-# contract domain  (publisher: apps.contract — future)
+# contract domain  (publisher: apps.contract.lifecycle / services)
 # ---------------------------------------------------------------------------
 
 registry.register(
@@ -86,10 +86,77 @@ registry.register(
 )
 
 registry.register(
+    name="contract.issued",
+    version=1,
+    required_payload_keys={
+        "contract_id",
+        "office_id",
+        "agent_id",
+        "status",
+        "occurred_at",
+    },
+    description="Emitted when a ready contract is issued/sent to the agent.",
+)
+
+registry.register(
     name="contract.signed",
     version=1,
     required_payload_keys={"contract_id", "signer_id", "signed_at"},
     description="Emitted when all required parties have signed a contract.",
+)
+
+registry.register(
+    name="contract.activated",
+    version=1,
+    required_payload_keys={
+        "contract_id",
+        "office_id",
+        "agent_id",
+        "status",
+        "occurred_at",
+    },
+    description=(
+        "Emitted when a signed contract becomes the governing active agreement."
+    ),
+)
+
+registry.register(
+    name="contract.superseded",
+    version=1,
+    required_payload_keys={
+        "contract_id",
+        "office_id",
+        "agent_id",
+        "status",
+        "occurred_at",
+    },
+    description="Emitted when a contract is superseded by a replacement.",
+)
+
+registry.register(
+    name="contract.terminated",
+    version=1,
+    required_payload_keys={
+        "contract_id",
+        "office_id",
+        "agent_id",
+        "status",
+        "occurred_at",
+    },
+    description="Emitted when a contract is terminated.",
+)
+
+registry.register(
+    name="contract.expired",
+    version=1,
+    required_payload_keys={
+        "contract_id",
+        "office_id",
+        "agent_id",
+        "status",
+        "occurred_at",
+    },
+    description="Emitted when an active contract expires by policy date.",
 )
 
 # ---------------------------------------------------------------------------

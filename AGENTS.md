@@ -34,6 +34,9 @@ registration, and deployment; don't duplicate it here.
 11. **Check dependency blocks when requested.** If a prompt says to check
     dependencies, inspect its blocking GitHub issues with `gh`. Stop when an
     unresolved blocker is open and report the required work in dependency order.
+12. Check for well maintained django and react packages before implementing yourself, do not implement
+    something that is already available as a package it would save lots of time
+
 ## Commands
 
 Two ways to run things. Pick one and stay consistent within a task.

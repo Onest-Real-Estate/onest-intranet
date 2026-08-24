@@ -479,6 +479,12 @@ def create_draft_contract(
                 )
             }
         )
+    if template_version is not None:
+        from apps.contract.administration import assert_template_applicable
+
+        assert_template_applicable(
+            template_version, office=owning_office, effective_on=effective_on
+        )
 
     contract = AgentContract(
         recipient=recipient,

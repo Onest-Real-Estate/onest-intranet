@@ -248,6 +248,11 @@ def test_brokerage_admin_can_reach_every_registered_destination(client):
             assert "filterOptions" in props
             assert "capabilities" in props
             continue
+        if destination.route_name == "admin_agent_contracts":
+            assert "contracts" in props
+            assert "capabilities" in props
+            assert "statusOptions" in props
+            continue
         assert props["title"] == destination.label
         assert props["administrative"] is True
         assert props["scope"] == {
