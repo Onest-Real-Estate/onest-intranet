@@ -9,6 +9,8 @@ VIEW_AGENT_CONTRACTS = "web.view_agent_contracts"
 # Create and edit drafts within scope. Lifecycle transitions will reuse this
 # grant until a finer split ships with the state machine.
 MANAGE_AGENT_CONTRACTS = "contract.manage_agent_contracts"
+MANAGE_CONTRACT_TEMPLATES = "contract.manage_contract_templates"
+APPROVE_CONTRACT_TEMPLATES = "contract.approve_contract_templates"
 
 # Commercial terms: agent/office split, mentor, referral, fees, caps.
 VIEW_COMMISSION_TERMS = "contract.view_commission_terms"

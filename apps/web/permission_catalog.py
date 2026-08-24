@@ -151,6 +151,32 @@ PERMISSION_DEFINITIONS: tuple[PermissionDefinition, ...] = (
         sensitive=True,
     ),
     PermissionDefinition(
+        codename="contract.manage_contract_templates",
+        name="Can manage scoped contract templates",
+        domain="people",
+        action="manage",
+        description=(
+            "Create and edit draft contract templates, merge schemas, and safe "
+            "synthetic previews for offices within effective scope."
+        ),
+        default_roles=(*_BROKERAGE_ADMINS, REGIONAL_MANAGER, BRANCH_MANAGER),
+        risk="high",
+        sensitive=True,
+    ),
+    PermissionDefinition(
+        codename="contract.approve_contract_templates",
+        name="Can approve and activate scoped contract templates",
+        domain="people",
+        action="approve",
+        description=(
+            "Publish immutable contract template versions, activate them for new "
+            "contracts, supersede older versions, and retire template families."
+        ),
+        default_roles=(*_BROKERAGE_ADMINS, REGIONAL_MANAGER, COMPLIANCE),
+        risk="high",
+        sensitive=True,
+    ),
+    PermissionDefinition(
         codename="contract.view_commission_terms",
         name="Can view contract commission terms",
         domain="people",

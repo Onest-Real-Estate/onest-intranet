@@ -13,6 +13,10 @@ wheels/
 db.sqlite3
 staticfiles/
 
+# Local media uploads (protected storage, headshots, previews, exports)
+media/*
+!media/.gitkeep
+
 # Environment
 .env
 deployment/.env.prod
