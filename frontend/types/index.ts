@@ -2236,6 +2236,72 @@ export interface AnnouncementWorkspacePageProps extends PageProps {
   posted: Record<string, string[]> | null;
 }
 
+export interface ContractTemplateRow {
+  publicId: string;
+  stableKey: string;
+  name: string;
+  description: string;
+  status: string;
+  jurisdictionStateCodes: string[];
+  companyWide: boolean;
+  effectiveFrom: string;
+  effectiveUntil: string;
+  activeVersionPk?: number | null;
+  activeVersionId: string | null;
+}
+
+export interface ContractTemplateVersionDetail {
+  id: number;
+  publicId: string;
+  templatePublicId: string;
+  versionLabel: string;
+  displayName: string;
+  description: string;
+  status: string;
+  sourceFormat: string;
+  sourceMediaType: string;
+  sourceChecksum: string;
+  placeholderKeys: string[];
+  mergeSchema: Array<Record<string, unknown>>;
+  mergeSchemaJson: string;
+  previewChecksum: string;
+  previewGeneratedAt: string | null;
+  previewUrl: string | null;
+  validationErrors: unknown[];
+  publishedAt: string | null;
+  retiredAt: string | null;
+  contractsUsingVersion: number;
+  version: string;
+  template: ContractTemplateRow;
+}
+
+export interface ContractTemplateCapabilities {
+  canManage: boolean;
+  canApprove: boolean;
+}
+
+export interface ContractTemplateCreateSheet {
+  open: boolean;
+  draft: Record<string, unknown>;
+}
+
+export interface ContractTemplateAdministrationPageProps extends PageProps {
+  templates: ListResponse<
+    ContractTemplateRow,
+    { q: string; status: string; jurisdiction: string }
+  >;
+  capabilities: ContractTemplateCapabilities;
+  createSheet: ContractTemplateCreateSheet | null;
+  errors: ValidationErrors;
+}
+
+export interface ContractTemplateWorkspacePageProps extends PageProps {
+  versionDetail: ContractTemplateVersionDetail;
+  capabilities: ContractTemplateCapabilities;
+  errors: ValidationErrors;
+  posted: Record<string, string[]> | null;
+}
+
 export interface ReportScopePayload {
   level: string;
   label: string;

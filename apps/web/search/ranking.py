@@ -126,6 +126,16 @@ def search_ranked(
     annotated = queryset.annotate(search=vector, rank=SearchRank(vector, search_query))
     predicate = Q(search=search_query)
 
+    # Full-text alone misses identity strings that SQLite's ``icontains`` path
+    # finds: emails (``findable.address@…``), dotted tokens, and other values
+    # the english config does not lexeme usefully. Keep FTS/trigram ranking,
+    # but always also accept an exact substring hit on the projected fields so
+    # Postgres and SQLite return the same authorized rows.
+    substring = Q()
+    for field in fields:
+        substring |= Q(**{f"{field}__icontains": query})
+    predicate |= substring
+
     if trigram_field:
         annotated = annotated.annotate(
             similarity=TrigramSimilarity(trigram_field, query)

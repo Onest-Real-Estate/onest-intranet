@@ -7,6 +7,7 @@ urlpatterns: list[URLPattern | URLResolver] = [
     path("accounts/", include("allauth.urls")),
     path("", include("apps.user.urls")),
     path("", include("apps.web.urls")),
+    path("", include("apps.contract.urls")),
     path("", include("apps.notifications.urls")),
     path("", include("apps.announcements.urls")),
     path("", include("apps.audit.urls")),

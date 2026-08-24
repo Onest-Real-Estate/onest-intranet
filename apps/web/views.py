@@ -5,6 +5,7 @@ from inertia import inertia, render
 from apps.announcements.administration_views import (
     announcement_administration_index,
 )
+from apps.contract.administration_views import contract_template_index
 from apps.user.services.role_assignments import get_effective_access
 from apps.user.views.directory_views import user_directory
 from apps.user.views.office_administration_views import office_administration_index
@@ -105,6 +106,7 @@ OPERATIONS_VIEWS = {
     for destination in OPERATIONS_DESTINATIONS
 }
 OPERATIONS_VIEWS["admin_announcements"] = announcement_administration_index
+OPERATIONS_VIEWS["admin_contract_templates"] = contract_template_index
 OPERATIONS_VIEWS["admin_users"] = user_directory
 OPERATIONS_VIEWS["admin_new_agents"] = new_agent_list
 OPERATIONS_VIEWS["admin_quick_access"] = quick_access_index

@@ -921,6 +921,67 @@ ROUTE_POLICIES.update(
     }
 )
 
+ROUTE_POLICIES["operations_admin_contract_templates"] = AuthorizationPolicy(
+    key="operations_admin_contract_templates",
+    access="permission_protected",
+    description="Render the governed contract-template administration destination.",
+    methods=("GET",),
+    route_names=("admin_contract_templates",),
+    all_permissions=("contract.manage_contract_templates",),
+    scope_rule="user_office_scope",
+)
+ROUTE_POLICIES["contract_template_admin"] = AuthorizationPolicy(
+    key="contract_template_admin",
+    access="permission_protected",
+    description="Render the contract-template administration queue.",
+    methods=("GET",),
+    route_names=("admin_contract_templates",),
+    all_permissions=("contract.manage_contract_templates",),
+    scope_rule="user_office_scope",
+)
+ROUTE_POLICIES["contract_template_create"] = AuthorizationPolicy(
+    key="contract_template_create",
+    access="permission_protected",
+    description="Create a draft contract template family and first version.",
+    methods=("POST",),
+    route_names=("contract_template_create",),
+    all_permissions=("contract.manage_contract_templates",),
+    scope_rule="user_office_scope",
+)
+ROUTE_POLICIES["contract_template_workspace"] = AuthorizationPolicy(
+    key="contract_template_workspace",
+    access="permission_protected",
+    description="Render one draft or published contract template version workspace.",
+    methods=("GET",),
+    route_names=("contract_template_workspace",),
+    any_permissions=(
+        "contract.manage_contract_templates",
+        "contract.approve_contract_templates",
+    ),
+    scope_rule="user_office_scope",
+)
+ROUTE_POLICIES["contract_template_update"] = AuthorizationPolicy(
+    key="contract_template_update",
+    access="permission_protected",
+    description="Save a contract template draft version.",
+    methods=("POST",),
+    route_names=("contract_template_update",),
+    all_permissions=("contract.manage_contract_templates",),
+    scope_rule="user_office_scope",
+)
+ROUTE_POLICIES["contract_template_action"] = AuthorizationPolicy(
+    key="contract_template_action",
+    access="permission_protected",
+    description="Preview, publish, activate, or retire a contract template version.",
+    methods=("POST",),
+    route_names=("contract_template_action",),
+    any_permissions=(
+        "contract.manage_contract_templates",
+        "contract.approve_contract_templates",
+    ),
+    scope_rule="user_office_scope",
+)
+
 NON_ROUTE_SURFACES: tuple[AuthorizationPolicy, ...] = (
     AuthorizationPolicy(
         key="admin_prefix",
