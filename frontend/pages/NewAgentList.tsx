@@ -1,5 +1,16 @@
 import { Head, Link, router, usePage } from "@inertiajs/react";
-import { ArrowRight, ChevronDown, CircleAlert, SlidersHorizontal } from "lucide-react";
+import {
+  ArrowRight,
+  BadgeCheck,
+  Building2,
+  CalendarClock,
+  ChevronDown,
+  CircleAlert,
+  CircleUser,
+  Gauge,
+  SlidersHorizontal,
+  UserRoundCog,
+} from "lucide-react";
 import { useState } from "react";
 
 import {
@@ -240,6 +251,7 @@ export default function NewAgentList() {
                 {
                   id: "name",
                   header: "Agent",
+                  icon: CircleUser,
                   sortable: true,
                   cell: (row) => (
                     <div className="grid min-w-44 gap-0.5">
@@ -258,6 +270,7 @@ export default function NewAgentList() {
                 {
                   id: "overallStatus",
                   header: "Status",
+                  icon: BadgeCheck,
                   sortable: true,
                   cell: (row) => (
                     <div className="grid gap-1.5">
@@ -275,6 +288,7 @@ export default function NewAgentList() {
                 {
                   id: "progress",
                   header: "Progress",
+                  icon: Gauge,
                   cell: (row) => {
                     const percent = row.progress.total
                       ? Math.round((row.progress.complete / row.progress.total) * 100)
@@ -288,32 +302,31 @@ export default function NewAgentList() {
                       </div>
                     );
                   },
-                  className: "hidden sm:table-cell",
-                  headerClassName: "hidden sm:table-cell",
+                  hideBelow: "2xl",
                 },
                 {
                   id: "office",
                   header: "Office",
+                  icon: Building2,
                   sortable: true,
                   cell: (row) => row.user.office ?? "Not assigned",
-                  className: "hidden lg:table-cell",
-                  headerClassName: "hidden lg:table-cell",
+                  hideBelow: "4xl",
                 },
                 {
                   id: "owner",
                   header: "Owner",
+                  icon: UserRoundCog,
                   sortable: true,
                   cell: (row) => row.owner?.name ?? "Unassigned",
-                  className: "hidden xl:table-cell",
-                  headerClassName: "hidden xl:table-cell",
+                  hideBelow: "5xl",
                 },
                 {
                   id: "startDate",
                   header: "Starts",
+                  icon: CalendarClock,
                   sortable: true,
                   cell: (row) => dateLabel(row.user.startDate),
-                  className: "hidden md:table-cell",
-                  headerClassName: "hidden md:table-cell",
+                  hideBelow: "5xl",
                 },
                 {
                   id: "actions",

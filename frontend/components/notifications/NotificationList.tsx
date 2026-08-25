@@ -76,11 +76,7 @@ function NotificationItem({
           ) : null}
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-1.5">
-          {row.mandatory ? (
-            <Badge variant="outline" className="border-warning/40 text-warning-ink">
-              Required
-            </Badge>
-          ) : null}
+          {row.mandatory ? <Badge variant="warning">Required</Badge> : null}
           <StatusBadge status={priorityPresentation(row)} />
         </div>
       </div>

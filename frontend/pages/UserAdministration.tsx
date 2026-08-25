@@ -9,6 +9,7 @@ import {
 import { AccountAccessPanel } from "@/components/administration/AccountAccessPanel";
 import { RoleAssignmentsPanel } from "@/components/administration/RoleAssignmentsPanel";
 import {
+  Callout,
   DateField,
   FormActionBar,
   FormDescription,
@@ -180,18 +181,10 @@ export default function UserAdministration() {
       />
 
       {subject.isSelf ? (
-        <SurfaceCard state="read-only" className="border-warning/25 bg-warning/8">
-          <SurfaceCardContent className="flex items-start gap-3">
-            <ShieldAlert
-              className="text-warning-ink mt-0.5 size-5 shrink-0"
-              aria-hidden
-            />
-            <p className="text-sm">
-              This is your own record. Nobody administers their own roles, office, or
-              status — ask another administrator to make the change.
-            </p>
-          </SurfaceCardContent>
-        </SurfaceCard>
+        <Callout tone="warning" icon={ShieldAlert}>
+          This is your own record. Nobody administers their own roles, office, or status
+          — ask another administrator to make the change.
+        </Callout>
       ) : null}
 
       <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_20rem] xl:gap-x-8">

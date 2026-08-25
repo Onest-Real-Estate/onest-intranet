@@ -6,9 +6,12 @@ import {
   ChevronDown,
   CircleHelp,
   LogOut,
+  Monitor,
+  Moon,
   Palette,
   RefreshCw,
   Settings,
+  Sun,
   UserRound,
   WifiOff,
 } from "lucide-react";
@@ -45,6 +48,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useTheme } from "@/hooks/use-theme";
 import {
   HUB_NAV_EXPANSION_STORAGE_KEY,
   HUB_NAV_SECTIONS,
@@ -58,6 +62,7 @@ import {
   resolveHubNavSections,
 } from "@/lib/hub-nav";
 import { routes } from "@/lib/routes";
+import type { ThemePreference } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import type { PageProps, User } from "@/types";
 
@@ -175,7 +180,7 @@ function NavList({ items, current }: { items: ResolvedHubNavItem[]; current: str
                 {item.availability === "coming-soon" ? (
                   <span
                     aria-hidden
-                    className="text-muted-foreground ml-auto shrink-0 text-[0.6875rem] group-data-[collapsible=icon]:hidden"
+                    className="text-muted-foreground ml-auto shrink-0 text-micro group-data-[collapsible=icon]:hidden"
                   >
                     Soon
                   </span>
@@ -226,7 +231,7 @@ function NavGroupItems({
               aria-expanded={open}
               aria-controls={panelId}
               onClick={() => onSectionToggle(section.key, active)}
-              className="text-muted-foreground hover:text-foreground focus-visible:ring-sidebar-ring flex w-full items-center gap-2 rounded-md px-2.5 pt-1 pb-1 text-left text-[0.6875rem] font-medium tracking-[0.02em] focus-visible:ring-2 focus-visible:outline-none group-data-[collapsible=icon]:hidden"
+              className="text-muted-foreground hover:text-foreground focus-visible:ring-sidebar-ring flex w-full items-center gap-2 rounded-md px-2.5 pt-1 pb-1 text-left text-micro font-medium tracking-[0.02em] focus-visible:ring-2 focus-visible:outline-none group-data-[collapsible=icon]:hidden"
             >
               <span className="min-w-0 flex-1 truncate">{section.label}</span>
               <ChevronDown
@@ -243,7 +248,14 @@ function NavGroupItems({
                 open ? undefined : "hidden group-data-[collapsible=icon]:block"
               }
             >
-              <NavList items={section.items} current={current} />
+              {/* A subsection is a branch of the rail, not a second list that
+                  happens to sit lower. The trunk plus a tick per destination
+                  says "these belong to the heading above" without a second
+                  divider, and both fold away on the icon rail where an indent
+                  would only push the icons off-center. */}
+              <div className="border-sidebar-border ms-3.5 border-s ps-2.5 group-data-[collapsible=icon]:ms-0 group-data-[collapsible=icon]:border-s-0 group-data-[collapsible=icon]:ps-0 [&_li]:before:absolute [&_li]:before:top-1/2 [&_li]:before:-left-2.5 [&_li]:before:w-2.5 [&_li]:before:border-t [&_li]:before:border-sidebar-border [&_li]:before:content-[''] group-data-[collapsible=icon]:[&_li]:before:hidden">
+                <NavList items={section.items} current={current} />
+              </div>
             </div>
           </section>
         );
@@ -301,6 +313,44 @@ function PendingAction({
  * Collapsed, it degrades to the avatar alone; sign-out stays reachable from the
  * header menu, which is the only copy that survives at that width.
  */
+const THEME_LABEL: Record<ThemePreference, string> = {
+  system: "Match system",
+  light: "Light",
+  dark: "Dark",
+};
+
+const THEME_ICON: Record<ThemePreference, typeof Monitor> = {
+  system: Monitor,
+  light: Sun,
+  dark: Moon,
+};
+
+/**
+ * The one control that reaches the dark token set. It cycles rather than opens
+ * a menu: three options, each one click away, in a footer that has room for an
+ * icon and not for a popover.
+ */
+function ThemeToggle() {
+  const { preference, cycle } = useTheme();
+  const Icon = THEME_ICON[preference];
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label={`Theme: ${THEME_LABEL[preference].toLowerCase()}. Change theme.`}
+          onClick={cycle}
+          className="text-muted-foreground hover:text-foreground size-9 shrink-0 group-data-[collapsible=icon]:hidden"
+        >
+          <Icon className="size-4" strokeWidth={1.5} />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>Theme: {THEME_LABEL[preference]}</TooltipContent>
+    </Tooltip>
+  );
+}
+
 function SidebarAccount({ user, onSignOut }: { user: User; onSignOut: () => void }) {
   return (
     <div className="flex items-center gap-1">
@@ -316,6 +366,7 @@ function SidebarAccount({ user, onSignOut }: { user: User; onSignOut: () => void
           </span>
         </span>
       </Link>
+      <ThemeToggle />
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
@@ -398,7 +449,7 @@ function PageContext({ context }: { context: HubPageContext }) {
       {breadcrumbs.length ? (
         <nav
           aria-label="Breadcrumb"
-          className="text-muted-foreground hidden min-w-0 text-[0.6875rem] sm:block"
+          className="text-muted-foreground hidden min-w-0 text-micro sm:block"
         >
           <ol className="flex min-w-0 items-center gap-1.5 overflow-hidden">
             {breadcrumbs.map((item, index) => {
@@ -542,7 +593,7 @@ function ShellWorkspace({
 
   return (
     <SidebarInset>
-      <header className="bg-background/92 sticky top-0 z-10 flex h-16 items-center gap-1.5 border-b px-3 backdrop-blur-xl sm:gap-2 sm:px-4 lg:px-6">
+      <header className="bg-background/92 sticky top-0 z-10 flex h-16 items-center gap-1.5 border-b px-3 backdrop-blur-sm sm:gap-2 sm:px-4 lg:px-6">
         <SidebarTrigger className="md:hidden" />
         {context.back ? (
           <Button variant="ghost" size="icon" asChild className="size-9 shrink-0">
@@ -719,7 +770,7 @@ export function HubLayout({ children, context, variant = "standard" }: HubLayout
       {/* First focusable element on the page — before the whole nav list. */}
       <a
         href="#hub-content"
-        className="bg-card text-foreground focus-visible:ring-ring sr-only rounded-md px-4 py-2 text-sm font-medium shadow-sm focus-visible:fixed focus-visible:top-3 focus-visible:left-3 focus-visible:z-50 focus-visible:not-sr-only focus-visible:ring-2"
+        className="bg-card text-foreground focus-visible:ring-ring sr-only rounded-md px-4 py-2 text-sm font-medium shadow-card focus-visible:fixed focus-visible:top-3 focus-visible:left-3 focus-visible:z-50 focus-visible:not-sr-only focus-visible:ring-2"
       >
         Skip to content
       </a>
@@ -750,7 +801,7 @@ export function HubLayout({ children, context, variant = "standard" }: HubLayout
                 key={group.label}
                 className="px-2.5 pt-4 pb-0 group-data-[collapsible=icon]:px-1.5"
               >
-                <SidebarGroupLabel className="text-muted-foreground h-6 px-2.5 text-[0.6875rem] font-semibold tracking-[0.09em] uppercase">
+                <SidebarGroupLabel className="text-muted-foreground h-6 px-2.5 text-micro font-semibold tracking-[0.09em] uppercase">
                   {group.label}
                 </SidebarGroupLabel>
                 <SidebarGroupContent>

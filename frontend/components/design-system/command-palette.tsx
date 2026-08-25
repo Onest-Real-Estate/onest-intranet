@@ -107,7 +107,7 @@ export function CommandPaletteGroupLabel({
   return (
     <div
       className={cn(
-        "text-muted-foreground px-3 pt-3 pb-1.5 text-[11px] font-semibold tracking-[0.06em] uppercase",
+        "text-muted-foreground px-3 pt-3 pb-1.5 text-micro font-semibold tracking-[0.06em] uppercase",
         className,
       )}
       {...props}
@@ -209,7 +209,7 @@ export function CommandPaletteFooter({
   return (
     <div
       className={cn(
-        "border-border/60 text-muted-foreground flex items-center gap-4 border-t px-4 py-2.5 text-[11px]",
+        "border-border/60 text-muted-foreground flex items-center gap-4 border-t px-4 py-2.5 text-micro",
         className,
       )}
       {...props}
@@ -219,7 +219,7 @@ export function CommandPaletteFooter({
 
 export function CommandPaletteKey({ children }: { children: React.ReactNode }) {
   return (
-    <kbd className="border-border/60 bg-muted/60 rounded border px-1.5 py-0.5 font-sans text-[10px] font-medium">
+    <kbd className="border-border/60 bg-muted/60 rounded border px-1.5 py-0.5 font-sans text-micro font-medium">
       {children}
     </kbd>
   );

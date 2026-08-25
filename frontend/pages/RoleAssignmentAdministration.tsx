@@ -1,5 +1,5 @@
 import { Head, Link, router, usePage } from "@inertiajs/react";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Building2, CircleUser, IdCard, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 
 import {
@@ -16,6 +16,7 @@ import {
 } from "@/components/design-system";
 import { HubLayout } from "@/components/HubLayout";
 import { PermissionRequired } from "@/components/PermissionRequired";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -26,6 +27,7 @@ import {
 } from "@/components/ui/select";
 import { buildListUrl } from "@/lib/list-query";
 import { routes } from "@/lib/routes";
+import { initials } from "@/lib/utils";
 import type {
   FilterOption,
   RoleAssignmentAdministrationPageProps,
@@ -171,23 +173,36 @@ function RoleAssignmentAdministrationPage() {
                 {
                   id: "person",
                   header: "Person",
+                  icon: CircleUser,
                   cell: (row: RoleAssignmentListRow) => (
-                    <span className="grid gap-0.5">
-                      <span className="font-medium">{row.displayName}</span>
-                      <span className="text-muted-foreground text-xs">{row.email}</span>
+                    <span className="flex min-w-48 items-center gap-3">
+                      <Avatar className="ring-border size-9 ring-1" aria-hidden>
+                        <AvatarFallback className="bg-secondary text-secondary-foreground text-xs font-semibold">
+                          {initials(row.displayName)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span className="grid min-w-0 gap-0.5">
+                        <span className="truncate font-semibold">
+                          {row.displayName}
+                        </span>
+                        <span className="text-muted-foreground truncate text-xs">
+                          {row.email}
+                        </span>
+                      </span>
                     </span>
                   ),
                 },
                 {
                   id: "office",
                   header: "Office",
+                  icon: Building2,
                   cell: (row) => row.office?.pathLabel ?? "—",
-                  className: "hidden md:table-cell",
-                  headerClassName: "hidden md:table-cell",
+                  hideBelow: "7xl",
                 },
                 {
                   id: "roles",
                   header: "Live roles",
+                  icon: ShieldCheck,
                   cell: (row) =>
                     row.liveRoles.length === 0 ? (
                       <span className="text-muted-foreground text-sm">None</span>
@@ -203,10 +218,12 @@ function RoleAssignmentAdministrationPage() {
                         ))}
                       </span>
                     ),
+                  hideBelow: "2xl",
                 },
                 {
                   id: "account",
                   header: "Account",
+                  icon: IdCard,
                   cell: (row) => (
                     <StatusBadge
                       status={{
@@ -215,8 +232,7 @@ function RoleAssignmentAdministrationPage() {
                       }}
                     />
                   ),
-                  className: "hidden lg:table-cell",
-                  headerClassName: "hidden lg:table-cell",
+                  hideBelow: "3xl",
                 },
                 {
                   id: "actions",

@@ -1,5 +1,4 @@
 import { router } from "@inertiajs/react";
-import { Building2 } from "lucide-react";
 
 import {
   Select,
@@ -44,10 +43,7 @@ export function DashboardScopeSelector({
 
   if (options.length < 2) {
     return current ? (
-      <p className="text-muted-foreground flex items-center gap-1.5 text-sm">
-        <Building2 className="size-4 shrink-0" aria-hidden />
-        <span>{current.label}</span>
-      </p>
+      <p className="text-muted-foreground text-sm">{current.label}</p>
     ) : null;
   }
 
@@ -66,9 +62,8 @@ export function DashboardScopeSelector({
       <SelectTrigger
         id="dashboard-scope"
         aria-label="Reporting scope"
-        className="w-full"
+        className="w-full sm:w-56"
       >
-        <Building2 className="text-muted-foreground size-4" aria-hidden />
         <SelectValue placeholder="Choose a scope" />
       </SelectTrigger>
       <SelectContent>

@@ -119,15 +119,7 @@ export default function Dashboard() {
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <DashboardGreeting greeting={greeting} user={user} />
           {showsScopeControl || showsProfileControl ? (
-            <div
-              className={
-                showsScopeControl && showsProfileControl
-                  ? "bg-muted/40 grid min-w-0 gap-2 rounded-xl border p-2 sm:grid-cols-[14rem_16rem] lg:shrink-0"
-                  : showsProfileControl
-                    ? "bg-muted/40 grid min-w-0 gap-2 rounded-xl border p-2 sm:w-64 lg:shrink-0"
-                    : "bg-muted/40 grid min-w-0 gap-2 rounded-xl border p-2 sm:w-56 lg:shrink-0"
-              }
-            >
+            <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center lg:shrink-0">
               <DashboardScopeSelector
                 options={scopeOptions}
                 selectedKey={serverScope ? serverScope.selectedKey : previewScopeKey}
@@ -138,7 +130,6 @@ export default function Dashboard() {
               <DashboardProfileSwitcher
                 profiles={resolved.available}
                 activeId={resolved.profile.id}
-                source={resolved.source}
                 onSelect={selectProfile}
               />
             </div>

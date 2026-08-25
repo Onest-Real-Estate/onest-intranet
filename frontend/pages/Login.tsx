@@ -33,7 +33,7 @@ export default function Login() {
       </aside>
 
       <main className="flex items-center justify-center px-6 py-16 sm:px-10">
-        <Card className="w-full max-w-md rounded-xl py-8 shadow-lg">
+        <Card className="w-full max-w-md rounded-xl py-8 shadow-popover">
           <CardHeader className="items-center text-center">
             <img
               src={onestLogo}

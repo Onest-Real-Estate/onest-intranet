@@ -1,5 +1,5 @@
 import { Head, Link, router, usePage } from "@inertiajs/react";
-import { CalendarClock, Plus, ShieldOff } from "lucide-react";
+import { BadgeCheck, CalendarClock, Plus, ShieldCheck, ShieldOff } from "lucide-react";
 import { useId, useMemo, useState } from "react";
 
 import {
@@ -378,6 +378,7 @@ function RoleAssignmentWorkspacePage() {
                 {
                   id: "role",
                   header: "Role",
+                  icon: ShieldCheck,
                   cell: (row) => (
                     <span className="grid gap-1">
                       <RoleBadge
@@ -395,6 +396,7 @@ function RoleAssignmentWorkspacePage() {
                 {
                   id: "status",
                   header: "Status",
+                  icon: BadgeCheck,
                   cell: (row) => (
                     <StatusBadge
                       status={{
@@ -407,13 +409,13 @@ function RoleAssignmentWorkspacePage() {
                 {
                   id: "window",
                   header: "Effective",
+                  icon: CalendarClock,
                   cell: (row) => (
                     <span className="text-muted-foreground text-xs">
                       {formatMoment(row.startsAt)} → {formatMoment(row.endsAt)}
                     </span>
                   ),
-                  className: "hidden md:table-cell",
-                  headerClassName: "hidden md:table-cell",
+                  hideBelow: "2xl",
                 },
                 {
                   id: "actions",

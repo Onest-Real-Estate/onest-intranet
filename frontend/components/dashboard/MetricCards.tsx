@@ -119,7 +119,12 @@ export function MetricCards({ metrics }: { metrics: DashboardMetrics }) {
   return (
     <div className="arrive @container grid gap-3">
       {visible.length > 0 ? (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        // Auto-fit between a floor and a ceiling rather than a fixed four-up:
+        // these figures are permission- and source-filtered, so the count
+        // varies per reader. The floor keeps four across a wide band; the
+        // ceiling stops a lone figure from stretching into a billboard whose
+        // label and mark sit a screen apart.
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(14rem,24rem))] gap-4">
           {visible.map((metric) => (
             <StatCard key={metric.key} metric={metric} />
           ))}
@@ -129,11 +134,13 @@ export function MetricCards({ metrics }: { metrics: DashboardMetrics }) {
           None of your figures have a data source yet.
         </p>
       )}
-      {scopeCaption ? (
-        <p className="text-muted-foreground text-xs">{scopeCaption}</p>
-      ) : null}
-      {asOfLabel ? (
-        <p className="text-muted-foreground text-xs">As of {asOfLabel}</p>
+      {/* One footnote to the band, not a stack of stranded lines under it. */}
+      {scopeCaption || asOfLabel ? (
+        <p className="text-muted-foreground text-xs">
+          {[scopeCaption, asOfLabel ? `As of ${asOfLabel}` : null]
+            .filter(Boolean)
+            .join(" · ")}
+        </p>
       ) : null}
     </div>
   );
@@ -142,7 +149,7 @@ export function MetricCards({ metrics }: { metrics: DashboardMetrics }) {
 export function MetricCardsSkeleton() {
   return (
     <div className="@container grid gap-3">
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(14rem,24rem))] gap-4">
         {["first", "second", "third", "fourth"].map((slot) => (
           <MetricCard key={slot} label="Loading" value={NO_VALUE} loading />
         ))}

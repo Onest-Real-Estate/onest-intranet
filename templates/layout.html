@@ -5,6 +5,28 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}Onest{% endblock %}</title>
+    {% comment %}
+        Resolve the theme before first paint. Anything that runs after the
+        bundle loads would show a light frame first, which is worse than no
+        dark theme at all for the reader who chose dark. Mirrors
+        frontend/lib/theme.ts.
+
+        `{# #}` is single-line only — Django's tag regex is not DOTALL, so a
+        multi-line one is not a comment and renders into the page.
+    {% endcomment %}
+    <script>
+        (function () {
+            try {
+                var stored = window.localStorage.getItem("onest-theme");
+                var dark = stored === "dark" || (stored !== "light" &&
+                    window.matchMedia("(prefers-color-scheme: dark)").matches);
+                if (dark) { document.documentElement.classList.add("dark"); }
+                document.documentElement.style.colorScheme = dark ? "dark" : "light";
+            } catch (error) {
+                /* Storage or matchMedia unavailable: the light theme is the default. */
+            }
+        })();
+    </script>
     {% vite_hmr_client %}
     {% vite_react_refresh %}
     {% vite_asset 'main.tsx' %}

@@ -1,8 +1,10 @@
 import { Head, router, usePage } from "@inertiajs/react";
 import { useMemo, useState } from "react";
 import { AccessChangeDialog } from "@/components/administration/AccessChangeDialog";
+import { CommissionCalculator } from "@/components/administration/CommissionCalculator";
 import {
   FormErrorSummary,
+  NativeSelect,
   PageHeader,
   PanelHeader,
   StatusBadge,
@@ -144,10 +146,9 @@ export default function AgentContractWorkspace() {
               <SurfaceCardContent className="grid gap-4 md:grid-cols-2">
                 <div className="grid gap-2 md:col-span-2">
                   <Label htmlFor="template_version_id">Template version</Label>
-                  <select
+                  <NativeSelect
                     id="template_version_id"
                     name="template_version_id"
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
                     defaultValue={contract.templateVersionId ?? ""}
                     disabled={!canEdit}
                     required
@@ -158,7 +159,7 @@ export default function AgentContractWorkspace() {
                         {option.templateName} ({option.versionLabel})
                       </option>
                     ))}
-                  </select>
+                  </NativeSelect>
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="effective_on">Effective on</Label>
@@ -460,41 +461,10 @@ export default function AgentContractWorkspace() {
           </SurfaceCard>
 
           {commercialPreview ? (
-            <SurfaceCard>
-              <PanelHeader
-                title="Financial breakdown"
-                description="Sample GCI worksheet (server-calculated)."
-              />
-              <SurfaceCardContent className="grid gap-2 text-sm">
-                <ul className="grid gap-1">
-                  {commercialPreview.summaryLines.map((line) => (
-                    <li key={line}>{line}</li>
-                  ))}
-                </ul>
-                {commercialPreview.breakdown ? (
-                  <dl className="grid gap-1 border-t border-border pt-2">
-                    <div className="flex justify-between gap-2">
-                      <dt>Agent net</dt>
-                      <dd>
-                        {commercialPreview.breakdown.agentNet}{" "}
-                        {commercialPreview.breakdown.currency}
-                      </dd>
-                    </div>
-                    <div className="flex justify-between gap-2">
-                      <dt>Office net</dt>
-                      <dd>
-                        {commercialPreview.breakdown.officeNet}{" "}
-                        {commercialPreview.breakdown.currency}
-                      </dd>
-                    </div>
-                    <div className="flex justify-between gap-2">
-                      <dt>Rule</dt>
-                      <dd>{commercialPreview.breakdown.ruleVersion}</dd>
-                    </div>
-                  </dl>
-                ) : null}
-              </SurfaceCardContent>
-            </SurfaceCard>
+            <CommissionCalculator
+              contractPublicId={contract.publicId}
+              initial={commercialPreview}
+            />
           ) : null}
         </aside>
 

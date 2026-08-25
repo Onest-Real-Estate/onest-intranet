@@ -1,5 +1,14 @@
 import { Head, Link, router, usePage } from "@inertiajs/react";
-import { Megaphone, Pencil, Pin, PinOff, Plus } from "lucide-react";
+import {
+  BadgeCheck,
+  CalendarClock,
+  Megaphone,
+  Pencil,
+  Pin,
+  PinOff,
+  Plus,
+  Tag,
+} from "lucide-react";
 import { useState } from "react";
 import {
   AnnouncementCreateFields,
@@ -375,6 +384,7 @@ function AnnouncementAdministrationPage() {
               {
                 id: "title",
                 header: "Announcement",
+                icon: Megaphone,
                 cell: (row) => (
                   <div className="grid min-w-40 gap-0.5 sm:min-w-64">
                     <span className="flex items-center gap-1.5 font-semibold">
@@ -395,6 +405,7 @@ function AnnouncementAdministrationPage() {
               {
                 id: "lifecycle",
                 header: "State",
+                icon: BadgeCheck,
                 cell: (row) => (
                   <div className="flex flex-wrap items-center gap-1.5">
                     <StatusBadge
@@ -414,18 +425,19 @@ function AnnouncementAdministrationPage() {
               {
                 id: "classification",
                 header: "Classification",
+                icon: Tag,
                 cell: (row) => (
                   <div className="flex flex-wrap items-center gap-1.5">
                     <Badge variant="outline">{row.category.label}</Badge>
                     <Badge variant="outline">{row.priority.label}</Badge>
                   </div>
                 ),
-                className: "hidden lg:table-cell",
-                headerClassName: "hidden lg:table-cell",
+                hideBelow: "4xl",
               },
               {
                 id: "updated",
                 header: "Last edited",
+                icon: CalendarClock,
                 cell: (row) => (
                   <div className="grid gap-0.5">
                     <span className="text-sm tabular-nums">
@@ -436,8 +448,7 @@ function AnnouncementAdministrationPage() {
                     </span>
                   </div>
                 ),
-                className: "hidden md:table-cell",
-                headerClassName: "hidden md:table-cell",
+                hideBelow: "5xl",
               },
               {
                 id: "actions",

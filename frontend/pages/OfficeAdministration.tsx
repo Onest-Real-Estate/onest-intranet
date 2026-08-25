@@ -1,5 +1,5 @@
 import { Head, Link, router, usePage } from "@inertiajs/react";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, BadgeCheck, Building2, Tag } from "lucide-react";
 import { useState } from "react";
 
 import {
@@ -152,6 +152,7 @@ function OfficeAdministrationPage() {
                 {
                   id: "name",
                   header: "Office",
+                  icon: Building2,
                   cell: (row: OfficeListRow) => (
                     <span className="grid gap-0.5">
                       <Link
@@ -169,20 +170,21 @@ function OfficeAdministrationPage() {
                 {
                   id: "kind",
                   header: "Kind",
+                  icon: Tag,
                   cell: (row) => row.kindLabel,
-                  className: "hidden md:table-cell",
-                  headerClassName: "hidden md:table-cell",
+                  hideBelow: "2xl",
                 },
                 {
                   id: "region",
                   header: "Region",
+                  icon: Building2,
                   cell: (row) => row.regionName,
-                  className: "hidden lg:table-cell",
-                  headerClassName: "hidden lg:table-cell",
+                  hideBelow: "4xl",
                 },
                 {
                   id: "status",
                   header: "Status",
+                  icon: BadgeCheck,
                   cell: (row) => (
                     <StatusBadge
                       status={{
@@ -191,6 +193,7 @@ function OfficeAdministrationPage() {
                       }}
                     />
                   ),
+                  hideBelow: "4xl",
                 },
                 {
                   id: "open",

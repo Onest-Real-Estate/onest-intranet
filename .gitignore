@@ -36,10 +36,20 @@ node_modules/*
 # Claude Code — personal, machine-local overrides (shared config is .claude/settings.json)
 .claude/settings.local.json
 
-# Impeccable design skill: vendored by `npx impeccable install`, ~2 MB, and
-# reinstallable at any time. The project's own skills (add-page, checks,
-# design-system) are team-authored and stay in git.
+# Impeccable design skill — vendored per harness by `npx impeccable install`
+# (~2 MB each) and reinstallable at any time, so none of it belongs in git.
+# Reinstall with: npx impeccable install --providers=claude,cursor,codex,github
 .claude/skills/impeccable/
+.cursor/skills/impeccable/
+.cursor/agents/impeccable-*
+.agents/skills/impeccable/
+.github/skills/impeccable/
+.github/agents/impeccable-*
+.github/hooks/impeccable.json
+
+# Impeccable hook manifests — written by the installer, machine-local.
+.cursor/hooks.json
+.codex/hooks.json
 
 # Impeccable working state — config caches, hook bookkeeping, live-mode
 # artifacts and receipts. Its shareable outputs are DESIGN.md and PRODUCT.md

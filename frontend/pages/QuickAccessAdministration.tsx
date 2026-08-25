@@ -1,5 +1,17 @@
 import { Head, Link, router, usePage } from "@inertiajs/react";
-import { ArrowDown, ArrowUp, Building2, Eye, Globe2, Pencil, Plus } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowUp,
+  BadgeCheck,
+  Building2,
+  Eye,
+  Globe2,
+  Link2,
+  ListOrdered,
+  Pencil,
+  Plus,
+  Users,
+} from "lucide-react";
 import { useState } from "react";
 import { QuickAccessLinkFields } from "@/components/administration/QuickAccessLinkFields";
 import {
@@ -279,6 +291,7 @@ function QuickAccessAdministrationPage() {
               {
                 id: "order",
                 header: "Order",
+                icon: ListOrdered,
                 cell: (row) => {
                   const index = rows.findIndex((item) => item.id === row.id);
                   return (
@@ -317,6 +330,7 @@ function QuickAccessAdministrationPage() {
               {
                 id: "name",
                 header: "Link",
+                icon: Link2,
                 cell: (row) => (
                   <div className="grid min-w-40 gap-0.5 sm:min-w-56">
                     <span className="truncate font-semibold">{row.name}</span>
@@ -325,10 +339,12 @@ function QuickAccessAdministrationPage() {
                     </span>
                   </div>
                 ),
+                hideBelow: "3xl",
               },
               {
                 id: "audience",
                 header: "Audience",
+                icon: Users,
                 cell: (row) => (
                   <div className="flex min-w-0 flex-wrap items-center gap-1.5">
                     <span className="truncate text-sm">
@@ -341,19 +357,18 @@ function QuickAccessAdministrationPage() {
                     ) : null}
                   </div>
                 ),
-                className: "hidden md:table-cell",
-                headerClassName: "hidden md:table-cell",
+                hideBelow: "5xl",
               },
               {
                 id: "status",
                 header: "Status",
+                icon: BadgeCheck,
                 cell: (row) => (
                   <StatusBadge
                     status={{ label: row.status.label, tone: row.status.tone }}
                   />
                 ),
-                className: "hidden sm:table-cell",
-                headerClassName: "hidden sm:table-cell",
+                hideBelow: "5xl",
               },
               {
                 id: "actions",

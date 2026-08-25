@@ -123,7 +123,7 @@ export function NotificationBell({ summary }: { summary: NotificationShell | nul
               {badge ? (
                 <span
                   aria-hidden
-                  className="bg-destructive text-destructive-foreground absolute top-1 right-0.5 grid min-w-4 place-items-center rounded-full px-1 text-[0.625rem] leading-4 font-semibold tabular-nums"
+                  className="bg-destructive text-destructive-foreground absolute top-1 right-0.5 grid min-w-4 place-items-center rounded-full px-1 text-micro font-semibold tabular-nums"
                 >
                   {badge}
                 </span>
