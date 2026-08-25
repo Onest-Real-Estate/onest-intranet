@@ -115,7 +115,7 @@ so the shell paints first. Page: default-exported component, props read via
 `PageProps` and live in `frontend/types/index.ts`.
 
 **URLs.** Reverse with the typed map, never string literals:
-`routes.dashboard()`, `routes.coming_soon("my-contract")`.
+`routes.dashboard()`, `routes.my_contract()`.
 
 ### Django best practices
 

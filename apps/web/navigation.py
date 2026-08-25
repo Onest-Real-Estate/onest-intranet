@@ -32,6 +32,7 @@ HUB_FEATURES: dict[str, bool] = {
 HUB_FEATURES["announcements"] = True
 HUB_FEATURES["office-info"] = True
 HUB_FEATURES["office-resources"] = True
+HUB_FEATURES["my-contract"] = True
 HUB_FEATURES["reports"] = True
 
 # Live destinations that are not Coming Soon ops stubs and are not agent
