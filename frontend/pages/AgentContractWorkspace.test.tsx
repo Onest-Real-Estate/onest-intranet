@@ -1,6 +1,6 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import AgentContractWorkspace from "./AgentContractWorkspace";
 
 const post = vi.fn();
@@ -121,6 +121,8 @@ vi.mock("@/lib/routes", () => ({
     agent_contract_update: () => "/save",
     agent_contract_lifecycle: () => "/lifecycle",
     agent_contract_preview: () => "/preview",
+    agent_contract_validate: (publicId: string) =>
+      `/operations/agent-contracts/${publicId}/validate`,
   },
 }));
 
@@ -144,10 +146,74 @@ describe("AgentContractWorkspace", () => {
     expect(body.confirmed).toBe("1");
   });
 
-  it("shows commercial breakdown for permitted actors", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("reprices from the server when the gross changes, and never in the browser", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        summaryLines: ["70% agent / 30% office"],
+        breakdown: {
+          ruleVersion: "1.0.0",
+          currency: "USD",
+          grossCommission: "20000",
+          agentNet: "14000.00",
+          officeNet: "6000.00",
+          transactionFee: "395.00",
+          mentorAmount: null,
+          referralAmount: null,
+          explanation: ["Gross commission 20000.00", "Agent side 70% = 14000.00"],
+        },
+        units: {},
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<AgentContractWorkspace />);
+
+    const input = screen.getByLabelText(/gross commission/i);
+    await user.clear(input);
+    await user.type(input, "20000");
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const url = String(fetchMock.mock.calls.at(-1)?.[0]);
+    expect(url).toContain("/validate");
+    expect(url).toContain("gross_commission=20000");
+
+    // The figure comes back from the engine; nothing is multiplied client-side.
+    expect(await screen.findByText("$14,000.00")).toBeInTheDocument();
+    expect(screen.getByText("$395.00")).toBeInTheDocument();
+    expect(screen.getByText(/Agent side 70% = 14000\.00/)).toBeInTheDocument();
+  });
+
+  it("surfaces a refused calculation instead of showing a stale figure as current", async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        json: async () => ({ error: "Gross commission must be positive." }),
+      }),
+    );
+    render(<AgentContractWorkspace />);
+
+    const input = screen.getByLabelText(/gross commission/i);
+    await user.clear(input);
+    await user.type(input, "-5");
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Gross commission must be positive.",
+    );
+  });
+
+  it("prices the agreement from the server's own figures", () => {
     render(<AgentContractWorkspace />);
     expect(screen.getByText(/70% agent \/ 30% office/i)).toBeInTheDocument();
     expect(screen.getByText(/Agent net/i)).toBeInTheDocument();
-    expect(screen.getByText(/7000\.00/)).toBeInTheDocument();
+    // Formatted as currency rather than echoed as a raw decimal string.
+    expect(screen.getByText("$7,000.00")).toBeInTheDocument();
+    expect(screen.getByText("$3,000.00")).toBeInTheDocument();
+    // The gross is editable: this panel prices a deal, it does not just report.
+    expect(screen.getByLabelText(/gross commission/i)).toHaveValue("10000");
   });
 });

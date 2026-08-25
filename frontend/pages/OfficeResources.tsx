@@ -50,9 +50,7 @@ function ResourceRow({ item }: { item: OfficeResourceItem }) {
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <Icon className="text-muted-foreground size-4 shrink-0" aria-hidden />
           <span className="text-foreground text-sm font-medium">{item.title}</span>
-          <Badge variant="secondary" className="rounded-full">
-            {item.sourceLabel}
-          </Badge>
+          <Badge variant="secondary">{item.sourceLabel}</Badge>
         </div>
         {item.summary ? (
           <p className="text-muted-foreground text-sm">{item.summary}</p>

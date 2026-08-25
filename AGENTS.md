@@ -102,7 +102,7 @@ docs/reporting.md  Scoped operational reports registry, exports, reconciliation
 docs/role-assignment-administration.md  Assign User Roles: preview, concurrency, scopes
 docs/office-resources.md  Scoped office resources: inheritance, precedence, protected files
 docs/announcements.md  Announcements: taxonomy, audience union semantics, media pipeline
-DESIGN.md          Raw design tokens (Material-style palette export)
+DESIGN.md          Design tokens + visual world (values win over docs/design-system.md)
 ```
 
 ## Conventions

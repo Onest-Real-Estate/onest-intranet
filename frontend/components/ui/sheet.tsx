@@ -54,7 +54,7 @@ function SheetContent({
       <DialogPrimitive.Content
         data-slot="sheet-content"
         className={cn(
-          "bg-background fixed z-50 flex flex-col gap-4 shadow-lg",
+          "bg-background fixed z-50 flex flex-col gap-4 shadow-popover",
           side === "right" &&
             "data-[state=closed]:animate-sheet-out-right data-[state=open]:animate-sheet-in-right inset-y-0 right-0 h-full w-3/4 border-l sm:max-w-sm",
           side === "left" &&

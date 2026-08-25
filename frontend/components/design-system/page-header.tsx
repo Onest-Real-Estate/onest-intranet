@@ -11,7 +11,6 @@ import { cn } from "@/lib/utils";
 export function PageHeader({
   title,
   description,
-  eyebrow,
   breadcrumbs,
   actions,
   meta,
@@ -20,7 +19,6 @@ export function PageHeader({
 }: Omit<React.ComponentProps<"header">, "title"> & {
   title: React.ReactNode;
   description?: React.ReactNode;
-  eyebrow?: React.ReactNode;
   breadcrumbs?: React.ReactNode;
   actions?: React.ReactNode;
   /** Static facts about the page — a date, an owner, a count. Never controls. */
@@ -35,16 +33,11 @@ export function PageHeader({
       ) : null}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0 max-w-3xl">
-          {eyebrow ? (
-            <p className="text-muted-foreground mb-1.5 text-xs font-semibold tracking-[0.08em] uppercase">
-              {eyebrow}
-            </p>
-          ) : null}
           <h1 className="text-[clamp(1.625rem,2.6vw,2rem)] leading-tight font-bold tracking-[-0.03em]">
             {title}
           </h1>
           {description ? (
-            <p className="text-muted-foreground mt-1.5 max-w-2xl text-sm leading-6">
+            <p className="text-muted-foreground mt-1.5 max-w-measure text-sm leading-6">
               {description}
             </p>
           ) : null}

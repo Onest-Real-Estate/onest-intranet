@@ -164,7 +164,6 @@ export default function OnboardingWorkspace() {
       <div className="grid gap-8">
         <Head title={`Onboarding · ${onboarding.user.name}`} />
         <PageHeader
-          eyebrow="Operational onboarding"
           title={onboarding.user.name}
           description={`${onboarding.user.email} · ${onboarding.user.office ?? "No office"} · Starts ${formatDate(onboarding.user.startDate)}`}
           meta={<StatusBadge status={onboarding.overall} />}

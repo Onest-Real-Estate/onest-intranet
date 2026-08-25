@@ -6,14 +6,12 @@ import {
   FormFieldError,
   FormLabel,
   fieldA11yProps,
+  NativeSelect,
 } from "@/components/design-system";
 import { Input } from "@/components/ui/input";
 import { firstFieldError } from "@/lib/validation";
 import type { QuickAccessChoice, QuickAccessOfficeChoice } from "@/types";
 import type { ValidationErrors } from "@/types/design-system";
-
-const SELECT_CLASS =
-  "bg-background border-border text-foreground h-9 w-full rounded-md border px-3 text-sm";
 
 /** Previously submitted values the create sheet repopulates after a 422. */
 export interface QuickAccessLinkDraft {
@@ -164,18 +162,17 @@ export function QuickAccessLinkFields({
           </FormLabel>
           {/* Native selects so values post with the plain form submit; the
               server re-validates every choice either way. */}
-          <select
+          <NativeSelect
             id="icon"
             name="icon"
             defaultValue={defaults?.icon ?? "app-window"}
-            className={SELECT_CLASS}
           >
             {iconOptions.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
               </option>
             ))}
-          </select>
+          </NativeSelect>
           <FormFieldError message={firstFieldError(errors, "icon")} />
         </FormField>
 
@@ -202,18 +199,17 @@ export function QuickAccessLinkFields({
           <FormLabel htmlFor="destination_type" required>
             Destination type
           </FormLabel>
-          <select
+          <NativeSelect
             id="destination_type"
             name="destination_type"
             defaultValue={defaults?.destinationType ?? "external_url"}
-            className={SELECT_CLASS}
           >
             {destinationTypeOptions.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
               </option>
             ))}
-          </select>
+          </NativeSelect>
           <FormFieldError message={firstFieldError(errors, "destination_type")} />
         </FormField>
 
@@ -222,12 +218,11 @@ export function QuickAccessLinkFields({
             Destination
           </FormLabel>
           {isInternal ? (
-            <select
+            <NativeSelect
               id="destination_value"
               name="destination_value"
               defaultValue={defaults?.destinationValue ?? ""}
               required
-              className={SELECT_CLASS}
             >
               <option value="" disabled>
                 Choose a page
@@ -237,7 +232,7 @@ export function QuickAccessLinkFields({
                   {option.label}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           ) : (
             <Input
               id="destination_value"
@@ -353,52 +348,49 @@ export function QuickAccessLinkFields({
 
         <FormField>
           <FormLabel htmlFor="sso_capability">Single sign-on</FormLabel>
-          <select
+          <NativeSelect
             id="sso_capability"
             name="sso_capability"
             defaultValue={defaults?.sso ?? "none"}
-            className={SELECT_CLASS}
           >
             {ssoOptions.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
               </option>
             ))}
-          </select>
+          </NativeSelect>
           <FormFieldError message={firstFieldError(errors, "sso_capability")} />
         </FormField>
 
         <FormField>
           <FormLabel htmlFor="integration_health">Integration health</FormLabel>
-          <select
+          <NativeSelect
             id="integration_health"
             name="integration_health"
             defaultValue={defaults?.health ?? "unknown"}
-            className={SELECT_CLASS}
           >
             {healthOptions.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
               </option>
             ))}
-          </select>
+          </NativeSelect>
           <FormFieldError message={firstFieldError(errors, "integration_health")} />
         </FormField>
 
         <FormField>
           <FormLabel htmlFor="setup_behavior">Setup behaviour</FormLabel>
-          <select
+          <NativeSelect
             id="setup_behavior"
             name="setup_behavior"
             defaultValue={defaults?.setup ?? "self_service"}
-            className={SELECT_CLASS}
           >
             {setupOptions.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
               </option>
             ))}
-          </select>
+          </NativeSelect>
           <FormFieldError message={firstFieldError(errors, "setup_behavior")} />
         </FormField>
 

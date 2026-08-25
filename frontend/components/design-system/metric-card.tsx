@@ -6,12 +6,15 @@ import { cn } from "@/lib/utils";
 type MetricTrend = "up" | "down" | "flat";
 type MetricTone = "neutral" | "success" | "warning" | "destructive";
 
-/** Soft tinted pill behind the signed period-over-period change. */
+/**
+ * The signed period-over-period change, in the same chip vocabulary as every
+ * other status on the page: a tinted surface behind a hairline of its own hue.
+ */
 const deltaPill: Record<MetricTone, string> = {
-  neutral: "bg-muted text-muted-foreground",
-  success: "bg-success/12 text-success",
-  warning: "bg-warning/20 text-warning-ink",
-  destructive: "bg-destructive/10 text-destructive",
+  neutral: "border-chip-neutral-edge bg-chip-neutral text-muted-foreground",
+  success: "border-chip-success-edge bg-chip-success text-success",
+  warning: "border-chip-warning-edge bg-chip-warning text-warning-ink",
+  destructive: "border-chip-destructive-edge bg-chip-destructive text-destructive",
 };
 
 /**
@@ -72,13 +75,13 @@ export function MetricCard({
       ) : (
         <>
           <div className="mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1">
-            <p className="text-[1.75rem] leading-9 font-bold tracking-[-0.02em] tabular-nums">
+            <p className="text-metric font-bold tracking-[-0.02em] tabular-nums">
               {value}
             </p>
             {delta && delta !== "0%" ? (
               <span
                 className={cn(
-                  "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums",
+                  "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-semibold tabular-nums",
                   deltaPill[tone],
                 )}
               >

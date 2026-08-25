@@ -213,10 +213,8 @@ describe("UserDirectory", () => {
     expect(screen.getByText(/not open their administrative record/i)).toBeVisible();
   });
 
-  it("explains a disabled contract filter instead of hiding it", async () => {
-    const user = userEvent.setup();
+  it("explains a disabled contract filter instead of hiding it", () => {
     render(<UserDirectory />);
-    await user.click(screen.getByText(/Status, onboarding, contract/i));
     expect(screen.getByRole("combobox", { name: "Contract" })).toBeDisabled();
     expect(
       screen.getByText("Agent contracts are not connected to the hub yet."),

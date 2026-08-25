@@ -84,7 +84,10 @@ describe("MetricCards", () => {
 
   it("shows section freshness from the metric as-of timestamp", () => {
     render(<MetricCards metrics={payload()} />);
-    expect(screen.getByText(`As of ${format(new Date(AS_OF), "PPP p")}`)).toBeVisible();
+    // Scope and freshness share one footnote line, so match within it.
+    expect(
+      screen.getByText(new RegExp(`As of ${format(new Date(AS_OF), "PPP p")}`)),
+    ).toBeVisible();
   });
 
   it("omits the scope caption for a self-scoped book of business", () => {

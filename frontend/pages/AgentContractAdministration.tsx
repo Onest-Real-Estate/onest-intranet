@@ -1,5 +1,12 @@
 import { Head, Link, router, usePage } from "@inertiajs/react";
-import { Plus } from "lucide-react";
+import {
+  BadgeCheck,
+  Building2,
+  CalendarClock,
+  CircleUser,
+  FileText,
+  Plus,
+} from "lucide-react";
 import { useState } from "react";
 import {
   DataTable,
@@ -122,6 +129,7 @@ export default function AgentContractAdministration() {
                 {
                   id: "agent",
                   header: "Agent",
+                  icon: CircleUser,
                   cell: (row) => (
                     <div className="grid gap-0.5">
                       <span className="font-semibold">{row.recipientName}</span>
@@ -134,11 +142,13 @@ export default function AgentContractAdministration() {
                 {
                   id: "office",
                   header: "Office",
+                  icon: Building2,
                   cell: (row) => <span className="text-sm">{row.officeName}</span>,
                 },
                 {
                   id: "status",
                   header: "Status",
+                  icon: BadgeCheck,
                   cell: (row) => (
                     <StatusBadge
                       status={{
@@ -151,11 +161,13 @@ export default function AgentContractAdministration() {
                 {
                   id: "effective",
                   header: "Effective",
+                  icon: CalendarClock,
                   cell: (row) => <span className="text-sm">{row.effectiveOn}</span>,
                 },
                 {
                   id: "template",
                   header: "Template",
+                  icon: FileText,
                   cell: (row) => (
                     <span className="text-sm">{row.templateLabel || "—"}</span>
                   ),

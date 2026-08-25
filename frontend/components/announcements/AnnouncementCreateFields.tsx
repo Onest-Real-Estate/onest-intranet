@@ -1,4 +1,9 @@
-import { FormDescription, FormField, FormLabel } from "@/components/design-system";
+import {
+  FormDescription,
+  FormField,
+  FormLabel,
+  NativeSelect,
+} from "@/components/design-system";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import type {
@@ -6,9 +11,6 @@ import type {
   AnnouncementOfficeOption,
   FilterOption,
 } from "@/types";
-
-const SELECT_CLASS =
-  "bg-background border-border text-foreground h-9 w-full rounded-md border px-3 text-sm";
 
 /** What the server echoed back after a rejected create, or nothing on a fresh open. */
 export interface AnnouncementDraftDefaults {
@@ -100,10 +102,9 @@ export function AnnouncementCreateFields({
         <FormLabel htmlFor="ac-owner" required>
           Owning office
         </FormLabel>
-        <select
+        <NativeSelect
           id="ac-owner"
           name="owner_office"
-          className={SELECT_CLASS}
           defaultValue={defaults.owner_office ?? ""}
           required
         >
@@ -113,7 +114,7 @@ export function AnnouncementCreateFields({
               {option.label}
             </option>
           ))}
-        </select>
+        </NativeSelect>
         <FormDescription>
           Who is publishing. Permanent once saved, and never widens the audience on its
           own.
@@ -123,10 +124,9 @@ export function AnnouncementCreateFields({
       <div className="grid gap-4 sm:grid-cols-2">
         <FormField>
           <FormLabel htmlFor="ac-category">Category</FormLabel>
-          <select
+          <NativeSelect
             id="ac-category"
             name="category"
-            className={SELECT_CLASS}
             defaultValue={defaults.category ?? ""}
           >
             <option value="">Not chosen yet</option>
@@ -135,15 +135,14 @@ export function AnnouncementCreateFields({
                 {option.label}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </FormField>
 
         <FormField>
           <FormLabel htmlFor="ac-priority">Priority</FormLabel>
-          <select
+          <NativeSelect
             id="ac-priority"
             name="priority"
-            className={SELECT_CLASS}
             defaultValue={defaults.priority ?? ""}
           >
             <option value="">Not chosen yet</option>
@@ -152,7 +151,7 @@ export function AnnouncementCreateFields({
                 {option.label}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </FormField>
       </div>
       <FormDescription>

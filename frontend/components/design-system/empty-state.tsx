@@ -3,12 +3,24 @@ import type * as React from "react";
 
 import { cn } from "@/lib/utils";
 
+/**
+ * `brand` is the gold well: a place where the reader is invited to put the
+ * first thing. `muted` is for an absence they cannot act on — a module that is
+ * not connected, a panel their access does not cover — where a brand moment
+ * would celebrate a dead end.
+ */
+const toneClasses = {
+  brand: "brand-well text-primary",
+  muted: "bg-muted text-muted-foreground",
+} as const;
+
 export function EmptyState({
   icon: Icon,
   title,
   description,
   actions,
   compact = false,
+  tone = "brand",
   className,
   ...props
 }: React.ComponentProps<"section"> & {
@@ -17,6 +29,7 @@ export function EmptyState({
   description?: string;
   actions?: React.ReactNode;
   compact?: boolean;
+  tone?: keyof typeof toneClasses;
 }) {
   return (
     <section
@@ -27,7 +40,9 @@ export function EmptyState({
       )}
       {...props}
     >
-      <span className="brand-well text-primary grid size-10 place-items-center rounded-xl">
+      <span
+        className={cn("grid size-10 place-items-center rounded-xl", toneClasses[tone])}
+      >
         <Icon className="size-5" aria-hidden />
       </span>
       <div className="max-w-md">

@@ -1,5 +1,5 @@
 import { Head, Link, router, usePage } from "@inertiajs/react";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, BadgeCheck, CalendarClock, FileText, Tag } from "lucide-react";
 import { useState } from "react";
 
 import {
@@ -231,6 +231,7 @@ export default function OfficeResourcesAdministration() {
                 {
                   id: "title",
                   header: "Resource",
+                  icon: FileText,
                   cell: (row: AdminOfficeResourceRow) => (
                     <span className="grid min-w-0 gap-0.5">
                       <Link
@@ -248,30 +249,33 @@ export default function OfficeResourcesAdministration() {
                 {
                   id: "category",
                   header: "Category",
+                  icon: Tag,
                   cell: (row) => row.categoryLabel,
-                  className: "hidden md:table-cell",
-                  headerClassName: "hidden md:table-cell",
+                  hideBelow: "2xl",
                 },
                 {
                   id: "type",
                   header: "Type",
+                  icon: Tag,
                   cell: (row) => row.typeLabel,
-                  className: "hidden lg:table-cell",
-                  headerClassName: "hidden lg:table-cell",
+                  hideBelow: "4xl",
                 },
                 {
                   id: "schedule",
                   header: "Schedule",
+                  icon: CalendarClock,
                   cell: (row: AdminOfficeResourceRow) =>
                     row.startsAt || row.endsAt
                       ? `${row.startsAt || "open"} → ${row.endsAt || "open"}`
                       : "—",
-                  className: "hidden xl:table-cell tabular-nums",
-                  headerClassName: "hidden xl:table-cell",
+                  className: "tabular-nums",
+                  headerClassName: "tabular-nums",
+                  hideBelow: "5xl",
                 },
                 {
                   id: "state",
                   header: "State",
+                  icon: BadgeCheck,
                   cell: (row: AdminOfficeResourceRow) => (
                     <span className="flex flex-wrap items-center gap-1.5">
                       <StatusBadge status={STATE_TONES[row.state]} />

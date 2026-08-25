@@ -188,7 +188,7 @@ export default function ReportDetail() {
         ) : (
           <>
             {report.filters.length > 0 ? (
-              <FilterControls>
+              <FilterControls collapsible={false}>
                 {report.filters.map((field) =>
                   field.kind === "select" ? (
                     <FilterField key={field.key} label={field.label}>

@@ -1,5 +1,5 @@
 import { Link, router } from "@inertiajs/react";
-import { Clock, Inbox, Lock, RefreshCw, Unplug } from "lucide-react";
+import { Clock, Inbox, Lock, PlugZap, RefreshCw, Unplug } from "lucide-react";
 import type { ReactNode } from "react";
 import { useState } from "react";
 
@@ -121,23 +121,18 @@ export function WidgetPanel<T>({
     >
       <PanelHeader title={title} />
       <SurfaceCardContent>
-        <section
+        {/* Every outcome a panel can end on renders through the same empty
+            state, so a dashboard of half-connected modules reads as one
+            deliberate page rather than five different apologies. */}
+        <EmptyState
+          compact
+          tone="muted"
           role={state.retryable ? "alert" : "status"}
-          className="flex flex-col items-start gap-3 py-3"
-        >
-          <span className="bg-muted text-muted-foreground grid size-9 place-items-center rounded-lg">
-            <Unplug className="size-4" aria-hidden />
-          </span>
-          <div className="max-w-md">
-            <h3 className="text-sm font-semibold">
-              {state.retryable ? "Couldn’t load this widget" : "Not connected yet"}
-            </h3>
-            <p className="text-muted-foreground mt-1 text-sm leading-5">
-              {state.reason}
-            </p>
-          </div>
-          {retry}
-        </section>
+          icon={state.retryable ? Unplug : PlugZap}
+          title={state.retryable ? "Couldn’t load this widget" : "Not connected yet"}
+          description={state.reason}
+          actions={retry}
+        />
       </SurfaceCardContent>
     </SurfaceCard>
   );
@@ -185,18 +180,14 @@ export function WithheldPanel({
     <SurfaceCard className="arrive" state="read-only" data-widget={propName}>
       <PanelHeader title={title} />
       <SurfaceCardContent>
-        <section role="status" className="flex flex-col items-start gap-3 py-3">
-          <span className="bg-muted text-muted-foreground grid size-9 place-items-center rounded-lg">
-            <Lock className="size-4" aria-hidden />
-          </span>
-          <div className="max-w-md">
-            <h3 className="text-sm font-semibold">Restricted</h3>
-            <p className="text-muted-foreground mt-1 text-sm leading-5">
-              This panel is part of your dashboard, but your access does not cover it.
-              Ask an administrator if you need it.
-            </p>
-          </div>
-        </section>
+        <EmptyState
+          compact
+          tone="muted"
+          role="status"
+          icon={Lock}
+          title="Restricted"
+          description="This panel is part of your dashboard, but your access does not cover it. Ask an administrator if you need it."
+        />
       </SurfaceCardContent>
     </SurfaceCard>
   );

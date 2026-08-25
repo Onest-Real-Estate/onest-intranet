@@ -1,14 +1,20 @@
 import { Head, usePage } from "@inertiajs/react";
 import {
   AlertTriangle,
+  BadgeCheck,
+  CalendarClock,
   CheckCircle2,
+  CircleUser,
   FileText,
+  House,
   Inbox,
   Plus,
+  ShieldAlert,
   Trash2,
 } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import {
+  Callout,
   CardStateMessage,
   CreateSheet,
   DataTable,
@@ -84,20 +90,33 @@ interface DesignSystemPageProps extends PageProps {
 }
 
 const columns: DataTableColumn<ContractRow>[] = [
-  { id: "id", header: "Contract", cell: (row) => row.id, sortable: true },
+  {
+    id: "id",
+    header: "Contract",
+    icon: FileText,
+    cell: (row) => row.id,
+    sortable: true,
+  },
   {
     id: "client",
     header: "Client",
+    icon: CircleUser,
     cell: (row) => <span className="font-medium">{row.client}</span>,
     sortable: true,
   },
-  { id: "property", header: "Property", cell: (row) => row.property },
+  { id: "property", header: "Property", icon: House, cell: (row) => row.property },
   {
     id: "status",
     header: "Status",
+    icon: BadgeCheck,
     cell: (row) => <StatusBadge status={presentStatus(row.status, CONTRACT_STATUS)} />,
   },
-  { id: "updated", header: "Last update", cell: (row) => row.updated },
+  {
+    id: "updated",
+    header: "Last update",
+    icon: CalendarClock,
+    cell: (row) => row.updated,
+  },
 ];
 
 const exampleValidation: ValidationErrors = {
@@ -129,7 +148,7 @@ function CatalogSection({
         >
           {title}
         </h2>
-        <p className="text-muted-foreground mt-1 max-w-3xl text-sm leading-6">
+        <p className="text-muted-foreground mt-1 max-w-measure text-sm leading-6">
           {description}
         </p>
       </div>
@@ -158,7 +177,6 @@ export default function DesignSystem() {
     <div className="grid gap-12">
       <Head title="Design system" />
       <PageHeader
-        eyebrow="ONEST foundation"
         title="Component catalog"
         description="Stable, accessible patterns for operational pages. Examples show real states and safe composition—not product authorization."
         actions={
@@ -296,6 +314,34 @@ export default function DesignSystem() {
             ))}
           </SurfaceCardContent>
         </SurfaceCard>
+      </CatalogSection>
+
+      <CatalogSection
+        title="Standing notes"
+        description="One sentence of context about a page or a section: what a reader may do here, or why a control is unavailable. Not a validation message and not a transient result."
+      >
+        <div className="grid gap-3">
+          <Callout>
+            Scope is applied before search, filters, and counts. Nothing outside it can
+            be reached from this page.
+          </Callout>
+          <Callout tone="warning" icon={ShieldAlert}>
+            This is your own record. Nobody administers their own roles, office, or
+            status.
+          </Callout>
+          <Callout
+            tone="destructive"
+            title="Two offices claim the same agent"
+            action={
+              <Button type="button" variant="outline" size="sm">
+                Review
+              </Button>
+            }
+          >
+            Assignments disagree, so commission cannot be attributed until one is
+            withdrawn.
+          </Callout>
+        </div>
       </CatalogSection>
 
       <CatalogSection

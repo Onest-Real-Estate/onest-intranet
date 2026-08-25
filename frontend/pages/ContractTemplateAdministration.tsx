@@ -1,5 +1,5 @@
 import { Head, Link, router, usePage } from "@inertiajs/react";
-import { Plus } from "lucide-react";
+import { BadgeCheck, Building2, FileText, Plus } from "lucide-react";
 import { useMemo, useState } from "react";
 import {
   CreateSheet,
@@ -157,6 +157,7 @@ export default function ContractTemplateAdministration() {
                 {
                   id: "name",
                   header: "Template",
+                  icon: FileText,
                   cell: (row) => (
                     <div className="grid gap-0.5">
                       <span className="font-semibold">{row.name}</span>
@@ -170,6 +171,7 @@ export default function ContractTemplateAdministration() {
                 {
                   id: "scope",
                   header: "Scope",
+                  icon: Building2,
                   cell: (row) => (
                     <span className="text-sm">
                       {row.companyWide ? "Company-wide" : "Scoped"}
@@ -179,6 +181,7 @@ export default function ContractTemplateAdministration() {
                 {
                   id: "status",
                   header: "Status",
+                  icon: BadgeCheck,
                   cell: (row) => (
                     <span className="text-sm capitalize">{row.status}</span>
                   ),

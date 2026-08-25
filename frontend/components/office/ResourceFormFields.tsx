@@ -1,10 +1,7 @@
-import { FormField, FormLabel } from "@/components/design-system";
+import { FormField, FormLabel, NativeSelect } from "@/components/design-system";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import type { FilterOption } from "@/types";
-
-const SELECT_CLASS =
-  "bg-background border-border text-foreground h-9 w-full rounded-md border px-3 text-sm";
 
 function HelpText({ children }: { children: string }) {
   return <p className="text-muted-foreground text-xs">{children}</p>;
@@ -89,35 +86,33 @@ export function ResourceFormFields({
           <FormLabel htmlFor="rf-category" required>
             Category
           </FormLabel>
-          <select
+          <NativeSelect
             id="rf-category"
             name="category"
             defaultValue={defaults.category ?? "general"}
-            className={SELECT_CLASS}
           >
             {categories.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </FormField>
         <FormField>
           <FormLabel htmlFor="rf-resource_type" required>
             Type
           </FormLabel>
-          <select
+          <NativeSelect
             id="rf-resource_type"
             name="resource_type"
             defaultValue={defaults.resourceType ?? "content"}
-            className={SELECT_CLASS}
           >
             {types.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </FormField>
       </div>
 
@@ -164,18 +159,17 @@ export function ResourceFormFields({
           </FormLabel>
           {/* Native select so the value posts with the form; the server
               re-validates the boundary either way. */}
-          <select
+          <NativeSelect
             id="rf-owner_office"
             name="owner_office"
             defaultValue={String(defaults.ownerId ?? writableOffices[0]?.id ?? "")}
-            className={SELECT_CLASS}
           >
             {writableOffices.map((option) => (
               <option key={option.id} value={String(option.id)}>
                 {option.label}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </FormField>
         <FormField>
           <FormLabel htmlFor="rf-sort_order">Sort order</FormLabel>

@@ -296,7 +296,7 @@ export function GlobalSearch() {
       >
         <SearchIcon className="size-4 shrink-0" aria-hidden />
         <span className="min-w-0 flex-1 truncate text-left">Search ONEST</span>
-        <kbd className="border-border/60 rounded border px-1.5 py-0.5 text-[10px] font-medium">
+        <kbd className="border-border/60 rounded border px-1.5 py-0.5 text-micro font-medium">
           &#8984;K
         </kbd>
       </button>
@@ -500,7 +500,7 @@ function Group({
                 </span>
               ) : null}
               {hit.meta ? (
-                <span className="text-muted-foreground text-[11px]">{hit.meta}</span>
+                <span className="text-muted-foreground text-micro">{hit.meta}</span>
               ) : null}
             </CommandPaletteOption>
           );

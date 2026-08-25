@@ -76,6 +76,49 @@
   --sidebar-accent-foreground: oklch(0.31 0.055 72);
   --sidebar-border: oklch(0.89 0.014 78);
   --sidebar-ring: oklch(0.61 0.12 76);
+
+  /*
+   * Chip surfaces and inks.
+   *
+   * A chip is a tinted surface behind a hairline of its own hue, and both are
+   * declared outright rather than composed from an alpha of the ink. Alpha made
+   * contrast context-dependent — the same `bg-x/10 text-x` pair that cleared AA
+   * on a white card fell to 4.2:1 on a dark one, because tinting a dark surface
+   * with the ink colour drags the background *toward* the text. Every pair
+   * below is verified at >=4.5:1 against its own surface and against the card,
+   * in both themes.
+   *
+   * Role inks encode breadth of authority. Hue carries the category; lightness
+   * carries the ordering, broadest reading darkest — lightness is the one
+   * channel every colour-vision deficiency preserves, so company and office
+   * stay tellable apart when their hues collapse. `assigned_record` is
+   * deliberately absent: the narrowest scope takes the neutral chip, which
+   * keeps brand gold spent on actions rather than on a badge.
+   */
+  --chip-neutral: oklch(0.96 0.008 78);
+  --chip-neutral-edge: oklch(0.89 0.014 78);
+  --chip-primary: oklch(0.965 0.027 74);
+  --chip-primary-edge: oklch(0.88 0.043 74);
+  --chip-success: oklch(0.965 0.027 150);
+  --chip-success-edge: oklch(0.88 0.043 150);
+  --chip-info: oklch(0.965 0.017 245);
+  --chip-info-edge: oklch(0.88 0.043 245);
+  --chip-warning: oklch(0.965 0.023 68);
+  --chip-warning-edge: oklch(0.88 0.043 68);
+  --chip-destructive: oklch(0.965 0.017 27);
+  --chip-destructive-edge: oklch(0.88 0.043 27);
+  --chip-role-company: oklch(0.965 0.017 244);
+  --chip-role-company-edge: oklch(0.88 0.043 244);
+  --role-company-ink: oklch(0.44 0.111 244);
+  --chip-role-region: oklch(0.965 0.017 42);
+  --chip-role-region-edge: oklch(0.88 0.043 42);
+  --role-region-ink: oklch(0.48 0.139 42);
+  --chip-role-office: oklch(0.965 0.027 153);
+  --chip-role-office-edge: oklch(0.88 0.043 153);
+  --role-office-ink: oklch(0.5 0.129 153);
+  --chip-role-protected: oklch(0.965 0.021 310);
+  --chip-role-protected-edge: oklch(0.88 0.043 310);
+  --role-protected-ink: oklch(0.46 0.139 310);
 }
 
 .dark {
@@ -131,6 +174,33 @@
   --sidebar-accent-foreground: oklch(0.95 0.012 80);
   --sidebar-border: oklch(1 0 0 / 12%);
   --sidebar-ring: oklch(0.7 0.12 78);
+
+  /* Dark chip surfaces are composed, not inverted: a real elevated tint a step
+     above the card, with the ink lightened to clear AA on it. */
+  --chip-neutral: oklch(0.25 0.012 72);
+  --chip-neutral-edge: oklch(0.32 0.014 72);
+  --chip-primary: oklch(0.27 0.043 78);
+  --chip-primary-edge: oklch(0.385 0.059 78);
+  --chip-success: oklch(0.27 0.043 150);
+  --chip-success-edge: oklch(0.385 0.059 150);
+  --chip-info: oklch(0.27 0.043 245);
+  --chip-info-edge: oklch(0.385 0.059 245);
+  --chip-warning: oklch(0.27 0.043 68);
+  --chip-warning-edge: oklch(0.385 0.059 68);
+  --chip-destructive: oklch(0.27 0.043 27);
+  --chip-destructive-edge: oklch(0.385 0.059 27);
+  --chip-role-company: oklch(0.27 0.043 244);
+  --chip-role-company-edge: oklch(0.385 0.059 244);
+  --role-company-ink: oklch(0.82 0.097 244);
+  --chip-role-region: oklch(0.27 0.043 42);
+  --chip-role-region-edge: oklch(0.385 0.059 42);
+  --role-region-ink: oklch(0.78 0.135 42);
+  --chip-role-office: oklch(0.27 0.043 153);
+  --chip-role-office-edge: oklch(0.385 0.059 153);
+  --role-office-ink: oklch(0.76 0.139 153);
+  --chip-role-protected: oklch(0.27 0.043 310);
+  --chip-role-protected-edge: oklch(0.385 0.059 310);
+  --role-protected-ink: oklch(0.8 0.135 310);
 }
 
 @theme inline {
@@ -178,6 +248,20 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  /* Sub-xs chrome step: sidebar group labels, breadcrumbs, keycaps, counters.
+     One documented value so the chrome does not accumulate a private ramp of
+     10px/11px near-duplicates. Anything a reader must actually read stays at
+     text-xs or larger. */
+  /* Reading measure. 34rem holds ~70 characters at the 14px body step, which
+     is where a paragraph stops needing the reader to hunt for the next line.
+     Any prose block wider than its own content deserves this cap. */
+  --container-measure: 34rem;
+  --text-micro: 0.6875rem;
+  --text-micro--line-height: 1rem;
+  /* The stat figure, so MetricCard and anything that has to match it read the
+     same number from the system instead of restating a literal. */
+  --text-metric: 1.75rem;
+  --text-metric--line-height: 2.25rem;
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -192,6 +276,30 @@
   --color-brand-on-gold: var(--brand-on-gold);
   --color-on-media: var(--on-media);
   --color-brand-ink: var(--brand-ink);
+  --color-chip-neutral: var(--chip-neutral);
+  --color-chip-neutral-edge: var(--chip-neutral-edge);
+  --color-chip-primary: var(--chip-primary);
+  --color-chip-primary-edge: var(--chip-primary-edge);
+  --color-chip-success: var(--chip-success);
+  --color-chip-success-edge: var(--chip-success-edge);
+  --color-chip-info: var(--chip-info);
+  --color-chip-info-edge: var(--chip-info-edge);
+  --color-chip-warning: var(--chip-warning);
+  --color-chip-warning-edge: var(--chip-warning-edge);
+  --color-chip-destructive: var(--chip-destructive);
+  --color-chip-destructive-edge: var(--chip-destructive-edge);
+  --color-chip-role-company: var(--chip-role-company);
+  --color-chip-role-company-edge: var(--chip-role-company-edge);
+  --color-role-company-ink: var(--role-company-ink);
+  --color-chip-role-region: var(--chip-role-region);
+  --color-chip-role-region-edge: var(--chip-role-region-edge);
+  --color-role-region-ink: var(--role-region-ink);
+  --color-chip-role-office: var(--chip-role-office);
+  --color-chip-role-office-edge: var(--chip-role-office-edge);
+  --color-role-office-ink: var(--role-office-ink);
+  --color-chip-role-protected: var(--chip-role-protected);
+  --color-chip-role-protected-edge: var(--chip-role-protected-edge);
+  --color-role-protected-ink: var(--role-protected-ink);
 }
 
 @layer base {
@@ -244,17 +352,84 @@
  * reliably outranks them, which is why biome flags the four lines below.
  */
 @media (prefers-reduced-motion: reduce) {
+  :root {
+    /* The properties whose transitions survive reduced motion: everything that
+       changes appearance in place, and nothing that moves. */
+    --reduced-motion-props: color, background-color, border-color, opacity, box-shadow;
+  }
+
   *,
   *::before,
   *::after {
+    /* Keep the transition, drop the movement. Restricting the property list is
+       what separates the two: colour, shadow, and opacity still ease, so hover,
+       focus, and press still read as feedback, while transforms and
+       layout-driving properties land instantly. A blanket 0.01ms would make
+       every state change a jump cut, and a colour fade is not movement. */
+    /* biome-ignore lint/complexity/noImportantStyles: must outrank Tailwind's inline transition utilities */
+    transition-property: var(--reduced-motion-props) !important;
+    /* biome-ignore lint/complexity/noImportantStyles: must outrank Tailwind's inline transition utilities */
+    transition-duration: 120ms !important;
     /* biome-ignore lint/complexity/noImportantStyles: must outrank Tailwind's inline transition utilities */
     animation-duration: 0.01ms !important;
     /* biome-ignore lint/complexity/noImportantStyles: must outrank Tailwind's inline transition utilities */
     animation-iteration-count: 1 !important;
     /* biome-ignore lint/complexity/noImportantStyles: must outrank Tailwind's inline transition utilities */
-    transition-duration: 0.01ms !important;
-    /* biome-ignore lint/complexity/noImportantStyles: must outrank Tailwind's inline transition utilities */
     scroll-behavior: auto !important;
+  }
+
+  /*
+   * Indeterminate progress is the exception, and it is not a small one.
+   *
+   * A spinner is the only thing telling a reader that work is still in flight.
+   * Stopped, it does not read as "reduced motion" — it reads as hung, which is
+   * worse than showing nothing at all. So it keeps turning, more slowly. A
+   * small glyph rotating on its own centre is not the large-area movement that
+   * reduced motion exists to suppress.
+   *
+   * The class selector outranks the universal rule above, so these win without
+   * needing to restate every longhand.
+   */
+  .animate-spin {
+    /* biome-ignore lint/complexity/noImportantStyles: must outrank the universal reduced-motion reset above */
+    animation: reduced-spin 1.6s linear infinite !important;
+  }
+
+  .animate-pulse {
+    /* biome-ignore lint/complexity/noImportantStyles: must outrank the universal reduced-motion reset above */
+    animation: reduced-pulse 2.4s ease-in-out infinite !important;
+  }
+
+  /* Deferred content still announces itself — by fading in place rather than
+     rising, so the arrival is legible without any travel. */
+  .arrive {
+    /* biome-ignore lint/complexity/noImportantStyles: must outrank the universal reduced-motion reset above */
+    animation: arrive-fade 120ms ease-out !important;
+  }
+
+  /* `animate-ping` is deliberately absent. It marks something for attention
+     rather than reporting progress, the dot stays perfectly visible without it,
+     and an unprompted pulse is exactly the loop a reduced-motion reader asked
+     to be rid of. */
+}
+
+/* Reduced-motion counterparts, kept out of the media query so the keyframes
+   resolve wherever the rules above apply. */
+@keyframes reduced-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes reduced-pulse {
+  50% {
+    opacity: 0.65;
+  }
+}
+
+@keyframes arrive-fade {
+  from {
+    opacity: 0;
   }
 }
 

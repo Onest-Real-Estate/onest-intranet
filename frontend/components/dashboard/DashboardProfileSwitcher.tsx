@@ -1,5 +1,3 @@
-import { LayoutGrid } from "lucide-react";
-
 import {
   Select,
   SelectContent,
@@ -8,17 +6,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { DashboardProfile } from "@/lib/dashboard/profiles";
-import type { DashboardProfileSource } from "@/lib/dashboard/resolve";
-
-/** How the reader arrived at the profile they are looking at. */
-const sourceLabel: Record<DashboardProfileSource, string> = {
-  "reader-selection": "Your choice",
-  "user-assignment": "Assigned to you",
-  "primary-role": "Your primary role",
-  "effective-role": "Your role",
-  "scope-assignment": "Assigned to your office",
-  fallback: "Default",
-};
 
 /**
  * Switch between the dashboard presentations the reader is authorized for.
@@ -34,42 +21,32 @@ const sourceLabel: Record<DashboardProfileSource, string> = {
 export function DashboardProfileSwitcher({
   profiles,
   activeId,
-  source,
   onSelect,
 }: {
   profiles: DashboardProfile[];
   activeId: string;
-  source: DashboardProfileSource;
   onSelect: (id: string) => void;
 }) {
   if (profiles.length < 2) {
     return null;
   }
-  const active = profiles.find((profile) => profile.id === activeId);
 
   return (
-    <div className="flex min-w-0 flex-col gap-1">
-      <Select value={activeId} onValueChange={onSelect}>
-        <SelectTrigger
-          id="dashboard-profile"
-          aria-label="Dashboard view"
-          className="w-full"
-        >
-          <LayoutGrid className="text-muted-foreground size-4" aria-hidden />
-          <SelectValue placeholder="Choose a dashboard" />
-        </SelectTrigger>
-        <SelectContent>
-          {profiles.map((profile) => (
-            <SelectItem key={profile.id} value={profile.id}>
-              {profile.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      <p className="text-muted-foreground line-clamp-2 px-1 text-xs leading-5">
-        {sourceLabel[source]}
-        {active ? ` · ${active.description}` : ""}
-      </p>
-    </div>
+    <Select value={activeId} onValueChange={onSelect}>
+      <SelectTrigger
+        id="dashboard-profile"
+        aria-label="Dashboard view"
+        className="w-full sm:w-56"
+      >
+        <SelectValue placeholder="Choose a dashboard" />
+      </SelectTrigger>
+      <SelectContent>
+        {profiles.map((profile) => (
+          <SelectItem key={profile.id} value={profile.id}>
+            {profile.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }

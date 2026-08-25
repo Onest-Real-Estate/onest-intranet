@@ -2,6 +2,7 @@ import { Head, router, usePage } from "@inertiajs/react";
 import { useEffect, useId, useState } from "react";
 import {
   FormErrorSummary,
+  NativeSelect,
   PageHeader,
   SurfaceCard,
   SurfaceCardContent,
@@ -151,10 +152,9 @@ export default function AgentContractNew() {
 
               <div className="grid gap-2">
                 <Label htmlFor="template_version_id">Template version</Label>
-                <select
+                <NativeSelect
                   id="template_version_id"
                   name="template_version_id"
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
                   required
                   disabled={!selected}
                 >
@@ -164,7 +164,7 @@ export default function AgentContractNew() {
                       {option.templateName} ({option.versionLabel})
                     </option>
                   ))}
-                </select>
+                </NativeSelect>
               </div>
 
               <div className="grid grid-cols-2 gap-4">

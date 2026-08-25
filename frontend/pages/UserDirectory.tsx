@@ -1,14 +1,20 @@
 import { Head, Link, router, usePage } from "@inertiajs/react";
 import {
   ArrowRight,
-  ChevronDown,
-  SlidersHorizontal,
+  Building2,
+  CalendarClock,
+  CircleUser,
+  ClipboardCheck,
+  FileSignature,
+  IdCard,
+  ShieldCheck,
   UserRoundX,
   Users,
 } from "lucide-react";
 import { useState } from "react";
 
 import {
+  Callout,
   DataTable,
   type DataTableColumn,
   FilterControls,
@@ -35,6 +41,7 @@ import {
 } from "@/components/ui/select";
 import { buildListUrl } from "@/lib/list-query";
 import { routes } from "@/lib/routes";
+import { initials } from "@/lib/utils";
 import type {
   DirectoryFilters,
   DirectoryRow,
@@ -55,15 +62,6 @@ const EMPTY_FILTERS: Omit<DirectoryFilters, "q"> = {
   contract: "",
   lastLogin: "",
 };
-
-function initials(name: string): string {
-  return name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join("");
-}
 
 function relativeDay(value: string | null): string {
   if (!value) return "Never";
@@ -166,6 +164,7 @@ export default function UserDirectory() {
     {
       id: "name",
       header: "Name",
+      icon: CircleUser,
       sortable: true,
       cell: (row) => (
         <div className="flex min-w-40 items-center gap-3 sm:min-w-56">
@@ -184,6 +183,7 @@ export default function UserDirectory() {
     {
       id: "office",
       header: "Office",
+      icon: Building2,
       sortable: true,
       cell: (row) => (
         <div className="grid min-w-32 gap-0.5">
@@ -195,12 +195,12 @@ export default function UserDirectory() {
           ) : null}
         </div>
       ),
-      className: "hidden md:table-cell",
-      headerClassName: "hidden md:table-cell",
+      hideBelow: "2xl",
     },
     {
       id: "account",
       header: "Account",
+      icon: ShieldCheck,
       cell: (row) => <StatusBadge status={row.accountState} />,
     },
   ];
@@ -209,42 +209,42 @@ export default function UserDirectory() {
     columns.push({
       id: "status",
       header: "Agent status",
+      icon: IdCard,
       sortable: true,
       cell: (row) =>
         row.agentStatus ? <StatusBadge status={row.agentStatus} /> : null,
-      className: "hidden lg:table-cell",
-      headerClassName: "hidden lg:table-cell",
+      hideBelow: "5xl",
     });
   }
   if (visible.onboarding) {
     columns.push({
       id: "onboarding",
       header: "Onboarding",
+      icon: ClipboardCheck,
       cell: (row) => <StatusBadge status={row.onboarding} />,
-      className: "hidden xl:table-cell",
-      headerClassName: "hidden xl:table-cell",
+      hideBelow: "6xl",
     });
   }
   if (visible.contract) {
     columns.push({
       id: "contract",
       header: "Contract",
+      icon: FileSignature,
       cell: (row) => (row.contract ? <StatusBadge status={row.contract} /> : null),
-      className: "hidden xl:table-cell",
-      headerClassName: "hidden xl:table-cell",
+      hideBelow: "7xl",
     });
   }
   columns.push({
     id: "lastLogin",
     header: "Last sign-in",
+    icon: CalendarClock,
     sortable: true,
     cell: (row) => (
       <span className="text-muted-foreground tabular-nums">
         {relativeDay(row.lastLoginAt)}
       </span>
     ),
-    className: "hidden sm:table-cell",
-    headerClassName: "hidden sm:table-cell",
+    hideBelow: "4xl",
   });
   if (canOpenRecord) {
     columns.push({
@@ -358,57 +358,44 @@ export default function UserDirectory() {
                 options={filterOptions.accountStates}
                 onChange={(account) => visit({ account })}
               />
+              {filterOptions.agentStatuses ? (
+                <FilterSelect
+                  label="Agent status"
+                  value={filters.status}
+                  options={filterOptions.agentStatuses.map((status) => ({
+                    value: status.value,
+                    label: status.label,
+                  }))}
+                  onChange={(status) => visit({ status })}
+                />
+              ) : null}
+              <FilterSelect
+                label="Onboarding"
+                value={filters.onboarding}
+                options={filterOptions.onboardingStates}
+                onChange={(onboarding) => visit({ onboarding })}
+              />
+              {visible.contract ? (
+                <FilterSelect
+                  label="Contract"
+                  value={filters.contract}
+                  options={filterOptions.contract.options}
+                  disabled={!filterOptions.contract.available}
+                  hint={
+                    filterOptions.contract.available
+                      ? undefined
+                      : filterOptions.contract.reason
+                  }
+                  onChange={(contract) => visit({ contract })}
+                />
+              ) : null}
+              <FilterSelect
+                label="Last sign-in"
+                value={filters.lastLogin}
+                options={filterOptions.lastLoginWindows}
+                onChange={(lastLogin) => visit({ lastLogin })}
+              />
             </FilterControls>
-
-            <details className="group">
-              <summary className="focus-visible:ring-ring text-muted-foreground hover:text-foreground inline-flex min-h-9 cursor-pointer list-none items-center gap-2 rounded-md text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-offset-2">
-                <SlidersHorizontal className="size-4 shrink-0" aria-hidden />
-                Status, onboarding, contract, and sign-in
-                <ChevronDown
-                  className="size-4 shrink-0 transition-transform group-open:rotate-180"
-                  aria-hidden
-                />
-              </summary>
-              <div className="grid gap-4 pt-4 sm:grid-cols-2 lg:grid-cols-4">
-                {filterOptions.agentStatuses ? (
-                  <FilterSelect
-                    label="Agent status"
-                    value={filters.status}
-                    options={filterOptions.agentStatuses.map((status) => ({
-                      value: status.value,
-                      label: status.label,
-                    }))}
-                    onChange={(status) => visit({ status })}
-                  />
-                ) : null}
-                <FilterSelect
-                  label="Onboarding"
-                  value={filters.onboarding}
-                  options={filterOptions.onboardingStates}
-                  onChange={(onboarding) => visit({ onboarding })}
-                />
-                {visible.contract ? (
-                  <FilterSelect
-                    label="Contract"
-                    value={filters.contract}
-                    options={filterOptions.contract.options}
-                    disabled={!filterOptions.contract.available}
-                    hint={
-                      filterOptions.contract.available
-                        ? undefined
-                        : filterOptions.contract.reason
-                    }
-                    onChange={(contract) => visit({ contract })}
-                  />
-                ) : null}
-                <FilterSelect
-                  label="Last sign-in"
-                  value={filters.lastLogin}
-                  options={filterOptions.lastLoginWindows}
-                  onChange={(lastLogin) => visit({ lastLogin })}
-                />
-              </div>
-            </details>
 
             <DataTable
               frame="bleed"
@@ -440,30 +427,18 @@ export default function UserDirectory() {
         </SurfaceCard>
 
         {!canOpenRecord ? (
-          <SurfaceCard state="read-only">
-            <SurfaceCardContent className="flex items-start gap-3">
-              <Users
-                className="text-muted-foreground mt-0.5 size-5 shrink-0"
-                aria-hidden
-              />
-              <p className="text-sm">
-                You can look people up, but not open their administrative record. Ask
-                for the user administration permission if you need to maintain offices,
-                status, or credentials.
-              </p>
-            </SurfaceCardContent>
-          </SurfaceCard>
+          <Callout icon={Users}>
+            You can look people up, but not open their administrative record. Ask for
+            the user administration permission if you need to maintain offices, status,
+            or credentials.
+          </Callout>
         ) : null}
 
         {summary.disabled > 0 && !filters.account ? (
-          <SurfaceCard state="read-only">
-            <SurfaceCardContent className="flex flex-wrap items-center gap-3">
-              <UserRoundX className="text-warning-ink size-5 shrink-0" aria-hidden />
-              <p className="min-w-0 flex-1 text-sm">
-                {summary.disabled} disabled{" "}
-                {summary.disabled === 1 ? "account is" : "accounts are"} still in your
-                scope. Disabled accounts cannot sign in.
-              </p>
+          <Callout
+            tone="warning"
+            icon={UserRoundX}
+            action={
               <Button
                 type="button"
                 variant="outline"
@@ -472,8 +447,12 @@ export default function UserDirectory() {
               >
                 Show them
               </Button>
-            </SurfaceCardContent>
-          </SurfaceCard>
+            }
+          >
+            {summary.disabled} disabled{" "}
+            {summary.disabled === 1 ? "account is" : "accounts are"} still in your
+            scope. Disabled accounts cannot sign in.
+          </Callout>
         ) : null}
       </div>
     </PermissionRequired>
