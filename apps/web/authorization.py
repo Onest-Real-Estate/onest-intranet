@@ -1031,6 +1031,29 @@ ROUTE_POLICIES["agent_contract_artifact_download"] = AuthorizationPolicy(
     route_names=("agent_contract_artifact_download",),
     scope_rule="assigned_or_self",
 )
+ROUTE_POLICIES["my_contract"] = AuthorizationPolicy(
+    key="my_contract",
+    access="authenticated",
+    description=(
+        "Self-service My Contract page for the signed-in recipient. "
+        "Never accepts an agent id from the client; optional version "
+        "query is re-checked against the recipient's own family."
+    ),
+    methods=("GET",),
+    route_names=("my_contract",),
+    scope_rule="self_only",
+)
+ROUTE_POLICIES["my_contract_artifact_preview"] = AuthorizationPolicy(
+    key="my_contract_artifact_preview",
+    access="authenticated",
+    description=(
+        "Inline preview stream for the recipient's own contract PDF. "
+        "Re-checks self-only queryset on every request."
+    ),
+    methods=("GET",),
+    route_names=("my_contract_artifact_preview",),
+    scope_rule="self_only",
+)
 
 NON_ROUTE_SURFACES: tuple[AuthorizationPolicy, ...] = (
     AuthorizationPolicy(

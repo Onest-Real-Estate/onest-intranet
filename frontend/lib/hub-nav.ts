@@ -263,7 +263,7 @@ export const HUB_NAV_REGISTRY: HubNavItem[] = [
   {
     key: "my-contract",
     label: "My contract",
-    route: route("coming_soon", routes.coming_soon("my-contract")),
+    route: route("my_contract", routes.my_contract()),
     icon: FileText,
     group: "general",
     order: 30,
@@ -271,7 +271,7 @@ export const HUB_NAV_REGISTRY: HubNavItem[] = [
     permissions: {},
     roles: PRODUCING_ROLES,
     feature: "my-contract",
-    activeMatch: active(routes.coming_soon("my-contract")),
+    activeMatch: active(routes.my_contract()),
   },
   {
     key: "agent-transactions",

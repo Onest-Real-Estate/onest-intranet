@@ -4,8 +4,9 @@ Brokerage agreements for recipient agents: commercial terms, lifecycle status,
 protected PDF artifacts, and immutable issuance snapshots.
 
 Admin authoring (create / validate / preview / issue) and the lifecycle
-transition service are documented below. Agent-facing signing UI lands in a
-later issue.
+transition service are documented below. Agent-facing **My Contract**
+(status, summary, secure PDF, history) is live; one-click signing lands in
+a later issue (P1-042).
 
 ## Models
 
@@ -154,6 +155,8 @@ stay consistent.
 ## Query services
 
 - `recipient_contract_queryset(user)` — self-only
+- `recipient_visible_queryset(user)` / `my_contract_page_payload` — agent
+  My Contract (issued+ statuses only)
 - `scoped_contract_queryset(actor)` — office/region/company from effective access
 - `create_draft_contract(...)` — validates active recipient, active assignable
   office, in-scope assignment, decimal bounds, published **and applicable**
@@ -181,6 +184,44 @@ Issuance freezes snapshots and queues `generate_contract_pdf`. Double-submit is
 idempotent via lifecycle locks. When the PDF lands, the workspace exposes a
 scoped download link; DocuSeal e-sign integration is a later issue and consumes
 this stored review PDF rather than re-rendering terms.
+
+# ---------------------------------------------------------------------------
+# Self-service My Contract (P1-041)
+# ---------------------------------------------------------------------------
+
+Agents open **My Contract** (`/my-contract`, Inertia page `MyContract`). The
+recipient is always the authenticated user — the route never accepts an agent
+id. Optional `?v=<public_id>` selects another **visible** version in the same
+recipient's family; unknown or foreign ids fall back to the current agreement
+without disclosing other agents' contracts.
+
+### What the page shows
+
+- Presentation state: `no_contract`, `generating`, `generation_failed`,
+  `awaiting_signature`, `signed`, `active`, `expired`, `superseded`,
+  `terminated`.
+- Frozen dates, office name, contract/version id, sent/viewed/signed stamps.
+- Plain-language commission summary from
+  `summarize_terms_for_display` (mentor and referral labeled separately).
+- Secure PDF preview (inline stream, same-origin framing) plus attachment
+  download via the existing artifact delivery path.
+- Family/history of superseded agreements and amendments the recipient may
+  view.
+- Sign CTA only when the focused version is signable (`sent`/`viewed` with a
+  generated PDF). The signing ceremony itself is P1-042
+  (`capabilities.signingReady` stays false until that lands).
+
+### Viewed status
+
+`mark_viewed` runs through the lifecycle service **once** when the recipient
+opens My Contract and the issued PDF is ready — never from a dashboard
+preload that only references standing. Retries are idempotent.
+
+### Serialization
+
+Recipient props omit `internalNotes`, admin ids, and other agents' rows.
+Commission keys require `web.view_own_commission` (or broader commission
+grants). Summary text is informational; the PDF controls on discrepancy.
 
 ## Constraints and indexes
 

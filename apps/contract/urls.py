@@ -19,8 +19,18 @@ from apps.contract.agent_contract_views import (
     agent_contract_validate,
     agent_contract_workspace,
 )
+from apps.contract.my_contract_views import (
+    my_contract,
+    my_contract_artifact_preview,
+)
 
 urlpatterns = [
+    path("my-contract", my_contract, name="my_contract"),
+    path(
+        "my-contract/<uuid:public_id>/artifacts/<uuid:artifact_public_id>/preview",
+        my_contract_artifact_preview,
+        name="my_contract_artifact_preview",
+    ),
     path(
         "operations/contract-templates",
         contract_template_index,

@@ -2405,6 +2405,121 @@ export interface AgentContractNewPageProps extends PageProps {
   draft: Record<string, string>;
 }
 
+/** Self-service My Contract presentation states (P1-041). */
+export type MyContractState =
+  | "no_contract"
+  | "generating"
+  | "generation_failed"
+  | "awaiting_signature"
+  | "signed"
+  | "active"
+  | "expired"
+  | "superseded"
+  | "terminated";
+
+export interface MyContractCommissionSide {
+  percent: string | null;
+  fixedAmount: string | null;
+  capAmount: string | null;
+  basis: string;
+  notes: string;
+}
+
+export interface MyContractCommission {
+  agentSplitPercent: string | null;
+  officeSplitPercent: string | null;
+  transactionFeeAmount: string | null;
+  transactionFeePercent: string | null;
+  annualCapAmount: string | null;
+  mentor: MyContractCommissionSide;
+  referral: MyContractCommissionSide;
+}
+
+export interface MyContractArtifactMeta {
+  publicId: string;
+  kind: string;
+  displayName: string;
+  mediaType: string;
+  byteSize: number;
+  checksum: string;
+  rendererVersion?: string | null;
+  ruleVersion?: string | null;
+  generatedAt?: string | null;
+}
+
+export interface MyContractDetail {
+  publicId: string;
+  familyId: string;
+  versionNumber: number;
+  status: string;
+  statusLabel: string;
+  statusTone: string;
+  effectiveOn: string;
+  expiresOn: string | null;
+  officeName: string;
+  partyDisplayName: string;
+  sentAt: string | null;
+  viewedAt: string | null;
+  signedAt: string | null;
+  activatedAt: string | null;
+  supersededAt: string | null;
+  expiredAt: string | null;
+  terminatedAt: string | null;
+  updatedAt: string | null;
+  expectedVersion: string;
+  generatedPdf: MyContractArtifactMeta | null;
+  signedPdf: MyContractArtifactMeta | null;
+  previewUrl: string | null;
+  downloadUrl: string | null;
+  artifactKind: string | null;
+  isCurrentFocus: boolean;
+  amendsPublicId: string | null;
+  supersedesPublicId: string | null;
+  commission?: MyContractCommission;
+  summaryLines?: string[];
+  specialArrangements?: string;
+  addendaReferences?: string[];
+  annualCapAmount?: string | null;
+}
+
+export interface MyContractHistoryRow {
+  publicId: string;
+  versionNumber: number;
+  status: string;
+  statusLabel: string;
+  statusTone: string;
+  effectiveOn: string;
+  expiresOn: string | null;
+  isFocus: boolean;
+  hasArtifact: boolean;
+  href: string;
+}
+
+export interface MyContractNextAction {
+  title: string;
+  description: string;
+  ctaLabel: string;
+  ctaKind: string;
+  ctaHref: string;
+}
+
+export interface MyContractCapabilities {
+  canViewCommission: boolean;
+  canSign: boolean;
+  /** False until P1-042 wires the signing ceremony. */
+  signingReady: boolean;
+}
+
+export interface MyContractPageProps extends PageProps {
+  state: MyContractState;
+  nextAction: MyContractNextAction;
+  contract: MyContractDetail | null;
+  history: MyContractHistoryRow[];
+  capabilities: MyContractCapabilities;
+  disclaimer: string;
+  empty: { kind: string; title: string; description: string } | null;
+}
+
 export interface ReportScopePayload {
   level: string;
   label: string;

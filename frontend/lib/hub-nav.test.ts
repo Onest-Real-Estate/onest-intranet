@@ -274,6 +274,17 @@ describe("resolveHubNav", () => {
     ).toBe("Agent profile");
   });
 
+  it("routes My contract to the live destination when the feature is on", () => {
+    const contract = resolveHubNav(user(), features(["my-contract"]), office)
+      .flatMap((group) => group.items)
+      .find((item) => item.key === "my-contract");
+    expect(contract).toMatchObject({
+      label: "My contract",
+      availability: "available",
+      route: { name: "my_contract", href: routes.my_contract() },
+    });
+  });
+
   it("keeps an explicitly registered disabled module as a Soon destination", () => {
     const groups = resolveHubNav(user(), { "my-contract": false }, office);
     const contract = groups

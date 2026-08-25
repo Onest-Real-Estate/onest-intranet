@@ -17,16 +17,19 @@ def stream_contract_artifact(
     *,
     contract_public_id,
     artifact_public_id,
+    as_attachment: bool = True,
+    queryset=None,
 ) -> FileResponse:
     """Stream one artifact after re-checking contract access policy.
 
     Never issues a durable/presigned URL. Object keys are not accepted from the
     client — only public ids resolved through the accessible queryset.
+
+    ``as_attachment=False`` streams for in-page/new-tab preview (inline
+    Content-Disposition) with same-origin framing allowed.
     """
-    contract = get_object_or_404(
-        accessible_contract_queryset(actor),
-        public_id=contract_public_id,
-    )
+    scope = queryset if queryset is not None else accessible_contract_queryset(actor)
+    contract = get_object_or_404(scope, public_id=contract_public_id)
     artifact = (
         ContractArtifact.objects.filter(
             public_id=artifact_public_id,
@@ -61,17 +64,23 @@ def stream_contract_artifact(
         source="view",
         channel="contract",
         office_id=getattr(contract.office, "stable_key", "") or "",
-        metadata={"kind": artifact.kind},
+        metadata={
+            "kind": artifact.kind,
+            "disposition": "attachment" if as_attachment else "inline",
+        },
     )
 
     response = FileResponse(
         storage.open(key, "rb"),
-        as_attachment=True,
+        as_attachment=as_attachment,
         filename=artifact.display_name,
         content_type=artifact.media_type or "application/octet-stream",
     )
     response["Cache-Control"] = "private, no-store, max-age=0"
     response["X-Content-Type-Options"] = "nosniff"
+    if not as_attachment:
+        # Allow same-origin iframe preview; default middleware is DENY.
+        response["X-Frame-Options"] = "SAMEORIGIN"
     return response
 
 

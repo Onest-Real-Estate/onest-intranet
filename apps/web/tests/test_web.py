@@ -194,13 +194,13 @@ def test_coming_soon_renders_named_section(client):
     user = User.objects.create_user(email="alice@example.com", profile_completed=True)
     client.force_login(user)
     response = client.get(
-        reverse("coming_soon", kwargs={"section": "my-contract"}),
+        reverse("coming_soon", kwargs={"section": "agent-transactions"}),
         HTTP_X_INERTIA="true",
     )
     assert response.status_code == 200
     data = json.loads(response.content)
     assert data["component"] == "ComingSoon"
-    assert data["props"]["title"] == "My contract"
+    assert data["props"]["title"] == "Agent transactions"
 
 
 @pytest.mark.django_db
