@@ -162,6 +162,23 @@ describe("DataTable responsive layout", () => {
     expect(screen.getByRole("button", { name: "Open" })).toBeInTheDocument();
   });
 
+  it("gives each card a heading so records are navigable by heading", () => {
+    measureWidthAs(390);
+    render(
+      <DataTable
+        rows={wideRows}
+        columns={wideColumns}
+        rowKey={(row) => row.id}
+        getRowLabel={(row) => row.name}
+        caption="People"
+      />,
+    );
+    // A real heading element, not a role on a div: a heading may only hold
+    // phrasing content, which is why it carries the label and not the cell.
+    const heading = screen.getByRole("heading", { name: "Avery Johnson", level: 3 });
+    expect(heading.tagName).toBe("H3");
+  });
+
   it("treats an unmeasured box as wide rather than as extremely narrow", () => {
     // jsdom reports 0 for every box; a headless render must not collapse to
     // cards just because layout never ran.

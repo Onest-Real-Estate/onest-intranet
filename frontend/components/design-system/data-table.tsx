@@ -206,6 +206,7 @@ export function DataTable<Row>({
           {rows.map((row) => {
             const key = rowKey(row);
             const selected = selectedKeys?.has(key) ?? false;
+            const rowLabel = getRowLabel?.(row);
             const [identity, ...rest] = columns;
             // The first column identifies the record and titles the card; the
             // action column becomes its footer; everything else is a fact.
@@ -231,14 +232,15 @@ export function DataTable<Row>({
                       }}
                     />
                   ) : null}
-                  {/* The identity is what the card is about, so it carries
-                      heading semantics — a reader navigating by heading can
-                      move between records. `role` rather than an `<h3>` because
-                      the cell renders arbitrary flow content that a heading
-                      element may not contain. */}
-                  <div role="heading" aria-level={3} className="min-w-0 flex-1">
-                    {identity?.cell(row)}
-                  </div>
+                  {/* A heading per card so a reader can move between records
+                      by heading rather than crawling the list. It carries the
+                      row label rather than wrapping the identity cell: a
+                      heading element may only contain phrasing content, and
+                      that cell renders arbitrary flow content. Visually hidden
+                      because the same name is already the first thing in the
+                      card — this adds structure, not a second title. */}
+                  {rowLabel ? <h3 className="sr-only">{rowLabel}</h3> : null}
+                  <div className="min-w-0 flex-1">{identity?.cell(row)}</div>
                 </div>
                 {/* Every column the table would have dropped is present here:
                       a card has vertical room, so narrow never means less. */}
