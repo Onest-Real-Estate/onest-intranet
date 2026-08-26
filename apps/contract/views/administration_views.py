@@ -18,8 +18,7 @@ from apps.contract.forms import (
     ContractTemplateVersionForm,
 )
 from apps.contract.models import ContractTemplateVersion
-from apps.contract.tasks import generate_contract_template_preview
-from apps.contract.template_service import (
+from apps.contract.services.template_service import (
     activate_version,
     capabilities,
     create_draft_version,
@@ -33,6 +32,7 @@ from apps.contract.template_service import (
     serialize_template_row,
     serialize_version_detail,
 )
+from apps.contract.tasks import generate_contract_template_preview
 from apps.user.models import User
 from apps.web.authorization import enforce_policy
 from apps.web.contracts import empty_validation_errors, list_response, validation_errors

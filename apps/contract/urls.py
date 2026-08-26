@@ -1,13 +1,13 @@
 from django.urls import path
 
-from apps.contract.administration_views import (
+from apps.contract.views.administration_views import (
     contract_template_action,
     contract_template_create,
     contract_template_index,
     contract_template_update,
     contract_template_workspace,
 )
-from apps.contract.agent_contract_views import (
+from apps.contract.views.agent_contract_views import (
     agent_contract_artifact_download,
     agent_contract_create,
     agent_contract_lifecycle,
@@ -19,7 +19,7 @@ from apps.contract.agent_contract_views import (
     agent_contract_validate,
     agent_contract_workspace,
 )
-from apps.contract.my_contract_views import (
+from apps.contract.views.my_contract_views import (
     my_contract,
     my_contract_artifact_preview,
 )

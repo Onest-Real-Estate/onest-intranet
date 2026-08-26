@@ -14,7 +14,6 @@ from django.db.models import QuerySet
 from django.urls import reverse
 from django.utils.translation import gettext as _
 
-from apps.contract.calculation_service import terms_input_from_contract
 from apps.contract.calculations import summarize_terms_for_display
 from apps.contract.lifecycle import contract_version, transition
 from apps.contract.models import AgentContract
@@ -27,6 +26,7 @@ from apps.contract.services import (
     models_order_priority,
     recipient_contract_queryset,
 )
+from apps.contract.services.calculation_service import terms_input_from_contract
 from apps.contract.statuses import (
     ContractStatus,
     status_label,

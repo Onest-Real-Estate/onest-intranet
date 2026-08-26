@@ -34,8 +34,13 @@ registration, and deployment; don't duplicate it here.
 11. **Check dependency blocks when requested.** If a prompt says to check
     dependencies, inspect its blocking GitHub issues with `gh`. Stop when an
     unresolved blocker is open and report the required work in dependency order.
-12. Check for well maintained django and react packages before implementing yourself, do not implement
+12. **Check for well maintained django and react packages before implementing yourself**, do not implement
     something that is already available as a package it would save lots of time
+13. **Use Self Hosted [Centrifugo](https://centrifugal.dev/) for all real time works**, do not use django channels and others use 
+    pusher compatible Open source Centrifugo if you reach for any realtime activity
+14. **Use Pattern /apps/views/{agents_views.py,*}** : Use the above patterns for the file structure
+15. **Use Enum instead of Raw Strings for comapraision**: Always create an Enum for all the states of comparison, if using database and if there is text choices use that for comparsion
+16. **Use Docuseal**. Use Docuseal for all pdf siginging related tasks, including the contract for agents as well as customers. 
 
 ## Commands
 

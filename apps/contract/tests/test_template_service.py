@@ -11,8 +11,7 @@ from pypdf import PdfWriter
 
 from apps.audit.models import AuditEvent
 from apps.contract.models import AgentContract, ContractTemplateVersion
-from apps.contract.template_security import inspect_template, validate_merge_schema
-from apps.contract.template_service import (
+from apps.contract.services.template_service import (
     activate_version,
     create_draft_version,
     create_template_family,
@@ -20,6 +19,7 @@ from apps.contract.template_service import (
     retire_version,
     save_draft_version,
 )
+from apps.contract.template_security import inspect_template, validate_merge_schema
 from apps.contract.tests.conftest import agent, company_admin
 
 
@@ -238,10 +238,10 @@ def test_publish_activate_and_retire_are_audited(seeded_offices, monkeypatch):
     version.refresh_from_db()
 
     monkeypatch.setattr(
-        "apps.contract.template_service.render_preview_pdf",
+        "apps.contract.services.template_service.render_preview_pdf",
         lambda **kwargs: (b"%PDF-1.4 preview", ("party.legalFirstName",)),
     )
-    from apps.contract.template_service import generate_preview
+    from apps.contract.services.template_service import generate_preview
 
     generate_preview(version)
     version.refresh_from_db()
@@ -297,10 +297,10 @@ def test_referenced_versions_cannot_be_retired(seeded_offices, monkeypatch):
     )
     version.refresh_from_db()
     monkeypatch.setattr(
-        "apps.contract.template_service.render_preview_pdf",
+        "apps.contract.services.template_service.render_preview_pdf",
         lambda **kwargs: (b"%PDF-1.4 preview", ("party.legalFirstName",)),
     )
-    from apps.contract.template_service import generate_preview
+    from apps.contract.services.template_service import generate_preview
 
     generate_preview(version)
     publish_version(actor, version=version)

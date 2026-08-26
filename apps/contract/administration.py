@@ -20,10 +20,6 @@ from django.utils.translation import gettext_lazy as _
 from apps.audit.models import AuditEvent
 from apps.audit.service import AuditTarget, actor_from_user, log_event
 from apps.contract.artifact_delivery import generated_pdf_download_url
-from apps.contract.calculation_service import (
-    preview_commission,
-    terms_input_from_contract,
-)
 from apps.contract.calculations import summarize_terms_for_display
 from apps.contract.lifecycle import (
     StaleContractVersion,
@@ -48,6 +44,10 @@ from apps.contract.services import (
     create_draft_contract,
     scoped_contract_queryset,
     serialize_contract,
+)
+from apps.contract.services.calculation_service import (
+    preview_commission,
+    terms_input_from_contract,
 )
 from apps.contract.snapshots import (
     office_snapshot,

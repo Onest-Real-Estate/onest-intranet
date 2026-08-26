@@ -18,7 +18,7 @@ _PDF_HARD_TIME_LIMIT = 150
 @shared_task(bind=True, max_retries=2, default_retry_delay=30)
 def generate_contract_template_preview(self, version_id: int) -> str:
     from apps.contract.models import ContractTemplateVersion
-    from apps.contract.template_service import generate_preview
+    from apps.contract.services.template_service import generate_preview
 
     version = (
         ContractTemplateVersion.objects.select_related("template")
