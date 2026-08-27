@@ -190,17 +190,22 @@ export default function ContractTemplateAdministration() {
                   id: "actions",
                   header: <span className="sr-only">Actions</span>,
                   cell: (row) =>
-                    row.activeVersionPk ? (
+                    row.workspaceVersionPk ? (
                       <Button asChild variant="outline" size="sm">
                         <Link
-                          href={routes.contract_template_workspace(row.activeVersionPk)}
+                          href={routes.contract_template_workspace(
+                            row.workspaceVersionPk,
+                          )}
                         >
-                          Open
+                          {row.activeVersionPk &&
+                          row.workspaceVersionPk === row.activeVersionPk
+                            ? "Open"
+                            : "Edit draft"}
                         </Link>
                       </Button>
                     ) : (
                       <span className="text-muted-foreground text-xs">
-                        No active version
+                        No version yet
                       </span>
                     ),
                   className: "text-right",

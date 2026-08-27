@@ -209,7 +209,7 @@ def _ensure_manage(actor: User | None) -> None:
 def _authorize(actor: User | None, contract: AgentContract, action: str) -> None:
     if action in SYSTEM_ACTIONS and actor is None:
         return
-    if action == "mark_viewed":
+    if action in {"mark_viewed", "mark_signed"}:
         if actor is None:
             raise PermissionDenied(_("Authentication required."))
         if getattr(actor, "is_superuser", False):

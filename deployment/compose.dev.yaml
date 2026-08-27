@@ -47,6 +47,8 @@ x-celery-service: &celery-service
     AWS_S3_URL_PROTOCOL: "http:"
     AWS_S3_REGION_NAME: us-east-1
     AWS_S3_ADDRESSING_STYLE: path
+    # DocuSeal API over the compose network (issue/signing tasks).
+    DOCUSEAL_API_URL: http://docuseal:3000
     # Error tracking (Sentry SDK)
     SENTRY_DSN: ${SENTRY_DSN:-}
     SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-development}
@@ -111,6 +113,11 @@ services:
       # MinIO only supports path-style addressing (settings.py defaults to
       # virtual-hosted style for AWS S3).
       AWS_S3_ADDRESSING_STYLE: path
+      # DocuSeal — server calls the compose service; browsers use the published
+      # localhost port via DOCUSEAL_BASE_URL from .env (same split as MinIO).
+      DOCUSEAL_API_URL: http://docuseal:3000
+      # DocuSeal container fetches builder source PDFs from the web service.
+      DOCUSEAL_DOCUMENT_FETCH_BASE: http://web:8000
       # Microsoft SSO
       MICROSOFT_CLIENT_ID: ${MICROSOFT_CLIENT_ID:-}
       MICROSOFT_CLIENT_SECRET: ${MICROSOFT_CLIENT_SECRET:-}
@@ -198,6 +205,11 @@ services:
   # default; data persists in the docuseal_data volume. Web UI + API:
   # http://localhost:${DOCUSEAL_PORT:-3000} (initial account is created on
   # first visit).
+  #
+  # Community image serves stub /js/builder.js + /js/form.js (“Upgrade to
+  # Pro”). In-hub embeds need the Pro Docker image from
+  # https://www.docuseal.com/on-premises. OSS still works via DocuSeal’s own
+  # UI + new-tab signing.
   docuseal:
     image: docuseal/docuseal:latest
     restart: unless-stopped

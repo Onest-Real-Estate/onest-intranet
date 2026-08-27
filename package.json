@@ -13,6 +13,7 @@
     "prepare": "husky"
   },
   "dependencies": {
+    "@docuseal/react": "1.0.75",
     "@fontsource-variable/plus-jakarta-sans": "^5.3.0",
     "@inertiajs/react": "^3.6.1",
     "@radix-ui/react-avatar": "^1.2.6",

@@ -320,6 +320,29 @@ DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default="Onest <noreply@onest.
 # this must point at the hub itself and never at a storage or document host.
 SITE_BASE_URL = config("SITE_BASE_URL", default="http://localhost:8000").rstrip("/")
 
+# DocuSeal (self-hosted e-sign). Empty API key disables recipient signing.
+DOCUSEAL_BASE_URL = config("DOCUSEAL_BASE_URL", default="http://localhost:3000").rstrip(
+    "/"
+)
+# Server-side API origin (docker: http://docuseal:3000). Falls back to
+# DOCUSEAL_BASE_URL when empty. Browser embeds always use DOCUSEAL_BASE_URL.
+DOCUSEAL_API_URL = config("DOCUSEAL_API_URL", default="").rstrip("/")
+# Origin DocuSeal uses to fetch uploaded PDF bytes for the builder JWT
+# document_urls (docker: http://web:8000). Empty falls back to absolute
+# request host when minting tokens.
+DOCUSEAL_DOCUMENT_FETCH_BASE = config(
+    "DOCUSEAL_DOCUMENT_FETCH_BASE", default=""
+).rstrip("/")
+DOCUSEAL_API_KEY = config("DOCUSEAL_API_KEY", default="")
+DOCUSEAL_USER_EMAIL = config("DOCUSEAL_USER_EMAIL", default="")
+DOCUSEAL_WEBHOOK_SECRET = config("DOCUSEAL_WEBHOOK_SECRET", default="")
+DOCUSEAL_SIGNING_INTENT_TTL_SECONDS = config(
+    "DOCUSEAL_SIGNING_INTENT_TTL_SECONDS", default=900, cast=int
+)
+DOCUSEAL_PREFILL_EMAIL = config(
+    "DOCUSEAL_PREFILL_EMAIL", default="contracts-prefill@onest.local"
+)
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # ---------------------------------------------------------------------------
@@ -341,7 +364,7 @@ DJANGO_VITE = {
 # ---------------------------------------------------------------------------
 INERTIA_LAYOUT = "layout.html"
 # Bump whenever the frontend bundle changes so stale clients get a full reload.
-INERTIA_VERSION = "22"
+INERTIA_VERSION = "24"
 
 # Optional external help centre. The shell exposes it only when it is an
 # absolute, credential-free HTTPS URL; an empty or unsafe value leaves the

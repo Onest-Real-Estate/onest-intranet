@@ -20,6 +20,7 @@ from apps.contract.forms import (
 from apps.contract.models import ContractTemplateVersion
 from apps.contract.services.template_service import (
     activate_version,
+    bind_docuseal_template_id,
     capabilities,
     create_draft_version,
     create_template_family,
@@ -27,10 +28,12 @@ from apps.contract.services.template_service import (
     manageable_template_queryset,
     manageable_version_queryset,
     publish_version,
+    resolve_source_fetch_token,
     retire_version,
     save_draft_version,
     serialize_template_row,
     serialize_version_detail,
+    sync_docuseal_fields,
 )
 from apps.contract.tasks import generate_contract_template_preview
 from apps.user.models import User
@@ -264,6 +267,8 @@ def contract_template_action(request: HttpRequest, version_id: int):
                 generate_contract_template_preview.delay(version.pk)
             else:
                 generate_preview(version)
+        elif action == "sync_fields":
+            sync_docuseal_fields(version)
         elif action == "publish":
             publish_version(actor, version=version)
         elif action == "activate":
@@ -282,3 +287,64 @@ def contract_template_action(request: HttpRequest, version_id: int):
             errors=errors,
         )
     return redirect("contract_template_workspace", version_id=version_id)
+
+
+@enforce_policy("contract_template_builder_saved")
+@require_POST
+def contract_template_builder_saved(request: HttpRequest, version_id: int):
+    """Persist DocuSeal template id from the embedded builder ``onSave`` event."""
+    version = _target(request, version_id)
+    actor = cast(User, request.user)
+    raw_id = (request.POST.get("docusealTemplateId") or "").strip()
+    try:
+        template_id = int(raw_id)
+    except ValueError:
+        return _render_workspace(
+            request,
+            version=version,
+            errors={
+                "fields": {},
+                "form": ["DocuSeal did not return a valid template id."],
+            },
+        )
+    try:
+        bind_docuseal_template_id(actor, version=version, template_id=template_id)
+        sync_docuseal_fields(version)
+    except ValidationError as exc:
+        errors = (
+            {"fields": exc.message_dict, "form": []}
+            if hasattr(exc, "message_dict")
+            else {"fields": {}, "form": [str(message) for message in exc.messages]}
+        )
+        return _render_workspace(
+            request,
+            version=_target(request, version_id),
+            errors=errors,
+        )
+    return redirect("contract_template_workspace", version_id=version_id)
+
+
+@enforce_policy("contract_template_docuseal_source")
+@require_GET
+def contract_template_docuseal_source(request: HttpRequest, token: str) -> HttpResponse:
+    """Short-lived PDF fetch URL for DocuSeal builder ``document_urls``.
+
+    Auth is the signed token (DocuSeal has no hub session). Tokens expire after
+    one hour.
+    """
+    del request  # token-authenticated; no session actor
+    try:
+        version = resolve_source_fetch_token(token)
+    except ValidationError:
+        return HttpResponse(status=404)
+
+    version.source_document.open("rb")
+    try:
+        data = version.source_document.read()
+    finally:
+        version.source_document.close()
+
+    response = HttpResponse(data, content_type="application/pdf")
+    response["Content-Disposition"] = 'inline; filename="template-source.pdf"'
+    response["Cache-Control"] = "private, no-store"
+    return response

@@ -1,39 +1,45 @@
-"""Deterministic review-PDF generation from frozen contract snapshots.
+"""Deterministic review-PDF generation via DocuSeal template submissions.
 
-Renders through the immutable published template version already attached at
-issuance. Does not fetch remote assets. Task logs must never include party or
-commercial payloads — only contract public ids and outcome codes.
+Renders through the immutable published DocuSeal template already attached at
+issuance: Prefill role auto-completes commercial fields; Agent signs later.
+Task logs must never include party or commercial payloads — only contract
+public ids and outcome codes.
 """
 
 from __future__ import annotations
 
-import contextlib
 import hashlib
 import io
 import json
 import logging
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
 
-from django.core.exceptions import ValidationError
+from django.conf import settings
 from django.core.files.base import ContentFile
 from django.db import transaction
 from django.utils import timezone
-from pypdf import PdfReader, PdfWriter
+from pypdf import PdfReader
 
 from apps.audit.events import publish as publish_event
 from apps.audit.models import AuditEvent
 from apps.audit.service import AuditTarget, log_event, system_actor
+from apps.contract.docuseal_client import (
+    DocuSealError,
+    DocuSealNotConfigured,
+    agent_submitter_payload,
+    create_submission,
+    download_submission_documents,
+    prefill_submitter_payload,
+)
 from apps.contract.lifecycle import contract_version, transition
 from apps.contract.models import AgentContract, ContractArtifact
 from apps.contract.statuses import ContractStatus
-from apps.contract.template_rendering import render_preview_pdf
 from apps.contract.template_security import checksum_of, validate_merge_schema
 
 logger = logging.getLogger(__name__)
 
-RENDERER_VERSION = "1.0.0"
+RENDERER_VERSION = "docuseal-1.0.0"
 MEDIA_TYPE_PDF = "application/pdf"
 
 _ALLOWED_STATUSES = frozenset(
@@ -61,6 +67,8 @@ class RenderedPdf:
     merge_values: dict[str, str]
     input_fingerprint: str
     markers: tuple[str, ...]
+    docuseal_submission_id: int
+    docuseal_agent_submitter_slug: str
 
 
 def build_merge_values(contract: AgentContract) -> dict[str, str]:
@@ -170,6 +178,11 @@ def input_fingerprint(
         "renderer": RENDERER_VERSION,
         "rule": contract.calculation_rule_version or "",
         "template_version_id": contract.template_version_id,
+        "docuseal_template_id": (
+            contract.template_version.docuseal_template_id
+            if contract.template_version
+            else None
+        ),
         "source_checksum": source_checksum,
         "party": contract.party_snapshot or {},
         "office": contract.office_snapshot or {},
@@ -182,45 +195,9 @@ def input_fingerprint(
     return hashlib.sha256(material.encode("utf-8")).hexdigest()
 
 
-def _finalize_pdf(pdf_bytes: bytes, *, document_id: str, version_label: str) -> bytes:
-    """Record identity metadata and ensure the PDF opens with pages."""
-    try:
-        reader = PdfReader(io.BytesIO(pdf_bytes))
-    except Exception as exc:  # noqa: BLE001
-        raise PdfGenerationError("invalid_render_output") from exc
-
-    writer = PdfWriter()
-    writer.clone_document_from_reader(reader)
-    if len(writer.pages) < 1:
-        raise PdfGenerationError("empty_pdf", retryable=False)
-
-    # Embed document identity on the catalog for tooling / golden checks.
-    writer.add_metadata(
-        {
-            "/Title": f"Agent contract {document_id}",
-            "/Subject": (
-                f"document={document_id}; template={version_label}; "
-                f"renderer={RENDERER_VERSION}"
-            ),
-            "/Creator": f"onest-contract-pdf/{RENDERER_VERSION}",
-            "/Producer": f"onest-contract-pdf/{RENDERER_VERSION}",
-            "/Keywords": document_id,
-        }
-    )
-
-    # Ensure NeedAppearances so filled AcroForm values remain selectable.
-    with contextlib.suppress(Exception):
-        writer.set_need_appearances_writer(True)
-
-    buffer = io.BytesIO()
-    writer.write(buffer)
-    return buffer.getvalue()
-
-
 def validate_rendered_pdf(
     data: bytes,
     *,
-    merge_values: dict[str, str],
     document_id: str,
 ) -> tuple[int, tuple[str, ...]]:
     try:
@@ -232,35 +209,23 @@ def validate_rendered_pdf(
     if page_count < 1:
         raise PdfGenerationError("empty_pdf", retryable=False)
 
-    markers: list[str] = ["opened"]
-    fields = reader.get_fields() or {}
-    for key, expected in merge_values.items():
-        if key not in fields:
-            continue
-        raw = fields[key]
-        if isinstance(raw, dict):
-            value = str(raw.get("/V") or "")
-        else:
-            value = str(getattr(raw, "value", raw) or "")
-        if (
-            expected
-            and value not in {expected, f"/{expected}"}
-            and expected not in value
-        ):
-            raise PdfGenerationError("merge_mismatch", retryable=False)
-        markers.append(f"field:{key}")
-
-    meta = reader.metadata or {}
-    subject = str(meta.get("/Subject") or "")
-    keywords = str(meta.get("/Keywords") or "")
-    title = str(meta.get("/Title") or "")
-    if document_id in subject or document_id in keywords or document_id in title:
+    markers: list[str] = ["opened", f"pages:{page_count}"]
+    # DocuSeal-filled PDFs may not retain AcroForm /V values; identity is the
+    # submission + checksum we store on the artifact.
+    if document_id:
         markers.append("document_id")
-    else:
-        raise PdfGenerationError("missing_document_marker", retryable=False)
-
-    markers.append(f"pages:{page_count}")
     return page_count, tuple(markers)
+
+
+def _party_display_name(contract: AgentContract) -> str:
+    snap = contract.party_snapshot or {}
+    display = str(snap.get("displayName") or "").strip()
+    if display:
+        return display
+    first = str(snap.get("legalFirstName") or "").strip()
+    last = str(snap.get("legalLastName") or "").strip()
+    combined = f"{first} {last}".strip()
+    return combined or str(snap.get("email") or "Agent")
 
 
 def render_contract_pdf(contract: AgentContract) -> RenderedPdf:
@@ -276,58 +241,68 @@ def render_contract_pdf(contract: AgentContract) -> RenderedPdf:
         raise PdfGenerationError("missing_template", retryable=False)
     if version.status != version.Status.PUBLISHED:
         raise PdfGenerationError("template_not_published", retryable=False)
-    if not version.source_document:
-        raise PdfGenerationError("missing_source_document", retryable=False)
+    if not version.docuseal_template_id:
+        raise PdfGenerationError("missing_docuseal_template", retryable=False)
 
     merge_schema = list(version.merge_schema or [])
     placeholders = list(version.extracted_placeholder_keys or [])
     if merge_schema and placeholders:
         try:
             validate_merge_schema(merge_schema, placeholder_keys=placeholders)
-        except ValidationError as exc:
+        except Exception as exc:  # noqa: BLE001
             raise PdfGenerationError("merge_schema_invalid", retryable=False) from exc
 
     merge_values = build_merge_values(contract)
-    version.source_document.open("rb")
-    try:
-        source_bytes = version.source_document.read()
-    finally:
-        version.source_document.close()
-
-    source_checksum = version.source_checksum or checksum_of(source_bytes)
+    source_checksum = (
+        version.source_checksum or f"docuseal:{version.docuseal_template_id}"
+    )
     fingerprint = input_fingerprint(
         contract, merge_values=merge_values, source_checksum=source_checksum
     )
 
+    recipient = contract.recipient
+    agent_email = str(
+        (contract.party_snapshot or {}).get("email") or getattr(recipient, "email", "")
+    )
+    if not agent_email:
+        raise PdfGenerationError("missing_recipient_email", retryable=False)
+
+    prefill_email = (settings.DOCUSEAL_PREFILL_EMAIL or "").strip()
+    if not prefill_email:
+        raise PdfGenerationError("missing_prefill_email", retryable=False)
+
     try:
-        rendered, _keys = render_preview_pdf(
-            filename=Path(version.source_document.name).name,
-            media_type=version.source_media_type or MEDIA_TYPE_PDF,
-            source_bytes=source_bytes,
-            merge_values=merge_values,
+        submission = create_submission(
+            template_id=int(version.docuseal_template_id),
+            name=f"Agent contract {contract.public_id} v{contract.version_number}",
+            submitters=[
+                prefill_submitter_payload(email=prefill_email, values=merge_values),
+                agent_submitter_payload(
+                    email=agent_email,
+                    name=_party_display_name(contract),
+                    external_id=str(contract.public_id),
+                ),
+            ],
         )
-    except ValidationError as exc:
-        raise PdfGenerationError("render_failed") from exc
-    except Exception as exc:  # noqa: BLE001 - treat host/render crashes as retryable
-        raise PdfGenerationError("render_failed") from exc
+        pdf_bytes = download_submission_documents(submission.id)
+    except DocuSealNotConfigured as exc:
+        raise PdfGenerationError("docuseal_not_configured", retryable=False) from exc
+    except DocuSealError as exc:
+        raise PdfGenerationError("docuseal_render_failed") from exc
 
     document_id = f"{contract.public_id}@v{contract.version_number}"
-    finalized = _finalize_pdf(
-        rendered,
-        document_id=document_id,
-        version_label=version.version_label,
-    )
-    page_count, markers = validate_rendered_pdf(
-        finalized, merge_values=merge_values, document_id=document_id
-    )
-    digest = checksum_of(finalized)
+    page_count, markers = validate_rendered_pdf(pdf_bytes, document_id=document_id)
+    agent = submission.agent_submitter()
+    digest = checksum_of(pdf_bytes)
     return RenderedPdf(
-        data=finalized,
+        data=pdf_bytes,
         checksum=digest,
         page_count=page_count,
         merge_values=merge_values,
         input_fingerprint=fingerprint,
         markers=markers,
+        docuseal_submission_id=submission.id,
+        docuseal_agent_submitter_slug=agent.slug,
     )
 
 
@@ -394,7 +369,6 @@ def attach_generated_pdf(
     fingerprint/checksum reuses the current artifact and does not emit again.
     """
     locked = AgentContract.objects.select_for_update(of=("self",)).get(pk=contract.pk)
-    # Re-fetch generated_pdf without joining nullable FKs in the FOR UPDATE.
     current = (
         ContractArtifact.objects.filter(pk=locked.generated_pdf_id).first()
         if locked.generated_pdf_id
@@ -404,6 +378,7 @@ def attach_generated_pdf(
         current is not None
         and current.input_fingerprint == rendered.input_fingerprint
         and current.checksum == rendered.checksum
+        and locked.docuseal_submission_id == rendered.docuseal_submission_id
     ):
         return current, False
 
@@ -422,10 +397,10 @@ def attach_generated_pdf(
             "pageCount": rendered.page_count,
             "markers": list(rendered.markers),
             "mergeKeys": sorted(rendered.merge_values.keys()),
+            "docusealSubmissionId": rendered.docuseal_submission_id,
         },
         created_by=None,
     )
-    # Save file after clean so upload_to can use contract.public_id.
     artifact.full_clean(exclude=["file"])
     orphan_key = ""
     try:
@@ -444,9 +419,15 @@ def attach_generated_pdf(
 
     previous_id = locked.generated_pdf_id
     locked.generated_pdf = artifact
-    update_fields = ["generated_pdf", "updated_at"]
+    locked.docuseal_submission_id = rendered.docuseal_submission_id
+    locked.docuseal_agent_submitter_slug = rendered.docuseal_agent_submitter_slug
+    update_fields = [
+        "generated_pdf",
+        "docuseal_submission_id",
+        "docuseal_agent_submitter_slug",
+        "updated_at",
+    ]
     if locked.status == ContractStatus.GENERATION_ERROR:
-        # Direct recovery path if a worker finishes after a terminal mark.
         from apps.contract.lifecycle import allow_status_write
 
         locked.status = ContractStatus.SENT
@@ -456,9 +437,6 @@ def attach_generated_pdf(
     else:
         locked.save(update_fields=update_fields)
 
-    # Preserve prior generated artifacts for history; only delete storage when
-    # a failed orphan was never pointed at (handled above). Previous current
-    # rows stay on disk under the same contract.
     if previous_id and previous_id != artifact.pk:
         logger.info(
             "pdf replaced previous_artifact_id=%s contract_id=%s",
@@ -504,6 +482,7 @@ def generate_and_store(contract_id: int) -> str:
             "template_version",
             "template_version__template",
             "office",
+            "recipient",
             "generated_pdf",
         )
         .filter(pk=contract_id)
@@ -519,12 +498,17 @@ def generate_and_store(contract_id: int) -> str:
         )
         return "skipped"
 
-    # Fast idempotent path before expensive render.
-    if contract.generated_pdf_id and contract.generated_pdf is not None:
+    if (
+        contract.generated_pdf_id
+        and contract.generated_pdf is not None
+        and contract.docuseal_submission_id
+    ):
         try:
             merge_values = build_merge_values(contract)
             version = contract.template_version
-            source_checksum = (version.source_checksum if version else "") or ""
+            source_checksum = (
+                version.source_checksum if version else ""
+            ) or f"docuseal:{getattr(version, 'docuseal_template_id', '')}"
             fingerprint = input_fingerprint(
                 contract,
                 merge_values=merge_values,

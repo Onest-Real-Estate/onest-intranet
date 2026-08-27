@@ -263,7 +263,7 @@ class ContractTemplateVersion(models.Model):
         _("source format"),
         max_length=16,
         blank=True,
-        help_text=_("Allowed values are docx and pdf."),
+        help_text=_("Allowed value is pdf (DocuSeal builder)."),
     )
     source_media_type = models.CharField(
         _("source media type"),
@@ -283,6 +283,19 @@ class ContractTemplateVersion(models.Model):
         max_length=64,
         blank=True,
         help_text=_("SHA-256 hex digest of the uploaded source bytes."),
+    )
+    docuseal_template_id = models.PositiveBigIntegerField(
+        _("DocuSeal template id"),
+        null=True,
+        blank=True,
+        help_text=_("Remote DocuSeal template used for field placement and signing."),
+    )
+    docuseal_external_id = models.CharField(
+        _("DocuSeal external id"),
+        max_length=120,
+        blank=True,
+        default="",
+        help_text=_("Stable hub key mirrored to DocuSeal as external_id."),
     )
     merge_schema = models.JSONField(
         _("merge schema"),
@@ -398,6 +411,8 @@ class ContractTemplateVersion(models.Model):
             "source_media_type",
             "source_document",
             "source_checksum",
+            "docuseal_template_id",
+            "docuseal_external_id",
             "merge_schema",
             "extracted_placeholder_keys",
             "preview_pdf",
@@ -415,9 +430,9 @@ class ContractTemplateVersion(models.Model):
                 str(_("A template version cannot supersede itself."))
             )
 
-        if self.source_format and self.source_format not in {"docx", "pdf"}:
+        if self.source_format and self.source_format not in {"pdf"}:
             errors.setdefault("source_format", []).append(
-                str(_("Source format must be either docx or pdf."))
+                str(_("Source format must be pdf."))
             )
 
         if self.source_checksum and (
@@ -716,6 +731,20 @@ class AgentContract(models.Model):
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
+    )
+    docuseal_submission_id = models.PositiveBigIntegerField(
+        _("DocuSeal submission id"),
+        null=True,
+        blank=True,
+        unique=True,
+        help_text=_("Issue-time DocuSeal submission reused for agent signing."),
+    )
+    docuseal_agent_submitter_slug = models.CharField(
+        _("DocuSeal agent submitter slug"),
+        max_length=120,
+        blank=True,
+        default="",
+        help_text=_("Agent role submitter slug for the embedded signing form."),
     )
 
     # --- Lifecycle timestamps --------------------------------------------
@@ -1258,3 +1287,188 @@ class CommissionCalculation(models.Model):
 
     def __str__(self) -> str:
         return f"{self.public_id}@{self.rule_version}"
+
+
+class ContractSigningIntent(models.Model):
+    """Short-lived, single-use recipient signing ceremony binding.
+
+    Bound to the authenticated recipient, contract row version, generated PDF
+    checksum, and session. DocuSeal submission ids correlate webhook completion.
+    """
+
+    class Status(models.TextChoices):
+        PENDING = "pending", _("Pending")
+        CONSUMED = "consumed", _("Consumed")
+        EXPIRED = "expired", _("Expired")
+        CANCELLED = "cancelled", _("Cancelled")
+
+    public_id = models.UUIDField(
+        _("public id"), default=uuid.uuid4, unique=True, editable=False
+    )
+    contract = models.ForeignKey(
+        AgentContract,
+        verbose_name=_("contract"),
+        related_name="signing_intents",
+        on_delete=models.PROTECT,
+    )
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        verbose_name=_("actor"),
+        related_name="contract_signing_intents",
+        on_delete=models.PROTECT,
+    )
+    contract_version = models.CharField(_("contract version token"), max_length=64)
+    artifact = models.ForeignKey(
+        ContractArtifact,
+        verbose_name=_("generated artifact"),
+        related_name="signing_intents",
+        on_delete=models.PROTECT,
+    )
+    artifact_checksum = models.CharField(_("artifact checksum"), max_length=64)
+    session_key_hash = models.CharField(_("session key hash"), max_length=64)
+    request_ip_hash = models.CharField(
+        _("request IP hash"),
+        max_length=64,
+        blank=True,
+        default="",
+    )
+    request_ua_hash = models.CharField(
+        _("request user-agent hash"),
+        max_length=64,
+        blank=True,
+        default="",
+    )
+    disclosure_version = models.CharField(_("disclosure version"), max_length=64)
+    consent_accepted_at = models.DateTimeField(_("consent accepted at"))
+    status = models.CharField(
+        _("status"),
+        max_length=16,
+        choices=Status.choices,
+        default=Status.PENDING,
+        db_index=True,
+    )
+    docuseal_submission_id = models.PositiveBigIntegerField(
+        _("DocuSeal submission id"),
+        null=True,
+        blank=True,
+        unique=True,
+    )
+    docuseal_submitter_slug = models.CharField(
+        _("DocuSeal submitter slug"),
+        max_length=120,
+        blank=True,
+        default="",
+    )
+    embed_src = models.TextField(_("embed src"), blank=True, default="")
+    expires_at = models.DateTimeField(_("expires at"), db_index=True)
+    created_at = models.DateTimeField(_("created at"), default=timezone.now)
+    consumed_at = models.DateTimeField(_("consumed at"), null=True, blank=True)
+
+    if TYPE_CHECKING:
+        contract_id: int
+        actor_id: int
+        artifact_id: int
+
+    class Meta:
+        ordering = ["-created_at", "-pk"]
+        verbose_name = _("contract signing intent")
+        verbose_name_plural = _("contract signing intents")
+        indexes = [
+            models.Index(
+                fields=["contract", "status", "-created_at"],
+                name="contract_sign_intent_lookup",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.public_id}:{self.status}"
+
+
+class ContractSignature(models.Model):
+    """Immutable recipient electronic signature record for one contract version."""
+
+    class Method(models.TextChoices):
+        DOCUSEAL_EMBEDDED = "docuseal_embedded", _("DocuSeal embedded")
+
+    public_id = models.UUIDField(
+        _("public id"), default=uuid.uuid4, unique=True, editable=False
+    )
+    contract = models.OneToOneField(
+        AgentContract,
+        verbose_name=_("contract"),
+        related_name="signature_record",
+        on_delete=models.PROTECT,
+    )
+    intent = models.OneToOneField(
+        ContractSigningIntent,
+        verbose_name=_("signing intent"),
+        related_name="signature",
+        on_delete=models.PROTECT,
+    )
+    signer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        verbose_name=_("signer"),
+        related_name="contract_signatures",
+        on_delete=models.PROTECT,
+    )
+    artifact = models.ForeignKey(
+        ContractArtifact,
+        verbose_name=_("signed artifact"),
+        related_name="signature_records",
+        on_delete=models.PROTECT,
+    )
+    signed_at = models.DateTimeField(_("signed at"), default=timezone.now)
+    disclosure_version = models.CharField(_("disclosure version"), max_length=64)
+    signature_method = models.CharField(
+        _("signature method"),
+        max_length=32,
+        choices=Method.choices,
+        default=Method.DOCUSEAL_EMBEDDED,
+    )
+    docuseal_submission_id = models.PositiveBigIntegerField(
+        _("DocuSeal submission id"),
+        unique=True,
+    )
+    docuseal_submitter_slug = models.CharField(
+        _("DocuSeal submitter slug"),
+        max_length=120,
+        blank=True,
+        default="",
+    )
+    # Minimized network metadata — hashed / truncated; never store raw IP.
+    request_ip_hash = models.CharField(
+        _("request IP hash"),
+        max_length=64,
+        blank=True,
+        default="",
+        help_text=_("SHA-256 of client IP at intent start; empty if unavailable."),
+    )
+    request_ua_hash = models.CharField(
+        _("request user-agent hash"),
+        max_length=64,
+        blank=True,
+        default="",
+        help_text=_("SHA-256 of truncated user agent at intent start."),
+    )
+    created_at = models.DateTimeField(_("created at"), default=timezone.now)
+
+    if TYPE_CHECKING:
+        contract_id: int
+        intent_id: int
+        signer_id: int
+        artifact_id: int
+
+    class Meta:
+        ordering = ["-signed_at", "-pk"]
+        verbose_name = _("contract signature")
+        verbose_name_plural = _("contract signatures")
+
+    def save(self, *args, **kwargs):
+        if self.pk is not None:
+            raise ValidationError(
+                {"__all__": _("Contract signatures are immutable after create.")}
+            )
+        super().save(*args, **kwargs)
+
+    def __str__(self) -> str:
+        return f"{self.public_id}:{self.signature_method}"

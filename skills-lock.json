@@ -6,6 +6,12 @@
       "sourceType": "github",
       "skillPath": "skills/caveman/SKILL.md",
       "computedHash": "48646eeec87b27067502d8bd450484faf08af588df783706b1571ee72f2d918c"
+    },
+    "docuseal-code": {
+      "source": "docusealco/docuseal-agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/docuseal-code/SKILL.md",
+      "computedHash": "b22950a071ad48c94ce5aac6b012de3c03e58f01c180d24513acecb1e56b79aa"
     }
   }
 }

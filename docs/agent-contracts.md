@@ -4,18 +4,18 @@ Brokerage agreements for recipient agents: commercial terms, lifecycle status,
 protected PDF artifacts, and immutable issuance snapshots.
 
 Admin authoring (create / validate / preview / issue) and the lifecycle
-transition service are documented below. Agent-facing **My Contract**
-(status, summary, secure PDF, history) is live; one-click signing lands in
-a later issue (P1-042).
+transition service are documented below. Agent-facing **My Contract** and
+**one-click DocuSeal signing** (P1-042) are live.
 
 ## Models
 
 | Model | Role |
 | --- | --- |
-| `ContractTemplate` / `ContractTemplateVersion` | Originating template family and version (`PROTECT`). Full template admin is a separate issue. |
-| `AgentContract` | One agreement version for one recipient at one owning office. |
+| `ContractTemplate` / `ContractTemplateVersion` | Originating template family and version (`PROTECT`). Field placement lives in DocuSeal Builder (`docuseal_template_id`). |
+| `AgentContract` | One agreement version for one recipient at one owning office. Stores issue-time `docuseal_submission_id` for signing reuse. |
 | `ContractArtifact` | Protected file (generated/signed PDF, addendum) with SHA-256 checksum. |
-| `CommissionCalculation` | Immutable mentor/referral worksheet for one GCI input (rule version + snapshots). |
+| `ContractSigningIntent` | Short-lived recipient ceremony binding (checksum, session, DocuSeal ids). |
+| `ContractSignature` | Immutable electronic signature record + signed PDF artifact link. |
 
 `AgentContract.public_id` (UUID) is the client-facing identity. The integer PK
 is internal. Family history uses shared `family_id` + monotonic
@@ -53,13 +53,15 @@ audit or domain events). Scheduled expiry: Celery task
 
 PDF generation after issue runs through Celery
 (`generate_contract_pdf` → `apps.contract.pdf_generation`): frozen snapshots and
-the immutable published template version are merged, the PDF is validated
-(openable, page count, document-id markers, merge fields), stored privately as
-a `ContractArtifact`, and `contract.pdf_ready` is emitted once after commit.
-Retries are idempotent on the input fingerprint + checksum. Failures move the
-contract to `generation_error` without falsely marking the agreement ready.
-Authorized download streams through
-`agent_contract_artifact_download` (no durable/presigned URL).
+the published DocuSeal template create a two-role submission (Prefill
+auto-completes readonly commercial fields; Agent is reserved for signature).
+The Prefill-completed documents become the review `ContractArtifact`, and
+`contract.pdf_ready` is emitted once after commit. The same DocuSeal submission
+id is stored on the contract for the recipient signing ceremony. Retries are
+idempotent on the input fingerprint + checksum. Failures move the contract to
+`generation_error` without falsely marking the agreement ready. Authorized
+download streams through `agent_contract_artifact_download` (no durable/presigned
+URL).
 
 ### Commercial terms
 
@@ -182,8 +184,38 @@ Operations → Agent Contracts (`/operations/agent-contracts`):
 
 Issuance freezes snapshots and queues `generate_contract_pdf`. Double-submit is
 idempotent via lifecycle locks. When the PDF lands, the workspace exposes a
-scoped download link; DocuSeal e-sign integration is a later issue and consumes
-this stored review PDF rather than re-rendering terms.
+scoped download link. Recipient signing (P1-042) reuses the issue-time DocuSeal
+submission rather than creating a one-off PDF submission.
+
+### Contract template administration (DocuSeal Builder)
+
+Operations → Contract Templates:
+
+1. Create a family + draft version.
+2. Upload a blank PDF — hub stores it privately and mints a builder JWT with a
+   short-lived `document_urls` fetch link (`DOCUSEAL_DOCUMENT_FETCH_BASE`,
+   docker default `http://web:8000`). Open-source DocuSeal does **not** expose
+   `POST /templates/pdf` (Pro-only); the embedded builder creates the remote
+   template on save.
+3. Place fields with roles **Prefill** (commercial/party text) and **Agent**
+   (signature + date), then Save in the builder so hub stores
+   `docuseal_template_id`.
+4. Sync fields, map Prefill field names to hub merge sources, generate a
+   DocuSeal preview, then publish / activate.
+
+**Embedded builder / form require DocuSeal Pro.** Community
+`docuseal/docuseal` serves a DummyBuilder stub at `/js/builder.js` (“Upgrade to
+Pro”). Without Pro, the workspace links out to the DocuSeal web UI: create the
+template there, paste the template id into the hub, then Sync fields. Signing
+similarly opens `/s/<slug>` in a new tab and polls for the webhook record.
+
+Local HTTP DocuSeal must load embed scripts over `http://` (not `https://`);
+the hub passes `DOCUSEAL_BASE_URL`'s scheme into the embed wrappers.
+
+DOCX/AcroForm local fill is retired; templates are PDF-only through DocuSeal.
+
+Compose sets `DOCUSEAL_API_URL=http://docuseal:3000` for server API calls while
+browsers keep `DOCUSEAL_BASE_URL=http://localhost:3000` for embeds.
 
 # ---------------------------------------------------------------------------
 # Self-service My Contract (P1-041)
@@ -207,9 +239,9 @@ without disclosing other agents' contracts.
   download via the existing artifact delivery path.
 - Family/history of superseded agreements and amendments the recipient may
   view.
-- Sign CTA only when the focused version is signable (`sent`/`viewed` with a
-  generated PDF). The signing ceremony itself is P1-042
-  (`capabilities.signingReady` stays false until that lands).
+- Sign CTA when the focused version is signable (`sent`/`viewed` with a
+  generated PDF). `capabilities.signingReady` is true when DocuSeal is
+  configured (`DOCUSEAL_API_KEY` + `DOCUSEAL_BASE_URL`).
 
 ### Viewed status
 
@@ -223,6 +255,56 @@ Recipient props omit `internalNotes`, admin ids, and other agents' rows.
 Commission keys require `web.view_own_commission` (or broader commission
 grants). Summary text is informational; the PDF controls on discrepancy.
 
+# ---------------------------------------------------------------------------
+# One-click signing ceremony (P1-042)
+# ---------------------------------------------------------------------------
+
+Recipients sign only through `/my-contract/sign` (Inertia `MyContractSign`).
+Admins cannot use this endpoint on an agent's behalf. Outbound DocuSeal calls
+use the official [`docuseal`](https://pypi.org/project/docuseal/) Python package
+(`create_submission` against the published template, `get_submission`,
+`get_submission_documents`).
+
+1. **Consent gate** — versioned disclosure from
+   `apps.contract.signing_disclosure` plus required acknowledgement. The
+   checkbox is informed consent, not the electronic signature.
+2. **Signing intent** — `POST /my-contract/sign` creates a short-lived
+   `ContractSigningIntent` bound to recipient, contract version token,
+   generated PDF checksum, and session hash; then reuses the issue-time
+   DocuSeal submission's Agent submitter embed URL (`send_email=false`).
+3. **Embed** — DocuSeal form via `@docuseal/react` using the server
+   `embedSrc`.
+4. **Completion** — DocuSeal webhook `POST /webhooks/docuseal/contracts`
+   (HMAC `X-Docuseal-Signature`) downloads the signed PDF, attaches
+   `signed_pdf`, writes immutable `ContractSignature`, consumes the intent,
+   and runs lifecycle `mark_signed`. Client `onComplete` only polls
+   `/my-contract/sign/status` until the signature row exists — success UI
+   never trusts the browser event alone.
+
+Replay, duplicate webhooks, and concurrent completes are idempotent (one
+signature, one signed artifact, one `contract.signed` effect). Stale version,
+expired intent, checksum drift, or non-signable status return recovery copy.
+
+Network metadata retained on the signature is minimized to hashed IP and
+hashed truncated user agent from intent start. Disclosure version is stored
+with the signature. Legal must approve disclosure copy before production;
+bump `DISCLOSURE_VERSION` when text changes.
+
+### Ops
+
+- Local DocuSeal: `make up`, open `http://localhost:${DOCUSEAL_PORT:-3000}`,
+  create an API key, set `DOCUSEAL_API_KEY` and `DOCUSEAL_USER_EMAIL` (the
+  DocuSeal admin that owns the key) in `.env`. Compose sets
+  `DOCUSEAL_API_URL=http://docuseal:3000` for server-side calls (browser embeds
+  still use `DOCUSEAL_BASE_URL=http://localhost:3000`). Generate a long random
+  `DOCUSEAL_WEBHOOK_SECRET` yourself (self-hosted has no webhook-secret UI) and
+  paste this URL into DocuSeal → Settings → Webhooks (enable `form.completed`):
+
+  `http://host.docker.internal:8000/webhooks/docuseal/contracts?token=<DOCUSEAL_WEBHOOK_SECRET>`
+
+  From the host (not Docker networking), use `http://localhost:8000/...` instead.
+  Completion still downloads the signed PDF via the DocuSeal API, so a guessed
+  submission id alone cannot invent a signature without a real completed form.
 ## Constraints and indexes
 
 Database constraints cover date ranges, nonnegative/bounded terms, both-or-

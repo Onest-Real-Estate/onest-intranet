@@ -2248,6 +2248,8 @@ export interface ContractTemplateRow {
   effectiveUntil: string;
   activeVersionPk?: number | null;
   activeVersionId: string | null;
+  /** Version workspace to open: latest draft, else active, else newest. */
+  workspaceVersionPk?: number | null;
 }
 
 export interface ContractTemplateVersionDetail {
@@ -2261,6 +2263,20 @@ export interface ContractTemplateVersionDetail {
   sourceFormat: string;
   sourceMediaType: string;
   sourceChecksum: string;
+  docusealTemplateId: number | null;
+  docusealExternalId: string;
+  docusealHost: string;
+  docusealOrigin: string;
+  docusealAdminUrl: string;
+  docusealEmbedsAvailable: boolean;
+  builder: {
+    token: string;
+    host: string;
+    protocol: string;
+    templateId: string;
+  } | null;
+  builderReady: boolean;
+  mergeSourceOptions: string[];
   placeholderKeys: string[];
   mergeSchema: Array<Record<string, unknown>>;
   mergeSchemaJson: string;
@@ -2506,7 +2522,7 @@ export interface MyContractNextAction {
 export interface MyContractCapabilities {
   canViewCommission: boolean;
   canSign: boolean;
-  /** False until P1-042 wires the signing ceremony. */
+  /** True when DocuSeal is configured and the signing ceremony is available. */
   signingReady: boolean;
 }
 
@@ -2518,6 +2534,51 @@ export interface MyContractPageProps extends PageProps {
   capabilities: MyContractCapabilities;
   disclaimer: string;
   empty: { kind: string; title: string; description: string } | null;
+}
+
+export interface SigningDisclosure {
+  version: string;
+  title: string;
+  body: string;
+  acknowledgementLabel: string;
+}
+
+export interface SigningCeremonyContract {
+  publicId: string;
+  versionNumber: number;
+  status: string;
+  statusLabel: string;
+  effectiveOn: string;
+  expectedVersion: string;
+  artifactChecksum: string;
+  partyDisplayName: string;
+  signerEmail: string;
+}
+
+export interface SigningCeremonyEmbed {
+  intentPublicId: string;
+  embedSrc: string;
+  expiresAt: string;
+  docusealSubmissionId: number;
+  /** False on community DocuSeal (embed JS is a Pro stub). */
+  embedsAvailable: boolean;
+  docusealHost: string;
+  docusealProtocol: string;
+}
+
+export interface SigningCeremonyRecovery {
+  code: string;
+  message: string;
+}
+
+export interface MyContractSignPageProps extends PageProps {
+  canSign: boolean;
+  signingReady: boolean;
+  recovery: SigningCeremonyRecovery | null;
+  disclosure: SigningDisclosure;
+  contract: SigningCeremonyContract | null;
+  ceremony: SigningCeremonyEmbed | null;
+  errors: { fields: Record<string, string[]>; form: string[] };
 }
 
 export interface ReportScopePayload {

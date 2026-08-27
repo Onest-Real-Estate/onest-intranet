@@ -30,6 +30,12 @@ vi.mock("@/components/PermissionRequired", () => ({
   PermissionRequired: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
+vi.mock("@/components/DocusealBuilderEmbed", () => ({
+  DocusealBuilderEmbed: ({ token }: { token: string }) => (
+    <div data-testid="docuseal-builder">{token}</div>
+  ),
+}));
+
 import { usePage } from "@inertiajs/react";
 
 describe("ContractTemplateAdministration", () => {
@@ -61,6 +67,7 @@ describe("ContractTemplateAdministration", () => {
               effectiveUntil: "",
               activeVersionPk: 9,
               activeVersionId: "ver-1",
+              workspaceVersionPk: 9,
             },
           ],
           pagination: {
@@ -87,6 +94,55 @@ describe("ContractTemplateAdministration", () => {
     expect(screen.getByRole("link", { name: /open/i })).toHaveAttribute(
       "href",
       "/operations/contract-templates/templates/9",
+    );
+  });
+
+  it("links draft families into their draft workspace", () => {
+    vi.mocked(usePage).mockReturnValue({
+      props: {
+        csrfToken: "token",
+        user: {
+          id: 1,
+          email: "admin@example.com",
+          permissions: ["contract.manage_contract_templates"],
+        },
+        templates: {
+          items: [
+            {
+              publicId: "pub-2",
+              stableKey: "agent-contract",
+              name: "Agent Contract",
+              description: "",
+              status: "draft",
+              jurisdictionStateCodes: ["VA"],
+              companyWide: true,
+              effectiveFrom: "",
+              effectiveUntil: "",
+              activeVersionPk: null,
+              activeVersionId: null,
+              workspaceVersionPk: 42,
+            },
+          ],
+          pagination: {
+            page: 1,
+            pageSize: 20,
+            totalItems: 1,
+            totalPages: 1,
+            hasNext: false,
+            hasPrevious: false,
+          },
+          filters: { q: "", status: "", jurisdiction: "" },
+          sort: null,
+        },
+        capabilities: { canManage: true, canApprove: false },
+        createSheet: null,
+        errors: { fields: {}, form: [] },
+      },
+    } as never);
+    render(<ContractTemplateAdministration />);
+    expect(screen.getByRole("link", { name: /edit draft/i })).toHaveAttribute(
+      "href",
+      "/operations/contract-templates/templates/42",
     );
   });
 
@@ -120,10 +176,18 @@ describe("ContractTemplateWorkspace", () => {
           displayName: "ICA Standard",
           description: "Draft",
           status: "draft",
-          sourceFormat: "docx",
-          sourceMediaType:
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          sourceFormat: "pdf",
+          sourceMediaType: "application/pdf",
           sourceChecksum: "a".repeat(64),
+          docusealTemplateId: null,
+          docusealExternalId: "",
+          docusealHost: "",
+          docusealOrigin: "",
+          docusealAdminUrl: "",
+          docusealEmbedsAvailable: false,
+          builder: null,
+          builderReady: false,
+          mergeSourceOptions: ["party.legalFirstName", "office.state"],
           placeholderKeys: ["party.legalFirstName"],
           mergeSchema: [],
           mergeSchemaJson: "[]",
@@ -147,6 +211,7 @@ describe("ContractTemplateWorkspace", () => {
             effectiveUntil: "",
             activeVersionPk: null,
             activeVersionId: null,
+            workspaceVersionPk: 9,
           },
         },
       },
@@ -158,5 +223,85 @@ describe("ContractTemplateWorkspace", () => {
     expect(
       screen.getByText(/review, preview, publish, and activate/i),
     ).toBeInTheDocument();
+  });
+
+  it("embeds the DocuSeal builder when a token is present", () => {
+    vi.mocked(usePage).mockReturnValue({
+      props: {
+        csrfToken: "token",
+        user: {
+          id: 1,
+          email: "admin@example.com",
+          permissions: [
+            "contract.manage_contract_templates",
+            "contract.approve_contract_templates",
+          ],
+        },
+        capabilities: { canManage: true, canApprove: true },
+        errors: { fields: {}, form: [] },
+        posted: null,
+        versionDetail: {
+          id: 9,
+          publicId: "ver-1",
+          templatePublicId: "tpl-1",
+          versionLabel: "1.0.0",
+          displayName: "ICA Standard",
+          description: "Draft",
+          status: "draft",
+          sourceFormat: "pdf",
+          sourceMediaType: "application/pdf",
+          sourceChecksum: "a".repeat(64),
+          docusealTemplateId: 55,
+          docusealExternalId: "ext-55",
+          docusealHost: "localhost:3000",
+          docusealOrigin: "http://localhost:3000",
+          docusealAdminUrl: "http://localhost:3000/templates/55",
+          docusealEmbedsAvailable: true,
+          builder: {
+            token: "builder-jwt",
+            host: "localhost:3000",
+            protocol: "http",
+            templateId: "55",
+          },
+          builderReady: true,
+          mergeSourceOptions: ["party.legalFirstName"],
+          placeholderKeys: ["party.legalFirstName"],
+          mergeSchema: [
+            {
+              key: "party.legalFirstName",
+              label: "First name",
+              type: "text",
+              source: "party.legalFirstName",
+            },
+          ],
+          mergeSchemaJson: "[]",
+          previewChecksum: "",
+          previewGeneratedAt: null,
+          previewUrl: null,
+          validationErrors: [],
+          publishedAt: null,
+          retiredAt: null,
+          contractsUsingVersion: 0,
+          version: "2026-08-24T12:00:00+00:00",
+          template: {
+            publicId: "tpl-1",
+            stableKey: "ica-standard",
+            name: "ICA Standard",
+            description: "Main agreement",
+            status: "draft",
+            jurisdictionStateCodes: ["VA"],
+            companyWide: false,
+            effectiveFrom: "",
+            effectiveUntil: "",
+            activeVersionPk: null,
+            activeVersionId: null,
+            workspaceVersionPk: 9,
+          },
+        },
+      },
+    } as never);
+    render(<ContractTemplateWorkspace />);
+    expect(screen.getByTestId("docuseal-builder")).toHaveTextContent("builder-jwt");
+    expect(screen.getByText(/merge field mapping/i)).toBeInTheDocument();
   });
 });

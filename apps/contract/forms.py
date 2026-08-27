@@ -80,6 +80,7 @@ class ContractTemplateActionForm(forms.Form):
     action = forms.ChoiceField(
         choices=[
             ("preview", "preview"),
+            ("sync_fields", "sync_fields"),
             ("publish", "publish"),
             ("activate", "activate"),
             ("retire", "retire"),

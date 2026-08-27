@@ -981,6 +981,15 @@ ROUTE_POLICIES["contract_template_action"] = AuthorizationPolicy(
     ),
     scope_rule="user_office_scope",
 )
+ROUTE_POLICIES["contract_template_builder_saved"] = AuthorizationPolicy(
+    key="contract_template_builder_saved",
+    access="permission_protected",
+    description="Persist DocuSeal template id after embedded builder save.",
+    methods=("POST",),
+    route_names=("contract_template_builder_saved",),
+    all_permissions=("contract.manage_contract_templates",),
+    scope_rule="user_office_scope",
+)
 
 ROUTE_POLICIES["agent_contract_admin"] = AuthorizationPolicy(
     key="agent_contract_admin",
@@ -1053,6 +1062,50 @@ ROUTE_POLICIES["my_contract_artifact_preview"] = AuthorizationPolicy(
     methods=("GET",),
     route_names=("my_contract_artifact_preview",),
     scope_rule="self_only",
+)
+ROUTE_POLICIES["my_contract_sign"] = AuthorizationPolicy(
+    key="my_contract_sign",
+    access="authenticated",
+    description=(
+        "Recipient signing ceremony for the authenticated agent's own contract. "
+        "Admins cannot sign on an agent's behalf through this route."
+    ),
+    methods=("GET", "POST"),
+    route_names=("my_contract_sign",),
+    scope_rule="self_only",
+)
+ROUTE_POLICIES["my_contract_sign_status"] = AuthorizationPolicy(
+    key="my_contract_sign_status",
+    access="authenticated",
+    description=(
+        "Poll whether a durable signature record exists for the recipient's "
+        "signing ceremony success gate."
+    ),
+    methods=("GET",),
+    route_names=("my_contract_sign_status",),
+    scope_rule="self_only",
+)
+ROUTE_POLICIES["docuseal_contract_webhook"] = AuthorizationPolicy(
+    key="docuseal_contract_webhook",
+    access="public",
+    description=(
+        "DocuSeal completion webhook for agent contract signing. Authenticated "
+        "via HMAC signature header, not session cookies."
+    ),
+    methods=("POST",),
+    route_names=("docuseal_contract_webhook",),
+    scope_rule="none",
+)
+ROUTE_POLICIES["contract_template_docuseal_source"] = AuthorizationPolicy(
+    key="contract_template_docuseal_source",
+    access="public",
+    description=(
+        "Short-lived signed PDF fetch for DocuSeal builder document_urls. "
+        "Authenticated by TimestampSigner token, not session cookies."
+    ),
+    methods=("GET",),
+    route_names=("contract_template_docuseal_source",),
+    scope_rule="none",
 )
 
 NON_ROUTE_SURFACES: tuple[AuthorizationPolicy, ...] = (

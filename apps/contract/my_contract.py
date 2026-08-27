@@ -15,6 +15,7 @@ from django.urls import reverse
 from django.utils.translation import gettext as _
 
 from apps.contract.calculations import summarize_terms_for_display
+from apps.contract.docuseal_client import is_docuseal_configured
 from apps.contract.lifecycle import contract_version, transition
 from apps.contract.models import AgentContract
 from apps.contract.permissions import VIEW_OWN_COMMISSION
@@ -398,9 +399,9 @@ def my_contract_page_payload(
         getattr(actor, "is_superuser", False)
         or has_effective_permission(actor, VIEW_OWN_COMMISSION)
     )
-    # Signing ceremony is P1-042; expose eligibility only.
+    # Signing ceremony (P1-042) when DocuSeal is configured.
     can_sign = is_signable(focus)
-    signing_ready = False  # flips true when P1-042 wires the ceremony route
+    signing_ready = is_docuseal_configured()
 
     contract_payload = (
         serialize_recipient_contract(actor, focus) if focus is not None else None

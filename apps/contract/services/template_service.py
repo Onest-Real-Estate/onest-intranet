@@ -3,25 +3,44 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
 
+from django.conf import settings
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.files.base import ContentFile
+from django.core.signing import BadSignature, SignatureExpired, TimestampSigner
 from django.db import transaction
 from django.db.models import Q, QuerySet
 from django.utils import timezone
 
 from apps.audit.models import AuditEvent
 from apps.audit.service import AuditTarget, actor_from_user, log_event
+from apps.contract.docuseal_client import (
+    DocuSealError,
+    DocuSealNotConfigured,
+    DocuSealTemplate,
+    agent_submitter_payload,
+    build_builder_token,
+    create_submission,
+    docuseal_embeds_available,
+    download_submission_documents,
+    embed_host,
+    embed_origin,
+    embed_protocol,
+    get_template,
+    is_docuseal_builder_configured,
+    is_docuseal_configured,
+    prefill_submitter_payload,
+)
 from apps.contract.models import (
     AgentContract,
     ContractTemplate,
     ContractTemplateVersion,
 )
-from apps.contract.template_rendering import render_preview_pdf
 from apps.contract.template_security import (
+    MERGE_SOURCE_OPTIONS,
     inspect_template,
+    seed_merge_schema_from_placeholders,
     synthetic_preview_context,
     validate_merge_schema,
 )
@@ -224,6 +243,249 @@ def create_template_family(
     return template
 
 
+SOURCE_FETCH_SALT = "contract-docuseal-source"
+SOURCE_FETCH_MAX_AGE = 60 * 60  # 1 hour
+
+
+def _docuseal_external_id(version: ContractTemplateVersion) -> str:
+    if version.docuseal_external_id:
+        return version.docuseal_external_id
+    return f"contract-template-version-{version.public_id}"
+
+
+def _source_signer() -> TimestampSigner:
+    return TimestampSigner(salt=SOURCE_FETCH_SALT)
+
+
+def source_fetch_token(version: ContractTemplateVersion) -> str:
+    return _source_signer().sign(str(version.public_id))
+
+
+def resolve_source_fetch_token(token: str) -> ContractTemplateVersion:
+    try:
+        public_id = _source_signer().unsign(token, max_age=SOURCE_FETCH_MAX_AGE)
+    except SignatureExpired as exc:
+        raise ValidationError({"form": ["Source download link expired."]}) from exc
+    except BadSignature as exc:
+        raise ValidationError({"form": ["Invalid source download link."]}) from exc
+    version = ContractTemplateVersion.objects.filter(public_id=public_id).first()
+    if version is None or not version.source_document:
+        raise ValidationError({"form": ["Template source is not available."]})
+    return version
+
+
+def document_fetch_base_url() -> str:
+    configured = (getattr(settings, "DOCUSEAL_DOCUMENT_FETCH_BASE", "") or "").strip()
+    if configured:
+        return configured.rstrip("/")
+    # Local runserver / host-side DocuSeal: browser-reachable Django.
+    return "http://localhost:8000"
+
+
+def source_document_fetch_url(version: ContractTemplateVersion) -> str:
+    token = source_fetch_token(version)
+    return (
+        f"{document_fetch_base_url()}"
+        f"/operations/contract-templates/docuseal-source/{token}"
+    )
+
+
+def ensure_docuseal_template(
+    version: ContractTemplateVersion,
+    *,
+    pdf_bytes: bytes | None = None,
+) -> ContractTemplateVersion:
+    """Bind a stable DocuSeal external_id after a PDF upload.
+
+    Open-source DocuSeal blocks ``POST /templates/pdf`` (Pro). The template is
+    created when the admin opens the embedded builder JWT (document_urls or
+    in-builder upload) and saves.
+    """
+    del pdf_bytes  # retained for call-site compatibility
+    if version.status != ContractTemplateVersion.Status.DRAFT:
+        raise ValidationError(
+            {"form": ["Only draft versions can sync a DocuSeal template."]}
+        )
+    if not version.source_document:
+        raise ValidationError({"source_document": ["Upload a PDF first."]})
+    if not is_docuseal_builder_configured():
+        raise ValidationError(
+            {
+                "form": [
+                    "DocuSeal builder is not configured. Set DOCUSEAL_API_KEY, "
+                    "DOCUSEAL_BASE_URL, and DOCUSEAL_USER_EMAIL."
+                ]
+            }
+        )
+
+    external_id = _docuseal_external_id(version)
+    version.docuseal_external_id = external_id
+    # New PDF means the remote DocuSeal documents must be re-bound via builder.
+    version.docuseal_template_id = None
+    version.save(
+        update_fields=[
+            "docuseal_external_id",
+            "docuseal_template_id",
+            "updated_at",
+        ]
+    )
+    return version
+
+
+def bind_docuseal_template_id(
+    actor: User,
+    *,
+    version: ContractTemplateVersion,
+    template_id: int,
+) -> ContractTemplateVersion:
+    """Persist the DocuSeal template id returned by the builder ``onSave``."""
+    _ensure_manage(actor)
+    if version.status != ContractTemplateVersion.Status.DRAFT:
+        raise ValidationError(
+            {"form": ["Only draft versions can bind a DocuSeal template."]}
+        )
+    if template_id < 1:
+        raise ValidationError({"form": ["Invalid DocuSeal template id."]})
+    version.docuseal_template_id = int(template_id)
+    version.docuseal_external_id = _docuseal_external_id(version)
+    version.save(
+        update_fields=["docuseal_template_id", "docuseal_external_id", "updated_at"]
+    )
+    return version
+
+
+def sync_docuseal_fields(version: ContractTemplateVersion) -> ContractTemplateVersion:
+    """Pull field names from DocuSeal into placeholder keys / merge schema."""
+    if not version.docuseal_template_id:
+        raise ValidationError(
+            {"form": ["Create the DocuSeal template before syncing fields."]}
+        )
+    try:
+        remote = get_template(int(version.docuseal_template_id))
+    except DocuSealNotConfigured as exc:
+        raise ValidationError({"form": ["DocuSeal is not configured."]}) from exc
+    except DocuSealError as exc:
+        raise ValidationError(
+            {"form": ["Could not load the DocuSeal template fields."]}
+        ) from exc
+
+    return apply_docuseal_template_fields(version, remote)
+
+
+def apply_docuseal_template_fields(
+    version: ContractTemplateVersion,
+    remote: DocuSealTemplate,
+) -> ContractTemplateVersion:
+    merge_keys = list(remote.merge_field_names)
+    version.extracted_placeholder_keys = merge_keys
+    existing = {
+        str(item.get("key", "")).strip(): item
+        for item in (version.merge_schema or [])
+        if isinstance(item, dict) and str(item.get("key", "")).strip()
+    }
+    merged: list[dict] = []
+    for key in merge_keys:
+        prior = existing.get(key)
+        if prior is not None:
+            merged.append(dict(prior))
+        else:
+            merged.extend(seed_merge_schema_from_placeholders([key]))
+    version.merge_schema = merged
+    version.full_clean()
+    version.save(
+        update_fields=[
+            "extracted_placeholder_keys",
+            "merge_schema",
+            "updated_at",
+        ]
+    )
+    return version
+
+
+def builder_token_for_version(version: ContractTemplateVersion) -> dict[str, str]:
+    """Mint a builder JWT for a draft version with an uploaded PDF."""
+    if not version.source_document and not version.docuseal_template_id:
+        raise ValidationError(
+            {"form": ["Upload a PDF so DocuSeal can open the builder."]}
+        )
+    if not is_docuseal_builder_configured():
+        raise ValidationError({"form": ["DocuSeal builder is not configured."]})
+
+    name = (
+        version.display_name or f"{version.template.name} {version.version_label}"
+    ).strip()
+    external_id = _docuseal_external_id(version)
+    document_urls: list[str] | None = None
+    template_id = (
+        int(version.docuseal_template_id) if version.docuseal_template_id else None
+    )
+    if template_id is None and version.source_document:
+        document_urls = [source_document_fetch_url(version)]
+
+    try:
+        token = build_builder_token(
+            template_id=template_id,
+            external_id=external_id,
+            name=name,
+            document_urls=document_urls,
+        )
+    except DocuSealNotConfigured as exc:
+        raise ValidationError(
+            {"form": ["DocuSeal builder is not configured."]}
+        ) from exc
+    return {
+        "token": token,
+        "host": embed_host(),
+        "protocol": embed_protocol(),
+        "templateId": str(template_id or ""),
+    }
+
+
+def _assert_publishable(version: ContractTemplateVersion) -> None:
+    if not version.docuseal_template_id:
+        raise ValidationError({"form": ["Link a DocuSeal template before publishing."]})
+    try:
+        remote = get_template(int(version.docuseal_template_id))
+    except DocuSealError as exc:
+        raise ValidationError(
+            {"form": ["Could not verify the DocuSeal template before publishing."]}
+        ) from exc
+    except DocuSealNotConfigured as exc:
+        raise ValidationError({"form": ["DocuSeal is not configured."]}) from exc
+
+    if not remote.has_agent_signature:
+        raise ValidationError(
+            {
+                "form": [
+                    "Add at least one Agent signature field in the DocuSeal "
+                    "builder before publishing."
+                ]
+            }
+        )
+    merge_keys = list(remote.merge_field_names)
+    version.extracted_placeholder_keys = merge_keys
+    validate_merge_schema(
+        list(version.merge_schema or []),
+        placeholder_keys=merge_keys,
+    )
+    missing_sources = [
+        str(item.get("key", "")).strip()
+        for item in (version.merge_schema or [])
+        if isinstance(item, dict)
+        and str(item.get("key", "")).strip()
+        and not str(item.get("source", "")).strip()
+    ]
+    if missing_sources:
+        raise ValidationError(
+            {
+                "merge_schema": [
+                    "Map every DocuSeal field to a hub source before publishing: "
+                    + ", ".join(missing_sources)
+                ]
+            }
+        )
+
+
 def create_draft_version(
     actor: User,
     *,
@@ -317,16 +579,29 @@ def save_draft_version(
                 media_type=getattr(source_upload, "content_type", ""),
                 data=data,
             )
-            validate_merge_schema(
-                locked.merge_schema,
-                placeholder_keys=inspection.placeholder_keys,
-            )
             locked.source_format = inspection.format
             locked.source_media_type = inspection.media_type
             locked.source_checksum = inspection.checksum
-            locked.extracted_placeholder_keys = list(inspection.placeholder_keys)
             locked.source_document.save(
                 source_upload.name, ContentFile(data), save=False
+            )
+            locked.full_clean()
+            locked.save()
+            ensure_docuseal_template(locked, pdf_bytes=data)
+            locked.refresh_from_db()
+            # Keep existing merge mappings when re-uploading; field sync comes
+            # from DocuSeal after the builder places fields.
+            if not locked.merge_schema and locked.extracted_placeholder_keys:
+                locked.merge_schema = seed_merge_schema_from_placeholders(
+                    locked.extracted_placeholder_keys
+                )
+                locked.save(update_fields=["merge_schema", "updated_at"])
+            return locked
+
+        if locked.extracted_placeholder_keys:
+            validate_merge_schema(
+                locked.merge_schema,
+                placeholder_keys=list(locked.extracted_placeholder_keys or []),
             )
 
         locked.full_clean()
@@ -337,28 +612,51 @@ def save_draft_version(
 def generate_preview(version: ContractTemplateVersion) -> ContractTemplateVersion:
     if version.status != ContractTemplateVersion.Status.DRAFT:
         raise ValidationError({"form": ["Only draft versions can generate a preview."]})
-    if not version.source_document:
-        raise ValidationError({"source_document": ["Upload a source document first."]})
+    if not version.docuseal_template_id:
+        raise ValidationError(
+            {"form": ["Upload a PDF and open the DocuSeal builder first."]}
+        )
 
-    version.source_document.open("rb")
-    try:
-        source_bytes = version.source_document.read()
-    finally:
-        version.source_document.close()
-
+    sync_docuseal_fields(version)
+    version.refresh_from_db()
     validate_merge_schema(
         list(version.merge_schema or []),
         placeholder_keys=list(version.extracted_placeholder_keys or []),
     )
     preview_context = synthetic_preview_context(list(version.merge_schema or []))
-    preview_bytes, placeholder_keys = render_preview_pdf(
-        filename=Path(version.source_document.name).name,
-        media_type=version.source_media_type,
-        source_bytes=source_bytes,
-        merge_values=preview_context,
-    )
+    prefill_email = (settings.DOCUSEAL_PREFILL_EMAIL or "").strip()
+    if not prefill_email:
+        raise ValidationError(
+            {"form": ["DOCUSEAL_PREFILL_EMAIL is required for previews."]}
+        )
+
+    try:
+        submission = create_submission(
+            template_id=int(version.docuseal_template_id),
+            name=f"Preview {version.template.stable_key}@{version.version_label}",
+            submitters=[
+                prefill_submitter_payload(email=prefill_email, values=preview_context),
+                agent_submitter_payload(
+                    email="preview-agent@example.com",
+                    name="Preview Agent",
+                    external_id=f"preview-{version.public_id}",
+                ),
+            ],
+        )
+        preview_bytes = download_submission_documents(submission.id)
+    except DocuSealNotConfigured as exc:
+        raise ValidationError({"form": ["DocuSeal is not configured."]}) from exc
+    except DocuSealError as exc:
+        raise ValidationError(
+            {
+                "form": [
+                    "Could not generate a DocuSeal preview. Ensure Prefill and "
+                    "Agent fields are placed in the builder."
+                ]
+            }
+        ) from exc
+
     version.preview_context = preview_context
-    version.extracted_placeholder_keys = list(placeholder_keys)
     version.preview_generated_at = timezone.now()
     version.validation_errors = []
     version.preview_pdf.save(
@@ -386,10 +684,7 @@ def publish_version(
         )
         if locked.status != ContractTemplateVersion.Status.DRAFT:
             raise ValidationError({"form": ["Only draft versions can be published."]})
-        validate_merge_schema(
-            list(locked.merge_schema or []),
-            placeholder_keys=list(locked.extracted_placeholder_keys or []),
-        )
+        _assert_publishable(locked)
         if not locked.preview_pdf:
             raise ValidationError(
                 {"preview_pdf": ["Generate a synthetic preview before publishing."]}
@@ -513,6 +808,35 @@ def retire_version(
     return locked
 
 
+def _workspace_version_pk(template: ContractTemplate) -> int | None:
+    """Version to open from the family list: latest draft, else active, else newest."""
+    if (
+        hasattr(template, "_prefetched_objects_cache")
+        and "versions" in template._prefetched_objects_cache
+    ):
+        versions = list(template.versions.all())
+    else:
+        versions = list(template.versions.order_by("-created_at", "-pk"))
+    draft = next(
+        (
+            version
+            for version in sorted(
+                versions, key=lambda item: (item.created_at, item.pk), reverse=True
+            )
+            if version.status == ContractTemplateVersion.Status.DRAFT
+        ),
+        None,
+    )
+    if draft is not None:
+        return draft.pk
+    if template.active_version_id is not None:
+        return template.active_version_id
+    if not versions:
+        return None
+    newest = max(versions, key=lambda item: (item.created_at, item.pk))
+    return newest.pk
+
+
 def serialize_template_row(template: ContractTemplate) -> dict[str, Any]:
     return {
         "publicId": str(template.public_id),
@@ -534,10 +858,32 @@ def serialize_template_row(template: ContractTemplate) -> dict[str, Any]:
             if template.active_version is not None
             else None
         ),
+        "workspaceVersionPk": _workspace_version_pk(template),
     }
 
 
 def serialize_version_detail(version: ContractTemplateVersion) -> dict[str, Any]:
+    embeds_ok = docuseal_embeds_available()
+    builder = None
+    if (
+        embeds_ok
+        and version.status == ContractTemplateVersion.Status.DRAFT
+        and (version.docuseal_template_id or version.source_document)
+        and is_docuseal_builder_configured()
+    ):
+        try:
+            builder = builder_token_for_version(version)
+        except ValidationError:
+            builder = None
+    origin = embed_origin() if is_docuseal_configured() else ""
+    template_id = version.docuseal_template_id
+    admin_url = ""
+    if origin:
+        admin_url = (
+            f"{origin}/templates/{template_id}"
+            if template_id
+            else f"{origin}/templates"
+        )
     return {
         "id": version.pk,
         "publicId": str(version.public_id),
@@ -549,6 +895,15 @@ def serialize_version_detail(version: ContractTemplateVersion) -> dict[str, Any]
         "sourceFormat": version.source_format,
         "sourceMediaType": version.source_media_type,
         "sourceChecksum": version.source_checksum,
+        "docusealTemplateId": version.docuseal_template_id,
+        "docusealExternalId": version.docuseal_external_id or "",
+        "docusealHost": embed_host() if is_docuseal_configured() else "",
+        "docusealOrigin": origin,
+        "docusealAdminUrl": admin_url,
+        "docusealEmbedsAvailable": embeds_ok,
+        "builder": builder,
+        "builderReady": is_docuseal_builder_configured(),
+        "mergeSourceOptions": list(MERGE_SOURCE_OPTIONS),
         "placeholderKeys": list(version.extracted_placeholder_keys or []),
         "mergeSchema": list(version.merge_schema or []),
         "previewChecksum": version.preview_checksum,

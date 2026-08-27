@@ -2,8 +2,9 @@ from django.urls import path
 
 from apps.contract.views.administration_views import (
     contract_template_action,
+    contract_template_builder_saved,
     contract_template_create,
-    contract_template_index,
+    contract_template_docuseal_source,
     contract_template_update,
     contract_template_workspace,
 )
@@ -23,18 +24,29 @@ from apps.contract.views.my_contract_views import (
     my_contract,
     my_contract_artifact_preview,
 )
+from apps.contract.views.signing_views import (
+    docuseal_contract_webhook,
+    my_contract_sign,
+    my_contract_sign_status,
+)
 
 urlpatterns = [
     path("my-contract", my_contract, name="my_contract"),
+    path("my-contract/sign", my_contract_sign, name="my_contract_sign"),
+    path(
+        "my-contract/sign/status",
+        my_contract_sign_status,
+        name="my_contract_sign_status",
+    ),
     path(
         "my-contract/<uuid:public_id>/artifacts/<uuid:artifact_public_id>/preview",
         my_contract_artifact_preview,
         name="my_contract_artifact_preview",
     ),
     path(
-        "operations/contract-templates",
-        contract_template_index,
-        name="admin_contract_templates",
+        "webhooks/docuseal/contracts",
+        docuseal_contract_webhook,
+        name="docuseal_contract_webhook",
     ),
     path(
         "operations/contract-templates/templates/create",
@@ -55,6 +67,16 @@ urlpatterns = [
         "operations/contract-templates/templates/<int:version_id>/action",
         contract_template_action,
         name="contract_template_action",
+    ),
+    path(
+        "operations/contract-templates/templates/<int:version_id>/builder-saved",
+        contract_template_builder_saved,
+        name="contract_template_builder_saved",
+    ),
+    path(
+        "operations/contract-templates/docuseal-source/<str:token>",
+        contract_template_docuseal_source,
+        name="contract_template_docuseal_source",
     ),
     path(
         "operations/agent-contracts/new",

@@ -353,7 +353,15 @@ MICROSOFT_TENANT=common
 
 > **Local development** uses a different stack: `deployment/compose.dev.yaml`
 > (via `make up`) bundles Postgres, Redis, Mailpit, MinIO, DocuSeal, and the
-> Celery worker + beat scheduler, so nothing external is needed.
+> Celery worker + beat scheduler, so nothing external is needed. For agent
+> contract templates and signing, set `DOCUSEAL_API_KEY`, `DOCUSEAL_USER_EMAIL`
+> (DocuSeal admin that owns the key), and a random `DOCUSEAL_WEBHOOK_SECRET` in
+> `.env`, then paste
+> `http://localhost:8000/webhooks/docuseal/contracts?token=<that-secret>` into
+> DocuSeal → Webhooks (self-hosted has no separate webhook-secret field); see
+> `docs/agent-contracts.md`. In-hub embedded builder/signing need **DocuSeal
+> Pro**; community `docuseal/docuseal` stubs `/js/builder.js` — without Pro,
+> place fields in DocuSeal’s UI and open signing in a new tab.
 
 ## Background tasks (Celery)
 
