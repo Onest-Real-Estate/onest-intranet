@@ -6,11 +6,11 @@ from apps.operational_tasks.views import (
     task_create,
     task_detail_view,
     task_transition,
-    tasks_index,
 )
 
 urlpatterns = [
-    path("operations/tasks", tasks_index, name="operational_tasks"),
+    # The list route itself is an operations destination and is registered in
+    # `apps.web.views.OPERATIONS_VIEWS`; these are the endpoints it drives.
     path("operations/tasks/new", task_create, name="operational_task_create"),
     # Keyed by the public id, never the primary key: a sequential id in a URL
     # tells a holder of one link how many tasks exist and what to try next.

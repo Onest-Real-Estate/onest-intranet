@@ -62,6 +62,7 @@ def test_only_the_live_destinations_are_enabled():
             "my-contract": True,
             "reports": True,
             "admin-operational-tasks": True,
+            "admin-feedback": True,
         }.items()
         if enabled
     }

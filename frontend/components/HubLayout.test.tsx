@@ -533,7 +533,20 @@ describe("HubLayout lifecycle and entry points", () => {
     );
   });
 
-  it("opens only a backend-approved help destination in a new tab", () => {
+  it("always offers a way to ask for help", async () => {
+    // The control used to be inert whenever no external help centre was
+    // configured, which is the state every deployment starts in.
+    const user = userEvent.setup();
+    renderLayout();
+
+    await user.click(screen.getByRole("button", { name: "Help and support" }));
+
+    expect(screen.getByRole("menuitem", { name: /get help/i })).toBeVisible();
+    expect(screen.getByRole("menuitem", { name: /my reports/i })).toBeVisible();
+  });
+
+  it("offers a configured help centre beside the in-app route, not instead", async () => {
+    const user = userEvent.setup();
     setPage({
       shell: {
         authorizationVersion: "access-v1",
@@ -543,9 +556,132 @@ describe("HubLayout lifecycle and entry points", () => {
       },
     });
     renderLayout();
-    expect(
-      screen.getByRole("link", { name: "Open help centre in a new tab" }),
-    ).toHaveAttribute("rel", "noopener noreferrer");
+
+    await user.click(screen.getByRole("button", { name: "Help and support" }));
+
+    const external = screen.getByRole("menuitem", { name: /help centre/i });
+    expect(external).toHaveAttribute("rel", "noopener noreferrer");
+    expect(external).toHaveAttribute("target", "_blank");
+    // The in-app route is still there: the two answer different questions.
+    expect(screen.getByRole("menuitem", { name: /get help/i })).toBeVisible();
+  });
+
+  it("omits the external entry when the backend approved none", async () => {
+    const user = userEvent.setup();
+    renderLayout();
+
+    await user.click(screen.getByRole("button", { name: "Help and support" }));
+
+    expect(screen.queryByRole("menuitem", { name: /help centre/i })).toBeNull();
+  });
+});
+
+describe("HubLayout coming-soon grouping", () => {
+  /** The default fixture marks every module live; a real deployment does not. */
+  function withPending() {
+    setPage({
+      features: features({
+        "training-learning": false,
+        "documents-forms": false,
+        "agent-directory": false,
+      }),
+    });
+  }
+
+  const soonToggle = () => within(nav()).getByRole("button", { name: /coming soon/i });
+
+  it("keeps unbuilt modules out of the live groups", () => {
+    // An agent's rail was fourteen entries of which eight went nowhere.
+    withPending();
+    renderLayout();
+    const panel = document.getElementById(
+      soonToggle().getAttribute("aria-controls") ?? "",
+    );
+    expect(panel).not.toBeNull();
+    // Every pending row lives in the disclosure, not beside a live one.
+    for (const link of within(panel as HTMLElement).getAllByRole("link")) {
+      expect(link).toHaveTextContent("Soon");
+    }
+  });
+
+  it("counts what is pending so the row is worth opening", () => {
+    withPending();
+    renderLayout();
+    expect(soonToggle()).toHaveTextContent("3");
+    expect(soonToggle()).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("opens on click", async () => {
+    const user = userEvent.setup();
+    withPending();
+    renderLayout();
+
+    await user.click(soonToggle());
+
+    expect(soonToggle()).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it("drops a heading whose every item was pending", () => {
+    // "Directory" holds one entry; unbuilt, it was a group label naming
+    // nothing a reader could use.
+    withPending();
+    renderLayout();
+    expect(within(nav()).queryByText("Directory")).toBeNull();
+  });
+
+  it("shows no disclosure at all once everything is built", () => {
+    renderLayout();
+    expect(within(nav()).queryByRole("button", { name: /coming soon/i })).toBeNull();
+  });
+});
+
+describe("HubLayout pinned help", () => {
+  const helpLink = () => within(footer()).getByRole("link", { name: /get help/i });
+
+  it("keeps help out of the scrolling nav and pinned in the footer", () => {
+    // The reader who needs it most should not have to scroll past everything
+    // that just failed them.
+    renderLayout();
+    expect(helpLink()).toHaveAttribute(
+      "href",
+      expect.stringContaining("/support/feedback"),
+    );
+    expect(within(nav()).queryByRole("link", { name: /get help/i })).toBeNull();
+  });
+
+  it("carries the page the reader was on into the report", () => {
+    // `document.referrer` is empty for an Inertia visit, which is every visit
+    // here — capturing it at the click is the only thing that works.
+    setPage({}, "/operations/tasks");
+    renderLayout();
+    expect(helpLink()).toHaveAttribute(
+      "href",
+      `/support/feedback?from=${encodeURIComponent("/operations/tasks")}`,
+    );
+  });
+
+  it("keeps the query string, which is often where the thing broke", () => {
+    // "Page 3 of the filtered list" is the whole story. The redaction layer
+    // allowlists exactly these filter parameters, so stripping them here would
+    // waste the one part of the capture that survives on purpose.
+    setPage({}, "/users?page=3&status=active");
+    renderLayout();
+    expect(helpLink()).toHaveAttribute(
+      "href",
+      `/support/feedback?from=${encodeURIComponent("/users?page=3&status=active")}`,
+    );
+  });
+
+  it("marks itself current on the support pages", () => {
+    setPage({}, "/support/feedback/mine");
+    renderLayout();
+    expect(helpLink()).toHaveAttribute("aria-current", "page");
+  });
+
+  it("sits above the account card", () => {
+    renderLayout();
+    const rows = within(footer()).getAllByRole("link");
+    expect(rows[0]).toHaveAccessibleName(expect.stringContaining("Get help"));
   });
 });
 

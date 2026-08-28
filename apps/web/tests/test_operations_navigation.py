@@ -124,6 +124,7 @@ def test_registry_has_exact_destinations_order_routes_and_permissions():
                 "admin_offices",
                 "admin_announcements",
                 "operational_tasks",
+                "admin_feedback",
             }
         )
 
@@ -164,7 +165,6 @@ def test_scoped_management_role_permission_matrix():
             "Training",
             "Documents",
             "Quick Access",
-            "Feedback",
             "Tasks",
             "Office Resources",
             "Offices",
@@ -178,7 +178,6 @@ def test_scoped_management_role_permission_matrix():
             "Training",
             "Documents",
             "Quick Access",
-            "Feedback",
             "Tasks",
             "Office Resources",
             "Offices",
@@ -257,6 +256,17 @@ def test_brokerage_admin_can_reach_every_registered_destination(client):
             assert "contracts" in props
             assert "capabilities" in props
             assert "statusOptions" in props
+            continue
+        if destination.route_name == "admin_feedback":
+            assert "tickets" in props
+            assert "filterOptions" in props
+            assert "summary" in props
+            continue
+        if destination.route_name == "operational_tasks":
+            assert "tasks" in props
+            assert "board" in props
+            assert "filterOptions" in props
+            assert "summary" in props
             continue
         assert props["title"] == destination.label
         assert props["administrative"] is True

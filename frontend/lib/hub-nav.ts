@@ -885,6 +885,46 @@ export function resolveHubNav(
     .filter((group) => group.items.length > 0);
 }
 
+/**
+ * Split a resolved rail into the destinations that work and the ones that do
+ * not yet.
+ *
+ * Registered-but-unbuilt modules stay visible to authorized readers — that is
+ * a deliberate product decision, so people can see what is coming. Scattering
+ * them through the groups was the problem: an agent's rail was fourteen
+ * entries of which eight went nowhere, and two whole headings ("Tools",
+ * "Directory") contained nothing else. A reader learning the product cannot
+ * tell the shape of what they have from a list that is mostly promises.
+ *
+ * Gathering them into one disclosure keeps the promise and gives the rail back
+ * its meaning: every heading now names live work, and what is coming is one
+ * countable row somebody can open on purpose.
+ *
+ * A group left with no live items disappears. Permission filtering is
+ * untouched — a pending item a reader may not hold never reaches either half.
+ */
+export function partitionByAvailability(groups: ResolvedHubNavGroup[]): {
+  live: ResolvedHubNavGroup[];
+  pending: ResolvedHubNavItem[];
+} {
+  const pending: ResolvedHubNavItem[] = [];
+  const live: ResolvedHubNavGroup[] = [];
+
+  for (const group of groups) {
+    const available = group.items.filter((item) => {
+      if (item.availability === "coming-soon") {
+        pending.push(item);
+        return false;
+      }
+      return true;
+    });
+    if (available.length > 0) {
+      live.push({ ...group, items: available });
+    }
+  }
+  return { live, pending };
+}
+
 function sectionOrder(key: HubNavSectionKey | undefined): number {
   if (!key) {
     return -1;

@@ -46,6 +46,11 @@ class OperationsPermission(models.Model):
             ("manage_documents", _("Can manage documents")),
             ("view_compliance", _("Can view scoped compliance items")),
             ("view_feedback", _("Can view scoped feedback")),
+            # Submitting needs no grant: everybody may report a problem with
+            # the tool they are told to use. These three are the triage half.
+            ("triage_feedback", _("Can triage scoped feedback")),
+            ("assign_feedback", _("Can assign feedback tickets")),
+            ("note_feedback", _("Can write internal notes on feedback")),
             ("view_platform_tasks", _("Can view sanitized platform task status")),
             # Operational tasks are a different subject from the sanitized
             # Celery status above: scoped work with assignees, comments, and a
