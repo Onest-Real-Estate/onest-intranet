@@ -263,3 +263,34 @@ describe("QuickApps accessibility", () => {
     expect(name.className).toContain("break-words");
   });
 });
+
+describe("vendor marks", () => {
+  it("draws a vendor's own artwork instead of a category glyph", () => {
+    // Lofty ships as an image mark; the generic Lucide fallback must not also
+    // render, or the tile would carry two icons.
+    const { container } = render(
+      <QuickApps apps={[app({ id: "lofty", name: "Lofty", icon: "lofty" })]} />,
+    );
+    // Scoped to the tile: the row also carries a Lucide chevron of its own.
+    expect(container.querySelector(".brand-well img")).not.toBeNull();
+    expect(container.querySelector(".brand-well svg")).toBeNull();
+  });
+
+  it("lets a mark that carries its own background be the tile", () => {
+    // RPR's artwork is a black rounded tile. Nesting it inside the gold well
+    // would put two squares inside each other.
+    const { container } = render(
+      <QuickApps apps={[app({ id: "rpr", name: "RPR", icon: "rpr" })]} />,
+    );
+    expect(container.querySelector(".brand-well")).toBeNull();
+    expect(container.querySelector("img")).not.toBeNull();
+  });
+
+  it("still draws the approved glyph for a vendor with no shipped artwork", () => {
+    const { container } = render(
+      <QuickApps apps={[app({ id: "other", name: "Other", icon: "wallet" })]} />,
+    );
+    expect(container.querySelector(".brand-well img")).toBeNull();
+    expect(container.querySelector(".brand-well svg")).not.toBeNull();
+  });
+});

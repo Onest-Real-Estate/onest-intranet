@@ -27,7 +27,12 @@ from django.urls import reverse
 #: ``frontend/lib/quick-access-icons.ts`` and the two are pinned by a test.
 QUICK_ACCESS_ICONS: tuple[tuple[str, str], ...] = (
     ("app-window", "Generic application"),
+    # Vendors whose real artwork the frontend ships (see `BrandMarks.tsx`).
+    # Pinned to that file by a test, so a key here without a mark there fails.
     ("microsoft", "Microsoft"),
+    ("lofty", "Lofty"),
+    ("skyslope", "SkySlope"),
+    ("rpr", "RPR"),
     ("contact", "CRM / contacts"),
     ("shield-check", "Compliance"),
     ("signature", "E-signature"),

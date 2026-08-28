@@ -153,7 +153,7 @@ function QuickAccessAdministrationPage() {
   }
 
   return (
-    <div className="grid gap-10">
+    <div className="grid gap-8">
       <Head title="Quick Access" />
       <PageHeader
         title="Quick Access"
@@ -195,7 +195,7 @@ function QuickAccessAdministrationPage() {
           // The exposure diff, shown before the link reaches anybody. The
           // acknowledgement rides the next submit, so a widening change is
           // still never applied by a single click.
-          <div className="border-warning/40 bg-warning/10 grid gap-2 rounded-lg border p-3 text-sm">
+          <div className="border-chip-warning-edge bg-chip-warning text-warning-ink grid gap-2 rounded-lg border p-3 text-sm">
             <p className="font-semibold">This change widens who can see the tool</p>
             <ul className="grid gap-1">
               {pendingConfirmation.map((change) => (
@@ -247,18 +247,19 @@ function QuickAccessAdministrationPage() {
           }
         />
         <SurfaceCardContent className="grid gap-4">
-          <SearchControl
-            label="Search links"
-            value={query}
-            onValueChange={setQuery}
-            onSearch={(next) => visit({ q: next })}
-            onClear={() => visit({ q: "" })}
-            placeholder="Name or stable key"
-            className="max-w-xl"
-          />
           <FilterControls
             activeCount={status ? 1 : 0}
             onReset={() => visit({ status: "" })}
+            leading={
+              <SearchControl
+                label="Search links"
+                value={query}
+                onValueChange={setQuery}
+                onSearch={(next) => visit({ q: next })}
+                onClear={() => visit({ q: "" })}
+                placeholder="Name or stable key"
+              />
+            }
           >
             <FilterField label="Lifecycle">
               <Select

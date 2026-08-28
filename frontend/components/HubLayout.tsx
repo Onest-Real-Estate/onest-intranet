@@ -16,8 +16,6 @@ import {
   WifiOff,
 } from "lucide-react";
 import { type CSSProperties, type ReactNode, useEffect, useRef, useState } from "react";
-
-import { BrandMark } from "@/components/BrandMark";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { QuickCreateMenu } from "@/components/QuickCreateMenu";
 import { GlobalSearch } from "@/components/search/GlobalSearch";
@@ -49,6 +47,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useTheme } from "@/hooks/use-theme";
+import onestLogo from "@/images/onest-logo.png";
 import {
   HUB_NAV_EXPANSION_STORAGE_KEY,
   HUB_NAV_SECTIONS,
@@ -161,7 +160,7 @@ function NavList({ items, current }: { items: ResolvedHubNavItem[]; current: str
               asChild
               isActive={active}
               tooltip={description ?? item.label}
-              className="h-9 rounded-lg px-2.5 font-normal transition-[background-color,color] duration-(--motion-fast) data-[active=true]:font-semibold group-data-[collapsible=icon]:rounded-lg"
+              className="h-9 rounded-lg px-2.5 font-normal transition-[background-color,color] duration-(--motion-fast) data-[active=true]:font-medium group-data-[collapsible=icon]:rounded-lg"
             >
               <Link
                 href={item.route.href}
@@ -171,8 +170,8 @@ function NavList({ items, current }: { items: ResolvedHubNavItem[]; current: str
                 <item.icon
                   className={
                     active
-                      ? "text-primary size-[1.125rem] transition-colors"
-                      : "text-muted-foreground group-hover/menu-item:text-foreground size-[1.125rem] transition-colors"
+                      ? "text-primary size-4 transition-colors"
+                      : "text-muted-foreground group-hover/menu-item:text-foreground size-4 transition-colors"
                   }
                   strokeWidth={1.5}
                 />
@@ -231,12 +230,12 @@ function NavGroupItems({
               aria-expanded={open}
               aria-controls={panelId}
               onClick={() => onSectionToggle(section.key, active)}
-              className="text-muted-foreground hover:text-foreground focus-visible:ring-sidebar-ring flex w-full items-center gap-2 rounded-md px-2.5 pt-1 pb-1 text-left text-micro font-medium tracking-[0.02em] focus-visible:ring-2 focus-visible:outline-none group-data-[collapsible=icon]:hidden"
+              className="text-muted-foreground hover:bg-sidebar-accent/55 hover:text-foreground focus-visible:ring-sidebar-ring flex h-9 w-full items-center gap-2 rounded-lg px-2.5 text-left text-sm transition-[background-color,color] duration-(--motion-fast) focus-visible:ring-2 focus-visible:outline-none group-data-[collapsible=icon]:hidden"
             >
               <span className="min-w-0 flex-1 truncate">{section.label}</span>
               <ChevronDown
                 aria-hidden
-                className={`size-3.5 shrink-0 transition-transform motion-reduce:transition-none ${
+                className={`size-4 shrink-0 transition-transform duration-(--motion-fast) motion-reduce:transition-none ${
                   open ? "rotate-0" : "-rotate-90"
                 }`}
                 strokeWidth={1.5}
@@ -356,7 +355,7 @@ function SidebarAccount({ user, onSignOut }: { user: User; onSignOut: () => void
     <div className="flex items-center gap-1">
       <Link
         href={routes.profile()}
-        className="hover:bg-sidebar-accent/50 focus-visible:ring-sidebar-ring flex min-w-0 flex-1 items-center gap-2.5 rounded-md px-1.5 py-1.5 transition-colors duration-(--motion-fast) focus-visible:ring-2 focus-visible:outline-none group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
+        className="hover:bg-sidebar-accent/55 focus-visible:ring-sidebar-ring flex min-w-0 flex-1 items-center gap-2.5 rounded-lg px-1.5 py-1.5 transition-colors duration-(--motion-fast) focus-visible:ring-2 focus-visible:outline-none group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
       >
         <UserAvatar user={user} className="size-8 shrink-0" />
         <span className="min-w-0 flex-1 text-left leading-tight group-data-[collapsible=icon]:hidden">
@@ -442,49 +441,70 @@ function ShellFeedback({
   );
 }
 
+/**
+ * Where the reader is, on one line.
+ *
+ * The trail already ends in the page's own name, so the stacked title that
+ * used to sit under it restated — inside a 56px band — what the crumb above it
+ * and the page's `<h1>` below it both said. One line reads as a location and
+ * leaves the bar room to breathe; the ancestors fold away on a narrow screen
+ * and the current page always survives.
+ */
 function PageContext({ context }: { context: HubPageContext }) {
   const breadcrumbs = context.breadcrumbs ?? [];
-  return (
-    <div className="min-w-0 flex-1">
-      {breadcrumbs.length ? (
-        <nav
-          aria-label="Breadcrumb"
-          className="text-muted-foreground hidden min-w-0 text-micro sm:block"
-        >
-          <ol className="flex min-w-0 items-center gap-1.5 overflow-hidden">
-            {breadcrumbs.map((item, index) => {
-              const current = index === breadcrumbs.length - 1;
-              return (
-                <li
-                  key={`${item.href ?? "current"}:${item.label}`}
-                  className="flex min-w-0 items-center gap-1.5"
-                >
-                  {index > 0 ? <span aria-hidden>/</span> : null}
-                  {item.href && !current ? (
-                    <Link
-                      href={safeInternalHref(item.href)}
-                      className="hover:text-foreground focus-visible:ring-ring truncate rounded-sm focus-visible:ring-2 focus-visible:outline-none"
-                    >
-                      {item.label}
-                    </Link>
-                  ) : (
-                    <span
-                      aria-current={current ? "page" : undefined}
-                      className="truncate"
-                    >
-                      {item.label}
-                    </span>
-                  )}
-                </li>
-              );
-            })}
-          </ol>
-        </nav>
-      ) : null}
-      <p className="truncate text-sm font-semibold tracking-[-0.01em]">
+
+  if (!breadcrumbs.length) {
+    return (
+      <p className="min-w-0 flex-1 truncate text-sm font-medium tracking-[-0.01em]">
         {context.title}
       </p>
-    </div>
+    );
+  }
+
+  return (
+    <nav aria-label="Breadcrumb" className="min-w-0 flex-1">
+      <ol className="flex min-w-0 items-center gap-1.5 overflow-hidden text-sm">
+        {breadcrumbs.map((item, index) => {
+          const current = index === breadcrumbs.length - 1;
+          return (
+            <li
+              key={`${item.href ?? "current"}:${item.label}`}
+              className={cn(
+                "flex min-w-0 items-center gap-1.5",
+                !current && "hidden sm:flex",
+              )}
+            >
+              {index > 0 ? (
+                <span
+                  aria-hidden
+                  className={cn(
+                    "text-muted-foreground/60",
+                    current && "hidden sm:inline",
+                  )}
+                >
+                  /
+                </span>
+              ) : null}
+              {item.href && !current ? (
+                <Link
+                  href={safeInternalHref(item.href)}
+                  className="text-muted-foreground hover:text-foreground focus-visible:ring-ring truncate rounded-sm transition-colors duration-(--motion-fast) focus-visible:ring-2 focus-visible:outline-none"
+                >
+                  {item.label}
+                </Link>
+              ) : (
+                <span
+                  aria-current={current ? "page" : undefined}
+                  className="truncate font-medium tracking-[-0.01em]"
+                >
+                  {item.label}
+                </span>
+              )}
+            </li>
+          );
+        })}
+      </ol>
+    </nav>
   );
 }
 
@@ -593,7 +613,21 @@ function ShellWorkspace({
 
   return (
     <SidebarInset>
-      <header className="bg-background/92 sticky top-0 z-10 flex h-16 items-center gap-1.5 border-b px-3 backdrop-blur-sm sm:gap-2 sm:px-4 lg:px-6">
+      <header className="bg-background/92 sticky top-0 z-10 flex h-16 items-center gap-1.5 border-b px-3 backdrop-blur-sm sm:gap-2 sm:px-4 lg:px-6 print:hidden">
+        {/* An Inertia visit swaps the page without a browser navigation, so
+            none of the usual chrome moves and a slow request reads as a dead
+            click. This is the only sighted feedback that one is in flight; the
+            polite status below carries the same fact to a screen reader. It
+            rides the header's own border, so nothing on the page shifts when
+            it appears. */}
+        {navigating ? (
+          <span
+            aria-hidden
+            className="pointer-events-none absolute inset-x-0 -bottom-px h-0.5 overflow-hidden"
+          >
+            <span className="bg-brand-gold animate-route-progress block h-full w-full" />
+          </span>
+        ) : null}
         <SidebarTrigger className="md:hidden" />
         {context.back ? (
           <Button variant="ghost" size="icon" asChild className="size-9 shrink-0">
@@ -609,7 +643,7 @@ function ShellWorkspace({
         {/* Live global search. Results are authorized and scoped server-side
             before serialization — see apps/web/search. */}
         <GlobalSearch />
-        <div className="ml-auto flex shrink-0 items-center gap-0.5">
+        <div className="border-border/70 ml-auto flex shrink-0 items-center gap-0.5 border-l pl-1.5 sm:pl-2">
           {helpUrl ? (
             <Tooltip>
               <TooltipTrigger asChild>
@@ -640,7 +674,7 @@ function ShellWorkspace({
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="ghost"
-                  className="ml-1 h-10 max-w-52 gap-2 rounded-full px-1 lg:pr-3"
+                  className="ml-1 h-9 max-w-52 gap-2 rounded-md px-1 lg:pr-3"
                   aria-label={`${firstName(user.name)} account menu`}
                 >
                   <UserAvatar user={user} className="size-8" />
@@ -707,6 +741,7 @@ function ShellWorkspace({
         aria-busy={navigating}
         className={cn(
           "flex flex-1 flex-col py-6 outline-none lg:py-8",
+          "print:px-0 print:py-0",
           contentVariants[variant],
         )}
       >
@@ -774,34 +809,53 @@ export function HubLayout({ children, context, variant = "standard" }: HubLayout
       >
         Skip to content
       </a>
-      <Sidebar collapsible="icon" className="border-sidebar-border/70">
-        {/* Collapsed, the rail keeps only the expand control — the wordmark has
-            no room and the mark alone would read as a dead button beside it. */}
-        <SidebarHeader className="h-16 flex-row items-center justify-between gap-1 px-3.5 py-0 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-2">
+      <Sidebar collapsible="icon" className="border-sidebar-border/70 print:hidden">
+        {/* Collapsed, the rail keeps only the expand control — the lockup has
+            no room and the mark alone would read as a dead button beside it.
+
+            The band is 64px rather than the 56px it used to share with the top
+            bar: this is a stacked lockup (mark over wordmark over tagline) and
+            at 56px the tagline collapsed into a smudge. The workspace header
+            matches, so the two hairlines still meet across the window. */}
+        <SidebarHeader className="border-sidebar-border/70 h-16 flex-row items-center justify-between gap-1 border-b px-3.5 py-0 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-2">
           <Link
             href={routes.dashboard()}
-            className="focus-visible:ring-sidebar-ring flex min-w-0 items-center gap-2.5 rounded-md py-1 focus-visible:ring-2 focus-visible:outline-none group-data-[collapsible=icon]:hidden"
-            aria-label="ONEST HUB home"
+            className="focus-visible:ring-sidebar-ring flex min-w-0 items-center rounded-md py-1 focus-visible:ring-2 focus-visible:outline-none group-data-[collapsible=icon]:hidden"
+            aria-label="oNEST Real Estate — go to dashboard"
           >
-            <span className="brand-surface shadow-xs grid size-8 shrink-0 place-items-center rounded-lg">
-              <BrandMark className="size-5" />
-            </span>
-            <span className="truncate text-sm font-bold tracking-[-0.025em]">
-              ONEST HUB
-            </span>
+            {/* The gold artwork carries its own contrast on both the near-white
+                rail and the dark one, so it needs no theme variant. Width and
+                height are stated to reserve the box before the file decodes —
+                a logo that pops in is the first thing a reader sees shift. */}
+            <img
+              src={onestLogo}
+              width={397}
+              height={251}
+              alt=""
+              className="h-11 w-auto max-w-full object-contain"
+            />
           </Link>
-          <SidebarTrigger className="text-muted-foreground hidden size-8 md:flex" />
+          {/* Cmd-B collapses the rail and nothing said so; a shortcut nobody
+              can find is a feature that does not exist. The hint is a `title`
+              and `aria-keyshortcuts` rather than a Radix tooltip on purpose:
+              this header also renders inside the mobile drawer, and a tooltip
+              there takes the Escape key that should be closing the drawer. */}
+          <SidebarTrigger
+            title="Collapse sidebar (⌘B)"
+            aria-keyshortcuts="Meta+B Control+B"
+            className="text-muted-foreground hover:text-foreground hidden size-8 md:flex"
+          />
         </SidebarHeader>
-        <SidebarContent className="gap-0 overflow-x-hidden">
+        <SidebarContent className="gap-0 overflow-x-hidden [mask-image:linear-gradient(to_bottom,#000_calc(100%-1.5rem),transparent)]">
           {/* Group labels carry the separation. Rules between them would add a
               second divider to a rail that is already one column of type. */}
           <nav aria-label="Hub sections" className="flex min-h-0 flex-col">
             {navGroups.map((group) => (
               <SidebarGroup
                 key={group.label}
-                className="px-2.5 pt-4 pb-0 group-data-[collapsible=icon]:px-1.5"
+                className="px-2.5 pt-4 pb-0 first:pt-3 group-data-[collapsible=icon]:px-1.5"
               >
-                <SidebarGroupLabel className="text-muted-foreground h-6 px-2.5 text-micro font-semibold tracking-[0.09em] uppercase">
+                <SidebarGroupLabel className="text-muted-foreground mb-1 h-5 px-2.5 text-micro font-semibold tracking-[0.09em] uppercase">
                   {group.label}
                 </SidebarGroupLabel>
                 <SidebarGroupContent>

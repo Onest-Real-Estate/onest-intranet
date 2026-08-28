@@ -12,6 +12,7 @@ import {
   Signature,
   Wallet,
 } from "lucide-react";
+import { BRAND_MARK_KEYS } from "@/components/BrandMarks";
 
 /**
  * The approved marks a Quick Access link may draw.
@@ -21,8 +22,9 @@ import {
  * administrator therefore chooses from marks the bundle already ships — there
  * is no path from a text field to a remote image.
  *
- * `microsoft` is deliberately absent: it is the one vendor whose real mark the
- * app ships, and `QuickApps` renders that component instead of a silhouette.
+ * The vendors whose **real** artwork the app ships are deliberately absent
+ * from this map — see `BrandMarks`. `QuickApps` draws those components instead
+ * of a silhouette, and their keys join this allowlist at the bottom.
  */
 export const QUICK_ACCESS_ICONS: Record<string, LucideIcon> = {
   "app-window": AppWindow,
@@ -38,12 +40,9 @@ export const QUICK_ACCESS_ICONS: Record<string, LucideIcon> = {
   wallet: Wallet,
 };
 
-/** Rendered by its own component rather than a Lucide glyph. */
-export const MICROSOFT_ICON_KEY = "microsoft";
-
 export const QUICK_ACCESS_ICON_KEYS: readonly string[] = [
   ...Object.keys(QUICK_ACCESS_ICONS),
-  MICROSOFT_ICON_KEY,
+  ...BRAND_MARK_KEYS,
 ];
 
 export function quickAccessIcon(key: string): LucideIcon {

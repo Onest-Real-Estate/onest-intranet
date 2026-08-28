@@ -47,6 +47,17 @@ class OperationsPermission(models.Model):
             ("view_compliance", _("Can view scoped compliance items")),
             ("view_feedback", _("Can view scoped feedback")),
             ("view_platform_tasks", _("Can view sanitized platform task status")),
+            # Operational tasks are a different subject from the sanitized
+            # Celery status above: scoped work with assignees, comments, and a
+            # lifecycle. They get their own family so a grant to read job
+            # status never becomes a grant to read somebody's task queue.
+            ("view_operational_tasks", _("Can view scoped operational tasks")),
+            (
+                "manage_operational_tasks",
+                _("Can create and transition operational tasks"),
+            ),
+            ("assign_operational_tasks", _("Can assign operational tasks")),
+            ("comment_operational_tasks", _("Can comment on operational tasks")),
             ("manage_offices", _("Can manage scoped offices")),
             ("view_it_support", _("Can view scoped IT support requests")),
             (

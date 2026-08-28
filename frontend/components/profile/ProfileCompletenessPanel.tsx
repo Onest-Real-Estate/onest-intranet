@@ -72,25 +72,32 @@ export function ProfileCompletenessPanel({
               {optional.map((item) => {
                 const anchor = sectionAnchors[item.section];
                 return (
-                  <li
-                    key={item.key}
-                    className="flex items-center justify-between gap-2"
-                  >
+                  <li key={item.key} className="min-w-0">
                     {anchor ? (
                       <a
-                        className="group hover:bg-muted/60 -mx-2 flex flex-1 items-center justify-between gap-2 rounded-lg px-2 py-1 transition-colors duration-(--motion-fast)"
+                        className="group hover:bg-muted/60 -mx-2 flex items-center gap-2 rounded-lg px-2 py-1 transition-colors duration-(--motion-fast)"
                         href={`#${anchor}`}
                       >
-                        <span>{item.label}</span>
+                        <span className="min-w-0 truncate">{item.label}</span>
+                        <span className="text-muted-foreground truncate text-xs">
+                          {item.sectionLabel}
+                        </span>
+                        {/* The arrow is the row's right edge. It used to sit
+                            mid-row with the section label stranded outside the
+                            link, which gave one row two right-hand endings. */}
                         <ArrowUpRight
-                          className="text-muted-foreground group-hover:text-primary size-4 shrink-0 transition-colors duration-(--motion-fast)"
+                          className="text-muted-foreground group-hover:text-primary ml-auto size-4 shrink-0 transition-colors duration-(--motion-fast)"
                           aria-hidden
                         />
                       </a>
                     ) : (
-                      item.label
+                      <span className="flex items-center gap-2 px-0 py-1">
+                        <span className="min-w-0 truncate">{item.label}</span>
+                        <span className="text-muted-foreground truncate text-xs">
+                          {item.sectionLabel}
+                        </span>
+                      </span>
                     )}
-                    <span className="text-muted-foreground">· {item.sectionLabel}</span>
                   </li>
                 );
               })}

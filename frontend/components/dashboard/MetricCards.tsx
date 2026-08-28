@@ -1,8 +1,9 @@
 import { Link } from "@inertiajs/react";
 import { format } from "date-fns";
 
-import { MetricCard } from "@/components/design-system/metric-card";
+import { MetricCard, MetricStrip } from "@/components/design-system/metric-card";
 import { metricIcon } from "@/lib/metric-icons";
+import { cn } from "@/lib/utils";
 import type { DashboardMetric, DashboardMetrics } from "@/types";
 
 /**
@@ -65,11 +66,14 @@ function StatCard({ metric }: { metric: DashboardMetric }) {
   const Icon = metricIcon(metric.icon);
   const card = (
     <MetricCard
-      className={
-        metric.drillDown
-          ? "group-hover:border-ring/40 h-full transition-colors duration-(--motion-fast)"
-          : "h-full"
-      }
+      className={cn(
+        "h-full",
+        // A figure that drills through lifts on hover the way a table row
+        // does: a wash, not a border change — a colour-shifting rule inside a
+        // ruled strip makes the whole grid look like it moved.
+        metric.drillDown &&
+          "group-hover:bg-accent/45 transition-colors duration-(--motion-fast)",
+      )}
       label={metric.label}
       value={unavailable ? NO_VALUE : (metric.value ?? NO_VALUE)}
       subline={sublineFor(metric)}
@@ -95,7 +99,7 @@ function StatCard({ metric }: { metric: DashboardMetric }) {
     <Link
       href={metric.drillDown.href}
       aria-label={`${metric.label} — ${metric.drillDown.label}`}
-      className="focus-visible:ring-ring focus-visible:ring-offset-background group rounded-xl focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
+      className="focus-visible:outline-ring group block h-full min-w-0 focus-visible:outline-2 focus-visible:-outline-offset-2"
     >
       {card}
     </Link>
@@ -119,16 +123,14 @@ export function MetricCards({ metrics }: { metrics: DashboardMetrics }) {
   return (
     <div className="arrive @container grid gap-3">
       {visible.length > 0 ? (
-        // Auto-fit between a floor and a ceiling rather than a fixed four-up:
-        // these figures are permission- and source-filtered, so the count
-        // varies per reader. The floor keeps four across a wide band; the
-        // ceiling stops a lone figure from stretching into a billboard whose
-        // label and mark sit a screen apart.
-        <div className="grid grid-cols-[repeat(auto-fit,minmax(14rem,24rem))] gap-4">
+        // One strip, auto-fitting: these figures are permission- and
+        // source-filtered, so the count varies per reader, and a ruled row
+        // absorbs three figures or seven without the gaps a fixed grid leaves.
+        <MetricStrip>
           {visible.map((metric) => (
             <StatCard key={metric.key} metric={metric} />
           ))}
-        </div>
+        </MetricStrip>
       ) : (
         <p className="text-muted-foreground text-sm">
           None of your figures have a data source yet.
@@ -149,11 +151,11 @@ export function MetricCards({ metrics }: { metrics: DashboardMetrics }) {
 export function MetricCardsSkeleton() {
   return (
     <div className="@container grid gap-3">
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(14rem,24rem))] gap-4">
+      <MetricStrip>
         {["first", "second", "third", "fourth"].map((slot) => (
           <MetricCard key={slot} label="Loading" value={NO_VALUE} loading />
         ))}
-      </div>
+      </MetricStrip>
     </div>
   );
 }

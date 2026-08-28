@@ -2,9 +2,17 @@ import {
   AlertTriangle,
   ArrowUp,
   Building2,
+  CalendarDays,
+  GraduationCap,
   Landmark,
+  Laptop,
   type LucideIcon,
   Map as MapIcon,
+  Megaphone,
+  Newspaper,
+  ShieldCheck,
+  Siren,
+  TrendingUp,
   UserRound,
   Users,
 } from "lucide-react";
@@ -49,6 +57,34 @@ export function priorityPresentation(badge: AnnouncementBadge): StatusPresentati
 
 export function categoryPresentation(badge: AnnouncementBadge): StatusPresentation {
   return { label: badge.label, tone: badge.tone };
+}
+
+/**
+ * A mark per category, keyed by the taxonomy's stable code.
+ *
+ * The feed is otherwise a column of identically-shaped rows, and a reader
+ * looking for "the training one" should not have to read eight titles to find
+ * it. The icon is a second, non-colour channel for the classification the
+ * badge already states in words, so it adds a way to scan without becoming the
+ * only way to know.
+ *
+ * An unknown or retired code falls back to the generic mark rather than
+ * failing — the taxonomy is editable, and a row stored against a code this
+ * build has never seen still has to render.
+ */
+const CATEGORY_ICONS: Record<string, LucideIcon> = {
+  company_announcement: Megaphone,
+  market_update: TrendingUp,
+  event: CalendarDays,
+  training_notice: GraduationCap,
+  compliance_update: ShieldCheck,
+  office_notice: Building2,
+  technology_notice: Laptop,
+  urgent_operational_notice: Siren,
+};
+
+export function categoryIcon(badge: AnnouncementBadge): LucideIcon {
+  return CATEGORY_ICONS[badge.code] ?? Newspaper;
 }
 
 /** Filter keys the reader can set. `rejected` is a report, not a filter. */

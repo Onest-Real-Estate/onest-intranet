@@ -62,9 +62,9 @@ export interface DashboardWidgetDefinition {
   /** Inertia prop carrying this widget's envelope, and its reload target. */
   prop: DashboardWidgetProp;
   /**
-   * True once a server provider fills `prop`. False means the card renders
-   * clearly-labelled preview data from `preview.ts`; flip the flag in the same
-   * commit that registers the provider, and the preview stops being read.
+   * True once a server provider fills `prop`. False means the card renders as
+   * *not connected* — never as an invented figure; flip the flag in the same
+   * commit that registers the provider and the panel starts reading real data.
    */
   backed: boolean;
   /** Every listed permission is required before the card is laid out. */

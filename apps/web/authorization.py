@@ -368,6 +368,36 @@ ROUTE_POLICIES: dict[str, AuthorizationPolicy] = {
         route_names=("office_resources",),
         scope_rule="self_only",
     ),
+    "operational_task_detail": AuthorizationPolicy(
+        key="operational_task_detail",
+        access="permission_protected",
+        description=(
+            "One task by public id, loaded through the reader's own scoped "
+            "queryset so an id outside their reach is a 404 rather than a 403."
+        ),
+        methods=("GET",),
+        route_names=("operational_task_detail",),
+        all_permissions=("web.view_operational_tasks",),
+        scope_rule="operational_task_reader_scope",
+    ),
+    "operational_task_write": AuthorizationPolicy(
+        key="operational_task_write",
+        access="permission_protected",
+        description=(
+            "Create, transition, assign, and comment. The route gate is the "
+            "read grant on purpose — each write re-checks its own specific "
+            "grant in the service, where the task's assignee is also known."
+        ),
+        methods=("POST",),
+        route_names=(
+            "operational_task_create",
+            "operational_task_transition",
+            "operational_task_assign",
+            "operational_task_comment",
+        ),
+        all_permissions=("web.view_operational_tasks",),
+        scope_rule="operational_task_reader_scope",
+    ),
     "announcements_feed": AuthorizationPolicy(
         key="announcements_feed",
         access="authenticated",

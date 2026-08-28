@@ -1,5 +1,11 @@
 const URLS = {
     'activity_timeline': (record_type: string, record_id: string) => `/activity/${record_type}/${record_id}`,
+    'operational_task_comment': (public_id: string) => `/operations/tasks/${public_id}/comment`,
+    'operational_task_assign': (public_id: string) => `/operations/tasks/${public_id}/assign`,
+    'operational_task_transition': (public_id: string) => `/operations/tasks/${public_id}/transition`,
+    'operational_task_detail': (public_id: string) => `/operations/tasks/${public_id}`,
+    'operational_task_create': () => `/operations/tasks/new`,
+    'operational_tasks': () => `/operations/tasks`,
     'announcement_media_remove': (media_id: number) => `/operations/announcements/media/${media_id}/remove`,
     'announcement_media_replace': (media_id: number) => `/operations/announcements/media/${media_id}/replace`,
     'announcement_media_reorder': (announcement_id: number) => `/operations/announcements/${announcement_id}/media/reorder`,

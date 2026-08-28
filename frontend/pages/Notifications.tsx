@@ -51,13 +51,13 @@ function FilterSelect({
   disabled?: boolean;
 }) {
   return (
-    <FilterField label={label}>
+    <FilterField label={label} hideLabel>
       <Select
         value={value || ALL}
         disabled={disabled}
         onValueChange={(next) => onChange(next === ALL ? "" : next)}
       >
-        <SelectTrigger aria-label={label} className="w-full sm:w-44">
+        <SelectTrigger size="sm" aria-label={label} className="w-full sm:w-44">
           <SelectValue placeholder={allLabel} />
         </SelectTrigger>
         <SelectContent>

@@ -139,7 +139,7 @@ function Workspace() {
       <Head
         title={resource ? `${resource.title} · Office Resources` : "New resource"}
       />
-      <div className="grid gap-10">
+      <div className="grid gap-8">
         <PageHeader
           title={resource ? resource.title : "New resource"}
           description={

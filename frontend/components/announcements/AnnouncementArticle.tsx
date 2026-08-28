@@ -59,7 +59,7 @@ export function AnnouncementArticle({
           // A hero that fails to load must not leave a broken-image icon in its
           // place; everything below stands on its own without it.
           onError={() => setHeroBroken(true)}
-          className="bg-muted max-h-96 w-full rounded-xl border object-cover"
+          className="bg-muted max-h-96 w-full rounded-lg border object-cover"
         />
       ) : null}
 
@@ -144,7 +144,7 @@ export function AnnouncementArticle({
               return (
                 <li
                   key={`${entry.kind}-${entry.code}-${entry.officeId ?? entry.userId ?? "all"}`}
-                  className="bg-muted text-muted-foreground flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs"
+                  className="bg-muted text-muted-foreground flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs"
                 >
                   <Icon className="size-3.5 shrink-0" aria-hidden />
                   {entry.label}

@@ -16,6 +16,7 @@ from dataclasses import dataclass
 
 from django.urls import reverse
 
+from apps.operational_tasks.action_items import collect_task_actions
 from apps.web.action_items.contract import ActionItem, ActionSourceContext
 from apps.web.action_items.ordering import order_items
 from apps.web.action_items.payloads import serialize_queue
@@ -40,6 +41,7 @@ class ActionSourceDefinition:
 
 ACTION_SOURCE_DEFINITIONS: tuple[ActionSourceDefinition, ...] = (
     ActionSourceDefinition(key="profile", collector=collect_profile_actions),
+    ActionSourceDefinition(key="operational_tasks", collector=collect_task_actions),
     # Remaining domains register here as their models ship (contracts,
     # transactions, documents/checklists, training, leads, commissions,
     # compliance corrections, overdue inventory). Until then they stay out of

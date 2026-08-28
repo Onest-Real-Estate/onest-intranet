@@ -66,6 +66,7 @@ def test_registry_has_exact_destinations_order_routes_and_permissions():
         "Quick Access",
         "Compliance",
         "Feedback",
+        "Tasks",
         "Platform Tasks",
         "Office Resources",
         "Offices",
@@ -86,6 +87,7 @@ def test_registry_has_exact_destinations_order_routes_and_permissions():
         120,
         130,
         140,
+        145,
         150,
         35,
         160,
@@ -95,16 +97,16 @@ def test_registry_has_exact_destinations_order_routes_and_permissions():
         *("People" for _ in range(5)),
         *("Operations" for _ in range(3)),
         *("Content" for _ in range(4)),
-        *("Governance & support" for _ in range(3)),
+        *("Governance & support" for _ in range(4)),
         *("Content" for _ in range(1)),
         *("Governance & support" for _ in range(2)),
     ]
-    assert len({destination.key for destination in OPERATIONS_DESTINATIONS}) == 18
+    assert len({destination.key for destination in OPERATIONS_DESTINATIONS}) == 19
     assert (
-        len({destination.route_name for destination in OPERATIONS_DESTINATIONS}) == 18
+        len({destination.route_name for destination in OPERATIONS_DESTINATIONS}) == 19
     )
     assert (
-        len({destination.permission for destination in OPERATIONS_DESTINATIONS}) == 18
+        len({destination.permission for destination in OPERATIONS_DESTINATIONS}) == 19
     )
     for destination in OPERATIONS_DESTINATIONS:
         assert reverse(destination.route_name) == f"/{destination.path}"
@@ -121,6 +123,7 @@ def test_registry_has_exact_destinations_order_routes_and_permissions():
                 "admin_office_resources",
                 "admin_offices",
                 "admin_announcements",
+                "operational_tasks",
             }
         )
 
@@ -162,6 +165,7 @@ def test_scoped_management_role_permission_matrix():
             "Documents",
             "Quick Access",
             "Feedback",
+            "Tasks",
             "Office Resources",
             "Offices",
         },
@@ -175,6 +179,7 @@ def test_scoped_management_role_permission_matrix():
             "Documents",
             "Quick Access",
             "Feedback",
+            "Tasks",
             "Office Resources",
             "Offices",
         },

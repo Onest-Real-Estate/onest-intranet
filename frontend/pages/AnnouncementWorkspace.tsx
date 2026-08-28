@@ -396,7 +396,7 @@ function AnnouncementWorkspacePage() {
   const checklist = announcement?.validation;
 
   return (
-    <div className="grid gap-10 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] xl:items-start">
+    <div className="grid gap-8 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] xl:items-start">
       <Head title={editing ? announcement.title : "New announcement"} />
 
       <div className="grid gap-8">

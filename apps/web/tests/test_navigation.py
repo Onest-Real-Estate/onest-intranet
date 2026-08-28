@@ -61,6 +61,7 @@ def test_only_the_live_destinations_are_enabled():
             "office-resources": True,
             "my-contract": True,
             "reports": True,
+            "admin-operational-tasks": True,
         }.items()
         if enabled
     }

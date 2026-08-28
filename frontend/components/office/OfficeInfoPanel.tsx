@@ -1,4 +1,14 @@
-import { Check, Copy, Mail, MapPin, Phone } from "lucide-react";
+import {
+  Car,
+  Check,
+  Clock,
+  Copy,
+  KeyRound,
+  type LucideIcon,
+  Mail,
+  MapPin,
+  Phone,
+} from "lucide-react";
 import { type ReactNode, useState } from "react";
 
 import {
@@ -7,7 +17,9 @@ import {
   SurfaceCard,
   SurfaceCardContent,
 } from "@/components/design-system";
+import { IconWell, type IconWellTone } from "@/components/IconWell";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import type { OfficeContactPerson, OfficeInfoPayload } from "@/types";
 
 const DAY_ORDER = [
@@ -39,7 +51,27 @@ function telHref(phoneNumber: string): string {
   return `tel:${phoneNumber.replace(/[^+\d]/g, "")}`;
 }
 
-function ContactBlock({
+function initials(name: string): string {
+  return (
+    name
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase())
+      .join("") || "?"
+  );
+}
+
+/**
+ * One person, as a card.
+ *
+ * These used to be label-and-value blocks in a two-column grid — a page of
+ * support contacts that read as a form. A person is the most concrete thing on
+ * this page and the thing an agent is actually here to find, so each gets an
+ * object of their own: a mark, their name, the role they hold, and the two
+ * ways to reach them as real controls rather than as wrapped URLs.
+ */
+function ContactCard({
   title,
   person,
   empty,
@@ -48,40 +80,63 @@ function ContactBlock({
   person: OfficeContactPerson | null;
   empty: string;
 }) {
-  return (
-    <div className="grid min-w-0 content-start gap-1">
-      <p className={FIELD_LABEL}>{title}</p>
-      {!person ? (
+  if (!person) {
+    if (!empty) {
+      return null;
+    }
+    return (
+      <div className="border-border/70 grid min-w-0 content-start gap-1 rounded-lg border border-dashed p-4">
+        <p className={FIELD_LABEL}>{title}</p>
         <p className="text-muted-foreground text-sm">{empty}</p>
-      ) : (
-        <>
-          <p className="text-foreground text-sm font-medium">{person.displayName}</p>
-          <a
-            className={CONTACT_LINK}
-            href={`mailto:${person.email}`}
-            title={person.email}
-          >
-            <Mail className="size-3.5 shrink-0" aria-hidden />
-            <span className="break-all underline">{person.email}</span>
-          </a>
-          {person.phoneNumber ? (
-            <a
-              className={CONTACT_LINK}
-              href={telHref(person.phoneNumber)}
-              title={person.phoneNumber}
-            >
-              <Phone className="size-3.5 shrink-0" aria-hidden />
-              <span className="tabular-nums">{person.phoneNumber}</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-card border-border/70 hover:border-border-strong flex min-w-0 items-start gap-3 rounded-lg border p-4 transition-colors duration-(--motion-fast)">
+      <span
+        aria-hidden
+        className="brand-surface grid size-9 shrink-0 place-items-center rounded-md text-xs font-semibold"
+      >
+        {initials(person.displayName)}
+      </span>
+      <div className="grid min-w-0 flex-1 gap-1.5">
+        <div className="min-w-0">
+          <p className="text-foreground truncate text-sm font-semibold">
+            {person.displayName}
+          </p>
+          <p className={FIELD_LABEL}>{title}</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Button asChild variant="outline" size="sm" className="h-7 px-2 text-xs">
+            <a href={`mailto:${person.email}`} title={person.email}>
+              <Mail className="size-3.5" aria-hidden />
+              Email
             </a>
+          </Button>
+          {person.phoneNumber ? (
+            <Button asChild variant="outline" size="sm" className="h-7 px-2 text-xs">
+              <a href={telHref(person.phoneNumber)} title={person.phoneNumber}>
+                <Phone className="size-3.5" aria-hidden />
+                <span className="tabular-nums">{person.phoneNumber}</span>
+              </a>
+            </Button>
           ) : null}
-        </>
-      )}
+        </div>
+      </div>
     </div>
   );
 }
 
+interface HourRow {
+  /** Lower-case weekday key, or "" for a free-text line the office typed. */
+  day: string;
+  label: string;
+  value: string;
+}
+
 interface ParsedHours {
-  lines: string[];
+  rows: HourRow[];
   structured: boolean;
 }
 
@@ -99,19 +154,66 @@ function parseHours(hours: unknown[]): ParsedHours {
     .filter((entry) => entry !== null);
   if (!entries.length) {
     return {
-      lines: hours.filter((entry): entry is string => typeof entry === "string"),
+      rows: hours
+        .filter((entry): entry is string => typeof entry === "string")
+        .map((line) => ({ day: "", label: line, value: "" })),
       structured: false,
     };
   }
   const byDay = new Map(entries.map((entry) => [entry.day, entry]));
-  const lines = DAY_ORDER.map((day) => {
+  const rows = DAY_ORDER.map((day) => {
     const entry = byDay.get(day);
-    if (!entry?.open || !entry.close) {
-      return `${DAY_LABELS[day]}: Closed`;
-    }
-    return `${DAY_LABELS[day]}: ${entry.open}–${entry.close}`;
+    return {
+      day,
+      label: DAY_LABELS[day] ?? day,
+      value: entry?.open && entry.close ? `${entry.open}–${entry.close}` : "Closed",
+    };
   });
-  return { lines, structured: true };
+  return { rows, structured: true };
+}
+
+/**
+ * Today's key, so the week reads as "am I able to walk in right now" rather
+ * than as seven equally-weighted lines a reader has to find themselves in.
+ */
+function todayKey(): string {
+  return DAY_ORDER[(new Date().getDay() + 6) % 7] ?? "";
+}
+
+/**
+ * One fact about the office, as an object rather than a label-and-value pair.
+ *
+ * The tone is not decoration: it separates *where* from *how to reach* from
+ * *when*, which is the first cut an agent makes when they open this page. The
+ * mark repeats that in a second, non-colour channel.
+ */
+function FactCard({
+  icon,
+  tone = "muted",
+  title,
+  className,
+  children,
+}: {
+  icon: LucideIcon;
+  tone?: IconWellTone;
+  title: string;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <section
+      className={cn(
+        "border-border/70 bg-card grid min-w-0 content-start gap-2.5 rounded-lg border p-4",
+        className,
+      )}
+    >
+      <div className="flex items-center gap-2.5">
+        <IconWell icon={icon} tone={tone} className="size-8" iconClassName="size-4" />
+        <h3 className={FIELD_LABEL}>{title}</h3>
+      </div>
+      {children}
+    </section>
+  );
 }
 
 function ContactLinkRow({ href, children }: { href: string; children: ReactNode }) {
@@ -169,7 +271,8 @@ export function OfficeInfoPanel({
   info: OfficeInfoPayload;
   preview?: boolean;
 }) {
-  const { lines: hourLines, structured } = parseHours(info.officeHours ?? []);
+  const { rows: hourRows, structured } = parseHours(info.officeHours ?? []);
+  const today = structured ? todayKey() : "";
   const address = addressLines(info);
   const showAccess =
     Boolean(info.accessInstructions) &&
@@ -196,71 +299,103 @@ export function OfficeInfoPanel({
             />
           }
         />
-        <SurfaceCardContent className="grid gap-6">
-          <div className="grid min-w-0 gap-4 sm:grid-cols-2">
-            <div className="grid min-w-0 content-start gap-1">
-              <p className={FIELD_LABEL}>Address</p>
-              {address ? (
-                <>
-                  <p className="text-foreground whitespace-pre-line text-sm">
-                    {address}
-                  </p>
-                  <div className="mt-1 flex flex-wrap items-center gap-2">
-                    <CopyAddressButton address={address} />
-                    {info.directionsUrl ? (
-                      <Button type="button" variant="outline" size="sm" asChild>
-                        <a
-                          href={info.directionsUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
-                          <MapPin className="size-3.5" aria-hidden />
-                          Directions
-                        </a>
-                      </Button>
-                    ) : null}
-                  </div>
-                </>
-              ) : (
-                <p className="text-muted-foreground text-sm">Not listed yet.</p>
-              )}
-            </div>
-            <div className="grid min-w-0 content-start gap-2">
-              <p className={FIELD_LABEL}>Contact</p>
-              {info.mainPhone ? (
-                <ContactLinkRow href={telHref(info.mainPhone)}>
-                  <Phone className="size-3.5 shrink-0" aria-hidden />
-                  <span className="tabular-nums">{info.mainPhone}</span>
-                </ContactLinkRow>
-              ) : null}
-              {info.publicEmail ? (
-                <ContactLinkRow href={`mailto:${info.publicEmail}`}>
-                  <Mail className="size-3.5 shrink-0" aria-hidden />
-                  <span className="break-all underline">{info.publicEmail}</span>
-                </ContactLinkRow>
-              ) : null}
-              {info.includeInternal && info.internalEmail ? (
-                <ContactLinkRow href={`mailto:${info.internalEmail}`}>
-                  <Mail className="size-3.5 shrink-0" aria-hidden />
-                  <span className="break-all underline">{info.internalEmail}</span>
-                  <span className="text-muted-foreground">(internal)</span>
-                </ContactLinkRow>
-              ) : null}
-              {!info.mainPhone && !info.publicEmail ? (
-                <p className="text-muted-foreground text-sm">Not listed yet.</p>
-              ) : null}
-            </div>
-          </div>
-
-          <div className="grid min-w-0 gap-1">
-            <p className={FIELD_LABEL}>Hours</p>
-            {hourLines.length ? (
+        <SurfaceCardContent className="grid gap-3 @2xl:grid-cols-2">
+          <FactCard icon={MapPin} tone="info" title="Address">
+            {address ? (
               <>
-                <ul className="text-foreground grid gap-1 text-sm">
-                  {hourLines.map((line) => (
-                    <li key={line}>{line}</li>
-                  ))}
-                </ul>
+                <p className="text-foreground whitespace-pre-line text-sm leading-6">
+                  {address}
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <CopyAddressButton address={address} />
+                  {info.directionsUrl ? (
+                    <Button type="button" variant="outline" size="sm" asChild>
+                      <a
+                        href={info.directionsUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        <MapPin className="size-3.5" aria-hidden />
+                        Directions
+                      </a>
+                    </Button>
+                  ) : null}
+                </div>
+              </>
+            ) : (
+              <p className="text-muted-foreground text-sm">Not listed yet.</p>
+            )}
+          </FactCard>
+
+          <FactCard icon={Phone} tone="success" title="Contact">
+            {info.mainPhone ? (
+              <ContactLinkRow href={telHref(info.mainPhone)}>
+                <Phone className="size-3.5 shrink-0" aria-hidden />
+                <span className="tabular-nums">{info.mainPhone}</span>
+              </ContactLinkRow>
+            ) : null}
+            {info.publicEmail ? (
+              <ContactLinkRow href={`mailto:${info.publicEmail}`}>
+                <Mail className="size-3.5 shrink-0" aria-hidden />
+                <span className="break-all underline">{info.publicEmail}</span>
+              </ContactLinkRow>
+            ) : null}
+            {info.includeInternal && info.internalEmail ? (
+              <ContactLinkRow href={`mailto:${info.internalEmail}`}>
+                <Mail className="size-3.5 shrink-0" aria-hidden />
+                <span className="break-all underline">{info.internalEmail}</span>
+                <span className="text-muted-foreground">(internal)</span>
+              </ContactLinkRow>
+            ) : null}
+            {!info.mainPhone && !info.publicEmail ? (
+              <p className="text-muted-foreground text-sm">Not listed yet.</p>
+            ) : null}
+          </FactCard>
+
+          <FactCard
+            icon={Clock}
+            tone="warning"
+            title="Hours"
+            className="@2xl:col-span-2"
+          >
+            {hourRows.length ? (
+              <>
+                {structured ? (
+                  // A week of equal lines makes a reader find themselves in it.
+                  // Today is the row they came for.
+                  <dl className="grid gap-x-6 gap-y-1 text-sm sm:grid-cols-2">
+                    {hourRows.map((row) => {
+                      const isToday = row.day === today;
+                      return (
+                        <div
+                          key={row.day}
+                          className={cn(
+                            "flex items-baseline justify-between gap-4 rounded-sm",
+                            isToday
+                              ? "text-foreground font-semibold"
+                              : "text-muted-foreground",
+                          )}
+                        >
+                          <dt className="min-w-0 truncate">
+                            {row.label}
+                            {isToday ? (
+                              <span className="text-primary ml-1.5 text-xs font-semibold">
+                                Today
+                              </span>
+                            ) : null}
+                          </dt>
+                          <dd className="shrink-0 tabular-nums">{row.value}</dd>
+                        </div>
+                      );
+                    })}
+                  </dl>
+                ) : (
+                  <ul className="text-foreground grid gap-1 text-sm">
+                    {hourRows.map((row) => (
+                      <li key={row.label}>{row.label}</li>
+                    ))}
+                  </ul>
+                )}
                 {structured ? (
                   <p className="text-muted-foreground text-xs">
                     Times shown in Eastern Time.
@@ -270,26 +405,26 @@ export function OfficeInfoPanel({
             ) : (
               <p className="text-muted-foreground text-sm">Hours not listed.</p>
             )}
-          </div>
+          </FactCard>
 
           {info.parkingInstructions ? (
-            <div className="grid min-w-0 gap-1">
-              <p className={FIELD_LABEL}>Parking</p>
-              <p className="text-foreground whitespace-pre-line text-sm">
+            <FactCard icon={Car} tone="neutral" title="Parking">
+              <p className="text-foreground whitespace-pre-line text-sm leading-6">
                 {info.parkingInstructions}
               </p>
-            </div>
+            </FactCard>
           ) : null}
 
           {showAccess ? (
-            <div className="grid min-w-0 gap-1">
-              <p className={FIELD_LABEL}>
-                Access{info.accessInstructionsInternal ? " (internal)" : ""}
-              </p>
-              <p className="text-foreground whitespace-pre-line text-sm">
+            <FactCard
+              icon={KeyRound}
+              tone={info.accessInstructionsInternal ? "warning" : "neutral"}
+              title={`Access${info.accessInstructionsInternal ? " (internal)" : ""}`}
+            >
+              <p className="text-foreground whitespace-pre-line text-sm leading-6">
                 {info.accessInstructions}
               </p>
-            </div>
+            </FactCard>
           ) : null}
         </SurfaceCardContent>
       </SurfaceCard>
@@ -300,44 +435,41 @@ export function OfficeInfoPanel({
           title="Contacts"
           description="Current branch support contacts"
         />
-        <SurfaceCardContent className="grid gap-x-6 gap-y-6 sm:grid-cols-2">
-          <ContactBlock
+        <SurfaceCardContent className="grid gap-3 @2xl:grid-cols-2">
+          <ContactCard
             title="Branch manager"
             person={info.contacts.branchManager}
             empty="No branch manager assigned."
           />
-          <ContactBlock
+          <ContactCard
             title="Branch admin"
             person={info.contacts.branchAdmin}
             empty="No branch admin assigned."
           />
-          <ContactBlock
+          <ContactCard
             title="Transaction coordinator"
             person={info.contacts.transactionCoordinator}
             empty="No transaction coordinator assigned."
           />
-          <ContactBlock
+          <ContactCard
             title="IT support"
             person={info.contacts.itSupport}
             empty="No IT support contact assigned."
           />
-          <div className="grid min-w-0 gap-3 sm:col-span-2">
-            <p className={FIELD_LABEL}>Brokers</p>
-            {info.contacts.brokers.length ? (
-              <div className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
-                {info.contacts.brokers.map((broker) => (
-                  <ContactBlock
-                    key={broker.id}
-                    title={broker.isPrimary ? "Primary broker" : "Broker"}
-                    person={broker}
-                    empty=""
-                  />
-                ))}
-              </div>
-            ) : (
-              <p className="text-muted-foreground text-sm">No broker contacts.</p>
-            )}
-          </div>
+          {info.contacts.brokers.length ? (
+            info.contacts.brokers.map((broker) => (
+              <ContactCard
+                key={broker.id}
+                title={broker.isPrimary ? "Primary broker" : "Broker"}
+                person={broker}
+                empty=""
+              />
+            ))
+          ) : (
+            <p className="text-muted-foreground text-sm @2xl:col-span-2">
+              No broker contacts.
+            </p>
+          )}
         </SurfaceCardContent>
       </SurfaceCard>
 
@@ -348,9 +480,9 @@ export function OfficeInfoPanel({
             title="Companywide support"
             description="Leadership and corporate directory for every office"
           />
-          <SurfaceCardContent className="grid gap-x-6 gap-y-6 sm:grid-cols-2">
+          <SurfaceCardContent className="grid gap-3 @2xl:grid-cols-2">
             {info.corporateContacts.map((person) => (
-              <ContactBlock
+              <ContactCard
                 key={`${person.assignmentType}-${person.id}`}
                 title={person.assignmentTypeLabel}
                 person={person}

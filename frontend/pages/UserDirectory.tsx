@@ -20,6 +20,7 @@ import {
   FilterControls,
   FilterField,
   MetricCard,
+  MetricStrip,
   PageHeader,
   Pagination,
   PanelHeader,
@@ -93,21 +94,22 @@ function FilterSelect({
   // contain spaces — derive it from the label instead of embedding it.
   const hintId = `${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-hint`;
   return (
-    <FilterField label={label}>
+    <FilterField label={label} hideLabel>
       <Select
         value={value || ALL}
         disabled={disabled}
         onValueChange={(next) => onChange(next === ALL ? "" : next)}
       >
         <SelectTrigger
+          size="sm"
           aria-label={label}
           aria-describedby={hint ? hintId : undefined}
           className="w-full sm:w-44"
         >
-          <SelectValue placeholder={`All ${label.toLowerCase()}`} />
+          <SelectValue placeholder={`Any ${label.toLowerCase()}`} />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value={ALL}>All {label.toLowerCase()}</SelectItem>
+          <SelectItem value={ALL}>Any {label.toLowerCase()}</SelectItem>
           {options.map((option) => (
             <SelectItem key={option.value} value={option.value}>
               {option.label}
@@ -273,7 +275,7 @@ export default function UserDirectory() {
 
   return (
     <PermissionRequired permission={{ all: ["web.view_users"] }}>
-      <div className="grid gap-10">
+      <div className="grid gap-8">
         <Head title="Users" />
         <PageHeader
           title="Users"
@@ -285,7 +287,7 @@ export default function UserDirectory() {
           }
         />
 
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <MetricStrip>
           <MetricCard label="People in scope" value={summary.total} />
           <MetricCard label="Active accounts" value={summary.active} tone="success" />
           <MetricCard
@@ -301,7 +303,7 @@ export default function UserDirectory() {
             value={summary.pendingOnboarding}
             tone={summary.pendingOnboarding > 0 ? "warning" : "neutral"}
           />
-        </div>
+        </MetricStrip>
 
         <SurfaceCard>
           <PanelHeader
@@ -316,23 +318,23 @@ export default function UserDirectory() {
             }
           />
           <SurfaceCardContent className="grid gap-4">
-            <SearchControl
-              label="Search people"
-              value={filters.q}
-              onValueChange={(q) => setFilters((current) => ({ ...current, q }))}
-              onSearch={(q) => visit({ q }, 1)}
-              onClear={() => visit({ q: "" })}
-              placeholder={
-                visible.administration
-                  ? "Name, work email, or agent ID"
-                  : "Name or work email"
-              }
-              className="max-w-xl"
-            />
-
             <FilterControls
               activeCount={activeCount}
               onReset={() => visit(EMPTY_FILTERS)}
+              leading={
+                <SearchControl
+                  label="Search people"
+                  value={filters.q}
+                  onValueChange={(q) => setFilters((current) => ({ ...current, q }))}
+                  onSearch={(q) => visit({ q }, 1)}
+                  onClear={() => visit({ q: "" })}
+                  placeholder={
+                    visible.administration
+                      ? "Name, work email, or agent ID"
+                      : "Name or work email"
+                  }
+                />
+              }
             >
               <FilterSelect
                 label="Office"

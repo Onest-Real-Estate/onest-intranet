@@ -50,16 +50,16 @@ function FilterSelect({
   onChange: (next: string) => void;
 }) {
   return (
-    <FilterField label={label}>
+    <FilterField label={label} hideLabel>
       <Select
         value={value || ALL}
         onValueChange={(next) => onChange(next === ALL ? "" : next)}
       >
-        <SelectTrigger aria-label={label}>
-          <SelectValue placeholder="Any" />
+        <SelectTrigger size="sm" aria-label={label}>
+          <SelectValue placeholder={`Any ${label.toLowerCase()}`} />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value={ALL}>Any</SelectItem>
+          <SelectItem value={ALL}>Any {label.toLowerCase()}</SelectItem>
           {options.map((option) => (
             <SelectItem key={option.value} value={option.value}>
               {option.label}
@@ -126,7 +126,7 @@ export default function OfficeResourcesAdministration() {
   return (
     <PermissionRequired permission={VIEW}>
       <Head title="Office Resources" />
-      <div className="grid gap-10">
+      <div className="grid gap-8">
         <PageHeader
           title="Office Resources"
           description="Publish instructions, procedures, contacts, links, and files to branches."

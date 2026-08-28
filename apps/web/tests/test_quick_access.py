@@ -1007,11 +1007,12 @@ def test_every_approved_icon_has_a_mark_in_the_bundle():
     """
     from pathlib import Path
 
-    source = (
-        Path(__file__).resolve().parents[3]
-        / "frontend"
-        / "lib"
-        / "quick-access-icons.ts"
+    frontend = Path(__file__).resolve().parents[3] / "frontend"
+    # Two files, because the vocabulary has two halves: category glyphs live in
+    # the icon map, and the vendors whose real artwork ships live in the brand
+    # registry. A key belongs to exactly one of them.
+    source = (frontend / "lib" / "quick-access-icons.ts").read_text() + (
+        frontend / "components" / "BrandMarks.tsx"
     ).read_text()
     # Keys that are valid JS identifiers appear unquoted; the rest are quoted.
     missing = [

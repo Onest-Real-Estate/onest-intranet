@@ -392,9 +392,9 @@ function LanguagePicker({
             <div
               key={option.code}
               className={cn(
-                "-m-px flex items-center gap-2 rounded-full border py-1.5 pr-4 pl-3 transition-colors duration-(--motion-fast)",
+                "-m-px flex items-center gap-2 rounded-md border py-1.5 pr-3.5 pl-3 transition-colors duration-(--motion-fast)",
                 checked
-                  ? "border-primary/40 bg-primary/10"
+                  ? "border-chip-primary-edge bg-chip-primary"
                   : "border-border hover:border-primary/30 hover:bg-muted/50",
               )}
             >

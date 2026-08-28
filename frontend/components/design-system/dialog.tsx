@@ -22,7 +22,7 @@ export function DialogContent({
       <DialogPrimitive.Overlay className="data-[state=closed]:animate-dialog-overlay-out data-[state=open]:animate-dialog-overlay-in fixed inset-0 z-50 bg-foreground/35 backdrop-blur-[2px]" />
       <DialogPrimitive.Content
         className={cn(
-          "animate-dialog-content bg-card text-card-foreground shadow-popover fixed top-1/2 left-1/2 z-50 grid max-h-[calc(100svh-2rem)] w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 gap-5 overflow-y-auto rounded-xl border p-5 outline-none sm:p-6",
+          "animate-dialog-content bg-card text-card-foreground shadow-popover fixed top-1/2 left-1/2 z-50 grid max-h-[calc(100svh-2rem)] w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 gap-5 overflow-y-auto rounded-(--radius-card) border p-5 outline-none sm:p-6",
           className,
         )}
         onCloseAutoFocus={(event) => {
@@ -116,7 +116,7 @@ export function DestructiveConfirmDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <span className="bg-destructive/10 text-destructive grid size-10 place-items-center rounded-xl">
+          <span className="bg-chip-destructive text-destructive grid size-10 place-items-center rounded-md">
             <AlertTriangle className="size-5" aria-hidden />
           </span>
           <DialogTitle>{title}</DialogTitle>

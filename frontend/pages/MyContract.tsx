@@ -13,6 +13,8 @@ import { useId, useState } from "react";
 
 import {
   EmptyState,
+  MetricCard,
+  MetricStrip,
   PageHeader,
   PanelHeader,
   StatusBadge,
@@ -178,31 +180,27 @@ function CommissionSummary({ contract }: { contract: MyContractDetail }) {
         </ul>
       ) : null}
 
-      <dl className="grid gap-4 sm:grid-cols-2">
-        <div className="grid gap-1">
-          <dt className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
-            Agent split
-          </dt>
-          <dd className="text-sm font-medium">
-            {displayValue(commission.agentSplitPercent)}
-            {commission.agentSplitPercent ? "%" : ""}
-          </dd>
-        </div>
-        <div className="grid gap-1">
-          <dt className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
-            Office split
-          </dt>
-          <dd className="text-sm font-medium">
-            {displayValue(commission.officeSplitPercent)}
-            {commission.officeSplitPercent ? "%" : ""}
-          </dd>
-        </div>
-        <div className="grid gap-1">
-          <dt className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
-            Transaction fee
-          </dt>
-          <dd className="text-sm font-medium">
-            {[
+      {/* These four are the terms an agent actually opens this page for, and
+          they are figures. Rendered as label-and-value pairs they read as a
+          form; on one ruled strip they share a baseline and can be compared at
+          a glance — the split against the split, the fee against the cap. */}
+      <MetricStrip min="11rem">
+        <MetricCard
+          label="Agent split"
+          value={`${displayValue(commission.agentSplitPercent)}${
+            commission.agentSplitPercent ? "%" : ""
+          }`}
+        />
+        <MetricCard
+          label="Office split"
+          value={`${displayValue(commission.officeSplitPercent)}${
+            commission.officeSplitPercent ? "%" : ""
+          }`}
+        />
+        <MetricCard
+          label="Transaction fee"
+          value={
+            [
               commission.transactionFeeAmount
                 ? `$${commission.transactionFeeAmount}`
                 : null,
@@ -211,18 +209,14 @@ function CommissionSummary({ contract }: { contract: MyContractDetail }) {
                 : null,
             ]
               .filter(Boolean)
-              .join(" · ") || "—"}
-          </dd>
-        </div>
-        <div className="grid gap-1">
-          <dt className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
-            Annual cap
-          </dt>
-          <dd className="text-sm font-medium">
-            {commission.annualCapAmount ? `$${commission.annualCapAmount}` : "—"}
-          </dd>
-        </div>
-      </dl>
+              .join(" · ") || "—"
+          }
+        />
+        <MetricCard
+          label="Annual cap"
+          value={commission.annualCapAmount ? `$${commission.annualCapAmount}` : "—"}
+        />
+      </MetricStrip>
 
       <div className="grid gap-4 md:grid-cols-2">
         <section

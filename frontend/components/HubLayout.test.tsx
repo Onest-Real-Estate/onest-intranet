@@ -499,6 +499,22 @@ describe("HubLayout lifecycle and entry points", () => {
     );
   });
 
+  it("shows a sighted indicator while a visit is in flight", () => {
+    // An Inertia visit replaces the page without a browser navigation, so
+    // aria-busy and a polite status are the whole signal for a screen reader
+    // and nothing at all for everybody else.
+    const { container } = renderLayout();
+    const bar = () => container.querySelector(".animate-route-progress");
+
+    expect(bar()).toBeNull();
+
+    fireRouterEvent("start");
+    expect(bar()).not.toBeNull();
+
+    fireRouterEvent("finish");
+    expect(bar()).toBeNull();
+  });
+
   it("offers a recoverable network error and retries fresh", async () => {
     renderLayout();
     fireRouterEvent("networkError", { error: new Error("offline") });

@@ -112,7 +112,7 @@ export function FormErrorSummary({
       role="alert"
       aria-labelledby="form-error-summary-title"
       className={cn(
-        "border-destructive/30 bg-destructive/5 rounded-lg border p-4",
+        "border-chip-destructive-edge bg-chip-destructive rounded-lg border p-4",
         className,
       )}
     >
@@ -183,7 +183,7 @@ export function FormActionBar({
   return (
     <div
       className={cn(
-        "bg-muted/40 border-border/60 flex flex-wrap items-center justify-between gap-4 rounded-xl border px-5 py-4",
+        "bg-muted/40 border-border/60 flex flex-wrap items-center justify-between gap-4 rounded-lg border px-5 py-4",
         className,
       )}
       {...props}

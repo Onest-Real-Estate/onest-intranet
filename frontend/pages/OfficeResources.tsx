@@ -128,7 +128,7 @@ export default function OfficeResources() {
   const filtered = Boolean(filters.q || filters.category);
 
   return (
-    <div className="grid gap-10">
+    <div className="grid gap-8">
       <Head title="Office resources" />
       <PageHeader
         title="Office resources"

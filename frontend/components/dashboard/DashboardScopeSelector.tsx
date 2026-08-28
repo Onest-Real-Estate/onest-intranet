@@ -25,19 +25,11 @@ export function DashboardScopeSelector({
   options,
   selectedKey,
   reloadProps,
-  onSelect,
-  interactive = true,
 }: {
   options: DashboardScopeOption[];
   selectedKey: string | null;
   /** Widget props to re-request when the scope changes. */
   reloadProps: DashboardWidgetProp[];
-  onSelect?: (key: string) => void;
-  /**
-   * False while the scope is illustrative (no server `scope` prop yet): the
-   * selector relabels the page but asks the server for nothing.
-   */
-  interactive?: boolean;
 }) {
   const current = options.find((option) => option.key === selectedKey) ?? options[0];
 
@@ -48,8 +40,7 @@ export function DashboardScopeSelector({
   }
 
   function change(key: string) {
-    onSelect?.(key);
-    if (!interactive || reloadProps.length === 0) {
+    if (reloadProps.length === 0) {
       return;
     }
     // Only the scoped widgets are re-requested; the shell and the reader's own

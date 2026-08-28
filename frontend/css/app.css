@@ -23,31 +23,50 @@
   --on-media: #ffffff;
   --brand-ink: #0d0d0d;
 
-  --radius: 0.875rem;
-  --radius-card: 1.25rem;
+  /* Shape. 8px is the professional-density step: sharp enough that a card
+     reads as a panel rather than a lozenge, soft enough that it is not a
+     hairline box. Controls sit one step tighter than the panels holding them,
+     which is what makes nesting legible instead of concentric. */
+  --radius: 0.5rem;
+  --radius-card: 0.625rem;
   --motion-fast: 150ms;
   --motion-base: 200ms;
   --motion-slow: 280ms;
   --ease-standard: cubic-bezier(0.16, 1, 0.3, 1);
-  --elevation-card:
-    0 1px 2px oklch(0.2 0.01 72 / 4%), 0 8px 24px oklch(0.2 0.01 72 / 5%);
+  /* Depth is carried by the 1px border first and the shadow second. A wide
+     diffuse bloom under every card reads as decoration at this density; a
+     single tight contact shadow reads as a panel resting on the page. */
+  --elevation-card: 0 1px 2px oklch(0.2 0.003 286 / 6%);
   --elevation-card-hover:
-    0 2px 6px oklch(0.2 0.01 72 / 4%), 0 16px 40px oklch(0.2 0.01 72 / 9%);
-  --elevation-popover: 0 18px 48px oklch(0.16 0.01 72 / 14%);
-  --background: oklch(0.985 0.006 80);
-  --foreground: oklch(0.22 0.018 72);
+    0 1px 2px oklch(0.2 0.003 286 / 7%), 0 4px 12px oklch(0.2 0.003 286 / 8%);
+  --elevation-popover:
+    0 2px 4px oklch(0.16 0.003 286 / 7%), 0 12px 32px oklch(0.16 0.003 286 / 13%);
+  /*
+   * The canvas is white and the neutrals are neutral.
+   *
+   * Every grey used to carry a hue-72–80 tilt, which read as warmth on one
+   * surface and as a yellow cast across a whole screen of them. Structure now
+   * comes from the border and from tonal steps that are genuinely achromatic,
+   * so the only colour on an ordinary page is the gold on its one primary
+   * action. A trace of chroma (0.002) survives on the greys: a perfectly
+   * achromatic panel beside a warm brand colour reads faintly blue by contrast.
+   */
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.21 0.003 286);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.22 0.018 72);
+  --card-foreground: oklch(0.21 0.003 286);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.22 0.018 72);
+  --popover-foreground: oklch(0.21 0.003 286);
+  /* Gold's readable step. Links, active navigation type, selection controls —
+     the places brand has to survive as ink rather than as a fill. */
   --primary: oklch(0.5 0.115 74);
   --primary-foreground: oklch(0.99 0.004 80);
-  --secondary: oklch(0.95 0.019 78);
-  --secondary-foreground: oklch(0.31 0.045 72);
-  --muted: oklch(0.96 0.008 78);
-  --muted-foreground: oklch(0.49 0.018 72);
-  --accent: oklch(0.92 0.04 78);
-  --accent-foreground: oklch(0.31 0.055 72);
+  --secondary: oklch(0.968 0.002 286);
+  --secondary-foreground: oklch(0.3 0.004 286);
+  --muted: oklch(0.968 0.002 286);
+  --muted-foreground: oklch(0.51 0.005 286);
+  --accent: oklch(0.955 0.003 286);
+  --accent-foreground: oklch(0.28 0.004 286);
   --destructive: oklch(0.56 0.2 27);
   --destructive-foreground: oklch(0.99 0 0);
   --success: oklch(0.49 0.12 150);
@@ -59,22 +78,25 @@
   --warning-ink: oklch(0.45 0.115 68);
   --info: oklch(0.52 0.13 245);
   --info-foreground: oklch(0.99 0 0);
-  --border: oklch(0.89 0.014 78);
-  --border-strong: oklch(0.78 0.02 76);
-  --input: oklch(0.86 0.018 78);
+  --border: oklch(0.917 0.003 286);
+  --border-strong: oklch(0.8 0.004 286);
+  --input: oklch(0.885 0.004 286);
+  /* The focus ring stays gold: it is the one moment brand and state coincide. */
   --ring: oklch(0.61 0.12 76);
   --chart-1: oklch(0.63 0.14 77);
   --chart-2: oklch(0.55 0.1 153);
   --chart-3: oklch(0.53 0.1 244);
   --chart-4: oklch(0.66 0.12 42);
   --chart-5: oklch(0.5 0.08 310);
-  --sidebar: oklch(0.975 0.01 78);
-  --sidebar-foreground: oklch(0.22 0.018 72);
+  /* The rail sits one step off white so it reads as chrome beside a white
+     workspace, without becoming a second colour. */
+  --sidebar: oklch(0.982 0.002 286);
+  --sidebar-foreground: oklch(0.21 0.003 286);
   --sidebar-primary: oklch(0.5 0.115 74);
   --sidebar-primary-foreground: oklch(0.99 0.004 80);
-  --sidebar-accent: oklch(0.92 0.04 78);
-  --sidebar-accent-foreground: oklch(0.31 0.055 72);
-  --sidebar-border: oklch(0.89 0.014 78);
+  --sidebar-accent: oklch(0.945 0.003 286);
+  --sidebar-accent-foreground: oklch(0.24 0.004 286);
+  --sidebar-border: oklch(0.917 0.003 286);
   --sidebar-ring: oklch(0.61 0.12 76);
 
   /*
@@ -95,8 +117,8 @@
    * deliberately absent: the narrowest scope takes the neutral chip, which
    * keeps brand gold spent on actions rather than on a badge.
    */
-  --chip-neutral: oklch(0.96 0.008 78);
-  --chip-neutral-edge: oklch(0.89 0.014 78);
+  --chip-neutral: oklch(0.968 0.002 286);
+  --chip-neutral-edge: oklch(0.9 0.003 286);
   --chip-primary: oklch(0.965 0.027 74);
   --chip-primary-edge: oklch(0.88 0.043 74);
   --chip-success: oklch(0.965 0.027 150);
@@ -124,6 +146,13 @@
 .dark {
   color-scheme: dark;
 
+  /* Depth inverts its mechanism in the dark. A tinted shadow disappears against
+     a dark canvas, so separation there comes from the surface step and the
+     border; only genuinely floating layers get a shadow, and it is black. */
+  --elevation-card: 0 1px 2px oklch(0 0 0 / 24%);
+  --elevation-card-hover: 0 1px 2px oklch(0 0 0 / 28%), 0 4px 12px oklch(0 0 0 / 24%);
+  --elevation-popover: 0 2px 4px oklch(0 0 0 / 32%), 0 12px 32px oklch(0 0 0 / 44%);
+
   --brand-gold: #d0a04a;
   --brand-gold-deep: #b98733;
   --brand-gold-soft: #493719;
@@ -134,20 +163,24 @@
   --on-media: #ffffff;
   --brand-ink: #fff8eb;
 
-  --background: oklch(0.17 0.012 72);
-  --foreground: oklch(0.94 0.008 78);
-  --card: oklch(0.21 0.014 72);
-  --card-foreground: oklch(0.94 0.008 78);
-  --popover: oklch(0.21 0.014 72);
-  --popover-foreground: oklch(0.94 0.008 78);
+  /* The dark canvas is neutral for the same reason the light one is: a warm
+     tilt across every surface reads as a cast, not as warmth. The card still
+     sits a clear step above the background, because in the dark that step is
+     what separates a panel — the shadow cannot. */
+  --background: oklch(0.165 0.003 286);
+  --foreground: oklch(0.94 0.003 286);
+  --card: oklch(0.205 0.004 286);
+  --card-foreground: oklch(0.94 0.003 286);
+  --popover: oklch(0.205 0.004 286);
+  --popover-foreground: oklch(0.94 0.003 286);
   --primary: oklch(0.73 0.13 78);
   --primary-foreground: oklch(0.2 0.025 70);
-  --secondary: oklch(0.27 0.025 72);
-  --secondary-foreground: oklch(0.93 0.012 78);
-  --muted: oklch(0.25 0.012 72);
-  --muted-foreground: oklch(0.7 0.014 76);
-  --accent: oklch(0.31 0.045 75);
-  --accent-foreground: oklch(0.95 0.012 80);
+  --secondary: oklch(0.265 0.005 286);
+  --secondary-foreground: oklch(0.93 0.003 286);
+  --muted: oklch(0.245 0.004 286);
+  --muted-foreground: oklch(0.705 0.006 286);
+  --accent: oklch(0.29 0.006 286);
+  --accent-foreground: oklch(0.96 0.003 286);
   --destructive: oklch(0.67 0.19 25);
   --destructive-foreground: oklch(0.99 0 0);
   --success: oklch(0.68 0.13 150);
@@ -157,28 +190,28 @@
   --warning-ink: oklch(0.82 0.12 78);
   --info: oklch(0.7 0.12 245);
   --info-foreground: oklch(0.17 0.02 245);
-  --border: oklch(1 0 0 / 12%);
-  --border-strong: oklch(1 0 0 / 22%);
-  --input: oklch(1 0 0 / 16%);
+  --border: oklch(1 0 0 / 11%);
+  --border-strong: oklch(1 0 0 / 21%);
+  --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.7 0.12 78);
   --chart-1: oklch(0.72 0.13 78);
   --chart-2: oklch(0.7 0.11 153);
   --chart-3: oklch(0.7 0.1 244);
   --chart-4: oklch(0.72 0.12 42);
   --chart-5: oklch(0.68 0.09 310);
-  --sidebar: oklch(0.2 0.014 72);
-  --sidebar-foreground: oklch(0.94 0.008 78);
+  --sidebar: oklch(0.185 0.003 286);
+  --sidebar-foreground: oklch(0.94 0.003 286);
   --sidebar-primary: oklch(0.73 0.13 78);
   --sidebar-primary-foreground: oklch(0.2 0.025 70);
-  --sidebar-accent: oklch(0.31 0.045 75);
-  --sidebar-accent-foreground: oklch(0.95 0.012 80);
-  --sidebar-border: oklch(1 0 0 / 12%);
+  --sidebar-accent: oklch(0.275 0.005 286);
+  --sidebar-accent-foreground: oklch(0.96 0.003 286);
+  --sidebar-border: oklch(1 0 0 / 11%);
   --sidebar-ring: oklch(0.7 0.12 78);
 
   /* Dark chip surfaces are composed, not inverted: a real elevated tint a step
      above the card, with the ink lightened to clear AA on it. */
-  --chip-neutral: oklch(0.25 0.012 72);
-  --chip-neutral-edge: oklch(0.32 0.014 72);
+  --chip-neutral: oklch(0.255 0.004 286);
+  --chip-neutral-edge: oklch(0.33 0.005 286);
   --chip-primary: oklch(0.27 0.043 78);
   --chip-primary-edge: oklch(0.385 0.059 78);
   --chip-success: oklch(0.27 0.043 150);
@@ -262,6 +295,7 @@
      same number from the system instead of restating a literal. */
   --text-metric: 1.75rem;
   --text-metric--line-height: 2.25rem;
+  /* 4 / 6 / 8 / 12 / 16. Chips and menu items at the bottom, panels at the top. */
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -310,7 +344,8 @@
   html {
     @apply bg-background;
     /* Browser chrome ships with no design system of its own. */
-    scrollbar-color: var(--border) transparent;
+    scrollbar-color: var(--border-strong) transparent;
+    scroll-behavior: smooth;
   }
 
   body {
@@ -335,8 +370,93 @@
     vertical-align: middle;
   }
 
+  /*
+   * Everything below ships with a browser default that belongs to no design
+   * system: the scrollbar, the autofill wash, the native date picker's accent,
+   * the list marker, the selection colour. Left alone they are the loudest
+   * signal that a page was assembled rather than built, because they are the
+   * only pixels on screen that came from somewhere else.
+   */
+
   ::selection {
     background: color-mix(in oklab, var(--brand-gold) 35%, transparent);
+    /* Stated rather than inherited: the wash sits over ink of two different
+       lightnesses across the themes, and an unset colour leaves one of them
+       to chance. */
+    color: var(--foreground);
+  }
+
+  /* Native controls the app does not draw: the date picker's highlight, a
+     checkbox the browser owns, the range thumb. Gold, like everything else
+     that means "this one". */
+  :root {
+    accent-color: var(--brand-gold);
+  }
+
+  /* Firefox takes the two-value form; WebKit and Blink need the pseudo
+     elements. Both are stated so the bar matches in every supported browser. */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--border-strong);
+    border: 3px solid transparent;
+    border-radius: var(--radius-lg);
+    background-clip: content-box;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--muted-foreground);
+    background-clip: content-box;
+  }
+
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  /*
+   * Chrome paints its own pale wash over an autofilled field and ignores
+   * `background-color` to do it. The inset shadow is the only way to reach the
+   * surface, and the transition delay is the standard trick for holding it
+   * there — the browser repaints the wash on interaction otherwise.
+   */
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus,
+  textarea:-webkit-autofill,
+  select:-webkit-autofill {
+    -webkit-text-fill-color: var(--foreground);
+    -webkit-box-shadow: 0 0 0 1000px var(--card) inset;
+    caret-color: var(--primary);
+    transition: background-color 10000s ease-in-out 0s;
+  }
+
+  ::marker {
+    color: var(--muted-foreground);
+  }
+
+  ::placeholder {
+    color: var(--muted-foreground);
+  }
+
+  /* A widow on the last line of a paragraph is a typesetting defect the
+     browser will fix for free once asked. */
+  p,
+  li {
+    text-wrap: pretty;
+  }
+
+  /* Anything reached by a fragment or by keyboard focus stops clear of the
+     sticky header instead of underneath it. */
+  :target,
+  :focus-visible {
+    scroll-margin-block: 5rem;
   }
 
   /* Figures line up column-wise wherever numbers are compared or scanned. */
@@ -400,6 +520,14 @@
     animation: reduced-pulse 2.4s ease-in-out infinite !important;
   }
 
+  /* Same exemption, same reason: the route bar is the only thing saying a
+     request is still out. Stopped, it does not read as reduced motion — it
+     reads as a page that failed to load. It travels more slowly instead. */
+  .animate-route-progress {
+    /* biome-ignore lint/complexity/noImportantStyles: must outrank the universal reduced-motion reset above */
+    animation: route-progress 2.4s ease-in-out infinite !important;
+  }
+
   /* Deferred content still announces itself — by fading in place rather than
      rising, so the arrival is legible without any travel. */
   .arrive {
@@ -444,6 +572,24 @@
   from {
     opacity: 0;
     transform: translateY(6px);
+  }
+}
+
+/*
+ * The one indeterminate bar in the shell. An Inertia visit replaces the page
+ * without a browser navigation, so nothing in the chrome moves and a slow
+ * request looks like a dead click. The travelling sweep says a request is out;
+ * it cannot say how far along it is, so it never pretends to by filling.
+ */
+@keyframes route-progress {
+  0% {
+    transform: translateX(-100%) scaleX(0.4);
+  }
+  50% {
+    transform: translateX(0%) scaleX(0.6);
+  }
+  100% {
+    transform: translateX(100%) scaleX(0.4);
   }
 }
 
@@ -550,6 +696,10 @@
     animation: arrive var(--motion-base) var(--ease-standard);
   }
 
+  .animate-route-progress {
+    animation: route-progress 1.15s var(--ease-standard) infinite;
+  }
+
   .animate-palette {
     animation: palette-in var(--motion-base) var(--ease-standard);
   }
@@ -645,5 +795,75 @@
     text-shadow:
       0 1px 2px rgb(0 0 0 / 0.55),
       0 2px 12px rgb(0 0 0 / 0.4);
+  }
+}
+
+/*
+ * Print.
+ *
+ * A brokerage prints: a contract, a report, a roster taken into a meeting. The
+ * chrome is navigation for a screen and is worthless on paper, so it goes, and
+ * what is left is the record itself in black on white. Panels keep their rules
+ * — the structure is the document — and lose their fills and shadows, which
+ * only cost toner.
+ */
+@media print {
+  :root {
+    --background: #fff;
+    --card: #fff;
+    --foreground: #000;
+    --card-foreground: #000;
+    --muted-foreground: #333;
+    --border: #999;
+    --border-strong: #666;
+  }
+
+  body {
+    background: #fff;
+  }
+
+  /* A row split across a page break is a row a reader has to reassemble. */
+  tr,
+  img,
+  blockquote {
+    break-inside: avoid;
+  }
+
+  thead {
+    display: table-header-group;
+  }
+
+  h1,
+  h2,
+  h3 {
+    break-after: avoid;
+  }
+
+  [data-slot="card"],
+  [data-slot="table-container"] {
+    /* biome-ignore lint/complexity/noImportantStyles: outranks the shadow utility on every panel */
+    box-shadow: none !important;
+    break-inside: avoid;
+  }
+}
+
+/*
+ * Windows High Contrast and friends replace the palette wholesale and drop
+ * background colours, which would take every border defined as a background
+ * with them. This app is mostly borders, so they are restated in system
+ * colours rather than left to disappear.
+ */
+@media (forced-colors: active) {
+  [data-slot="card"],
+  [data-slot="table-container"],
+  [data-slot="input"],
+  [data-slot="select-trigger"],
+  [data-slot="badge"] {
+    border: 1px solid CanvasText;
+  }
+
+  :focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
   }
 }
