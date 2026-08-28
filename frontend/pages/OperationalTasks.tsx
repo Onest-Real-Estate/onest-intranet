@@ -311,7 +311,7 @@ export default function OperationalTasks() {
                   <Columns3 aria-hidden />
                   Board
                 </Button>
-              </div>
+              </fieldset>
             }
           />
           <SurfaceCardContent className="grid gap-4">
