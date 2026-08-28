@@ -226,12 +226,12 @@ export default function OperationalTaskDetail() {
                     </FormField>
                     {can.manage ? (
                       <label
-  htmlFor="comment-internal"
-  className="flex items-center gap-2 text-sm"
->
+                        htmlFor="comment-internal"
+                        className="flex items-center gap-2 text-sm"
+                      >
                         <Checkbox
                           id="comment-internal"
-checked={commentForm.data.internal}
+                          checked={commentForm.data.internal}
                           onCheckedChange={(next) =>
                             commentForm.setData("internal", next === true)
                           }

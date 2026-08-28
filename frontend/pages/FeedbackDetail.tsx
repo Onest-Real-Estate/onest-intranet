@@ -231,12 +231,12 @@ export default function FeedbackDetail() {
                   </FormField>
                   {can.note ? (
                     <label
-  htmlFor="note-internal"
-  className="flex items-center gap-2 text-sm"
->
+                      htmlFor="note-internal"
+                      className="flex items-center gap-2 text-sm"
+                    >
                       <Checkbox
                         id="note-internal"
-checked={noteForm.data.internal}
+                        checked={noteForm.data.internal}
                         onCheckedChange={(next) =>
                           noteForm.setData("internal", next === true)
                         }

@@ -360,7 +360,7 @@ export default function OperationalTasks() {
             </FilterControls>
 
             {view === "board" ? (
-              board && board.some((column) => column.count > 0) ? (
+              board?.some((column) => column.count > 0) ? (
                 // Horizontal scroll rather than a wrapping grid: a board whose
                 // columns reflow stops being a board.
                 <div className="-mx-5 overflow-x-auto px-5 pb-1">
