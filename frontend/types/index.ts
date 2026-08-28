@@ -304,7 +304,7 @@ export type DashboardWidgetProp =
   | "documents"
   // Administrative widgets. Registered here so `router.reload({ only: [...] })`
   // stays typed; each is marked `backed: false` in the widget registry until
-  // its provider ships, and renders preview data in the meantime.
+  // its provider ships, and renders as not connected in the meantime.
   | "agentOnboarding"
   | "closingPipeline"
   | "contractsAwaitingSignature"
@@ -315,6 +315,136 @@ export type DashboardWidgetProp =
   | "operationalActivity"
   | "supportQueue"
   | "feedbackSignals";
+
+/* -------------------------------------------------------------------------- */
+/* Operational tasks                                                          */
+/* -------------------------------------------------------------------------- */
+
+/** A resolved code plus everything a surface needs to draw it. */
+export interface TaskBadge {
+  code: string;
+  label: string;
+  tone: StatusTone;
+}
+
+export interface TaskStatusBadge extends TaskBadge {
+  /** False when the row holds a code this build does not recognise. */
+  known: boolean;
+}
+
+export interface TaskPriorityBadge extends TaskBadge {
+  /** Sort key; lower is more urgent. */
+  rank: number;
+}
+
+/** Just enough to name somebody — never an email. */
+export interface TaskPerson {
+  id: number;
+  name: string;
+}
+
+export interface TaskRow {
+  id: string;
+  reference: string;
+  title: string;
+  category: { code: string; label: string };
+  status: TaskStatusBadge;
+  priority: TaskPriorityBadge;
+  office: { id: number; name: string };
+  assignee: TaskPerson | null;
+  team: string;
+  dueAt: string | null;
+  isOverdue: boolean;
+  source: string;
+  tags: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TaskComment {
+  id: string;
+  author: TaskPerson | null;
+  body: string;
+  /** Staff-only. The server never serializes one to a reader without the
+   *  management grant, so this is a display hint, never the boundary. */
+  internal: boolean;
+  createdAt: string;
+}
+
+/** No URL: files are fetched through a view that re-authorizes the reader. */
+export interface TaskAttachment {
+  id: string;
+  displayName: string;
+  mediaType: string;
+  byteSize: number;
+  internal: boolean;
+  uploadedBy: TaskPerson | null;
+  createdAt: string;
+}
+
+/** One legal move, already filtered to what this actor may make. */
+export interface TaskTransition {
+  target: string;
+  label: string;
+  requiresNote: boolean;
+  tone: StatusTone;
+}
+
+export interface TaskDetail extends TaskRow {
+  description: string;
+  reporter: TaskPerson | null;
+  sourceReference: string;
+  relatedObject: { type: string; id: string } | null;
+  startedAt: string | null;
+  resolvedAt: string | null;
+  closedAt: string | null;
+  comments: TaskComment[];
+  attachments: TaskAttachment[];
+  transitions: TaskTransition[];
+}
+
+export interface TaskBoardColumn {
+  status: TaskStatusBadge;
+  items: TaskRow[];
+  count: number;
+}
+
+export interface TaskFilters extends Record<string, unknown> {
+  status: string;
+  category: string;
+  priority: string;
+  assigned: string;
+  q: string;
+}
+
+/** Mirrors the service's grants so the UI can hide what it may not do. It is
+ *  never the authorization — every write re-checks server-side. */
+export interface TaskCapabilities {
+  manage: boolean;
+  assign: boolean;
+  comment: boolean;
+}
+
+export interface OperationalTasksPageProps extends PageProps {
+  tasks: ListResponse<TaskRow, TaskFilters>;
+  /** Present only in board view; the list view sends null. */
+  board: TaskBoardColumn[] | null;
+  view: "list" | "board";
+  filterOptions: {
+    statuses: FilterOption[];
+    categories: FilterOption[];
+    priorities: FilterOption[];
+  };
+  summary: { open: number; overdue: number; mine: number };
+  can: TaskCapabilities;
+  errors: ValidationErrors;
+}
+
+export interface OperationalTaskDetailPageProps extends PageProps {
+  task: TaskDetail;
+  can: TaskCapabilities;
+  errors: ValidationErrors;
+}
 
 /**
  * Props available on every Inertia page. `user` and `csrfToken` are shared by

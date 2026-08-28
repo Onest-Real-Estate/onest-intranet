@@ -198,9 +198,7 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "error_message",
-                    models.CharField(
-                        blank=True, max_length=500, verbose_name="error"
-                    ),
+                    models.CharField(blank=True, max_length=500, verbose_name="error"),
                 ),
                 (
                     "scope_level",
@@ -232,9 +230,7 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "byte_size",
-                    models.PositiveIntegerField(
-                        default=0, verbose_name="byte size"
-                    ),
+                    models.PositiveIntegerField(default=0, verbose_name="byte size"),
                 ),
                 (
                     "requested_at",

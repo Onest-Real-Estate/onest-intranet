@@ -145,7 +145,7 @@ export function Announcements({ data }: { data: DashboardAnnouncements }) {
 
         {!single ? (
           <>
-            <span className="bg-background/85 absolute top-4 left-4 z-10 rounded-full border px-3 py-1 text-xs font-semibold tabular-nums backdrop-blur-sm">
+            <span className="bg-background/85 absolute top-4 left-4 z-10 rounded-md border px-2.5 py-1 text-xs font-semibold tabular-nums backdrop-blur-sm">
               {current + 1} / {items.length}
             </span>
             <div className="absolute top-4 right-4 z-10 flex gap-1.5">

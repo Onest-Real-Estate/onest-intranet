@@ -14,7 +14,7 @@ export default function OfficeInfo() {
   const { officeInfo, empty } = usePage<OfficeInfoPageProps>().props;
 
   return (
-    <div className="grid gap-10">
+    <div className="grid gap-8">
       <Head title="Office info" />
       <PageHeader
         title="Office info"

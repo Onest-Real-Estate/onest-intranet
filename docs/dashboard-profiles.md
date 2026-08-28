@@ -10,8 +10,9 @@ page component and no role conditional in `frontend/pages/Dashboard.tsx`.
 > / `DashboardProfileAssignment` models, the assignment admin screen, and the
 > server-side providers for the administrative widgets are not implemented yet.
 > The page already reads the props those will fill; until they exist the
-> administrative widgets render clearly-labelled preview data (see
-> [Preview data](#preview-data)).
+> administrative widgets render as **not connected** (see
+> [Unbacked widgets](#unbacked-widgets)). The dashboard never fills the gap
+> with an invented figure.
 
 ## The widget registry
 
@@ -142,21 +143,27 @@ company one would misdescribe every number under it.
 With one option there is nothing to choose, so the page shows the scope as a
 plain label rather than a control that does nothing.
 
-## Preview data
+## Unbacked widgets
 
-`frontend/lib/dashboard/preview.ts` holds one fixture per unbacked widget,
-typed as that widget's real payload so a fixture that drifts from the contract
-fails `tsc`. The rules:
+A widget whose provider has not shipped has no prop to read. `envelope()` in
+`DashboardWidgetSlot` synthesises an `unavailable` envelope for it, so the
+panel says *Not connected yet* in the same vocabulary as a module that is
+genuinely offline. The rules:
 
 - A `ready` server envelope always wins, whatever the registry says, so real
-  data can never end up hidden behind a fixture because someone forgot to flip
-  `backed`. Otherwise a `backed: false` widget shows its preview, and a backed
-  one shows whatever the provider said — including empty and failed.
-- Every preview panel renders a **Preview data** badge.
+  data can never end up hidden behind the placeholder because someone forgot to
+  flip `backed`. Otherwise a `backed: false` widget renders as not connected,
+  and a backed one shows whatever the provider said — including empty and
+  failed.
+- **No fixtures.** The dashboard puts no figure on the page that no provider
+  produced. A reader cannot tell an illustrative 42 from a real one once they
+  have scrolled past the caveat that said so, and a screenshot of the page
+  outlives the caveat entirely.
+- The scope selector is absent until the server sends a `scope` prop, for the
+  same reason: offering breadths the reader may not hold mislabels every figure
+  under it.
 - Registering a provider means flipping `backed` to `true` in the same commit,
-  at which point the fixture is dead and should be deleted.
-
-Nothing in the file is scoped, aggregated, or derived from a real record.
+  at which point the panel starts reading real data with no other change.
 
 ## Adding a role's dashboard
 
@@ -175,8 +182,8 @@ Nothing in the file is scoped, aggregated, or derived from a real record.
    `backed: false`.
 2. Add its prop to `DashboardWidgetProp` and to `DashboardPageProps` in
    `frontend/types/index.ts`.
-3. Add a `case` to `DashboardWidgetSlot`, routing the envelope through
-   `envelope()` if it has a preview fixture. If the shape is a staged funnel, a
+3. Add a `case` to `DashboardWidgetSlot`, routing the prop through
+   `envelope()`. If the shape is a staged funnel, a
    work queue, a utilization meter, or an activity feed, reuse `StageFunnel`,
    `WorkQueue`, `UtilizationMeter`, or `ActivityFeed` rather than writing a
    fifth presentation.

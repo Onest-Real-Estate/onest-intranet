@@ -768,7 +768,7 @@ function PreviewSummary({
 }) {
   return (
     <div
-      className="border-border/60 bg-muted/30 grid gap-2 rounded-xl border p-4 text-sm"
+      className="border-border/60 bg-muted/30 grid gap-2 rounded-lg border p-4 text-sm"
       aria-live="polite"
     >
       <p className="font-medium">Access preview</p>

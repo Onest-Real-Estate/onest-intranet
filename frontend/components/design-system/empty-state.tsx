@@ -1,18 +1,8 @@
 import type { LucideIcon } from "lucide-react";
 import type * as React from "react";
 
+import { IconWell, type IconWellTone } from "@/components/IconWell";
 import { cn } from "@/lib/utils";
-
-/**
- * `brand` is the gold well: a place where the reader is invited to put the
- * first thing. `muted` is for an absence they cannot act on — a module that is
- * not connected, a panel their access does not cover — where a brand moment
- * would celebrate a dead end.
- */
-const toneClasses = {
-  brand: "brand-well text-primary",
-  muted: "bg-muted text-muted-foreground",
-} as const;
 
 export function EmptyState({
   icon: Icon,
@@ -29,7 +19,14 @@ export function EmptyState({
   description?: string;
   actions?: React.ReactNode;
   compact?: boolean;
-  tone?: keyof typeof toneClasses;
+  /**
+   * `brand` is the gold well: a place where the reader is invited to put the
+   * first thing. `muted` is for an absence they cannot act on — a module that
+   * is not connected, a panel their access does not cover — where a brand
+   * moment would celebrate a dead end. The semantic tones classify *why* the
+   * surface is empty when that is worth saying.
+   */
+  tone?: IconWellTone;
 }) {
   return (
     <section
@@ -40,11 +37,7 @@ export function EmptyState({
       )}
       {...props}
     >
-      <span
-        className={cn("grid size-10 place-items-center rounded-xl", toneClasses[tone])}
-      >
-        <Icon className="size-5" aria-hidden />
-      </span>
+      <IconWell icon={Icon} tone={tone} />
       <div className="max-w-md">
         <h3 className="font-semibold">{title}</h3>
         {description ? (

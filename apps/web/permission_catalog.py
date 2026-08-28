@@ -428,6 +428,49 @@ PERMISSION_DEFINITIONS: tuple[PermissionDefinition, ...] = (
         default_roles=(*_MANAGERS, MARKETING_TEAM),
     ),
     PermissionDefinition(
+        codename="web.view_operational_tasks",
+        name="Can view scoped operational tasks",
+        domain="governance",
+        action="view",
+        description=(
+            "View operational tasks within effective scope, plus tasks the "
+            "holder reported, is assigned, or was explicitly shared."
+        ),
+        default_roles=(*_MANAGERS, IT_SUPPORT),
+    ),
+    PermissionDefinition(
+        codename="web.manage_operational_tasks",
+        name="Can create and transition operational tasks",
+        domain="governance",
+        action="manage",
+        description=(
+            "Create tasks, move them through the lifecycle, write internal "
+            "notes, and reopen closed work."
+        ),
+        default_roles=(*_BROKERAGE_ADMINS, IT_SUPPORT),
+        sensitive=True,
+    ),
+    PermissionDefinition(
+        codename="web.assign_operational_tasks",
+        name="Can assign operational tasks",
+        domain="governance",
+        action="manage",
+        description="Set or clear the assignee on a task in scope.",
+        default_roles=(*_MANAGERS, IT_SUPPORT),
+    ),
+    PermissionDefinition(
+        codename="web.comment_operational_tasks",
+        name="Can comment on operational tasks",
+        domain="governance",
+        action="manage",
+        description=(
+            "Post a visible comment. Internal staff-only notes need the "
+            "management grant instead."
+        ),
+        default_roles=(*_MANAGERS, IT_SUPPORT),
+        risk="low",
+    ),
+    PermissionDefinition(
         codename="web.view_platform_tasks",
         name="Can view sanitized platform task status",
         domain="platform",

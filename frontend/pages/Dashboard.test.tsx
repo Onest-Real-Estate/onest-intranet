@@ -279,13 +279,16 @@ describe("per-role dashboards", () => {
 });
 
 describe("widget states", () => {
-  it("labels illustrative figures as preview data", () => {
+  it("puts no figure on the page that no provider produced", () => {
     setPage({
       user: reader({ roles: ["branch_manager"], permissions: ALL_PERMISSIONS }),
     });
     render(<Dashboard />);
 
-    expect(screen.getAllByText("Preview data").length).toBeGreaterThan(0);
+    // A manager's dashboard is mostly unbacked widgets. Each one states the
+    // gap; none of them invents a number to fill it.
+    expect(screen.getAllByText("Not connected yet").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Preview data")).toBeNull();
   });
 
   it("keeps an unconnected module distinct from a zero", () => {

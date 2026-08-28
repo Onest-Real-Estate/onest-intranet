@@ -1,5 +1,5 @@
 import { Head, Link, router, usePage } from "@inertiajs/react";
-import { Info, Newspaper } from "lucide-react";
+import { CalendarClock, ChevronRight, Info, Newspaper } from "lucide-react";
 
 import {
   EmptyState,
@@ -12,6 +12,7 @@ import {
   SurfaceCardContent,
 } from "@/components/design-system";
 import { HubLayout } from "@/components/HubLayout";
+import { IconWell } from "@/components/IconWell";
 import {
   Select,
   SelectContent,
@@ -21,6 +22,7 @@ import {
 } from "@/components/ui/select";
 import {
   activeFilterCount,
+  categoryIcon,
   categoryPresentation,
   priorityPresentation,
   rejectedFilterMessage,
@@ -60,16 +62,16 @@ function FilterSelect({
   onChange: (next: string) => void;
 }) {
   return (
-    <FilterField label={label}>
+    <FilterField label={label} hideLabel>
       <Select
         value={value || ANY}
         onValueChange={(next) => onChange(next === ANY ? "" : next)}
       >
-        <SelectTrigger aria-label={label}>
-          <SelectValue placeholder="Any" />
+        <SelectTrigger size="sm" aria-label={label}>
+          <SelectValue placeholder={`Any ${label.toLowerCase()}`} />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value={ANY}>Any</SelectItem>
+          <SelectItem value={ANY}>Any {label.toLowerCase()}</SelectItem>
           {options.map((option) => (
             <SelectItem key={option.value} value={option.value}>
               {option.label}
@@ -84,43 +86,65 @@ function FilterSelect({
 function AnnouncementCard({ row }: { row: AnnouncementRow }) {
   const priority = priorityPresentation(row.priority);
   const category = categoryPresentation(row.category);
+  const CategoryIcon = categoryIcon(row.category);
+  const titleId = `announcement-${row.id}-title`;
 
   return (
-    <article aria-labelledby={`announcement-${row.id}-title`}>
-      <SurfaceCard>
-        <SurfaceCardContent className="grid gap-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <StatusBadge status={priority} />
-            <StatusBadge status={category} />
-            <span className="text-muted-foreground text-xs">
-              {row.scope.label} · {row.scope.officeName}
-            </span>
-          </div>
-          {/*
-            The badges above are visual shorthand. This sentence is the same
-            information in words, read by assistive technology and available to
-            anyone the tones do not reach.
-          */}
-          <p className="sr-only">
-            {row.priority.srLabel}. {row.category.srLabel}.
-          </p>
-          <h2
-            id={`announcement-${row.id}-title`}
-            className="text-lg leading-snug font-semibold text-balance"
-          >
-            <Link
-              href={routes.announcement_detail(row.id)}
-              className="hover:text-primary focus-visible:ring-ring rounded-sm focus-visible:ring-2 focus-visible:outline-none"
+    <article aria-labelledby={titleId}>
+      <SurfaceCard interactive className="group relative">
+        <SurfaceCardContent className="flex min-w-0 items-start gap-4">
+          {/* The category's own tone and mark. A reader hunting for "the
+              training one" should find it by shape and colour rather than by
+              reading eight titles; the badge beside it still says the word. */}
+          <IconWell
+            icon={CategoryIcon}
+            tone={category.tone}
+            className="mt-0.5 hidden size-10 sm:grid"
+          />
+          <div className="grid min-w-0 flex-1 gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <StatusBadge status={priority} />
+              <StatusBadge status={category} />
+              <span className="text-muted-foreground text-xs">
+                {row.scope.label} · {row.scope.officeName}
+              </span>
+            </div>
+            {/*
+              The badges above are visual shorthand. This sentence is the same
+              information in words, read by assistive technology and available to
+              anyone the tones do not reach.
+            */}
+            <p className="sr-only">
+              {row.priority.srLabel}. {row.category.srLabel}.
+            </p>
+            <h2
+              id={titleId}
+              className="text-base leading-snug font-semibold text-balance"
             >
-              {row.title}
-            </Link>
-          </h2>
-          {row.summary ? (
-            <p className="text-muted-foreground text-sm leading-6">{row.summary}</p>
-          ) : null}
-          <p className="text-muted-foreground text-xs">
-            Published {formatPublished(row.publishedAt)}
-          </p>
+              <Link
+                href={routes.announcement_detail(row.id)}
+                className="group-hover:text-primary focus-visible:ring-ring rounded-sm transition-colors duration-(--motion-fast) focus-visible:ring-2 focus-visible:outline-none"
+              >
+                {/* The whole card is the target; the link keeps the accessible
+                    name and the only tab stop. */}
+                <span className="absolute inset-0" aria-hidden />
+                {row.title}
+              </Link>
+            </h2>
+            {row.summary ? (
+              <p className="text-muted-foreground line-clamp-2 text-sm leading-6">
+                {row.summary}
+              </p>
+            ) : null}
+            <div className="text-muted-foreground flex items-center gap-1.5 text-xs">
+              <CalendarClock className="size-3.5 shrink-0" aria-hidden />
+              Published {formatPublished(row.publishedAt)}
+            </div>
+          </div>
+          <ChevronRight
+            aria-hidden
+            className="text-muted-foreground/60 group-hover:text-foreground mt-2 hidden size-4 shrink-0 transition-colors duration-(--motion-fast) sm:block"
+          />
         </SurfaceCardContent>
       </SurfaceCard>
     </article>
@@ -206,7 +230,7 @@ export default function Announcements() {
             />
           </SurfaceCard>
         ) : (
-          <section aria-label="Announcements" className="grid gap-4">
+          <section aria-label="Announcements" className="grid gap-3">
             {feed.items.map((row) => (
               <AnnouncementCard key={row.id} row={row} />
             ))}

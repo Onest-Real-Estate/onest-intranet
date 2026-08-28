@@ -70,7 +70,6 @@ def revoke_permissions(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("web", "0008_quick_access_click"),
     ]

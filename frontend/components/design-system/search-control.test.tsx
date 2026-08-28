@@ -30,7 +30,8 @@ describe("SearchControl", () => {
     );
     const input = screen.getByRole("searchbox", { name: "Search across ONEST" });
     expect(input).toBeDisabled();
-    expect(input.className).toContain("h-9");
+    // `sm` is one step under the 36px default control height.
+    expect(input.className).toContain("h-8");
   });
 
   it("has no automated accessibility violations", async () => {

@@ -121,8 +121,8 @@ export function AccountAccessPanel({
               <span
                 className={
                   disabling
-                    ? "bg-destructive/12 text-destructive grid size-10 place-items-center rounded-xl"
-                    : "bg-success/15 text-success grid size-10 place-items-center rounded-xl"
+                    ? "bg-chip-destructive text-destructive grid size-10 place-items-center rounded-md"
+                    : "bg-chip-success text-success grid size-10 place-items-center rounded-md"
                 }
               >
                 {disabling ? (

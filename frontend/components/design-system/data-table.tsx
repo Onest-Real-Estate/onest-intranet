@@ -216,7 +216,7 @@ export function DataTable<Row>({
               <li
                 key={key}
                 data-state={selected ? "selected" : undefined}
-                className="bg-card data-[state=selected]:border-ring/50 grid gap-3 rounded-xl border p-4"
+                className="bg-card data-[state=selected]:border-ring/50 grid gap-3 rounded-lg border p-4"
               >
                 <div className="flex items-start gap-3">
                   {selectable ? (
@@ -280,7 +280,7 @@ export function DataTable<Row>({
         <caption className="sr-only">{caption}</caption>
         {/* Micro-caps headers: the column names read as labels rather than as
             another row of data competing with the values below them. */}
-        <TableHeader className="[&_th]:tracking-[0.06em] [&_th]:uppercase">
+        <TableHeader>
           <TableRow>
             {selectable ? (
               <TableHead className="w-11">
@@ -426,7 +426,9 @@ export function DataTable<Row>({
         "@container",
         !asCards && "overflow-hidden",
         frame === "bordered" &&
-          (asCards ? "rounded-xl border p-3" : "rounded-xl border"),
+          (asCards
+            ? "rounded-(--radius-card) border p-3"
+            : "rounded-(--radius-card) border"),
         frame === "bleed" &&
           (asCards
             ? "-mx-5 px-5"

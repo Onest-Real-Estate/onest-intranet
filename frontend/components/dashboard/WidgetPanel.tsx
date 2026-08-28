@@ -9,7 +9,6 @@ import {
   SurfaceCard,
   SurfaceCardContent,
 } from "@/components/design-system/surface-card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { DashboardWidget, DashboardWidgetProp } from "@/types";
 
@@ -23,12 +22,6 @@ interface WidgetPanelProps<T> {
    * they are marked and a refresh is offered.
    */
   stale?: boolean;
-  /**
-   * The payload is illustrative, not this brokerage's data. Set by the
-   * dashboard for widgets whose provider has not shipped; see
-   * `frontend/lib/dashboard/preview.ts`.
-   */
-  preview?: boolean;
   children: (data: T) => ReactNode;
 }
 
@@ -47,19 +40,18 @@ export function WidgetPanel<T>({
   propName,
   widget,
   stale = false,
-  preview = false,
   children,
 }: WidgetPanelProps<T>) {
   const [reloading, setReloading] = useState(false);
 
   if (widget.status === "ready") {
     const content = children(widget.data);
-    if (!stale && !preview) {
+    if (!stale) {
       return content;
     }
     return (
       <div className="grid h-full grid-rows-[auto_1fr] gap-2">
-        <WidgetNotice stale={stale} />
+        <StaleNotice />
         {content}
       </div>
     );
@@ -139,25 +131,19 @@ export function WidgetPanel<T>({
 }
 
 /**
- * The mark above a widget whose data is illustrative or no longer current.
+ * The mark above a widget whose data is no longer current.
  *
  * Deliberately label-only. The page carries one stale banner with the refresh
  * action; repeating that button above ten panels would make the fix look like
  * ten separate jobs.
  */
-function WidgetNotice({ stale }: { stale: boolean }) {
-  if (stale) {
-    return (
-      <p className="text-warning-ink flex items-center gap-1.5 text-xs font-medium">
-        <Clock className="size-3.5 shrink-0" aria-hidden />
-        Stale — loaded before your access changed
-      </p>
-    );
-  }
-
-  // Badge only. The page explains what preview data means once; repeating the
-  // sentence above ten panels turns a caveat into wallpaper.
-  return <Badge variant="warning">Preview data</Badge>;
+function StaleNotice() {
+  return (
+    <p className="text-warning-ink flex items-center gap-1.5 text-xs font-medium">
+      <Clock className="size-3.5 shrink-0" aria-hidden />
+      Stale — loaded before your access changed
+    </p>
+  );
 }
 
 /**
