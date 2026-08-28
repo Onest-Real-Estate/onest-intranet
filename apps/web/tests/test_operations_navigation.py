@@ -124,6 +124,7 @@ def test_registry_has_exact_destinations_order_routes_and_permissions():
                 "admin_offices",
                 "admin_announcements",
                 "operational_tasks",
+                "admin_feedback",
             }
         )
 
@@ -164,7 +165,6 @@ def test_scoped_management_role_permission_matrix():
             "Training",
             "Documents",
             "Quick Access",
-            "Feedback",
             "Tasks",
             "Office Resources",
             "Offices",
@@ -178,7 +178,6 @@ def test_scoped_management_role_permission_matrix():
             "Training",
             "Documents",
             "Quick Access",
-            "Feedback",
             "Tasks",
             "Office Resources",
             "Offices",

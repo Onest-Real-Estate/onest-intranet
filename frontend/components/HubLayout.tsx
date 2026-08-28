@@ -2,9 +2,13 @@ import { Link, router, usePage } from "@inertiajs/react";
 import {
   AlertTriangle,
   ArrowLeft,
+  BookOpen,
   Building2,
   ChevronDown,
   CircleHelp,
+  ExternalLink,
+  Inbox,
+  LifeBuoy,
   LogOut,
   Monitor,
   Moon,
@@ -15,7 +19,14 @@ import {
   UserRound,
   WifiOff,
 } from "lucide-react";
-import { type CSSProperties, type ReactNode, useEffect, useRef, useState } from "react";
+import {
+  type CSSProperties,
+  type ReactNode,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+} from "react";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { QuickCreateMenu } from "@/components/QuickCreateMenu";
 import { GlobalSearch } from "@/components/search/GlobalSearch";
@@ -55,6 +66,7 @@ import {
   hubNavItemDescription,
   isHubNavItemActive,
   parseHubNavExpansion,
+  partitionByAvailability,
   type ResolvedHubNavGroup,
   type ResolvedHubNavItem,
   resolveHubNav,
@@ -264,39 +276,6 @@ function NavGroupItems({
 }
 
 /**
- * Header affordances whose backend does not exist yet. `aria-disabled` rather
- * than `disabled` so the control keeps focus and can still explain itself —
- * a dead control that looks live is worse than one that says it is not ready.
- */
-function PendingAction({
-  label,
-  note,
-  children,
-}: {
-  label: string;
-  note: string;
-  children: ReactNode;
-}) {
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label={`${label} — ${note}`}
-          aria-disabled
-          className="text-muted-foreground size-9"
-          onClick={(event) => event.preventDefault()}
-        >
-          {children}
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent>{note}</TooltipContent>
-    </Tooltip>
-  );
-}
-
-/**
  * Signed-in identity at the foot of the rail: who you are, and the one action
  * that ends the session. The name block is a link to the profile rather than a
  * menu — a second dropdown holding the same items as the header one would make
@@ -346,6 +325,134 @@ function ThemeToggle() {
         </Button>
       </TooltipTrigger>
       <TooltipContent>Theme: {THEME_LABEL[preference]}</TooltipContent>
+    </Tooltip>
+  );
+}
+
+/**
+ * The pinned help row.
+ *
+ * Built to the nav rows' own metrics so the rail still reads as one column,
+ * and it answers the pointer the same way. Collapsed to the icon rail it keeps
+ * a tooltip, because an unlabelled lifebuoy is a guess.
+ */
+/**
+ * What is registered but not built yet, in one row instead of eight.
+ *
+ * Kept visible because seeing what is coming is the point of registering it,
+ * and collapsed because an agent should be able to read their rail as a list
+ * of things that work first. The rows keep everything they had — the link to
+ * their Coming Soon page, the Soon marker, the spoken description — so this
+ * takes nothing away from a reader who goes looking.
+ */
+function SidebarComingSoon({
+  items,
+  current,
+}: {
+  items: ResolvedHubNavItem[];
+  current: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const panelId = useId();
+
+  if (items.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="px-2.5 pt-4 group-data-[collapsible=icon]:hidden">
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-controls={panelId}
+        onClick={() => setOpen((current) => !current)}
+        className="text-muted-foreground hover:text-foreground focus-visible:ring-sidebar-ring flex w-full items-center gap-2 rounded-md px-2.5 py-1 text-left text-micro font-semibold tracking-[0.09em] uppercase transition-colors duration-(--motion-fast) focus-visible:ring-2 focus-visible:outline-none"
+      >
+        <span className="min-w-0 flex-1 truncate">Coming soon</span>
+        <span className="text-muted-foreground/80 tabular-nums">{items.length}</span>
+        <ChevronDown
+          aria-hidden
+          className={cn(
+            "size-3.5 shrink-0 transition-transform duration-(--motion-fast) motion-reduce:transition-none",
+            open ? "rotate-0" : "-rotate-90",
+          )}
+          strokeWidth={1.5}
+        />
+      </button>
+      {/* Still real links: each resolves to its own protected Coming Soon page
+          that explains the module, and each keeps its Soon marker and spoken
+          description. The simplification here is the *grouping* — nothing is
+          taken away. */}
+      <div id={panelId} className={open ? undefined : "hidden"}>
+        <NavList items={items} current={current} />
+      </div>
+    </div>
+  );
+}
+
+function SidebarSupportLink({
+  current,
+  fullUrl,
+}: {
+  current: string;
+  fullUrl: string;
+}) {
+  const active =
+    current === routes.feedback_submit() ||
+    current.startsWith(`${routes.feedback_submit()}/`) ||
+    current === routes.feedback_mine();
+
+  // The page the reader is on travels with the click. `document.referrer` is
+  // empty for an Inertia visit, which is every visit here, so capturing it at
+  // the source is the only way the report knows where it came from.
+  //
+  // The *full* url, not the path: `current` has its query stripped for
+  // active-matching, and the query is often the whole story — "page 3 of the
+  // filtered list" is where the thing broke. The redaction layer keeps an
+  // allowlist of exactly those filter parameters and drops the rest, so
+  // sending them is safe and dropping them here would waste that work.
+  const href = `${routes.feedback_submit()}?from=${encodeURIComponent(fullUrl)}`;
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Link
+          href={href}
+          aria-current={active ? "page" : undefined}
+          className={cn(
+            // An *outlined* row, not a nav row. Every destination above it is
+            // a place in the product; this is a utility, and giving it the
+            // same treatment made it read as an orphaned twelfth link rather
+            // than the thing you reach for when something breaks.
+            "focus-visible:ring-sidebar-ring group/help flex items-center gap-2.5 rounded-lg border px-2.5 py-2 text-left transition-[background-color,border-color,color] duration-(--motion-fast) focus-visible:ring-2 focus-visible:outline-none",
+            "group-data-[collapsible=icon]:size-9 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:gap-0 group-data-[collapsible=icon]:border-transparent group-data-[collapsible=icon]:px-0 group-data-[collapsible=icon]:py-0",
+            active
+              ? "border-chip-primary-edge bg-chip-primary"
+              : "border-sidebar-border/70 hover:border-border-strong hover:bg-sidebar-accent/45 bg-transparent",
+          )}
+        >
+          <span
+            aria-hidden
+            className={cn(
+              "grid size-7 shrink-0 place-items-center rounded-md transition-colors",
+              active
+                ? "bg-brand-gold/25 text-primary"
+                : "brand-well text-primary group-hover/help:bg-brand-gold/25",
+            )}
+          >
+            <LifeBuoy className="size-4" strokeWidth={1.5} />
+          </span>
+          <span className="grid min-w-0 leading-tight group-data-[collapsible=icon]:hidden">
+            <span className="text-sidebar-foreground truncate text-sm font-medium">
+              Get help
+            </span>
+            <span className="text-muted-foreground truncate text-xs">
+              Report a problem
+            </span>
+          </span>
+        </Link>
+      </TooltipTrigger>
+      <TooltipContent side="right">Report a problem or ask for help</TooltipContent>
     </Tooltip>
   );
 }
@@ -644,27 +751,66 @@ function ShellWorkspace({
             before serialization — see apps/web/search. */}
         <GlobalSearch />
         <div className="border-border/70 ml-auto flex shrink-0 items-center gap-0.5 border-l pl-1.5 sm:pl-2">
-          {helpUrl ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button asChild variant="ghost" size="icon" className="size-9">
-                  <a
-                    href={helpUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label="Open help centre in a new tab"
-                  >
-                    <CircleHelp aria-hidden className="size-5" />
-                  </a>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Help centre</TooltipContent>
-            </Tooltip>
-          ) : (
-            <PendingAction label="Help" note="Help centre is not wired up yet">
-              <CircleHelp className="size-5" strokeWidth={1.5} />
-            </PendingAction>
-          )}
+          {/* Help always does something now. The in-app support surface is the
+              destination that always exists; an external help centre, when one
+              is configured, is offered beside it rather than instead of it —
+              the two answer different questions ("how does this work" versus
+              "this is broken"). */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="text-muted-foreground hover:text-foreground size-9"
+                aria-label="Help and support"
+              >
+                <CircleHelp aria-hidden className="size-5" strokeWidth={1.5} />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-64">
+              <DropdownMenuLabel className="font-normal">
+                <p className="text-sm font-medium">Need a hand?</p>
+                <p className="text-muted-foreground text-xs">
+                  Report a problem or check something you already sent.
+                </p>
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem asChild>
+                <Link
+                  href={`${routes.feedback_submit()}?from=${encodeURIComponent(
+                    typeof window === "undefined"
+                      ? ""
+                      : window.location.pathname + window.location.search,
+                  )}`}
+                >
+                  <LifeBuoy className="size-4" strokeWidth={1.5} />
+                  Get help
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href={routes.feedback_mine()}>
+                  <Inbox className="size-4" strokeWidth={1.5} />
+                  My reports
+                </Link>
+              </DropdownMenuItem>
+              {helpUrl ? (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem asChild>
+                    <a href={helpUrl} target="_blank" rel="noopener noreferrer">
+                      <BookOpen className="size-4" strokeWidth={1.5} />
+                      Help centre
+                      <ExternalLink
+                        className="text-muted-foreground ml-auto size-3.5"
+                        aria-hidden
+                      />
+                      <span className="sr-only">(opens in a new tab)</span>
+                    </a>
+                  </DropdownMenuItem>
+                </>
+              ) : null}
+            </DropdownMenuContent>
+          </DropdownMenu>
           <NotificationBell summary={notifications} />
           {/* One registry, both entry points: this header is the mobile header
               too, so desktop and mobile can never offer different actions. */}
@@ -755,7 +901,11 @@ export function HubLayout({ children, context, variant = "standard" }: HubLayout
   const page = usePage<PageProps>();
   const { user, features, primaryOffice, notifications, quickCreate } = page.props;
   const current = page.url.split("?")[0];
-  const navGroups = resolveHubNav(user, features, primaryOffice);
+  // The rail lists what works; what is registered but unbuilt is gathered into
+  // one disclosure at the bottom rather than scattered through the groups.
+  const { live: navGroups, pending } = partitionByAvailability(
+    resolveHubNav(user, features, primaryOffice),
+  );
   const [expandedSections, setExpandedSections] = useState<Set<HubNavSectionKey>>(() =>
     parseHubNavExpansion(storedExpansionState()),
   );
@@ -868,6 +1018,7 @@ export function HubLayout({ children, context, variant = "standard" }: HubLayout
                 </SidebarGroupContent>
               </SidebarGroup>
             ))}
+            <SidebarComingSoon items={pending} current={current} />
           </nav>
         </SidebarContent>
         {/* The wordmark in the header already names the company; under a real
@@ -875,7 +1026,14 @@ export function HubLayout({ children, context, variant = "standard" }: HubLayout
             This rule is the one divider in the rail — group labels carry the
             separation above it, but the account is a different kind of thing
             from a destination and earns the seam. */}
-        <SidebarFooter className="border-sidebar-border/70 mt-2 border-t px-2.5 py-2.5 group-data-[collapsible=icon]:px-1.5">
+        {/* Help is pinned rather than listed. It is the one destination whose
+            value is being findable the moment something goes wrong — putting
+            it in the scrolling list means the reader who needs it most has to
+            scroll past everything that just failed them. It sits above the
+            account card because both are about the person rather than the
+            work, and the footer is already the rail's one seam. */}
+        <SidebarFooter className="border-sidebar-border/70 mt-2 gap-1 border-t px-2.5 py-2.5 group-data-[collapsible=icon]:px-1.5">
+          <SidebarSupportLink current={current} fullUrl={page.url} />
           {user ? <SidebarAccount user={user} onSignOut={signOut} /> : null}
         </SidebarFooter>
       </Sidebar>

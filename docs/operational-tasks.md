@@ -131,11 +131,17 @@ and only in `Open` / `In progress`. A blocked or waiting task is not something
 the assignee can move, so it stays off the queue until it comes back to them.
 Completion is derived from the task; there is no dashboard-side dismissal.
 
-## Status of this module
+## Surface
 
-Shipped: domain, migration, permissions, lifecycle service, scope, audit,
-notifications, action items, admin, 38 backend tests.
+`/operations/tasks` is the queue, in two layouts behind one route:
 
-Not yet shipped: the Inertia list/board/detail pages, their routes, and the
-`admin-operational-tasks` navigation entry. `HUB_FEATURES` therefore has no
-entry for this module yet — add one in the same commit that ships the pages.
+- **List** — paginated, filterable, columns dropping by *container* width.
+- **Board** — grouped **server-side** into the lifecycle's fixed columns, so
+  the order, the counts, and the empty columns are the same fact the list is
+  reading. A client-side `groupBy` would silently drop a status the server
+  knows about. The board is bounded at 200 rather than paginated: a column that
+  quietly stops at 25 looks like the work is done.
+
+`/operations/tasks/<public_id>` is the detail. `transitions` arrives already
+narrowed to the moves the reader may make, each posts `expectedStatus`, and the
+service re-checks every one — the buttons are a convenience, never the gate.

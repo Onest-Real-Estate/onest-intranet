@@ -317,6 +317,148 @@ export type DashboardWidgetProp =
   | "feedbackSignals";
 
 /* -------------------------------------------------------------------------- */
+/* Feedback and support                                                       */
+/* -------------------------------------------------------------------------- */
+
+export interface FeedbackBadge {
+  code: string;
+  label: string;
+  tone: StatusTone;
+}
+
+export interface FeedbackStatusBadge extends FeedbackBadge {
+  known: boolean;
+}
+
+export interface FeedbackPriorityBadge extends FeedbackBadge {
+  rank: number;
+}
+
+export interface FeedbackPerson {
+  id: number;
+  name: string;
+}
+
+export interface FeedbackRow {
+  id: string;
+  reference: string;
+  summary: string;
+  category: { code: string; label: string };
+  status: FeedbackStatusBadge;
+  priority: FeedbackPriorityBadge;
+  /** What the submitter said. Distinct from the staff-set priority. */
+  urgency: { code: string; label: string };
+  submitter: FeedbackPerson | null;
+  assignee: FeedbackPerson | null;
+  office: { id: number; name: string } | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FeedbackNote {
+  id: string;
+  author: FeedbackPerson | null;
+  body: string;
+  /** Staff-only. The server never serializes one to the submitter, so this is
+   *  a display hint and never the boundary. */
+  internal: boolean;
+  createdAt: string;
+}
+
+/** `href` is a route that re-authorizes, never a storage path. */
+export interface FeedbackScreenshot {
+  id: string;
+  displayName: string;
+  mediaType: string;
+  byteSize: number;
+  width: number | null;
+  height: number | null;
+  href: string;
+}
+
+export interface FeedbackTransition {
+  target: string;
+  label: string;
+  requiresReply: boolean;
+  tone: StatusTone;
+}
+
+export interface FeedbackDetail extends FeedbackRow {
+  description: string;
+  notes: FeedbackNote[];
+  screenshots: FeedbackScreenshot[];
+  transitions: FeedbackTransition[];
+  resolvedAt: string | null;
+  closedAt: string | null;
+  convertedTaskId: string;
+  /** Present only for a reader who may triage — already scrubbed server-side. */
+  diagnostics?: { pageUrl: string; metadata: Record<string, string> };
+}
+
+export interface FeedbackCapabilities {
+  triage: boolean;
+  assign: boolean;
+  note: boolean;
+}
+
+/** A real office assignment, narrowed to what somebody stuck actually needs. */
+export interface SupportContact {
+  key: string;
+  role: string;
+  purpose: string;
+  name: string;
+  email: string;
+  phone: string;
+}
+
+export interface FeedbackSubmitPageProps extends PageProps {
+  categories: FilterOption[];
+  urgencies: FilterOption[];
+  /** Generated from the constants that do the capturing, so the promise and
+   *  the behaviour cannot drift apart. */
+  disclosure: string[];
+  contacts: SupportContact[];
+  /** The page the reader came from, already scrubbed and same-origin checked. */
+  pageUrl: string;
+  errors: ValidationErrors;
+}
+
+export interface FeedbackMinePageProps extends PageProps {
+  tickets: ListResponse<FeedbackRow, Record<string, never>>;
+  errors: ValidationErrors;
+}
+
+export interface FeedbackDetailPageProps extends PageProps {
+  ticket: FeedbackDetail;
+  can: FeedbackCapabilities;
+  /** Support staff inside the reader's own reach. Empty without triage. */
+  assignees: FeedbackPerson[];
+  priorities: FilterOption[];
+  errors: ValidationErrors;
+}
+
+export interface FeedbackInboxFilters {
+  status: string;
+  category: string;
+  assigned: string;
+  q: string;
+  [key: string]: string | string[];
+}
+
+export interface FeedbackInboxPageProps extends PageProps {
+  tickets: ListResponse<FeedbackRow, FeedbackInboxFilters>;
+  filterOptions: {
+    statuses: FilterOption[];
+    categories: FilterOption[];
+    priorities: FilterOption[];
+    urgencies: FilterOption[];
+  };
+  summary: { open: number; mine: number };
+  can: { triage: boolean; assign: boolean };
+  errors: ValidationErrors;
+}
+
+/* -------------------------------------------------------------------------- */
 /* Operational tasks                                                          */
 /* -------------------------------------------------------------------------- */
 
@@ -409,12 +551,14 @@ export interface TaskBoardColumn {
   count: number;
 }
 
-export interface TaskFilters extends Record<string, unknown> {
+export interface TaskFilters {
   status: string;
   category: string;
   priority: string;
   assigned: string;
   q: string;
+  /** Matches the shape `buildListUrl` and `ListResponse` both expect. */
+  [key: string]: string | string[];
 }
 
 /** Mirrors the service's grants so the UI can hide what it may not do. It is

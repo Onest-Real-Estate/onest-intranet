@@ -368,6 +368,84 @@ ROUTE_POLICIES: dict[str, AuthorizationPolicy] = {
         route_names=("office_resources",),
         scope_rule="self_only",
     ),
+    "feedback_submit": AuthorizationPolicy(
+        key="feedback_submit",
+        access="authenticated",
+        description=(
+            "The support form. Open to every authenticated person on purpose: "
+            "gating it would mean the people most likely to hit a permission "
+            "bug are the ones who cannot report it."
+        ),
+        methods=("GET",),
+        route_names=("feedback_submit",),
+        scope_rule="self_only",
+    ),
+    "feedback_mine": AuthorizationPolicy(
+        key="feedback_mine",
+        access="authenticated",
+        description=(
+            "The submitter's own tickets. `for_reader` with `can_triage=False` "
+            "returns their rows and nobody else's, whatever office they are in."
+        ),
+        methods=("GET",),
+        route_names=("feedback_mine",),
+        scope_rule="self_only",
+    ),
+    "feedback_detail": AuthorizationPolicy(
+        key="feedback_detail",
+        access="authenticated",
+        description=(
+            "One ticket, loaded through the reader's own scoped queryset so an "
+            "id outside their reach is a 404 rather than a 403. Triage "
+            "capability widens which tickets resolve, never what the route "
+            "allows."
+        ),
+        methods=("GET",),
+        route_names=("feedback_detail",),
+        scope_rule="feedback_reader_scope",
+    ),
+    "feedback_screenshot": AuthorizationPolicy(
+        key="feedback_screenshot",
+        access="authenticated",
+        description=(
+            "One attached image, authorized at access time and streamed. The "
+            "parent ticket is loaded through the reader's scoped queryset "
+            "first, so nothing durable is handed out that could outlive their "
+            "access."
+        ),
+        methods=("GET",),
+        route_names=("feedback_screenshot",),
+        scope_rule="feedback_reader_scope",
+    ),
+    "feedback_write": AuthorizationPolicy(
+        key="feedback_write",
+        access="authenticated",
+        description=(
+            "Submit a report, or reply on a ticket. The service decides what "
+            "each actor may write — a submitter replies on their own ticket, "
+            "an internal note needs the note grant."
+        ),
+        methods=("POST",),
+        route_names=("feedback_create", "feedback_note"),
+        scope_rule="feedback_reader_scope",
+    ),
+    "feedback_triage_write": AuthorizationPolicy(
+        key="feedback_triage_write",
+        access="permission_protected",
+        description=(
+            "Transition, assign, prioritise, and convert. Each write re-checks "
+            "its own specific grant in the service."
+        ),
+        methods=("POST",),
+        route_names=(
+            "feedback_transition",
+            "feedback_assign",
+            "feedback_prioritise",
+            "feedback_convert",
+        ),
+        all_permissions=("web.triage_feedback",),
+        scope_rule="feedback_office_scope",
+    ),
     "operational_task_detail": AuthorizationPolicy(
         key="operational_task_detail",
         access="permission_protected",

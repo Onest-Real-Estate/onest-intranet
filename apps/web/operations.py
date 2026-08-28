@@ -180,7 +180,7 @@ OPERATIONS_DESTINATIONS: tuple[OperationsDestination, ...] = (
         section="Governance & support",
         route_name="admin_feedback",
         path="operations/feedback",
-        permission="web.view_feedback",
+        permission="web.triage_feedback",
         order=140,
         feature="admin-feedback",
         scope_rule="feedback_office_scope",
@@ -259,6 +259,7 @@ OPERATIONS_FEATURES["admin-offices"] = True
 OPERATIONS_FEATURES["admin-office-resources"] = True
 OPERATIONS_FEATURES["admin-announcements"] = True
 OPERATIONS_FEATURES["admin-operational-tasks"] = True
+OPERATIONS_FEATURES["admin-feedback"] = True
 
 _OPS_SURFACE_PERMISSIONS = frozenset(
     destination.permission for destination in OPERATIONS_DESTINATIONS

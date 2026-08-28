@@ -428,6 +428,38 @@ PERMISSION_DEFINITIONS: tuple[PermissionDefinition, ...] = (
         default_roles=(*_MANAGERS, MARKETING_TEAM),
     ),
     PermissionDefinition(
+        codename="web.triage_feedback",
+        name="Can triage scoped feedback",
+        domain="governance",
+        action="manage",
+        description=(
+            "Read other people's feedback in scope, move it through the "
+            "lifecycle, set priority, and convert it to operational work."
+        ),
+        default_roles=(*_BROKERAGE_ADMINS, IT_SUPPORT),
+        sensitive=True,
+    ),
+    PermissionDefinition(
+        codename="web.assign_feedback",
+        name="Can assign feedback tickets",
+        domain="governance",
+        action="manage",
+        description="Set or clear the assignee on a ticket in scope.",
+        default_roles=(*_BROKERAGE_ADMINS, IT_SUPPORT),
+    ),
+    PermissionDefinition(
+        codename="web.note_feedback",
+        name="Can write internal notes on feedback",
+        domain="governance",
+        action="manage",
+        description=(
+            "Write staff-only notes. Never visible to the submitter, and "
+            "separate from replying to them."
+        ),
+        default_roles=(*_BROKERAGE_ADMINS, IT_SUPPORT),
+        sensitive=True,
+    ),
+    PermissionDefinition(
         codename="web.view_operational_tasks",
         name="Can view scoped operational tasks",
         domain="governance",
