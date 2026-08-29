@@ -67,9 +67,27 @@ def test_an_ordinary_attachment_needs_only_the_comment_grant(seeded):
 
     assert attachment.internal is False
     assert attachment.byte_size == 4
-    # Derived from the name the server accepted, never the header the client
-    # claimed: a Content-Type is the uploader's assertion, not a fact.
+    # From the module's own table, never the header the client claimed: a
+    # Content-Type is the uploader's assertion, not a fact.
     assert attachment.media_type == "text/plain"
+
+
+def test_the_media_type_does_not_depend_on_the_host():
+    """`mimetypes` reads the operating system's own MIME database.
+
+    macOS maps `.log` to `text/plain`; a bare Linux container returns nothing
+    and would store `application/octet-stream`. That difference reached CI as a
+    failure here, and would have reached production as a served header that
+    depended on which machine accepted the upload — so the table is code-owned
+    and every accepted extension must appear in it.
+    """
+    assert set(services.ATTACHMENT_MEDIA_TYPES) == set(
+        services.ALLOWED_ATTACHMENT_EXTENSIONS
+    )
+    assert all(
+        "/" in media_type for media_type in services.ATTACHMENT_MEDIA_TYPES.values()
+    )
+    assert services.ATTACHMENT_MEDIA_TYPES[".log"] == "text/plain"
 
 
 @pytest.mark.django_db

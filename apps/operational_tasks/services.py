@@ -17,7 +17,6 @@ Step 3 is what makes the API safe for a UI: a stale board that still shows
 from __future__ import annotations
 
 import logging
-import mimetypes
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -57,27 +56,38 @@ logger = logging.getLogger("apps.operational_tasks")
 #: because an HTTP caller has to be able to say "the form sent no opinion".
 UNSET: object = object()
 
-#: What may be attached to a task. Deliberately the same allowlist the office
-#: resource module uses: an extension this hub refuses to serve anywhere else
-#: must not become servable because it arrived through a support queue.
-ALLOWED_ATTACHMENT_EXTENSIONS: frozenset[str] = frozenset(
-    {
-        ".pdf",
-        ".doc",
-        ".docx",
-        ".xls",
-        ".xlsx",
-        ".png",
-        ".jpg",
-        ".jpeg",
-        ".gif",
-        ".webp",
-        ".txt",
-        ".csv",
-        ".log",
-        ".json",
-    }
-)
+#: What may be attached, and what each one is served as.
+#:
+#: Deliberately the same allowlist the office resource module uses: an
+#: extension this hub refuses to serve anywhere else must not become servable
+#: because it arrived through a support queue.
+#:
+#: The media type is stated here rather than read from :mod:`mimetypes`, which
+#: consults the host's own MIME database — macOS maps ``.log`` to ``text/plain``
+#: and a bare Linux container does not. A stored type that depends on which
+#: machine accepted the upload is a header we would later serve back, so the
+#: table is code-owned and the same everywhere.
+ATTACHMENT_MEDIA_TYPES: dict[str, str] = {
+    ".pdf": "application/pdf",
+    ".doc": "application/msword",
+    ".docx": (
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    ),
+    ".xls": "application/vnd.ms-excel",
+    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+    ".txt": "text/plain",
+    ".csv": "text/csv",
+    ".log": "text/plain",
+    ".json": "application/json",
+}
+
+#: Derived, so the allowlist and the served type can never disagree.
+ALLOWED_ATTACHMENT_EXTENSIONS: frozenset[str] = frozenset(ATTACHMENT_MEDIA_TYPES)
 MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
 #: Per task, not per upload. A support queue collects evidence, not a document
 #: library, and an unbounded count turns one task into a storage bill.
@@ -496,12 +506,14 @@ def attach_file(
 
     uploaded.seek(0)
     data = uploaded.read()
-    guessed, _encoding = mimetypes.guess_type(name)
     attachment = TaskAttachment(
         task=task,
         uploaded_by=actor.user,
         display_name=name[:200],
-        media_type=(guessed or "application/octet-stream")[:100],
+        # From the extension the allowlist just accepted, so the stored type is
+        # the same on every host and never the ``Content-Type`` the client
+        # claimed — a header is the uploader's assertion, not a fact.
+        media_type=ATTACHMENT_MEDIA_TYPES[extension],
         byte_size=len(data),
         internal=internal,
     )

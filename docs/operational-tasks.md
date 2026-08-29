@@ -108,10 +108,15 @@ no signed link, no presigned URL.
 Uploading (`services.attach_file`) needs the **comment** grant; marking a file
 internal needs **manage**, the same split as notes. Before anything is written
 the service checks the extension against a closed allowlist, the size against
-10 MB, and the per-task count against 10, and it derives the stored media type
-from the filename the server accepted rather than the `Content-Type` the client
-claimed — a header is the uploader’s assertion, not a fact. A closed task takes
-no more files.
+10 MB, and the per-task count against 10. A closed task takes no more files.
+
+The stored media type comes from `services.ATTACHMENT_MEDIA_TYPES`, which the
+allowlist is derived from, so the two cannot disagree. It is **not** read from
+`mimetypes`: that consults the host’s own MIME database — macOS maps `.log` to
+`text/plain`, a bare Linux container does not — and a type that depends on
+which machine accepted the upload is a header this hub would later serve back.
+It is never the `Content-Type` the client claimed either; a header is the
+uploader’s assertion, not a fact.
 
 > `TaskAttachment.file` carries `max_length=255`. The generated object key is
 > two UUIDs and a prefix — about 92 characters — before the filename starts, so
