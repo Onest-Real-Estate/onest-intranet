@@ -1,7 +1,11 @@
+import json
 import logging
 
+from django.core.exceptions import RequestDataTooBig
+from django.http import QueryDict, UnreadablePostError
 from django.middleware.csrf import get_token
 from django.urls import Resolver404, resolve
+from django.utils.datastructures import MultiValueDict
 from inertia import share
 
 from apps.audit.models import AuditEvent
@@ -20,6 +24,105 @@ from apps.web.quick_actions import quick_create_payload
 from apps.web.shell import authorization_version, help_configuration
 
 logger = logging.getLogger("apps.authorization")
+#: Its own channel: a body that will not parse is a request-shape problem,
+#: not an authorization decision, and the two are read by different people.
+json_logger = logging.getLogger("apps.web.inertia_json")
+
+
+class InertiaJsonPostMiddleware:
+    """Make Inertia's JSON request bodies readable as ``request.POST``.
+
+    Inertia serializes a visit's data as ``application/json`` unless it carries
+    a file. Django populates ``request.POST`` only for
+    ``application/x-www-form-urlencoded`` and ``multipart/form-data``, so every
+    field of such a request arrives as an empty ``QueryDict`` and each view
+    silently reads ``""`` — no error, no log, just a write that does nothing.
+    Django's test client posts form-encoded by default, so a test suite does
+    not see it.
+
+    This translates the body once, at the edge, so the fifteen view modules
+    that read ``request.POST`` keep one input contract regardless of how the
+    caller encoded it. The alternative — forcing the client to send
+    ``FormData`` — cannot express a list: Inertia writes ``order[0]``,
+    ``order[1]``, and ``QueryDict.getlist("order")`` then returns nothing.
+
+    Values are coerced to what an equivalent HTML form would have submitted, so
+    a view written against a form post reads the same thing either way:
+
+    * ``True`` / ``False`` become ``"1"`` / ``"0"`` — the convention Inertia's
+      own ``FormData`` serializer uses, and what ``== "1"`` checks expect;
+    * ``None`` becomes ``""``, the empty field a browser sends;
+    * a list becomes repeated values, readable with ``getlist``;
+    * a nested object is re-encoded as JSON, because a ``QueryDict`` holds
+      strings and dropping it silently would be worse than handing the view
+      something it can parse.
+
+    Only unsafe methods with a JSON content type are touched. A GET carries no
+    body, a form post is already correct, and a multipart upload must keep
+    Django's own parser — none of them reach the translation.
+    """
+
+    #: Methods that carry a body worth reading. GET and DELETE are excluded
+    #: because Inertia sends their data in the query string, not the body.
+    UNSAFE_METHODS = frozenset({"POST", "PUT", "PATCH"})
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        if request.method in self.UNSAFE_METHODS and self._is_json(request):
+            self._translate(request)
+        return self.get_response(request)
+
+    @staticmethod
+    def _is_json(request) -> bool:
+        return request.content_type == "application/json"
+
+    def _translate(self, request) -> None:
+        try:
+            raw = request.body
+        except (RequestDataTooBig, UnreadablePostError, OSError):
+            # Django raises rather than truncating. Leaving ``POST`` empty lets
+            # the view answer with its own validation error instead of a 500.
+            json_logger.warning("unreadable body on %s", request.path)
+            return
+        if not raw:
+            return
+        try:
+            payload = json.loads(raw)
+        except (ValueError, UnicodeDecodeError):
+            json_logger.warning("malformed body on %s", request.path)
+            return
+        if not isinstance(payload, dict):
+            # A bare list or scalar has no field names, so there is nothing a
+            # form-shaped view could read from it.
+            return
+
+        data = QueryDict(mutable=True)
+        for key, value in payload.items():
+            if isinstance(value, list):
+                data.setlist(str(key), [self._scalar(item) for item in value])
+            else:
+                data[str(key)] = self._scalar(value)
+        data._mutable = False
+
+        # Both, together: Django populates ``_post`` and ``_files`` in one step,
+        # and a view reaching for ``request.FILES`` must not find the attribute
+        # missing on a request that never had one.
+        request._post = data
+        request._files = MultiValueDict()
+
+    @staticmethod
+    def _scalar(value) -> str:
+        if isinstance(value, bool):
+            return "1" if value else "0"
+        if value is None:
+            return ""
+        if isinstance(value, str):
+            return value
+        if isinstance(value, int | float):
+            return str(value)
+        return json.dumps(value)
 
 
 class AuthorizationPolicyMiddleware:

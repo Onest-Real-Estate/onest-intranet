@@ -513,7 +513,8 @@ export interface TaskComment {
   createdAt: string;
 }
 
-/** No URL: files are fetched through a view that re-authorizes the reader. */
+/** No URL: files are fetched through `routes.operational_task_attachment`,
+ *  which re-authorizes the reader against the parent task on every request. */
 export interface TaskAttachment {
   id: string;
   displayName: string;
@@ -569,6 +570,20 @@ export interface TaskCapabilities {
   comment: boolean;
 }
 
+/** The create drawer's fields, echoed verbatim when a save is refused. Mirrors
+ *  `views.DRAFT_FIELDS`; every value is a form string, never a parsed one. */
+export interface TaskDraft {
+  office: string;
+  category: string;
+  title: string;
+  description: string;
+  priority: string;
+  team: string;
+  assignee: string;
+  dueAt: string;
+  tags: string;
+}
+
 export interface OperationalTasksPageProps extends PageProps {
   tasks: ListResponse<TaskRow, TaskFilters>;
   /** Present only in board view; the list view sends null. */
@@ -581,12 +596,22 @@ export interface OperationalTasksPageProps extends PageProps {
   };
   summary: { open: number; overdue: number; mine: number };
   can: TaskCapabilities;
+  /** Offices this actor may file a task against, scoped server-side. Empty for
+   *  a reader without the management grant — the create form never renders. */
+  offices: { id: number; name: string }[];
+  categories: FilterOption[];
+  /** Reopened by the server on a refused save, with the draft echoed back:
+   *  the drawer posts natively, so anything not returned is lost. */
+  createSheet: { open: boolean; draft: TaskDraft };
   errors: ValidationErrors;
 }
 
 export interface OperationalTaskDetailPageProps extends PageProps {
   task: TaskDetail;
   can: TaskCapabilities;
+  /** Candidate assignees inside this actor's own reach. Empty for somebody
+   *  without the assign grant, so the picker never becomes a staff directory. */
+  assignees: TaskPerson[];
   errors: ValidationErrors;
 }
 

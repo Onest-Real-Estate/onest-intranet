@@ -95,6 +95,10 @@ function setPage(overrides: Partial<OperationalTaskDetailPageProps> = {}) {
     notifications: null,
     task: task(),
     can: { manage: true, assign: true, comment: true },
+    assignees: [
+      { id: 1, name: "Sam Staff" },
+      { id: 2, name: "Avery Johnson" },
+    ],
     errors: { fields: {}, form: [] },
     ...overrides,
   } as OperationalTaskDetailPageProps;
@@ -184,6 +188,96 @@ describe("OperationalTaskDetail", () => {
     setPage({ can: { manage: false, assign: false, comment: false } });
     render(<OperationalTaskDetail />);
     expect(screen.queryByLabelText("Add a comment")).toBeNull();
+  });
+
+  it("offers the assignee picker only to somebody who may assign", () => {
+    setPage({ can: { manage: false, assign: false, comment: true } });
+    render(<OperationalTaskDetail />);
+    // Read-only for everybody else — the name is still shown, the control is not.
+    expect(screen.queryByLabelText("Assignee")).toBeNull();
+    expect(screen.getByText("Avery Johnson")).toBeVisible();
+  });
+
+  it("posts a reassignment to the task's own endpoint", async () => {
+    const user = userEvent.setup();
+    render(<OperationalTaskDetail />);
+
+    await user.selectOptions(screen.getByLabelText("Assignee"), "1");
+
+    expect(formPost).toHaveBeenCalledOnce();
+    expect(formPost.mock.calls[0][0]).toBe(
+      "/operations/tasks/11111111-1111-1111-1111-111111111111/assign",
+    );
+  });
+
+  it("offers only the candidates the server scoped, plus unassigned", () => {
+    render(<OperationalTaskDetail />);
+    const options = screen.getAllByRole("option").map((option) => option.textContent);
+    expect(options).toEqual(["Unassigned", "Sam Staff", "Avery Johnson"]);
+  });
+
+  it("links an attachment to the authorized download route, never a storage url", () => {
+    setPage({
+      task: task({
+        attachments: [
+          {
+            id: "a1",
+            displayName: "server.log",
+            mediaType: "text/plain",
+            byteSize: 2048,
+            internal: false,
+            uploadedBy: { id: 2, name: "Avery Johnson" },
+            createdAt: "2026-08-02T09:00:00Z",
+          },
+        ],
+      }),
+    });
+    render(<OperationalTaskDetail />);
+
+    const link = screen.getByRole("link", { name: /download/i });
+    expect(link).toHaveAttribute(
+      "href",
+      "/operations/tasks/11111111-1111-1111-1111-111111111111/attachments/a1",
+    );
+  });
+
+  it("says in words that an internal attachment is staff-only", () => {
+    setPage({
+      task: task({
+        attachments: [
+          {
+            id: "a1",
+            displayName: "vendor-contract.pdf",
+            mediaType: "application/pdf",
+            byteSize: 4096,
+            internal: true,
+            uploadedBy: { id: 2, name: "Avery Johnson" },
+            createdAt: "2026-08-02T09:00:00Z",
+          },
+        ],
+      }),
+    });
+    render(<OperationalTaskDetail />);
+    // Said in words on the row itself, not only by the icon.
+    expect(screen.getByText("Internal — staff only")).toBeVisible();
+  });
+
+  it("posts the upload as multipart to the attach endpoint", () => {
+    render(<OperationalTaskDetail />);
+    const field = screen.getByLabelText("Attach a file");
+    const form = field.closest("form");
+
+    expect(form).toHaveAttribute("enctype", "multipart/form-data");
+    expect(form).toHaveAttribute(
+      "action",
+      "/operations/tasks/11111111-1111-1111-1111-111111111111/attachments",
+    );
+  });
+
+  it("hides the upload form without the comment grant", () => {
+    setPage({ can: { manage: false, assign: false, comment: false } });
+    render(<OperationalTaskDetail />);
+    expect(screen.queryByLabelText("Attach a file")).toBeNull();
   });
 
   it("has no automated accessibility violations", async () => {

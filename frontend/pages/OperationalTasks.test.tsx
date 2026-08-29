@@ -84,6 +84,22 @@ function setPage(overrides: Partial<OperationalTasksPageProps> = {}) {
     },
     summary: { open: 4, overdue: 1, mine: 2 },
     can: { manage: true, assign: true, comment: true },
+    offices: [{ id: 1, name: "Fairfax VA" }],
+    categories: [{ value: "bug", label: "Bug" }],
+    createSheet: {
+      open: false,
+      draft: {
+        office: "",
+        category: "",
+        title: "",
+        description: "",
+        priority: "",
+        team: "",
+        assignee: "",
+        dueAt: "",
+        tags: "",
+      },
+    },
     errors: { fields: {}, form: [] },
     ...overrides,
   } as OperationalTasksPageProps;
@@ -167,7 +183,62 @@ describe("OperationalTasks", () => {
   it("hides the create action from somebody who may not manage", () => {
     setPage({ can: { manage: false, assign: false, comment: true } });
     render(<OperationalTasks />);
-    expect(screen.queryByRole("link", { name: /new task/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /new task/i })).toBeNull();
+  });
+
+  it("opens the create drawer and posts natively to the create route", async () => {
+    const user = userEvent.setup();
+    render(<OperationalTasks />);
+
+    await user.click(screen.getByRole("button", { name: /new task/i }));
+
+    const title = screen.getByLabelText(/^Title/);
+    const form = title.closest("form");
+    // A native POST, not an Inertia visit: one code path whether or not the
+    // drawer carries a file, and a refusal comes back as an ordinary re-render.
+    expect(form).toHaveAttribute("action", "/operations/tasks/new");
+    expect(form).toHaveAttribute("method", "post");
+  });
+
+  it("offers only the offices the server scoped", async () => {
+    const user = userEvent.setup();
+    render(<OperationalTasks />);
+
+    await user.click(screen.getByRole("button", { name: /new task/i }));
+
+    const office = screen.getByLabelText(/^Owning office/);
+    expect(
+      within(office)
+        .getAllByRole("option")
+        .map((option) => option.textContent),
+    ).toEqual(["Choose an office", "Fairfax VA"]);
+  });
+
+  it("reopens the drawer with the draft when the server refused the save", () => {
+    setPage({
+      createSheet: {
+        open: true,
+        draft: {
+          office: "1",
+          category: "bug",
+          title: "Printer will not enrol",
+          description: "",
+          priority: "high",
+          team: "IT",
+          assignee: "",
+          dueAt: "",
+          tags: "printer",
+        },
+      },
+      errors: { fields: { dueAt: ["Use a date like 2026-03-14."] }, form: [] },
+    });
+    render(<OperationalTasks />);
+
+    // The drawer posts natively, so anything the server does not echo is lost.
+    expect(screen.getByLabelText(/^Title/)).toHaveValue("Printer will not enrol");
+    // Twice on purpose: once in the summary at the top of the drawer, once
+    // beside the field it belongs to.
+    expect(screen.getAllByText("Use a date like 2026-03-14.")).toHaveLength(2);
   });
 
   it("has no automated accessibility violations", async () => {

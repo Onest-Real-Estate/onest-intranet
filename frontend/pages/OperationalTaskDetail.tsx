@@ -3,11 +3,14 @@ import {
   ArrowLeft,
   Building2,
   CalendarClock,
+  Download,
   Lock,
   MessageSquare,
+  Paperclip,
   TriangleAlert,
   UserRound,
 } from "lucide-react";
+import { useRef } from "react";
 
 import {
   Callout,
@@ -16,6 +19,7 @@ import {
   FormField,
   FormFieldError,
   FormLabel,
+  NativeSelect,
   PageHeader,
   PanelHeader,
   ReadOnlyValue,
@@ -31,7 +35,11 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { routes } from "@/lib/routes";
 import { cn } from "@/lib/utils";
-import type { OperationalTaskDetailPageProps, TaskComment } from "@/types";
+import type {
+  OperationalTaskDetailPageProps,
+  TaskAttachment,
+  TaskComment,
+} from "@/types";
 
 const ACCESS = { all: ["web.view_operational_tasks"] };
 
@@ -77,6 +85,58 @@ function CommentRow({ comment }: { comment: TaskComment }) {
   );
 }
 
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+/**
+ * One file, reached only through the authorized download route.
+ *
+ * A plain `<a>` rather than an Inertia `<Link>` on purpose: this is a file
+ * download, not an in-app visit, and the server re-authorizes the reader
+ * against the parent task on every request. There is no permanent URL to hold.
+ */
+function AttachmentRow({ taskId, file }: { taskId: string; file: TaskAttachment }) {
+  return (
+    <li className="border-border/70 bg-card flex items-center gap-3 rounded-lg border p-3">
+      <IconWell
+        icon={Paperclip}
+        tone="muted"
+        className="size-8 shrink-0"
+        iconClassName="size-4"
+      />
+      <div className="grid min-w-0 flex-1 gap-0.5">
+        <span className="truncate text-sm font-medium">{file.displayName}</span>
+        <span className="text-muted-foreground flex flex-wrap items-center gap-x-2 text-xs">
+          <span>{formatBytes(file.byteSize)}</span>
+          <span aria-hidden>·</span>
+          <span>{file.uploadedBy?.name ?? "Removed user"}</span>
+          {file.internal ? (
+            // Said in words, not only by the icon: a staff-only file that reads
+            // as ordinary is the failure this channel exists to prevent.
+            <span className="text-warning-ink inline-flex items-center gap-1 font-medium">
+              <Lock className="size-3" aria-hidden />
+              Internal — staff only
+            </span>
+          ) : null}
+        </span>
+      </div>
+      <Button asChild variant="outline" size="sm">
+        <a
+          href={routes.operational_task_attachment(taskId, file.id)}
+          download={file.displayName}
+        >
+          <Download aria-hidden />
+          <span className="sr-only">Download </span>
+          Download
+        </a>
+      </Button>
+    </li>
+  );
+}
+
 /**
  * One task, and every move its reader is actually allowed to make.
  *
@@ -87,10 +147,30 @@ function CommentRow({ comment }: { comment: TaskComment }) {
  * re-renders from the stored row.
  */
 export default function OperationalTaskDetail() {
-  const { task, can, errors } = usePage<OperationalTaskDetailPageProps>().props;
+  const { task, can, assignees, errors, user, csrfToken } =
+    usePage<OperationalTaskDetailPageProps>().props;
 
   const transitionForm = useForm({ status: "", expectedStatus: task.status, note: "" });
   const commentForm = useForm({ body: "", internal: false });
+  const assignForm = useForm({
+    assignee: task.assignee ? String(task.assignee.id) : "",
+    // The caller's view of the world, re-checked under a row lock: a stale tab
+    // is told it lost the race rather than overwriting a decision it never saw.
+    expectedAssignee: task.assignee ? String(task.assignee.id) : "",
+  });
+  const uploadInput = useRef<HTMLInputElement>(null);
+
+  function reassign(next: string) {
+    // Both, deliberately: `setData` moves the controlled `<select>` now so the
+    // reader sees their own choice while the request is in flight, and
+    // `transform` guarantees the posted value regardless of when that state
+    // update lands.
+    assignForm.setData("assignee", next);
+    assignForm.transform((data) => ({ ...data, assignee: next }));
+    assignForm.post(routes.operational_task_assign(task.id), {
+      preserveScroll: true,
+    });
+  }
 
   function move(target: string, requiresNote: boolean) {
     transitionForm.transform((data) => ({
@@ -254,24 +334,144 @@ export default function OperationalTaskDetail() {
                 ) : null}
               </SurfaceCardContent>
             </SurfaceCard>
+
+            <SurfaceCard>
+              <PanelHeader
+                divided
+                title="Attachments"
+                description="Files live in protected storage and are re-authorized on every download."
+              />
+              <SurfaceCardContent className="grid gap-4">
+                {task.attachments.length > 0 ? (
+                  <ul className="grid gap-2">
+                    {task.attachments.map((file) => (
+                      <AttachmentRow key={file.id} taskId={task.id} file={file} />
+                    ))}
+                  </ul>
+                ) : (
+                  <EmptyState
+                    compact
+                    tone="muted"
+                    icon={Paperclip}
+                    title="No files attached"
+                    description="Logs, screenshots, and documents for this task appear here."
+                  />
+                )}
+
+                {can.comment ? (
+                  // A native multipart POST rather than an Inertia visit: a file
+                  // upload has no second code path this way, and a refusal comes
+                  // back as an ordinary 422 re-render of this page.
+                  <form
+                    method="post"
+                    action={routes.operational_task_attach(task.id)}
+                    encType="multipart/form-data"
+                    className="grid gap-3"
+                  >
+                    <input type="hidden" name="csrfmiddlewaretoken" value={csrfToken} />
+                    <FormField>
+                      <FormLabel htmlFor="attachment-file">Attach a file</FormLabel>
+                      <input
+                        ref={uploadInput}
+                        id="attachment-file"
+                        name="file"
+                        type="file"
+                        required
+                        className="border-input file:text-foreground flex h-9 w-full rounded-md border bg-transparent px-3 py-1 text-sm shadow-xs file:mr-3 file:border-0 file:bg-transparent file:text-sm file:font-medium focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] focus-visible:outline-none"
+                        aria-invalid={Boolean(errors.fields.file) || undefined}
+                        aria-describedby="attachment-file-help"
+                      />
+                      <FormDescription id="attachment-file-help">
+                        Up to 10 MB. PDF, Office documents, images, logs, CSV, and plain
+                        text.
+                      </FormDescription>
+                      <FormFieldError
+                        id="attachment-file-error"
+                        message={errors.fields.file?.[0]}
+                      />
+                    </FormField>
+                    {can.manage ? (
+                      <label
+                        htmlFor="attachment-internal"
+                        className="flex items-center gap-2 text-sm"
+                      >
+                        <input
+                          id="attachment-internal"
+                          name="internal"
+                          type="checkbox"
+                          value="1"
+                          className="accent-primary size-4"
+                        />
+                        Internal file — staff only
+                      </label>
+                    ) : null}
+                    <div>
+                      <Button type="submit" size="sm" variant="outline">
+                        <Paperclip aria-hidden />
+                        Attach
+                      </Button>
+                    </div>
+                  </form>
+                ) : null}
+              </SurfaceCardContent>
+            </SurfaceCard>
           </div>
 
           <aside className="grid content-start gap-6">
             <SurfaceCard>
               <PanelHeader divided title="Assignment" />
               <SurfaceCardContent className="grid gap-4">
+                {can.assign ? (
+                  <FormField>
+                    <FormLabel htmlFor="task-assignee">Assignee</FormLabel>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <NativeSelect
+                        id="task-assignee"
+                        className="flex-1"
+                        value={assignForm.data.assignee}
+                        disabled={assignForm.processing}
+                        onChange={(event) => reassign(event.target.value)}
+                        aria-invalid={Boolean(errors.fields.assignee) || undefined}
+                      >
+                        <option value="">Unassigned</option>
+                        {assignees.map((person) => (
+                          <option key={person.id} value={String(person.id)}>
+                            {person.name}
+                          </option>
+                        ))}
+                      </NativeSelect>
+                      {user && task.assignee?.id !== user.id ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={assignForm.processing}
+                          onClick={() => reassign(String(user.id))}
+                        >
+                          Take it
+                        </Button>
+                      ) : null}
+                    </div>
+                    <FormFieldError
+                      id="task-assignee-error"
+                      message={errors.fields.assignee?.[0]}
+                    />
+                  </FormField>
+                ) : null}
                 <dl className="grid gap-4">
-                  <ReadOnlyValue label="Assignee">
-                    <span className="flex items-center gap-2">
-                      <IconWell
-                        icon={UserRound}
-                        tone="muted"
-                        className="size-7"
-                        iconClassName="size-3.5"
-                      />
-                      {task.assignee?.name ?? "Unassigned"}
-                    </span>
-                  </ReadOnlyValue>
+                  {can.assign ? null : (
+                    <ReadOnlyValue label="Assignee">
+                      <span className="flex items-center gap-2">
+                        <IconWell
+                          icon={UserRound}
+                          tone="muted"
+                          className="size-7"
+                          iconClassName="size-3.5"
+                        />
+                        {task.assignee?.name ?? "Unassigned"}
+                      </span>
+                    </ReadOnlyValue>
+                  )}
                   <ReadOnlyValue label="Reported by">
                     {task.reporter?.name ?? "—"}
                   </ReadOnlyValue>

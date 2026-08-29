@@ -160,9 +160,9 @@ def resolve_task_notifications(user, notifications: Sequence) -> dict:
         resolved[notification.public_id] = SourceResolution(
             available=True,
             detail=f"{reference} · {status.replace('_', ' ')}",
-            # The detail page is not routed yet; the notice still resolves so
-            # the reader sees what it refers to rather than a dead row.
-            action_available=False,
+            # The task is in this reader's scope — that is what putting it in
+            # ``visible`` means — so the detail page will admit them.
+            action_available=True,
         )
     return resolved
 

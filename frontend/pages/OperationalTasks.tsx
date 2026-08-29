@@ -7,15 +7,23 @@ import {
   TriangleAlert,
   UserRound,
 } from "lucide-react";
+import { useState } from "react";
 
 import {
+  CreateSheet,
   DataTable,
   type DataTableColumn,
   EmptyState,
   FilterControls,
   FilterField,
+  FormDescription,
+  FormErrorSummary,
+  FormField,
+  FormFieldError,
+  FormLabel,
   MetricCard,
   MetricStrip,
+  NativeSelect,
   PageHeader,
   Pagination,
   PanelHeader,
@@ -27,6 +35,7 @@ import {
 import { HubLayout } from "@/components/HubLayout";
 import { PermissionRequired } from "@/components/PermissionRequired";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -34,9 +43,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { buildListUrl } from "@/lib/list-query";
 import { routes } from "@/lib/routes";
 import { cn } from "@/lib/utils";
+import { hasValidationErrors } from "@/lib/validation";
 import type {
   FilterOption,
   OperationalTasksPageProps,
@@ -171,9 +182,26 @@ function BoardCard({ row }: { row: TaskRow }) {
  * independently — the guard here is for tidiness, never for security.
  */
 export default function OperationalTasks() {
-  const { tasks, board, view, filterOptions, summary, can } =
-    usePage<OperationalTasksPageProps>().props;
+  const {
+    tasks,
+    board,
+    view,
+    filterOptions,
+    summary,
+    can,
+    offices,
+    categories,
+    createSheet,
+    errors,
+    csrfToken,
+  } = usePage<OperationalTasksPageProps>().props;
   const filters = tasks.filters as TaskFilters;
+  // Reopened by the server on a refused save, with the draft echoed: the
+  // drawer posts natively, so anything not sent back is genuinely lost.
+  const [createOpen, setCreateOpen] = useState(
+    createSheet.open || hasValidationErrors(errors),
+  );
+  const draft = createSheet.draft;
 
   function visit(next: Partial<TaskFilters & { view: string }>, page?: number) {
     router.get(
@@ -260,15 +288,181 @@ export default function OperationalTasks() {
           description="Internal operational work across the offices you cover."
           actions={
             can.manage ? (
-              <Button asChild>
-                <Link href={`${routes.operational_tasks()}?create=1`}>
-                  <Plus aria-hidden />
-                  New task
-                </Link>
+              <Button type="button" onClick={() => setCreateOpen(true)}>
+                <Plus aria-hidden />
+                New task
               </Button>
             ) : null
           }
         />
+
+        {can.manage ? (
+          <CreateSheet
+            open={createOpen}
+            onOpenChange={setCreateOpen}
+            title="New task"
+            description="Internal work for one of the offices you cover. The reporter is you unless the task is converted from a feedback ticket."
+            action={routes.operational_task_create()}
+            csrfToken={csrfToken}
+            formId="operational-task-create-form"
+            submitLabel="Create task"
+          >
+            <FormErrorSummary errors={errors} />
+            <div className="grid gap-4">
+              <FormField>
+                <FormLabel htmlFor="create-title" required>
+                  Title
+                </FormLabel>
+                <Input
+                  id="create-title"
+                  name="title"
+                  required
+                  maxLength={200}
+                  defaultValue={draft.title}
+                  aria-invalid={Boolean(errors.fields.title) || undefined}
+                  aria-describedby={
+                    errors.fields.title ? "create-title-error" : undefined
+                  }
+                />
+                <FormFieldError
+                  id="create-title-error"
+                  message={errors.fields.title?.[0]}
+                />
+              </FormField>
+
+              <FormField>
+                <FormLabel htmlFor="create-office" required>
+                  Owning office
+                </FormLabel>
+                <NativeSelect
+                  id="create-office"
+                  name="office"
+                  required
+                  defaultValue={draft.office}
+                  aria-invalid={Boolean(errors.fields.office) || undefined}
+                >
+                  <option value="">Choose an office</option>
+                  {offices.map((office) => (
+                    <option key={office.id} value={String(office.id)}>
+                      {office.name}
+                    </option>
+                  ))}
+                </NativeSelect>
+                <FormDescription id="create-office-help">
+                  Scope is read from this office. Only the offices you cover are listed.
+                </FormDescription>
+                <FormFieldError
+                  id="create-office-error"
+                  message={errors.fields.office?.[0]}
+                />
+              </FormField>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <FormField>
+                  <FormLabel htmlFor="create-category" required>
+                    Category
+                  </FormLabel>
+                  <NativeSelect
+                    id="create-category"
+                    name="category"
+                    required
+                    defaultValue={draft.category}
+                    aria-invalid={Boolean(errors.fields.category) || undefined}
+                  >
+                    <option value="">Choose a category</option>
+                    {categories.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </NativeSelect>
+                  <FormFieldError
+                    id="create-category-error"
+                    message={errors.fields.category?.[0]}
+                  />
+                </FormField>
+
+                <FormField>
+                  <FormLabel htmlFor="create-priority">Priority</FormLabel>
+                  <NativeSelect
+                    id="create-priority"
+                    name="priority"
+                    defaultValue={draft.priority || "normal"}
+                  >
+                    {filterOptions.priorities.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </NativeSelect>
+                </FormField>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <FormField>
+                  <FormLabel htmlFor="create-due" optional>
+                    Due date
+                  </FormLabel>
+                  <Input
+                    id="create-due"
+                    name="dueAt"
+                    type="date"
+                    defaultValue={draft.dueAt}
+                    aria-invalid={Boolean(errors.fields.dueAt) || undefined}
+                    aria-describedby={
+                      errors.fields.dueAt ? "create-due-error" : undefined
+                    }
+                  />
+                  <FormFieldError
+                    id="create-due-error"
+                    message={errors.fields.dueAt?.[0]}
+                  />
+                </FormField>
+
+                <FormField>
+                  <FormLabel htmlFor="create-team" optional>
+                    Team
+                  </FormLabel>
+                  <Input
+                    id="create-team"
+                    name="team"
+                    maxLength={60}
+                    placeholder="IT, Onboarding…"
+                    defaultValue={draft.team}
+                  />
+                </FormField>
+              </div>
+
+              <FormField>
+                <FormLabel htmlFor="create-description" optional>
+                  Description
+                </FormLabel>
+                <Textarea
+                  id="create-description"
+                  name="description"
+                  rows={4}
+                  defaultValue={draft.description}
+                />
+              </FormField>
+
+              <FormField>
+                <FormLabel htmlFor="create-tags" optional>
+                  Tags
+                </FormLabel>
+                <Input
+                  id="create-tags"
+                  name="tags"
+                  defaultValue={draft.tags}
+                  placeholder="crm, licence"
+                  aria-describedby="create-tags-help"
+                />
+                <FormDescription id="create-tags-help">
+                  Comma separated, for grouping only. A tag grants nobody anything.
+                </FormDescription>
+              </FormField>
+            </div>
+          </CreateSheet>
+        ) : null}
 
         <MetricStrip>
           <MetricCard label="Open" value={summary.open} />

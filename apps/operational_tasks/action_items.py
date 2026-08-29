@@ -12,6 +12,8 @@ dashboard queue that lists other people's work is a queue nobody trusts.
 
 from __future__ import annotations
 
+from django.urls import reverse
+
 from apps.operational_tasks.models import OperationalTask
 from apps.operational_tasks.taxonomy import (
     CATEGORY_LABELS,
@@ -79,9 +81,10 @@ def collect_task_actions(context: ActionSourceContext) -> list[ActionItem]:
                 source_record_id=str(task.public_id),
                 context=context_line,
                 cta_label="Open task",
-                # The list route is the destination until the detail page
-                # ships; it re-authorizes on arrival like every other CTA.
-                cta_href="/operations/tasks",
+                # Reversed, never a literal: the URL is the task module's to
+                # own, and it re-authorizes the reader on arrival like every
+                # other CTA.
+                cta_href=reverse("operational_task_detail", args=[str(task.public_id)]),
                 assignee_id=user.pk,
             )
         )

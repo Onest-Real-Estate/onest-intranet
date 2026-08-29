@@ -17,10 +17,13 @@ Step 3 is what makes the API safe for a UI: a stale board that still shows
 from __future__ import annotations
 
 import logging
+import mimetypes
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.core.files.base import ContentFile
 from django.db import transaction
 from django.utils import timezone
 
@@ -50,8 +53,35 @@ from apps.operational_tasks.taxonomy import (
 logger = logging.getLogger("apps.operational_tasks")
 
 #: "No opinion", distinct from an explicit ``None`` meaning "I believe this is
-#: unassigned". Both are real inputs, so they need different values.
-_UNSET: object = object()
+#: unassigned". Both are real inputs, so they need different values. Public
+#: because an HTTP caller has to be able to say "the form sent no opinion".
+UNSET: object = object()
+
+#: What may be attached to a task. Deliberately the same allowlist the office
+#: resource module uses: an extension this hub refuses to serve anywhere else
+#: must not become servable because it arrived through a support queue.
+ALLOWED_ATTACHMENT_EXTENSIONS: frozenset[str] = frozenset(
+    {
+        ".pdf",
+        ".doc",
+        ".docx",
+        ".xls",
+        ".xlsx",
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".gif",
+        ".webp",
+        ".txt",
+        ".csv",
+        ".log",
+        ".json",
+    }
+)
+MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
+#: Per task, not per upload. A support queue collects evidence, not a document
+#: library, and an unbounded count turns one task into a storage bill.
+MAX_ATTACHMENTS_PER_TASK = 10
 
 #: Fields the audit trail snapshots. Deliberately excludes ``description`` and
 #: comment bodies: an audit record is a statement about *what changed*, and
@@ -315,11 +345,11 @@ def assign(
     actor: ActorContext,
     task: OperationalTask,
     assignee,
-    expected_assignee_id: int | None | object = _UNSET,
+    expected_assignee_id: int | None | object = UNSET,
 ) -> OperationalTask:
     """Set or clear the assignee.
 
-    ``expected_assignee_id`` defaults to ``_UNSET`` meaning "do not check".
+    ``expected_assignee_id`` defaults to ``UNSET`` meaning "do not check".
     An explicit ``None`` means "I believe this is unassigned", which is a real
     claim worth verifying — ``None`` cannot double as "no opinion".
     """
@@ -336,10 +366,7 @@ def assign(
         raise ValidationError(
             {"assignee": ["A closed task cannot be reassigned. Reopen it first."]}
         )
-    if (
-        expected_assignee_id is not _UNSET
-        and locked.assignee_pk != expected_assignee_id
-    ):
+    if expected_assignee_id is not UNSET and locked.assignee_pk != expected_assignee_id:
         raise ConcurrentUpdate(
             {"assignee": ["Somebody else reassigned this task. Reload to continue."]}
         )
@@ -416,6 +443,96 @@ def visible_comments(task: OperationalTask, actor: ActorContext):
     return queryset.filter(internal=False)
 
 
+@transaction.atomic
+def attach_file(
+    *,
+    actor: ActorContext,
+    task: OperationalTask,
+    uploaded,
+    internal: bool = False,
+) -> TaskAttachment:
+    """Store one file against a task, in protected storage.
+
+    An *internal* file follows the internal-note rule exactly: writing one
+    needs the management grant, and :func:`visible_attachments` excludes it
+    from every reader who lacks that grant. An ordinary attachment needs the
+    comment grant — somebody who may discuss a task may also show what they
+    are talking about.
+
+    The extension is judged against a closed allowlist and the size against a
+    ceiling *before* anything is written, and the stored media type is derived
+    from the name the server accepted rather than the ``Content-Type`` the
+    client claimed: a header is the uploader's assertion, not a fact.
+    """
+    if internal:
+        _require(actor, TaskPermission.MANAGE)
+    else:
+        _require(actor, TaskPermission.COMMENT, TaskPermission.MANAGE)
+
+    if uploaded is None:
+        raise ValidationError({"file": ["Choose a file to attach."]})
+    if task.is_terminal:
+        raise ValidationError(
+            {"file": ["This task is closed. Reopen it before attaching anything."]}
+        )
+
+    name = Path(uploaded.name or "").name
+    extension = Path(name).suffix.lower()
+    if extension not in ALLOWED_ATTACHMENT_EXTENSIONS:
+        raise ValidationError(
+            {"file": [f"File type “{extension or 'unknown'}” is not allowed."]}
+        )
+    if uploaded.size > MAX_ATTACHMENT_BYTES:
+        raise ValidationError({"file": ["Files must be 10 MB or smaller."]})
+    if TaskAttachment.objects.filter(task=task).count() >= MAX_ATTACHMENTS_PER_TASK:
+        raise ValidationError(
+            {
+                "file": [
+                    f"A task holds at most {MAX_ATTACHMENTS_PER_TASK} files. "
+                    "Remove one before adding another."
+                ]
+            }
+        )
+
+    uploaded.seek(0)
+    data = uploaded.read()
+    guessed, _encoding = mimetypes.guess_type(name)
+    attachment = TaskAttachment(
+        task=task,
+        uploaded_by=actor.user,
+        display_name=name[:200],
+        media_type=(guessed or "application/octet-stream")[:100],
+        byte_size=len(data),
+        internal=internal,
+    )
+    attachment.file.save(name, ContentFile(data), save=False)
+    attachment.save()
+
+    log_on_commit(
+        action="operational_task.attachment_added",
+        actor=actor_from_user(actor.user),
+        target=target_from_instance(task, label=task.reference),
+        # The file name only. The bytes stay where the task's own permissions
+        # protect them, and an audit row is read by a wider audience.
+        metadata={"fileName": attachment.display_name, "internal": internal},
+    )
+    return attachment
+
+
+def load_attachment(
+    *, task: OperationalTask, actor: ActorContext, public_id
+) -> TaskAttachment | None:
+    """One attachment, looked up *inside* what this actor may already read.
+
+    Resolved through :func:`visible_attachments` rather than by bare id, so an
+    internal file is indistinguishable from one that does not exist for a
+    reader without the management grant. A later ``if attachment.internal``
+    check would answer the same question with a different status code, and
+    that difference is the disclosure.
+    """
+    return visible_attachments(task, actor).filter(public_id=public_id).first()
+
+
 def visible_attachments(task: OperationalTask, actor: ActorContext):
     queryset = (
         TaskAttachment.objects.filter(task=task)
@@ -467,8 +584,9 @@ def convert_from_feedback(
     reader is not automatically entitled to it. The link back is the reference,
     which the feedback module re-authorizes on its own side.
 
-    The feedback module (P1-078) is not built yet. This is the seam it will
-    call; nothing else in this module depends on it.
+    The feedback module calls this seam through
+    ``apps.feedback.services.convert_to_task``, which additionally records the
+    resulting task id on the ticket so its own side is idempotent too.
     """
     return create_task(
         actor=actor,
