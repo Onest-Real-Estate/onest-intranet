@@ -472,7 +472,23 @@ ROUTE_POLICIES: dict[str, AuthorizationPolicy] = {
             "operational_task_transition",
             "operational_task_assign",
             "operational_task_comment",
+            "operational_task_attach",
         ),
+        all_permissions=("web.view_operational_tasks",),
+        scope_rule="operational_task_reader_scope",
+    ),
+    "operational_task_attachment": AuthorizationPolicy(
+        key="operational_task_attachment",
+        access="permission_protected",
+        description=(
+            "Streams one task attachment from protected storage. The parent "
+            "task is resolved inside the reader's scope and the file inside "
+            "the visible-attachment queryset, so an internal file is a 404 "
+            "rather than a 403 for a reader without the management grant. "
+            "There is no signed link and no public URL."
+        ),
+        methods=("GET",),
+        route_names=("operational_task_attachment",),
         all_permissions=("web.view_operational_tasks",),
         scope_rule="operational_task_reader_scope",
     ),

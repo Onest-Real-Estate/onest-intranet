@@ -69,6 +69,11 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "apps.audit.middleware.AuditContextMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
+    # After CSRF so its own checks are untouched, and before any view runs:
+    # Inertia posts `application/json`, which Django never parses into
+    # `request.POST`, so without this every field of every Inertia mutation
+    # arrives empty. See `apps.web.middleware.InertiaJsonPostMiddleware`.
+    "apps.web.middleware.InertiaJsonPostMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "allauth.account.middleware.AccountMiddleware",
     "apps.web.middleware.AuthorizationPolicyMiddleware",

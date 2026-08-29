@@ -212,5 +212,14 @@ indent. Types: `ty` on the backend, `tsc --noEmit` on the frontend — both must
 - **pnpm blocks fresh releases.** `minimumReleaseAge: 10080` (7 days) in
   `pnpm-workspace.yaml` — a brand-new package version will refuse to install.
   That is supply-chain hardening, not a bug; don't disable it to unblock yourself.
+- **Inertia posts JSON; `request.POST` reads it only via middleware.** Inertia
+  serializes a visit's data as `application/json` unless it carries a file, and
+  Django parses `request.POST` only for form-encoded and multipart bodies.
+  `apps.web.middleware.InertiaJsonPostMiddleware` translates the body at the
+  edge so every view keeps one input contract. Two consequences: don't remove
+  it, and **don't write a write-path test that only posts form-encoded** — the
+  Django test client's default hid this bug across the whole app while every
+  test passed. Post `content_type="application/json"` in at least one test per
+  write surface.
 - **Secrets live in `.env`** (python-decouple). Never commit them, never print
   them into logs, output, or artifacts.

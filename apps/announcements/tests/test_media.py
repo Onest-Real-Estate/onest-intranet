@@ -1281,3 +1281,41 @@ def _context(user):
     return DashboardContext(
         user=user, access=get_effective_access(user), now=timezone.now()
     )
+
+
+def test_reordering_works_when_the_order_arrives_as_a_json_array(seeded, client):
+    """The array case that a client-side encoding switch could not have fixed.
+
+    The page posts `{ order: [...] }` through Inertia, which serializes it as
+    `application/json`. Django parses `request.POST` only for form and
+    multipart bodies, so this view's `getlist("order")` saw nothing and a
+    reorder silently did nothing. Forcing the client to send `FormData` would
+    not have helped either: Inertia writes an array as `order[0]`, `order[1]`,
+    and `getlist("order")` still returns an empty list.
+
+    `apps.web.middleware.InertiaJsonPostMiddleware` is what makes the list
+    survive, so this asserts the whole path — URL, middleware, view, service.
+    """
+    import json as json_module
+
+    actor = publisher()
+    row = draft()
+    first = attach_media(actor, row, upload("a.txt", b"a"))
+    second = attach_media(actor, row, upload("b.txt", b"b"))
+    third = attach_media(actor, row, upload("c.txt", b"c"))
+    client.force_login(actor)
+
+    response = client.post(
+        reverse("announcement_media_reorder", args=[row.pk]),
+        data=json_module.dumps({"order": [third.pk, first.pk, second.pk]}),
+        content_type="application/json",
+        HTTP_X_INERTIA="true",
+    )
+
+    assert response.status_code == 302
+    order = list(
+        AnnouncementMedia.objects.filter(announcement=row, role=Role.ATTACHMENT)
+        .order_by("sort_order")
+        .values_list("display_name", flat=True)
+    )
+    assert order == ["c.txt", "a.txt", "b.txt"]

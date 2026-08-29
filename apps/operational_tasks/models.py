@@ -336,7 +336,13 @@ class TaskAttachment(models.Model):
         verbose_name=_("uploaded by"),
     )
     file = models.FileField(
-        _("file"), upload_to=attachment_upload_to, storage=private_storage
+        _("file"),
+        upload_to=attachment_upload_to,
+        storage=private_storage,
+        # The generated key is two UUIDs and a prefix before the name even
+        # starts — about 92 characters — so Django's default of 100 leaves no
+        # room for a filename and every upload fails at storage time.
+        max_length=255,
     )
     display_name = models.CharField(_("display name"), max_length=200)
     media_type = models.CharField(_("media type"), max_length=100, blank=True)

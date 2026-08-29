@@ -2,6 +2,8 @@ from django.urls import path
 
 from apps.operational_tasks.views import (
     task_assign,
+    task_attach,
+    task_attachment_download,
     task_comment,
     task_create,
     task_detail_view,
@@ -33,5 +35,17 @@ urlpatterns = [
         "operations/tasks/<uuid:public_id>/comment",
         task_comment,
         name="operational_task_comment",
+    ),
+    path(
+        "operations/tasks/<uuid:public_id>/attachments",
+        task_attach,
+        name="operational_task_attach",
+    ),
+    # Streamed by a view that re-authorizes the reader against the parent task
+    # on every request. There is no signed link and no public URL.
+    path(
+        "operations/tasks/<uuid:public_id>/attachments/<uuid:attachment_id>",
+        task_attachment_download,
+        name="operational_task_attachment",
     ),
 ]
