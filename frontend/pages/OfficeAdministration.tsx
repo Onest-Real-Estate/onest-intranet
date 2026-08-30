@@ -240,5 +240,6 @@ OfficeAdministration.layout = () =>
           { label: "Offices" },
         ],
       },
+      variant: "wide",
     },
   ] as const;

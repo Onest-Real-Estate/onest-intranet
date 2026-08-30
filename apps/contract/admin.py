@@ -62,10 +62,11 @@ class AgentContractAdmin(admin.ModelAdmin):
         "recipient",
         "office",
         "status",
+        "change_kind",
         "effective_on",
         "version_number",
     )
-    list_filter = ("status",)
+    list_filter = ("status", "change_kind")
     search_fields = (
         "public_id",
         "recipient__email",
@@ -75,6 +76,8 @@ class AgentContractAdmin(admin.ModelAdmin):
     readonly_fields = (
         "public_id",
         "family_id",
+        "change_kind",
+        "change_summary",
         "status",
         "party_snapshot",
         "office_snapshot",

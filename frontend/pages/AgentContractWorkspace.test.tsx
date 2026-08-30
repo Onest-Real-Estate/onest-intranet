@@ -44,8 +44,13 @@ function buildPageProps(overrides: Record<string, unknown> = {}) {
       canManage: true,
       canViewCommission: true,
       canViewNotes: true,
+      canCreateAmendment: false,
+      canCreateReplacement: false,
     },
     allowedActions: ["issue", "reopen"],
+    familyHistory: [],
+    termComparison: null,
+    governingTerms: null,
     recipient: {
       id: 1,
       name: "Ada Agent",
@@ -132,6 +137,10 @@ vi.mock("@/lib/routes", () => ({
     agent_contract_lifecycle: () => "/lifecycle",
     agent_contract_preview: () => "/preview",
     agent_contract_recipient_search: () => "/recipients",
+    agent_contract_create_amendment: (publicId: string) =>
+      `/operations/agent-contracts/${publicId}/amend`,
+    agent_contract_create_replacement: (publicId: string) =>
+      `/operations/agent-contracts/${publicId}/replace`,
     agent_contract_validate: (publicId: string) =>
       `/operations/agent-contracts/${publicId}/validate`,
   },
@@ -183,6 +192,109 @@ describe("AgentContractWorkspace", () => {
     const body = post.mock.calls[0][1] as FormData;
     expect(body.get("action")).toBe("activate");
     expect(body.get("confirmed")).toBe("1");
+  });
+
+  it("exposes create amendment and replacement when capable", async () => {
+    pageProps = buildPageProps({
+      contract: {
+        ...(pageProps.contract as object),
+        status: "active",
+        statusLabel: "Active",
+        statusTone: "success",
+        versionNumber: 1,
+        changeKind: "original",
+        changeKindLabel: "Original agreement",
+      },
+      capabilities: {
+        canView: true,
+        canManage: true,
+        canViewCommission: true,
+        canViewNotes: true,
+        canCreateAmendment: true,
+        canCreateReplacement: true,
+      },
+      allowedActions: ["supersede", "terminate"],
+      termComparison: null,
+      familyHistory: [
+        {
+          publicId: "11111111-1111-1111-1111-111111111111",
+          versionNumber: 1,
+          changeKind: "original",
+          changeKindLabel: "Original agreement",
+          role: "base",
+          governing: "current",
+          status: "active",
+          statusLabel: "Active",
+          statusTone: "success",
+          effectiveOn: "2026-08-24",
+          expiresOn: null,
+          isFocus: true,
+          amendsPublicId: null,
+          supersedesPublicId: null,
+          hasArtifact: true,
+          href: "/operations/agent-contracts/11111111-1111-1111-1111-111111111111",
+        },
+      ],
+    });
+    const user = userEvent.setup();
+    render(<AgentContractWorkspace />);
+    expect(
+      screen.getByRole("button", { name: /create amendment/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /create replacement/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/family history/i)).toBeInTheDocument();
+    expect(screen.getByText(/currently governing/i)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /create amendment/i }));
+    expect(post).toHaveBeenCalled();
+    expect(String(post.mock.calls[0][0])).toContain("/amend");
+  });
+
+  it("renders accessible before/after term comparison", () => {
+    pageProps = buildPageProps({
+      contract: {
+        ...(pageProps.contract as object),
+        status: "draft",
+        statusLabel: "Draft",
+        changeKind: "amendment",
+        changeKindLabel: "Amendment",
+        changeSummary: "Lower agent split.",
+        versionNumber: 2,
+      },
+      termComparison: {
+        basePublicId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+        baseVersionNumber: 1,
+        baseStatus: "active",
+        baseStatusLabel: "Active",
+        baseEffectiveOn: "2026-01-01",
+        baseExpiresOn: null,
+        draftEffectiveOn: "2026-08-24",
+        draftExpiresOn: null,
+        changeKind: "amendment",
+        changeKindLabel: "Amendment",
+        changeSummary: "Lower agent split.",
+        effectiveDateNote: "Effective date moves from 2026-01-01 to 2026-08-24.",
+        rows: [
+          {
+            key: "agentSplitPercent",
+            label: "Agent split %",
+            before: "70.000",
+            after: "65.000",
+            changed: true,
+          },
+        ],
+      },
+    });
+    render(<AgentContractWorkspace />);
+    expect(
+      screen.getByRole("table", {
+        name: /term changes between base version 1 and this draft/i,
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Agent split %")).toBeInTheDocument();
+    expect(screen.getByText("70.000")).toBeInTheDocument();
+    expect(screen.getByText("65.000")).toBeInTheDocument();
   });
 
   afterEach(() => vi.unstubAllGlobals());

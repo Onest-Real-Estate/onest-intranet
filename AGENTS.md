@@ -43,6 +43,7 @@ registration, and deployment; don't duplicate it here.
 16. **Hub-native agent contract e-sign**. Agent contracts use Hub field
  placement, Hub signing UI, and pyHanko org PKCS#12 sealing — not DocuSeal.
  Customer/transaction packages remain out of scope until a later decision.
+17. **Use `inertiajs's` `router.post` and `router.get` or <Form/> component instead of default <form tag>**
 
 ## Commands
 

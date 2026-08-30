@@ -12,13 +12,14 @@ from decimal import Decimal
 from typing import Any
 
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Q, QuerySet
 from django.utils.translation import gettext_lazy as _
 
 from apps.audit.models import AuditEvent
 from apps.audit.service import AuditTarget, actor_from_user, log_event
 from apps.contract.calculations.rules import CURRENT_RULE_VERSION
+from apps.contract.change_kinds import ContractChangeKind, change_kind_label
 from apps.contract.models import (
     AgentContract,
     ContractArtifact,
@@ -307,6 +308,9 @@ def serialize_contract(viewer: User, contract: AgentContract) -> dict[str, Any]:
         "publicId": str(contract.public_id),
         "familyId": str(contract.family_id),
         "versionNumber": contract.version_number,
+        "changeKind": contract.change_kind,
+        "changeKindLabel": change_kind_label(contract.change_kind),
+        "changeSummary": contract.change_summary or "",
         "status": contract.status,
         "statusLabel": status_label(contract.status),
         "statusTone": status_tone(contract.status),
@@ -332,6 +336,14 @@ def serialize_contract(viewer: User, contract: AgentContract) -> dict[str, Any]:
         "rootAgreementId": contract.root_agreement_id,
         "supersedesId": contract.supersedes_id,
         "amendsId": contract.amends_id,
+        "amendsPublicId": (
+            str(contract.amends.public_id) if contract.amends is not None else None
+        ),
+        "supersedesPublicId": (
+            str(contract.supersedes.public_id)
+            if contract.supersedes is not None
+            else None
+        ),
     }
     if _can_view_commission(viewer, contract):
         payload["termsSnapshot"] = contract.terms_snapshot
@@ -445,6 +457,8 @@ def create_draft_contract(
     supersedes: AgentContract | None = None,
     amends: AgentContract | None = None,
     root_agreement: AgentContract | None = None,
+    change_kind: str | None = None,
+    change_summary: str = "",
 ) -> AgentContract:
     """Create a validated draft for an active in-scope agent and office."""
     _ensure_manage(actor)
@@ -496,6 +510,15 @@ def create_draft_contract(
             template_version, office=owning_office, effective_on=effective_on
         )
 
+    resolved_kind = change_kind
+    if resolved_kind is None:
+        if amends is not None:
+            resolved_kind = ContractChangeKind.AMENDMENT
+        elif supersedes is not None:
+            resolved_kind = ContractChangeKind.REPLACEMENT
+        else:
+            resolved_kind = ContractChangeKind.ORIGINAL
+
     contract = AgentContract(
         recipient=recipient,
         office=owning_office,
@@ -527,18 +550,10 @@ def create_draft_contract(
         supersedes=supersedes,
         amends=amends,
         root_agreement=root_agreement,
+        change_kind=resolved_kind,
+        change_summary=(change_summary or "").strip(),
         calculation_rule_version=CURRENT_RULE_VERSION,
     )
-    if root_agreement is not None:
-        contract.family_id = root_agreement.family_id
-        contract.version_number = (
-            AgentContract.objects.filter(family_id=root_agreement.family_id)
-            .order_by("-version_number")
-            .values_list("version_number", flat=True)
-            .first()
-            or 0
-        ) + 1
-
     contract.party_snapshot = party_snapshot(recipient)
     contract.office_snapshot = office_snapshot(owning_office)
     # terms_snapshot filled after clean so quantized values are frozen.
@@ -546,7 +561,35 @@ def create_draft_contract(
     contract.terms_snapshot = terms_snapshot_from_contract(contract)
 
     with transaction.atomic():
-        contract.save()
+        if root_agreement is not None:
+            from apps.contract.versioning import lock_family, next_version_number
+
+            lock_family(root_agreement.family_id)
+            contract.family_id = root_agreement.family_id
+            contract.version_number = next_version_number(root_agreement.family_id)
+        elif supersedes is not None or amends is not None:
+            from apps.contract.versioning import lock_family, next_version_number
+
+            parent = supersedes or amends
+            assert parent is not None
+            lock_family(parent.family_id)
+            contract.family_id = parent.family_id
+            contract.version_number = next_version_number(parent.family_id)
+            if contract.root_agreement_id is None:
+                contract.root_agreement = (
+                    parent.root_agreement if parent.root_agreement_id else parent
+                )
+
+        try:
+            contract.save()
+        except IntegrityError as exc:
+            raise ValidationError(
+                {
+                    "version_number": _(
+                        "Could not allocate a unique family version; retry."
+                    )
+                }
+            ) from exc
         log_event(
             "contract.draft.created",
             actor=actor_from_user(actor),
@@ -605,6 +648,15 @@ def attach_artifact(
         contract.generated_pdf = artifact
         update_fields.append("generated_pdf")
     elif kind == ContractArtifact.Kind.SIGNED_PDF:
+        if contract.signed_pdf_id:
+            raise ValidationError(
+                {
+                    "kind": _(
+                        "This contract version already has a signed PDF; "
+                        "signed artifacts are immutable."
+                    )
+                }
+            )
         contract.signed_pdf = artifact
         update_fields.append("signed_pdf")
     if update_fields:

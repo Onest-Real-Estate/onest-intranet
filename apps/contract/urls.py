@@ -12,6 +12,8 @@ from apps.contract.views.administration_views import (
 from apps.contract.views.agent_contract_views import (
     agent_contract_artifact_download,
     agent_contract_create,
+    agent_contract_create_amendment,
+    agent_contract_create_replacement,
     agent_contract_lifecycle,
     agent_contract_new,
     agent_contract_preview,
@@ -113,6 +115,16 @@ urlpatterns = [
         "operations/agent-contracts/<uuid:public_id>/save",
         agent_contract_update,
         name="agent_contract_update",
+    ),
+    path(
+        "operations/agent-contracts/<uuid:public_id>/amend",
+        agent_contract_create_amendment,
+        name="agent_contract_create_amendment",
+    ),
+    path(
+        "operations/agent-contracts/<uuid:public_id>/replace",
+        agent_contract_create_replacement,
+        name="agent_contract_create_replacement",
     ),
     path(
         "operations/agent-contracts/<uuid:public_id>/lifecycle",

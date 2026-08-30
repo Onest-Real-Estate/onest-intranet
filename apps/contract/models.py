@@ -19,6 +19,7 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from apps.contract.calculations.rules import CURRENT_RULE_VERSION
+from apps.contract.change_kinds import AMENDMENT_KINDS, ContractChangeKind
 from apps.contract.statuses import ContractStatus
 from apps.contract.terms import (
     HUNDRED,
@@ -30,6 +31,22 @@ from apps.contract.terms import (
     quantize_percent,
 )
 from apps.user.storage import private_storage
+
+#: Once issued (or terminal), legal/financial fields and family links freeze.
+#: Lifecycle timestamps, status (via the transition service), and current
+#: artifact *pointers* may still change.
+FROZEN_CONTRACT_STATUSES = frozenset(
+    {
+        ContractStatus.SENT,
+        ContractStatus.VIEWED,
+        ContractStatus.SIGNED,
+        ContractStatus.ACTIVE,
+        ContractStatus.SUPERSEDED,
+        ContractStatus.EXPIRED,
+        ContractStatus.TERMINATED,
+        ContractStatus.GENERATION_ERROR,
+    }
+)
 
 if TYPE_CHECKING:
     from apps.user.models import User  # noqa: F401
@@ -590,6 +607,26 @@ class AgentContract(models.Model):
         default=1,
         help_text=_("Monotonic revision within the family. Starts at 1."),
     )
+    change_kind = models.CharField(
+        _("change kind"),
+        max_length=32,
+        choices=ContractChangeKind.choices,
+        default=ContractChangeKind.ORIGINAL,
+        db_index=True,
+        help_text=_(
+            "Why this family version exists: original, amendment/addendum, "
+            "or full replacement. Never rewrite a signed original in place."
+        ),
+    )
+    change_summary = models.TextField(
+        _("change summary"),
+        blank=True,
+        help_text=_(
+            "Legal narrative for an amendment or addendum: what changes and "
+            "effective-date implications. Empty on originals and most "
+            "replacements."
+        ),
+    )
     recipient = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         verbose_name=_("recipient agent"),
@@ -917,6 +954,17 @@ class AgentContract(models.Model):
                 ),
                 name="contract_splits_both_or_neither",
             ),
+            models.CheckConstraint(
+                condition=(
+                    ~Q(change_kind__in=["amendment", "addendum"])
+                    | Q(amends__isnull=False)
+                ),
+                name="contract_amendment_requires_amends",
+            ),
+            models.CheckConstraint(
+                condition=(~Q(change_kind="replacement") | Q(supersedes__isnull=False)),
+                name="contract_replacement_requires_supersedes",
+            ),
         ]
         indexes = [
             models.Index(
@@ -939,6 +987,51 @@ class AgentContract(models.Model):
 
     def __str__(self) -> str:
         return f"{self.public_id} ({self.status})"
+
+    def _immutable_field_names(self) -> tuple[str, ...]:
+        """Legal, financial, snapshot, and family identity fields.
+
+        Status, lifecycle timestamps, and current artifact pointer FKs stay
+        mutable so the lifecycle and PDF services can finish their work.
+        """
+        return (
+            "recipient_id",
+            "office_id",
+            "template_version_id",
+            "family_id",
+            "version_number",
+            "change_kind",
+            "change_summary",
+            "effective_on",
+            "expires_on",
+            "agent_split_percent",
+            "office_split_percent",
+            "transaction_fee_amount",
+            "transaction_fee_percent",
+            "annual_cap_amount",
+            "mentor_percent",
+            "mentor_fixed_amount",
+            "mentor_cap_amount",
+            "mentor_basis",
+            "mentor_payee_id",
+            "mentor_notes",
+            "referral_percent",
+            "referral_fixed_amount",
+            "referral_cap_amount",
+            "referral_basis",
+            "referral_payee_id",
+            "referral_notes",
+            "special_arrangements",
+            "addenda_references",
+            "party_snapshot",
+            "office_snapshot",
+            "terms_snapshot",
+            "calculation_rule_version",
+            "root_agreement_id",
+            "supersedes_id",
+            "amends_id",
+            "created_by_id",
+        )
 
     def clean(self):
         super().clean()
@@ -1046,6 +1139,48 @@ class AgentContract(models.Model):
                 str(_("A contract cannot amend itself."))
             )
 
+        if self.change_kind in AMENDMENT_KINDS and not self.amends_id:
+            errors.setdefault("amends", []).append(
+                str(_("Amendments and addenda must reference a base version."))
+            )
+        if (
+            self.change_kind == ContractChangeKind.REPLACEMENT
+            and not self.supersedes_id
+        ):
+            errors.setdefault("supersedes", []).append(
+                str(_("Replacements must reference the version they supersede."))
+            )
+        if self.change_kind == ContractChangeKind.ORIGINAL and (
+            self.amends_id or self.supersedes_id
+        ):
+            errors.setdefault("change_kind", []).append(
+                str(
+                    _(
+                        "Original agreements cannot amend or supersede another "
+                        "version; use amendment or replacement."
+                    )
+                )
+            )
+
+        if self.pk:
+            original = type(self).objects.filter(pk=self.pk).first()
+            if original and original.status in FROZEN_CONTRACT_STATUSES:
+                changed = [
+                    field
+                    for field in self._immutable_field_names()
+                    if getattr(original, field) != getattr(self, field)
+                ]
+                if changed:
+                    errors.setdefault("__all__", []).append(
+                        str(
+                            _(
+                                "Issued and historical contract versions are "
+                                "immutable; create an amendment or replacement "
+                                "draft instead."
+                            )
+                        )
+                    )
+
         if errors:
             raise ValidationError(errors)
 
@@ -1073,6 +1208,25 @@ class AgentContract(models.Model):
                         )
                     }
                 )
+            # Enforce immutability even when callers skip full_clean().
+            if previous is not None and previous in FROZEN_CONTRACT_STATUSES:
+                original = type(self).objects.filter(pk=self.pk).first()
+                if original is not None:
+                    changed = [
+                        field
+                        for field in self._immutable_field_names()
+                        if getattr(original, field) != getattr(self, field)
+                    ]
+                    if changed:
+                        raise ValidationError(
+                            {
+                                "__all__": _(
+                                    "Issued and historical contract versions are "
+                                    "immutable; create an amendment or replacement "
+                                    "draft instead."
+                                )
+                            }
+                        )
         super().save(*args, **kwargs)
 
 
@@ -1185,6 +1339,22 @@ class ContractArtifact(models.Model):
     def __str__(self) -> str:
         return f"{self.kind}:{self.display_name}"
 
+    def _immutable_field_names(self) -> tuple[str, ...]:
+        return (
+            "contract_id",
+            "kind",
+            "display_name",
+            "file",
+            "media_type",
+            "byte_size",
+            "checksum",
+            "renderer_version",
+            "rule_version",
+            "input_fingerprint",
+            "generation_metadata",
+            "created_by_id",
+        )
+
     def clean(self):
         super().clean()
         if self.byte_size is not None and self.byte_size <= 0:
@@ -1215,6 +1385,45 @@ class ContractArtifact(models.Model):
             raise ValidationError(
                 {"generation_metadata": _("Generation metadata must be an object.")}
             )
+        if self.pk:
+            original = type(self).objects.filter(pk=self.pk).first()
+            if original is not None:
+                changed = [
+                    field
+                    for field in self._immutable_field_names()
+                    if getattr(original, field) != getattr(self, field)
+                ]
+                if changed:
+                    raise ValidationError(
+                        {
+                            "__all__": _(
+                                "Contract artifacts are immutable after create; "
+                                "retain the prior file and attach a new artifact "
+                                "on a new contract version if needed."
+                            )
+                        }
+                    )
+
+    def save(self, *args, **kwargs):
+        if self.pk is not None:
+            original = type(self).objects.filter(pk=self.pk).first()
+            if original is not None:
+                changed = [
+                    field
+                    for field in self._immutable_field_names()
+                    if getattr(original, field) != getattr(self, field)
+                ]
+                if changed:
+                    raise ValidationError(
+                        {
+                            "__all__": _(
+                                "Contract artifacts are immutable after create; "
+                                "retain the prior file and attach a new artifact "
+                                "on a new contract version if needed."
+                            )
+                        }
+                    )
+        super().save(*args, **kwargs)
 
 
 def _required_money(**kwargs):

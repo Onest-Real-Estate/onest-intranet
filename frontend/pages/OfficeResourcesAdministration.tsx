@@ -330,5 +330,6 @@ OfficeResourcesAdministration.layout = () =>
           { label: "Office Resources" },
         ],
       },
+      variant: "wide",
     },
   ] as const;

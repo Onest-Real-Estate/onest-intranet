@@ -176,6 +176,11 @@ def test_submitting_redirects_to_the_ticket_and_scrubs_diagnostics(seeded, clien
     assert ticket.page_url == "/contracts?page=2"
     assert "supersecret" not in ticket.page_url
     assert ticket.browser_metadata == {"viewport": "1280x720"}
+    # Success toast is set for the following Inertia render.
+    assert client.session["inertia_flash"] == {
+        "level": "success",
+        "message": f"Report sent — reference {ticket.reference}",
+    }
 
 
 def test_unparseable_metadata_does_not_lose_the_report(seeded, client):

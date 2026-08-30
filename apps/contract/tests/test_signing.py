@@ -281,7 +281,7 @@ def test_complete_rejects_checksum_drift(seeded_offices, settings):
         request_meta=_meta("sess-drift"),
     )
     artifact.checksum = "0" * 64
-    artifact.save(update_fields=["checksum"])
+    ContractArtifact.objects.filter(pk=artifact.pk).update(checksum="0" * 64)
     with pytest.raises(TransitionRefused):
         complete_signing(
             recipient,

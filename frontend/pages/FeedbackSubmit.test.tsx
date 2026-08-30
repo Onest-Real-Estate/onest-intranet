@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { ReactNode } from "react";
+import type { FormHTMLAttributes, ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { axe } from "vitest-axe";
 
@@ -8,6 +8,11 @@ import FeedbackSubmit from "@/pages/FeedbackSubmit";
 import type { FeedbackSubmitPageProps } from "@/types";
 
 const pageProps = vi.hoisted(() => ({ current: {} as FeedbackSubmitPageProps }));
+const validationToasts = vi.hoisted(() => vi.fn());
+
+vi.mock("@/hooks/use-validation-toasts", () => ({
+  useValidationToasts: (...args: unknown[]) => validationToasts(...args),
+}));
 
 vi.mock("@inertiajs/react", () => ({
   usePage: () => ({ props: pageProps.current, url: "/support/feedback" }),
@@ -17,6 +22,16 @@ vi.mock("@inertiajs/react", () => ({
     </a>
   ),
   Head: () => null,
+  Form: ({
+    children,
+    ...rest
+  }: FormHTMLAttributes<HTMLFormElement> & {
+    children?: ReactNode | ((props: { processing: boolean }) => ReactNode);
+  }) => (
+    <form {...rest}>
+      {typeof children === "function" ? children({ processing: false }) : children}
+    </form>
+  ),
 }));
 
 function setPage(overrides: Partial<FeedbackSubmitPageProps> = {}) {
@@ -55,6 +70,7 @@ function setPage(overrides: Partial<FeedbackSubmitPageProps> = {}) {
 }
 
 beforeEach(() => {
+  validationToasts.mockClear();
   setPage();
 });
 
@@ -102,12 +118,24 @@ describe("FeedbackSubmit", () => {
     expect(screen.getByText(/your name, work email, and office/i)).toBeVisible();
   });
 
-  it("posts as a native multipart form so a screenshot needs no second path", () => {
+  it("submits through Inertia Form as multipart so a screenshot needs no second path", () => {
     const { container } = render(<FeedbackSubmit />);
     const form = container.querySelector("form");
     expect(form).toHaveAttribute("method", "post");
     expect(form).toHaveAttribute("enctype", "multipart/form-data");
     expect(form).toHaveAttribute("action", "/support/feedback/send");
+  });
+
+  it("toasts validation refusals instead of a sticky banner", () => {
+    const errors = {
+      fields: { summary: ["Enter a short summary."] },
+      form: [] as string[],
+    };
+    setPage({ errors });
+    render(<FeedbackSubmit />);
+    expect(validationToasts).toHaveBeenCalledWith(errors, {
+      title: "Could not send your report",
+    });
   });
 
   it("lists real office contacts when the office has them", () => {

@@ -6,15 +6,19 @@ import json
 from typing import Any
 
 from django import forms
+from django.core.validators import validate_slug
 from django.utils.translation import gettext_lazy as _
 
+from apps.contract.models import ContractTemplate
 from apps.user.models import Office, User
 from apps.user.us import US_STATE_CHOICES, US_STATE_CODES
 from apps.web.authorization import scope_queryset_for_offices
 
 
 class ContractTemplateCreateForm(forms.Form):
-    stable_key = forms.SlugField()
+    # CharField + validate_slug: forms.SlugField accepts max_length at runtime
+    # via **kwargs, but django-stubs omits it from the typed signature.
+    stable_key = forms.CharField(max_length=80, validators=[validate_slug])
     name = forms.CharField(max_length=180)
     description = forms.CharField(required=False, widget=forms.Textarea)
     jurisdiction_state_codes = forms.MultipleChoiceField(
@@ -47,6 +51,14 @@ class ContractTemplateCreateForm(forms.Form):
         offices_field.queryset = offices.exclude(
             kind__in=[Office.Kind.HEAD_OFFICE, Office.Kind.REGION]
         )
+
+    def clean_stable_key(self) -> str:
+        key = (self.cleaned_data.get("stable_key") or "").strip().lower()
+        if ContractTemplate.objects.filter(stable_key=key).exists():
+            raise forms.ValidationError(
+                _("A contract template with this stable key already exists.")
+            )
+        return key
 
     def clean_jurisdiction_state_codes(self) -> list[str]:
         raw = self.cleaned_data.get("jurisdiction_state_codes") or []
