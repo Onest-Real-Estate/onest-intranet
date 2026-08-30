@@ -522,3 +522,33 @@ def test_preview_url_is_hub_stream_not_storage_url(
     assert response.status_code == 200
     assert response["Content-Type"] == "application/pdf"
     assert response.content[:4] == b"%PDF"
+
+
+@pytest.mark.django_db
+def test_create_rejects_duplicate_stable_key(seeded_offices, client):
+    from apps.web.tests.test_permissions import inertia_page_script
+
+    actor = company_admin(seeded_offices)
+    create_template_family(
+        actor,
+        stable_key="ica-dup",
+        name="Existing",
+        company_wide=True,
+    )
+    client.force_login(actor)
+    response = client.post(
+        reverse("contract_template_create"),
+        data={
+            "stable_key": "ica-dup",
+            "name": "Duplicate attempt",
+            "description": "",
+            "company_wide": "on",
+            "version_label": "1.0.0",
+            "context": "sheet",
+        },
+    )
+    assert response.status_code == 422
+    page = inertia_page_script(response)
+    assert page["component"] == "ContractTemplateAdministration"
+    assert page["props"]["createSheet"]["open"] is True
+    assert "stable_key" in page["props"]["errors"]["fields"]

@@ -13,6 +13,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { type ReactNode, useState } from "react";
+import { toast } from "sonner";
 import {
   Callout,
   CardStateMessage,
@@ -66,6 +67,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { FLASH_LEVELS, showFlashToast } from "@/lib/flash-toast";
 import { buildListUrl, visitListUrl } from "@/lib/list-query";
 import { routes } from "@/lib/routes";
 import { CONTRACT_STATUS, presentStatus } from "@/lib/status";
@@ -125,6 +127,14 @@ const exampleValidation: ValidationErrors = {
     email: ["Enter a valid email address."],
   },
   form: ["The server could not save this draft. Review the fields and try again."],
+};
+
+const flashDemoCopy: Record<(typeof FLASH_LEVELS)[number], string> = {
+  debug: "Debug: request finished in 42 ms",
+  info: "Info: review is optional for this step",
+  success: "Success: draft saved",
+  warning: "Warning: closing date is in the past",
+  error: "Error: the server could not save this draft",
 };
 
 function CatalogSection({
@@ -341,6 +351,99 @@ export default function DesignSystem() {
             Assignments disagree, so commission cannot be attributed until one is
             withdrawn.
           </Callout>
+        </div>
+      </CatalogSection>
+
+      <CatalogSection
+        title="Toasts"
+        description="Transient results after a write. Server flashes use set_flash with Django messages tags (debug, info, success, warning, error); FlashToasts maps them onto Sonner. Prefer a toast for one-shot confirmation — not for standing page guidance (use Callout) or field validation (use FormFieldError)."
+      >
+        <div className="grid gap-4 lg:grid-cols-2">
+          <SurfaceCard>
+            <SurfaceCardHeader>
+              <SurfaceCardTitle>Django flash levels</SurfaceCardTitle>
+              <SurfaceCardDescription>
+                Same levels as <code className="text-xs">messages.success</code>,{" "}
+                <code className="text-xs">messages.warning</code>, and friends — and as{" "}
+                <code className="text-xs">set_flash(…, level=)</code>.
+              </SurfaceCardDescription>
+            </SurfaceCardHeader>
+            <SurfaceCardContent className="flex flex-wrap gap-2">
+              {FLASH_LEVELS.map((level) => (
+                <Button
+                  key={level}
+                  type="button"
+                  variant={level === "error" ? "destructive" : "outline"}
+                  size="sm"
+                  className="capitalize"
+                  onClick={() => showFlashToast(level, flashDemoCopy[level])}
+                >
+                  Show {level}
+                </Button>
+              ))}
+            </SurfaceCardContent>
+          </SurfaceCard>
+          <SurfaceCard>
+            <SurfaceCardHeader>
+              <SurfaceCardTitle>Other toast patterns</SurfaceCardTitle>
+              <SurfaceCardDescription>
+                Descriptions, loading, and validation-style refusals. Product pages
+                should still prefer server flash for post-redirect success.
+              </SurfaceCardDescription>
+            </SurfaceCardHeader>
+            <SurfaceCardContent className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  toast.success("Report sent", {
+                    description: "Reference FB-000042 — open it from My reports.",
+                  })
+                }
+              >
+                Success with detail
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  toast.error("Could not send your report", {
+                    description: "Summary: Enter a short summary.",
+                    duration: 8_000,
+                  })
+                }
+              >
+                Validation refusal
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const id = toast.loading("Saving draft…");
+                  window.setTimeout(() => {
+                    toast.success("Draft saved", { id });
+                  }, 1200);
+                }}
+              >
+                Loading then success
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  toast.message("Plain notice", {
+                    description: "No semantic level — use sparingly.",
+                  })
+                }
+              >
+                Neutral message
+              </Button>
+            </SurfaceCardContent>
+          </SurfaceCard>
         </div>
       </CatalogSection>
 

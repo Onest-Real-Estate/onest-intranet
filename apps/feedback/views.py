@@ -40,6 +40,7 @@ from apps.user.models import User
 from apps.web.authorization import enforce_policy
 from apps.web.capability import access_for
 from apps.web.contracts import empty_validation_errors, list_response
+from apps.web.flash import set_flash
 
 SUBMIT_PAGE = "FeedbackSubmit"
 MINE_PAGE = "FeedbackMine"
@@ -213,7 +214,12 @@ def feedback_create(request: HttpRequest):
         return response
     # Redirect after success so a refresh cannot repeat the write. A replayed
     # POST lands on the same ticket anyway, but the reader should not have to
-    # rely on that.
+    # rely on that. Flash so FlashToasts confirms the send across the redirect.
+    set_flash(
+        request,
+        level="success",
+        message=f"Report sent — reference {ticket.reference}",
+    )
     return redirect(reverse("feedback_detail", args=[str(ticket.public_id)]))
 
 

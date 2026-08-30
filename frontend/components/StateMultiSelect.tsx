@@ -88,6 +88,21 @@ export function StateMultiSelect({
     setSelected([]);
   }
 
+  function selectAllShown() {
+    const codes = filtered.map((option) => option.code.toUpperCase());
+    setSelected((current) => {
+      const next = new Set(current);
+      for (const code of codes) {
+        next.add(code);
+      }
+      return [...next].sort();
+    });
+  }
+
+  const allShownSelected =
+    filtered.length > 0 &&
+    filtered.every((option) => selected.includes(option.code.toUpperCase()));
+
   const summary =
     selected.length === 0
       ? placeholder
@@ -158,22 +173,35 @@ export function StateMultiSelect({
               />
             </div>
           </div>
-          <div className="flex items-center justify-between border-b border-border px-3 py-1.5">
+          <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-1.5">
             <span className="text-muted-foreground text-xs font-medium">
               {selected.length} selected
               {query.trim() ? ` · ${filtered.length} shown` : ""}
             </span>
-            {selected.length > 0 ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-7 px-2 text-xs"
-                onClick={clear}
-              >
-                Clear
-              </Button>
-            ) : null}
+            <div className="flex shrink-0 items-center gap-0.5">
+              {!allShownSelected ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2 text-xs"
+                  onClick={selectAllShown}
+                >
+                  {query.trim() ? "Select shown" : "Select all"}
+                </Button>
+              ) : null}
+              {selected.length > 0 ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2 text-xs"
+                  onClick={clear}
+                >
+                  Clear
+                </Button>
+              ) : null}
+            </div>
           </div>
           <div
             className="max-h-64 overflow-y-auto overscroll-contain p-2"

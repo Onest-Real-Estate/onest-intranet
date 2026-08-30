@@ -626,10 +626,11 @@
 }
 
 /*
- * Sheets slide in from a viewport edge over the page, the way dialogs rise:
- * one motion language across every surface that covers the page. The panel
- * travels on the standard easing so it settles instead of stopping; the exit
- * is shorter and ease-in so closing feels decisive rather than reluctant.
+ * Sheets slide from a viewport edge. Animations are bound with attribute
+ * selectors — not Tailwind `data-[state=*]:animate-*` variants — because
+ * custom utilities in `@layer utilities` do not receive generated variant
+ * classes here, so those class names were no-ops and the panel snapped open.
+ * Timing matches DESIGN.md panel travel: `--motion-slow` on `--ease-standard`.
  */
 @keyframes sheet-overlay-in {
   from {
@@ -647,9 +648,15 @@
   from {
     transform: translateX(100%);
   }
+  to {
+    transform: translateX(0);
+  }
 }
 
 @keyframes sheet-out-right {
+  from {
+    transform: translateX(0);
+  }
   to {
     transform: translateX(100%);
   }
@@ -659,9 +666,15 @@
   from {
     transform: translateX(-100%);
   }
+  to {
+    transform: translateX(0);
+  }
 }
 
 @keyframes sheet-out-left {
+  from {
+    transform: translateX(0);
+  }
   to {
     transform: translateX(-100%);
   }
@@ -671,9 +684,15 @@
   from {
     transform: translateY(-100%);
   }
+  to {
+    transform: translateY(0);
+  }
 }
 
 @keyframes sheet-out-top {
+  from {
+    transform: translateY(0);
+  }
   to {
     transform: translateY(-100%);
   }
@@ -683,12 +702,58 @@
   from {
     transform: translateY(100%);
   }
+  to {
+    transform: translateY(0);
+  }
 }
 
 @keyframes sheet-out-bottom {
+  from {
+    transform: translateY(0);
+  }
   to {
     transform: translateY(100%);
   }
+}
+
+[data-slot="sheet-overlay"][data-state="open"] {
+  animation: sheet-overlay-in var(--motion-base) var(--ease-standard) both;
+}
+
+[data-slot="sheet-overlay"][data-state="closed"] {
+  animation: sheet-overlay-out var(--motion-fast) ease-in both;
+}
+
+[data-slot="sheet-content"][data-side="right"][data-state="open"] {
+  animation: sheet-in-right var(--motion-slow) var(--ease-standard) both;
+}
+
+[data-slot="sheet-content"][data-side="right"][data-state="closed"] {
+  animation: sheet-out-right var(--motion-base) ease-in both;
+}
+
+[data-slot="sheet-content"][data-side="left"][data-state="open"] {
+  animation: sheet-in-left var(--motion-slow) var(--ease-standard) both;
+}
+
+[data-slot="sheet-content"][data-side="left"][data-state="closed"] {
+  animation: sheet-out-left var(--motion-base) ease-in both;
+}
+
+[data-slot="sheet-content"][data-side="top"][data-state="open"] {
+  animation: sheet-in-top var(--motion-slow) var(--ease-standard) both;
+}
+
+[data-slot="sheet-content"][data-side="top"][data-state="closed"] {
+  animation: sheet-out-top var(--motion-base) ease-in both;
+}
+
+[data-slot="sheet-content"][data-side="bottom"][data-state="open"] {
+  animation: sheet-in-bottom var(--motion-slow) var(--ease-standard) both;
+}
+
+[data-slot="sheet-content"][data-side="bottom"][data-state="closed"] {
+  animation: sheet-out-bottom var(--motion-base) ease-in both;
 }
 
 @layer utilities {
@@ -714,46 +779,6 @@
 
   .animate-dialog-content {
     animation: dialog-content-in var(--motion-base) var(--ease-standard);
-  }
-
-  .animate-sheet-overlay-in {
-    animation: sheet-overlay-in var(--motion-base) var(--ease-standard);
-  }
-
-  .animate-sheet-overlay-out {
-    animation: sheet-overlay-out var(--motion-fast) ease-in;
-  }
-
-  .animate-sheet-in-right {
-    animation: sheet-in-right var(--motion-slow) var(--ease-standard);
-  }
-
-  .animate-sheet-out-right {
-    animation: sheet-out-right var(--motion-base) ease-in;
-  }
-
-  .animate-sheet-in-left {
-    animation: sheet-in-left var(--motion-slow) var(--ease-standard);
-  }
-
-  .animate-sheet-out-left {
-    animation: sheet-out-left var(--motion-base) ease-in;
-  }
-
-  .animate-sheet-in-top {
-    animation: sheet-in-top var(--motion-slow) var(--ease-standard);
-  }
-
-  .animate-sheet-out-top {
-    animation: sheet-out-top var(--motion-base) ease-in;
-  }
-
-  .animate-sheet-in-bottom {
-    animation: sheet-in-bottom var(--motion-slow) var(--ease-standard);
-  }
-
-  .animate-sheet-out-bottom {
-    animation: sheet-out-bottom var(--motion-base) ease-in;
   }
 
   .brand-text {

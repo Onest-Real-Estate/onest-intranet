@@ -32,7 +32,7 @@ function SheetOverlay({
     <DialogPrimitive.Overlay
       data-slot="sheet-overlay"
       className={cn(
-        "data-[state=closed]:animate-sheet-overlay-out data-[state=open]:animate-sheet-overlay-in fixed inset-0 z-50 bg-foreground/35 backdrop-blur-[2px]",
+        "fixed inset-0 z-50 bg-foreground/35 backdrop-blur-[2px]",
         className,
       )}
       {...props}
@@ -53,16 +53,13 @@ function SheetContent({
       <SheetOverlay />
       <DialogPrimitive.Content
         data-slot="sheet-content"
+        data-side={side}
         className={cn(
-          "bg-background fixed z-50 flex flex-col gap-4 shadow-popover",
-          side === "right" &&
-            "data-[state=closed]:animate-sheet-out-right data-[state=open]:animate-sheet-in-right inset-y-0 right-0 h-full w-3/4 border-l sm:max-w-sm",
-          side === "left" &&
-            "data-[state=closed]:animate-sheet-out-left data-[state=open]:animate-sheet-in-left inset-y-0 left-0 h-full w-3/4 border-r sm:max-w-sm",
-          side === "top" &&
-            "data-[state=closed]:animate-sheet-out-top data-[state=open]:animate-sheet-in-top inset-x-0 top-0 h-auto border-b",
-          side === "bottom" &&
-            "data-[state=closed]:animate-sheet-out-bottom data-[state=open]:animate-sheet-in-bottom inset-x-0 bottom-0 h-auto border-t",
+          "bg-background fixed z-50 flex flex-col gap-4 shadow-popover outline-hidden",
+          side === "right" && "inset-y-0 right-0 h-full w-3/4 border-l sm:max-w-sm",
+          side === "left" && "inset-y-0 left-0 h-full w-3/4 border-r sm:max-w-sm",
+          side === "top" && "inset-x-0 top-0 h-auto border-b",
+          side === "bottom" && "inset-x-0 bottom-0 h-auto border-t",
           className,
         )}
         {...props}

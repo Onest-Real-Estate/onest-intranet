@@ -703,7 +703,8 @@ export interface ShellSharedProps {
 }
 
 export interface FlashMessage {
-  level: "success" | "error" | "info" | "warning";
+  /** Django ``messages`` tag / ``set_flash`` level. */
+  level: "debug" | "info" | "success" | "warning" | "error";
   message: string;
 }
 

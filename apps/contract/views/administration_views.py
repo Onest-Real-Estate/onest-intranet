@@ -133,41 +133,61 @@ def _render_index(
     return response
 
 
+def _create_draft_from_post(request: HttpRequest) -> dict[str, object]:
+    draft: dict[str, object] = {key: request.POST.get(key) for key in request.POST}
+    draft["jurisdiction_state_codes"] = request.POST.getlist("jurisdiction_state_codes")
+    return draft
+
+
+def _service_validation_errors(exc: ValidationError) -> dict[str, Any]:
+    if hasattr(exc, "message_dict"):
+        fields = {
+            key: [str(message) for message in messages]
+            for key, messages in exc.message_dict.items()
+        }
+        form_messages = fields.pop("__all__", [])
+        return {"fields": fields, "form": form_messages}
+    return {"fields": {}, "form": [str(message) for message in exc.messages]}
+
+
 @enforce_policy("contract_template_create")
 @require_POST
 def contract_template_create(request: HttpRequest):
     actor = cast(User, request.user)
     form = ContractTemplateCreateForm(request.POST, actor=actor)
     if not form.is_valid():
-        draft: dict[str, object] = {key: request.POST.get(key) for key in request.POST}
-        draft["jurisdiction_state_codes"] = request.POST.getlist(
-            "jurisdiction_state_codes"
-        )
         return _render_index(
             request,
-            create_sheet={"open": True, "draft": draft},
+            create_sheet={"open": True, "draft": _create_draft_from_post(request)},
             errors=validation_errors(form),
         )
-    template = create_template_family(
-        actor,
-        stable_key=form.cleaned_data["stable_key"],
-        name=form.cleaned_data["name"],
-        description=form.cleaned_data["description"],
-        jurisdiction_state_codes=form.cleaned_data["jurisdiction_state_codes"],
-        company_wide=form.cleaned_data["company_wide"],
-        applicable_offices=list(form.cleaned_data["applicable_offices"]),
-        applicable_regions=list(form.cleaned_data["applicable_regions"]),
-        effective_from=form.cleaned_data["effective_from"],
-        effective_until=form.cleaned_data["effective_until"],
-    )
-    version = create_draft_version(
-        actor,
-        template=template,
-        version_label=form.cleaned_data["version_label"],
-        display_name=form.cleaned_data["name"],
-        description=form.cleaned_data["description"],
-        merge_schema=[],
-    )
+    try:
+        template = create_template_family(
+            actor,
+            stable_key=form.cleaned_data["stable_key"],
+            name=form.cleaned_data["name"],
+            description=form.cleaned_data["description"],
+            jurisdiction_state_codes=form.cleaned_data["jurisdiction_state_codes"],
+            company_wide=form.cleaned_data["company_wide"],
+            applicable_offices=list(form.cleaned_data["applicable_offices"]),
+            applicable_regions=list(form.cleaned_data["applicable_regions"]),
+            effective_from=form.cleaned_data["effective_from"],
+            effective_until=form.cleaned_data["effective_until"],
+        )
+        version = create_draft_version(
+            actor,
+            template=template,
+            version_label=form.cleaned_data["version_label"],
+            display_name=form.cleaned_data["name"],
+            description=form.cleaned_data["description"],
+            merge_schema=[],
+        )
+    except ValidationError as exc:
+        return _render_index(
+            request,
+            create_sheet={"open": True, "draft": _create_draft_from_post(request)},
+            errors=_service_validation_errors(exc),
+        )
     return redirect("contract_template_workspace", version_id=version.pk)
 
 
