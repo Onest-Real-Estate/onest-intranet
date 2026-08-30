@@ -7,6 +7,21 @@ import { axe } from "vitest-axe";
 import Notifications from "@/pages/Notifications";
 import type { NotificationRow, NotificationsPageProps } from "@/types";
 
+/** Read a FormData body back as plain entries, so assertions stay legible. */
+function bodyOf(call: unknown[]): Record<string, string> {
+  const body = call[1];
+  if (!(body instanceof FormData)) {
+    throw new Error(
+      `Expected a FormData body, got ${typeof body}. Inertia sends a plain object as JSON, which never reaches Django's request.POST.`,
+    );
+  }
+  const entries: Record<string, string> = {};
+  for (const [key, value] of body.entries()) {
+    entries[key] = String(value);
+  }
+  return entries;
+}
+
 const pageProps = vi.hoisted(() => ({
   current: {} as NotificationsPageProps,
 }));
@@ -218,8 +233,11 @@ describe("Notifications", () => {
 
     expect(routerPost).toHaveBeenCalledWith(
       "/notifications/11111111-1111-1111-1111-111111111111/state",
-      expect.objectContaining({ action: "read", status: "unread", page: "1" }),
+      expect.any(FormData),
       expect.objectContaining({ preserveScroll: true }),
+    );
+    expect(bodyOf(routerPost.mock.calls[0])).toEqual(
+      expect.objectContaining({ action: "read", status: "unread", page: "1" }),
     );
   });
 
@@ -236,15 +254,25 @@ describe("Notifications", () => {
     await user.click(screen.getByRole("button", { name: /Mark unread/ }));
     expect(routerPost).toHaveBeenLastCalledWith(
       expect.stringContaining("/state"),
-      expect.objectContaining({ action: "unread" }),
+      expect.any(FormData),
       expect.anything(),
+    );
+    const unreadCall = routerPost.mock.calls.at(-1);
+    expect(unreadCall).toBeDefined();
+    expect(bodyOf(unreadCall ?? [])).toEqual(
+      expect.objectContaining({ action: "unread" }),
     );
 
     await user.click(screen.getByRole("button", { name: /Archive/ }));
     expect(routerPost).toHaveBeenLastCalledWith(
       expect.stringContaining("/state"),
-      expect.objectContaining({ action: "archive" }),
+      expect.any(FormData),
       expect.anything(),
+    );
+    const archiveCall = routerPost.mock.calls.at(-1);
+    expect(archiveCall).toBeDefined();
+    expect(bodyOf(archiveCall ?? [])).toEqual(
+      expect.objectContaining({ action: "archive" }),
     );
   });
 
@@ -261,8 +289,11 @@ describe("Notifications", () => {
     await user.click(screen.getByRole("button", { name: /Mark all read/ }));
     expect(routerPost).toHaveBeenCalledWith(
       "/notifications/read-all",
-      expect.objectContaining({ status: "unread" }),
+      expect.any(FormData),
       expect.anything(),
+    );
+    expect(bodyOf(routerPost.mock.calls[0])).toEqual(
+      expect.objectContaining({ status: "unread" }),
     );
   });
 

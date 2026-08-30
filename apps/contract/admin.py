@@ -11,6 +11,8 @@ from apps.contract.models import (
     AgentContract,
     CommissionCalculation,
     ContractArtifact,
+    ContractSignature,
+    ContractSigningIntent,
     ContractTemplate,
     ContractTemplateVersion,
 )
@@ -147,6 +149,81 @@ class CommissionCalculationAdmin(admin.ModelAdmin):
         "office_net_amount",
         "transaction_fee_amount",
         "created_by",
+        "created_at",
+    )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(ContractSigningIntent)
+class ContractSigningIntentAdmin(admin.ModelAdmin):
+    list_display = (
+        "public_id",
+        "contract",
+        "actor",
+        "status",
+        "docuseal_submission_id",
+        "expires_at",
+        "created_at",
+    )
+    list_filter = ("status",)
+    search_fields = ("public_id", "docuseal_submission_id", "actor__email")
+    readonly_fields = (
+        "public_id",
+        "contract",
+        "actor",
+        "contract_version",
+        "artifact",
+        "artifact_checksum",
+        "session_key_hash",
+        "request_ip_hash",
+        "request_ua_hash",
+        "disclosure_version",
+        "consent_accepted_at",
+        "status",
+        "docuseal_submission_id",
+        "docuseal_submitter_slug",
+        "embed_src",
+        "expires_at",
+        "created_at",
+        "consumed_at",
+    )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(ContractSignature)
+class ContractSignatureAdmin(admin.ModelAdmin):
+    list_display = (
+        "public_id",
+        "contract",
+        "signer",
+        "signature_method",
+        "disclosure_version",
+        "signed_at",
+    )
+    search_fields = ("public_id", "signer__email", "docuseal_submission_id")
+    readonly_fields = (
+        "public_id",
+        "contract",
+        "intent",
+        "signer",
+        "artifact",
+        "signed_at",
+        "disclosure_version",
+        "signature_method",
+        "docuseal_submission_id",
+        "docuseal_submitter_slug",
+        "request_ip_hash",
+        "request_ua_hash",
         "created_at",
     )
 

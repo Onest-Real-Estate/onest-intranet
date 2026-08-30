@@ -3,7 +3,7 @@
 # Django management commands run inside the compose dev stack (the `web`
 # service), so start it first:
 #
-#   make up            start the dev stack (db, redis, mailpit, minio, docuseal, celery, celery-beat, web)
+#   make up            start the dev stack (db, redis, mailpit, minio, celery, celery-beat, web)
 #   make clean         stop everything and remove containers, volumes, and images
 #   make migrate       apply database migrations
 #   make makemigrations   create migrations for model changes

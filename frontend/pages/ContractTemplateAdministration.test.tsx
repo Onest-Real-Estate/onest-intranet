@@ -30,6 +30,28 @@ vi.mock("@/components/PermissionRequired", () => ({
   PermissionRequired: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
+vi.mock("@/components/ContractTemplateFieldPlacer", () => ({
+  ContractTemplateFieldPlacer: ({
+    pdfUrl,
+    value,
+    onSave,
+  }: {
+    pdfUrl: string;
+    value: Array<{ name: string }>;
+    onSave?: () => void;
+  }) => (
+    <div data-testid="hub-field-placer">
+      <span>{pdfUrl}</span>
+      <span>{value.map((item) => item.name).join(",")}</span>
+      {onSave ? (
+        <button type="button" onClick={onSave}>
+          Save fields
+        </button>
+      ) : null}
+    </div>
+  ),
+}));
+
 import { usePage } from "@inertiajs/react";
 
 describe("ContractTemplateAdministration", () => {
@@ -47,6 +69,10 @@ describe("ContractTemplateAdministration", () => {
             "contract.approve_contract_templates",
           ],
         },
+        states: [
+          { code: "VA", name: "Virginia" },
+          { code: "MD", name: "Maryland" },
+        ],
         templates: {
           items: [
             {
@@ -61,6 +87,7 @@ describe("ContractTemplateAdministration", () => {
               effectiveUntil: "",
               activeVersionPk: 9,
               activeVersionId: "ver-1",
+              workspaceVersionPk: 9,
             },
           ],
           pagination: {
@@ -87,6 +114,59 @@ describe("ContractTemplateAdministration", () => {
     expect(screen.getByRole("link", { name: /open/i })).toHaveAttribute(
       "href",
       "/operations/contract-templates/templates/9",
+    );
+  });
+
+  it("links draft families into their draft workspace", () => {
+    vi.mocked(usePage).mockReturnValue({
+      props: {
+        csrfToken: "token",
+        user: {
+          id: 1,
+          email: "admin@example.com",
+          permissions: ["contract.manage_contract_templates"],
+        },
+        templates: {
+          items: [
+            {
+              publicId: "pub-2",
+              stableKey: "agent-contract",
+              name: "Agent Contract",
+              description: "",
+              status: "draft",
+              jurisdictionStateCodes: ["VA"],
+              companyWide: true,
+              effectiveFrom: "",
+              effectiveUntil: "",
+              activeVersionPk: null,
+              activeVersionId: null,
+              workspaceVersionPk: 42,
+            },
+          ],
+          pagination: {
+            page: 1,
+            pageSize: 20,
+            totalItems: 1,
+            totalPages: 1,
+            hasNext: false,
+            hasPrevious: false,
+          },
+          filters: { q: "", status: "", jurisdiction: "" },
+          sort: null,
+        },
+        capabilities: { canManage: true, canApprove: false },
+        createSheet: null,
+        errors: { fields: {}, form: [] },
+        states: [
+          { code: "VA", name: "Virginia" },
+          { code: "MD", name: "Maryland" },
+        ],
+      },
+    } as never);
+    render(<ContractTemplateAdministration />);
+    expect(screen.getByRole("link", { name: /edit draft/i })).toHaveAttribute(
+      "href",
+      "/operations/contract-templates/templates/42",
     );
   });
 
@@ -120,10 +200,13 @@ describe("ContractTemplateWorkspace", () => {
           displayName: "ICA Standard",
           description: "Draft",
           status: "draft",
-          sourceFormat: "docx",
-          sourceMediaType:
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          sourceFormat: "pdf",
+          sourceMediaType: "application/pdf",
           sourceChecksum: "a".repeat(64),
+          sourcePdfUrl: "",
+          fieldLayout: [],
+          fieldAiConfigured: false,
+          mergeSourceOptions: ["party.legalFirstName", "office.state"],
           placeholderKeys: ["party.legalFirstName"],
           mergeSchema: [],
           mergeSchemaJson: "[]",
@@ -147,6 +230,7 @@ describe("ContractTemplateWorkspace", () => {
             effectiveUntil: "",
             activeVersionPk: null,
             activeVersionId: null,
+            workspaceVersionPk: 9,
           },
         },
       },
@@ -158,5 +242,89 @@ describe("ContractTemplateWorkspace", () => {
     expect(
       screen.getByText(/review, preview, publish, and activate/i),
     ).toBeInTheDocument();
+  });
+
+  it("shows the Hub field placer when a source PDF is available", async () => {
+    const user = userEvent.setup();
+    vi.mocked(usePage).mockReturnValue({
+      props: {
+        csrfToken: "token",
+        user: {
+          id: 1,
+          email: "admin@example.com",
+          permissions: [
+            "contract.manage_contract_templates",
+            "contract.approve_contract_templates",
+          ],
+        },
+        capabilities: { canManage: true, canApprove: true },
+        errors: { fields: {}, form: [] },
+        posted: null,
+        versionDetail: {
+          id: 9,
+          publicId: "ver-1",
+          templatePublicId: "tpl-1",
+          versionLabel: "1.0.0",
+          displayName: "ICA Standard",
+          description: "Draft",
+          status: "draft",
+          sourceFormat: "pdf",
+          sourceMediaType: "application/pdf",
+          sourceChecksum: "a".repeat(64),
+          sourcePdfUrl: "/operations/contract-templates/templates/9/source.pdf",
+          fieldLayout: [
+            {
+              id: "f1",
+              name: "AgentSignature",
+              type: "signature",
+              role: "Agent",
+              page: 1,
+              x: 10,
+              y: 10,
+              w: 100,
+              h: 40,
+            },
+          ],
+          fieldAiConfigured: false,
+          mergeSourceOptions: ["party.legalFirstName"],
+          placeholderKeys: [],
+          mergeSchema: [],
+          mergeSchemaJson: "[]",
+          previewChecksum: "",
+          previewGeneratedAt: null,
+          previewUrl: null,
+          validationErrors: [],
+          publishedAt: null,
+          retiredAt: null,
+          contractsUsingVersion: 0,
+          version: "2026-08-24T12:00:00+00:00",
+          template: {
+            publicId: "tpl-1",
+            stableKey: "ica-standard",
+            name: "ICA Standard",
+            description: "Main agreement",
+            status: "draft",
+            jurisdictionStateCodes: ["VA"],
+            companyWide: false,
+            effectiveFrom: "",
+            effectiveUntil: "",
+            activeVersionPk: null,
+            activeVersionId: null,
+            workspaceVersionPk: 9,
+          },
+        },
+      },
+    } as never);
+    render(<ContractTemplateWorkspace />);
+    expect(screen.getByTestId("hub-field-placer")).toHaveTextContent("AgentSignature");
+    expect(screen.getByText(/merge field mapping/i)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /save fields/i }));
+    expect(postMock).toHaveBeenCalledWith(
+      "/operations/contract-templates/templates/9/field-layout",
+      expect.objectContaining({
+        fieldLayoutJson: expect.stringContaining("AgentSignature"),
+      }),
+      expect.any(Object),
+    );
   });
 });

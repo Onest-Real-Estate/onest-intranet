@@ -1,13 +1,15 @@
 from django.urls import path
 
-from apps.contract.administration_views import (
+from apps.contract.views.administration_views import (
     contract_template_action,
     contract_template_create,
-    contract_template_index,
+    contract_template_field_layout,
+    contract_template_preview_pdf,
+    contract_template_source_pdf,
     contract_template_update,
     contract_template_workspace,
 )
-from apps.contract.agent_contract_views import (
+from apps.contract.views.agent_contract_views import (
     agent_contract_artifact_download,
     agent_contract_create,
     agent_contract_lifecycle,
@@ -19,22 +21,33 @@ from apps.contract.agent_contract_views import (
     agent_contract_validate,
     agent_contract_workspace,
 )
-from apps.contract.my_contract_views import (
+from apps.contract.views.my_contract_views import (
     my_contract,
     my_contract_artifact_preview,
+)
+from apps.contract.views.signing_views import (
+    my_contract_sign,
+    my_contract_sign_complete,
+    my_contract_sign_status,
 )
 
 urlpatterns = [
     path("my-contract", my_contract, name="my_contract"),
+    path("my-contract/sign", my_contract_sign, name="my_contract_sign"),
+    path(
+        "my-contract/sign/complete",
+        my_contract_sign_complete,
+        name="my_contract_sign_complete",
+    ),
+    path(
+        "my-contract/sign/status",
+        my_contract_sign_status,
+        name="my_contract_sign_status",
+    ),
     path(
         "my-contract/<uuid:public_id>/artifacts/<uuid:artifact_public_id>/preview",
         my_contract_artifact_preview,
         name="my_contract_artifact_preview",
-    ),
-    path(
-        "operations/contract-templates",
-        contract_template_index,
-        name="admin_contract_templates",
     ),
     path(
         "operations/contract-templates/templates/create",
@@ -55,6 +68,21 @@ urlpatterns = [
         "operations/contract-templates/templates/<int:version_id>/action",
         contract_template_action,
         name="contract_template_action",
+    ),
+    path(
+        "operations/contract-templates/templates/<int:version_id>/field-layout",
+        contract_template_field_layout,
+        name="contract_template_field_layout",
+    ),
+    path(
+        "operations/contract-templates/templates/<int:version_id>/source.pdf",
+        contract_template_source_pdf,
+        name="contract_template_source_pdf",
+    ),
+    path(
+        "operations/contract-templates/templates/<int:version_id>/preview.pdf",
+        contract_template_preview_pdf,
+        name="contract_template_preview_pdf",
     ),
     path(
         "operations/agent-contracts/new",

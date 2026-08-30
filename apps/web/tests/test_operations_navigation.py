@@ -13,6 +13,7 @@ from apps.user.roles import (
     REGION_MANAGER,
     ScopeType,
     role_group_name,
+    seed_brokerage_roles,
 )
 from apps.user.services.role_assignments import (
     create_role_assignment,
@@ -57,6 +58,7 @@ def test_registry_has_exact_destinations_order_routes_and_permissions():
         "Add New User",
         "Assign User Roles",
         "Agent Contracts",
+        "Contract Templates",
         "Transactions",
         "Inventory",
         "Reservations",
@@ -78,6 +80,7 @@ def test_registry_has_exact_destinations_order_routes_and_permissions():
         30,
         40,
         50,
+        55,
         60,
         70,
         80,
@@ -94,19 +97,19 @@ def test_registry_has_exact_destinations_order_routes_and_permissions():
         170,
     ]
     assert [destination.section for destination in OPERATIONS_DESTINATIONS] == [
-        *("People" for _ in range(5)),
+        *("People" for _ in range(6)),
         *("Operations" for _ in range(3)),
         *("Content" for _ in range(4)),
         *("Governance & support" for _ in range(4)),
         *("Content" for _ in range(1)),
         *("Governance & support" for _ in range(2)),
     ]
-    assert len({destination.key for destination in OPERATIONS_DESTINATIONS}) == 19
+    assert len({destination.key for destination in OPERATIONS_DESTINATIONS}) == 20
     assert (
-        len({destination.route_name for destination in OPERATIONS_DESTINATIONS}) == 19
+        len({destination.route_name for destination in OPERATIONS_DESTINATIONS}) == 20
     )
     assert (
-        len({destination.permission for destination in OPERATIONS_DESTINATIONS}) == 19
+        len({destination.permission for destination in OPERATIONS_DESTINATIONS}) == 20
     )
     for destination in OPERATIONS_DESTINATIONS:
         assert reverse(destination.route_name) == f"/{destination.path}"
@@ -123,6 +126,7 @@ def test_registry_has_exact_destinations_order_routes_and_permissions():
                 "admin_office_resources",
                 "admin_offices",
                 "admin_announcements",
+                "admin_contract_templates",
                 "operational_tasks",
                 "admin_feedback",
             }
@@ -141,13 +145,13 @@ def test_every_destination_policy_matches_its_minimum_permission_and_scope():
 
 @pytest.mark.django_db
 def test_admin_group_receives_all_operations_permissions():
+    seed_brokerage_roles(sync_permissions=True)
     group = Group.objects.get(name=role_group_name(ADMIN))
     actual = {
         f"{app_label}.{codename}"
         for app_label, codename in group.permissions.values_list(
             "content_type__app_label", "codename"
         )
-        if app_label == "web"
     }
     assert actual.issuperset(ROLE_OPERATION_PERMISSIONS[ADMIN])
 
@@ -158,6 +162,7 @@ def test_scoped_management_role_permission_matrix():
         REGION_MANAGER: {
             "Users",
             "New Agent List",
+            "Contract Templates",
             "Transactions",
             "Inventory",
             "Reservations",
@@ -172,6 +177,7 @@ def test_scoped_management_role_permission_matrix():
         BRANCH_MANAGER: {
             "Users",
             "New Agent List",
+            "Contract Templates",
             "Inventory",
             "Reservations",
             "Announcements",
@@ -195,6 +201,7 @@ def test_scoped_management_role_permission_matrix():
 
 @pytest.mark.django_db
 def test_brokerage_admin_can_reach_every_registered_destination(client):
+    seed_brokerage_roles(sync_permissions=True)
     actor = User.objects.create_superuser(email="system@example.com")
     admin = user("broker-admin@example.com")
     create_role_assignment(
@@ -256,6 +263,10 @@ def test_brokerage_admin_can_reach_every_registered_destination(client):
             assert "contracts" in props
             assert "capabilities" in props
             assert "statusOptions" in props
+            continue
+        if destination.route_name == "admin_contract_templates":
+            assert "templates" in props
+            assert "capabilities" in props
             continue
         if destination.route_name == "admin_feedback":
             assert "tickets" in props

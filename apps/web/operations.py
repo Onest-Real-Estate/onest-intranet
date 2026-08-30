@@ -87,6 +87,17 @@ OPERATIONS_DESTINATIONS: tuple[OperationsDestination, ...] = (
         scope_rule="user_office_scope",
     ),
     OperationsDestination(
+        key="admin-contract-templates",
+        label="Contract Templates",
+        section="People",
+        route_name="admin_contract_templates",
+        path="operations/contract-templates",
+        permission="contract.manage_contract_templates",
+        order=55,
+        feature="admin-contract-templates",
+        scope_rule="user_office_scope",
+    ),
+    OperationsDestination(
         key="admin-transactions",
         label="Transactions",
         section="Operations",
@@ -258,6 +269,7 @@ OPERATIONS_FEATURES["admin-assign-roles"] = True
 OPERATIONS_FEATURES["admin-offices"] = True
 OPERATIONS_FEATURES["admin-office-resources"] = True
 OPERATIONS_FEATURES["admin-announcements"] = True
+OPERATIONS_FEATURES["admin-contract-templates"] = True
 OPERATIONS_FEATURES["admin-operational-tasks"] = True
 OPERATIONS_FEATURES["admin-feedback"] = True
 

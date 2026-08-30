@@ -34,6 +34,7 @@ from apps.audit.service import (
     system_actor,
 )
 from apps.contract.calculations.rules import CURRENT_RULE_VERSION
+from apps.contract.emails import AGENT_EMAIL_ACTIONS
 from apps.contract.models import AgentContract
 from apps.contract.permissions import MANAGE_AGENT_CONTRACTS
 from apps.contract.snapshots import (
@@ -209,7 +210,7 @@ def _ensure_manage(actor: User | None) -> None:
 def _authorize(actor: User | None, contract: AgentContract, action: str) -> None:
     if action in SYSTEM_ACTIONS and actor is None:
         return
-    if action == "mark_viewed":
+    if action in {"mark_viewed", "mark_signed"}:
         if actor is None:
             raise PermissionDenied(_("Authentication required."))
         if getattr(actor, "is_superuser", False):
@@ -523,7 +524,33 @@ def _transition(
     if action in {"issue", "retry_generation"}:
         _queue_pdf_generation(locked.pk)
 
+    if action in AGENT_EMAIL_ACTIONS:
+        _queue_agent_status_email(locked.pk, action=action)
+
     return locked
+
+
+def _queue_agent_status_email(contract_pk: int, *, action: str) -> None:
+    from apps.contract.emails import send_lifecycle_status_email
+
+    def _send() -> None:
+        refreshed = (
+            AgentContract.objects.select_related("recipient")
+            .filter(pk=contract_pk)
+            .first()
+        )
+        if refreshed is None:
+            return
+        try:
+            send_lifecycle_status_email(refreshed, action=action)
+        except Exception:  # noqa: BLE001
+            logger.exception(
+                "lifecycle email after %s failed id=%s",
+                action,
+                contract_pk,
+            )
+
+    transaction.on_commit(_send)
 
 
 @dataclass(frozen=True)

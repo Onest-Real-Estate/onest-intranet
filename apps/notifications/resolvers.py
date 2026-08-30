@@ -71,8 +71,9 @@ CONTRACT_MODULE = "contract"
 
 
 def resolve_contracts(user, notifications: Sequence) -> dict[UUID, SourceResolution]:
-    """Detail for contract PDF-ready notifications."""
+    """Detail for contract lifecycle notifications."""
     from apps.contract.services import accessible_contract_queryset
+    from apps.contract.statuses import ContractStatus
 
     by_notification: dict[UUID, str] = {}
     for notification in notifications:
@@ -88,16 +89,40 @@ def resolve_contracts(user, notifications: Sequence) -> dict[UUID, SourceResolut
             public_id__in=list(by_notification.values())
         )
     }
+    detail_by_status = {
+        ContractStatus.SENT: "Issued to you",
+        ContractStatus.VIEWED: "Awaiting your signature",
+        ContractStatus.SIGNED: "Signed agreement is available",
+        ContractStatus.ACTIVE: "Active governing agreement",
+        ContractStatus.SUPERSEDED: "Superseded by a replacement",
+        ContractStatus.TERMINATED: "Agreement was terminated",
+        ContractStatus.EXPIRED: "Agreement has expired",
+        ContractStatus.GENERATION_ERROR: "PDF preparation needs attention",
+    }
     resolutions: dict[UUID, SourceResolution] = {}
     for note_id, contract_id in by_notification.items():
         contract = contracts.get(contract_id)
         if contract is None:
             continue
-        if contract.generated_pdf_id is None:
-            continue
+        status = contract.status
+        if (
+            status
+            in {
+                ContractStatus.SENT,
+                ContractStatus.VIEWED,
+            }
+            and contract.generated_pdf_id
+        ):
+            detail = "Review PDF is ready to sign"
+        else:
+            detail = detail_by_status.get(status)
+            if detail is None:
+                if contract.generated_pdf_id is None:
+                    continue
+                detail = "Contract update"
         resolutions[note_id] = SourceResolution(
             available=True,
-            detail="Review PDF is ready",
+            detail=detail,
             action_available=True,
         )
     return resolutions

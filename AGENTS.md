@@ -34,8 +34,15 @@ registration, and deployment; don't duplicate it here.
 11. **Check dependency blocks when requested.** If a prompt says to check
     dependencies, inspect its blocking GitHub issues with `gh`. Stop when an
     unresolved blocker is open and report the required work in dependency order.
-12. Check for well maintained django and react packages before implementing yourself, do not implement
+12. **Check for well maintained django and react packages before implementing yourself**, do not implement
     something that is already available as a package it would save lots of time
+13. **Use Self Hosted [Centrifugo](https://centrifugal.dev/) for all real time works**, do not use django channels and others use 
+    pusher compatible Open source Centrifugo if you reach for any realtime activity
+14. **Use Pattern /apps/views/{agents_views.py,*}** : Use the above patterns for the file structure
+15. **Use Enum instead of Raw Strings for comapraision**: Always create an Enum for all the states of comparison, if using database and if there is text choices use that for comparsion
+16. **Hub-native agent contract e-sign**. Agent contracts use Hub field
+ placement, Hub signing UI, and pyHanko org PKCS#12 sealing — not DocuSeal.
+ Customer/transaction packages remain out of scope until a later decision.
 
 ## Commands
 
@@ -53,7 +60,7 @@ Two ways to run things. Pick one and stay consistent within a task.
 | `pnpm run routes:generate` | Regenerate `frontend/types/routes.ts` |
 
 **Docker dev stack (`make up`)** — bundles Postgres, Redis, Mailpit, MinIO,
-DocuSeal, Celery worker + beat. Use when the task needs a real database, S3, mail,
+Celery worker + beat. Use when the task needs a real database, S3, mail,
 or background tasks. Management commands go through `make manage cmd="..."`,
 `make migrate`, `make makemigrations`, `make shell`, `make test`.
 

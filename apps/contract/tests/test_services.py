@@ -166,3 +166,36 @@ def test_agent_contract_status_and_directory_filter(seeded_offices):
     filters = contract_filter_options(company)
     assert filters["available"] is True
     assert any(opt["value"] == ContractStatus.ACTIVE for opt in filters["options"])
+
+
+@pytest.mark.django_db
+def test_serialize_includes_payee_summary(seeded_offices):
+    from decimal import Decimal
+
+    from apps.contract.administration import update_draft_contract
+    from apps.contract.lifecycle import contract_version
+
+    company = company_admin(seeded_offices)
+    recipient = agent(seeded_offices)
+    mentor = agent(seeded_offices, email="mentor.payee@example.com", slug="fairfax-va")
+    contract = create_draft_contract(
+        company,
+        recipient=recipient,
+        effective_on=date.today(),
+        agent_split_percent="70",
+        office_split_percent="30",
+    )
+    contract = update_draft_contract(
+        company,
+        contract,
+        expected_version=contract_version(contract),
+        mentor_percent=Decimal("5"),
+        mentor_basis="agent_side_before_fees",
+        mentor_payee=mentor,
+    )
+
+    payload = serialize_contract(company, contract)
+    payee = payload["commission"]["mentor"]["payee"]
+    assert payee["id"] == mentor.pk
+    assert payee["email"] == mentor.email
+    assert payee["name"]

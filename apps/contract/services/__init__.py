@@ -349,6 +349,7 @@ def serialize_contract(viewer: User, contract: AgentContract) -> dict[str, Any]:
                 "capAmount": _dec(contract.mentor_cap_amount),
                 "basis": contract.mentor_basis,
                 "payeeId": contract.mentor_payee_id,
+                "payee": _payee_summary(contract.mentor_payee),
                 "notes": contract.mentor_notes,
             },
             "referral": {
@@ -357,6 +358,7 @@ def serialize_contract(viewer: User, contract: AgentContract) -> dict[str, Any]:
                 "capAmount": _dec(contract.referral_cap_amount),
                 "basis": contract.referral_basis,
                 "payeeId": contract.referral_payee_id,
+                "payee": _payee_summary(contract.referral_payee),
                 "notes": contract.referral_notes,
             },
         }
@@ -373,6 +375,19 @@ def _dec(value: Decimal | None) -> str | None:
     if value is None:
         return None
     return format(value, "f")
+
+
+def _payee_summary(payee: User | None) -> dict[str, Any] | None:
+    if payee is None:
+        return None
+    office = getattr(payee, "office", None)
+    return {
+        "id": payee.pk,
+        "name": payee.preferred_display_name(),
+        "email": payee.email,
+        "officeId": getattr(payee, "office_id", None),
+        "officeName": office.name if office else "",
+    }
 
 
 def _artifact_meta(artifact: ContractArtifact | None) -> dict[str, Any] | None:

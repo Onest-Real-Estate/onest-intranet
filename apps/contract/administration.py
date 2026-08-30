@@ -20,10 +20,6 @@ from django.utils.translation import gettext_lazy as _
 from apps.audit.models import AuditEvent
 from apps.audit.service import AuditTarget, actor_from_user, log_event
 from apps.contract.artifact_delivery import generated_pdf_download_url
-from apps.contract.calculation_service import (
-    preview_commission,
-    terms_input_from_contract,
-)
 from apps.contract.calculations import summarize_terms_for_display
 from apps.contract.lifecycle import (
     StaleContractVersion,
@@ -49,13 +45,17 @@ from apps.contract.services import (
     scoped_contract_queryset,
     serialize_contract,
 )
+from apps.contract.services.calculation_service import (
+    preview_commission,
+    terms_input_from_contract,
+)
 from apps.contract.snapshots import (
     office_snapshot,
     party_snapshot,
     terms_snapshot_from_contract,
 )
 from apps.contract.statuses import ContractStatus, status_label, status_tone
-from apps.contract.terms import quantize_money, quantize_percent
+from apps.contract.terms import CommissionBasis, quantize_money, quantize_percent
 from apps.user.administration_fields import ACTIVE as ACTIVE_AGENT_STATUS
 from apps.user.models import Office, User
 from apps.user.services.agent_administration import (
@@ -140,7 +140,7 @@ def applicable_template_versions(
         status=ContractTemplateVersion.Status.PUBLISHED,
     )
 
-    state = (office.state or "").strip().upper()
+    state = _office_jurisdiction_state(office)
     matching: list[int] = []
     for version in queryset:
         codes = [
@@ -148,9 +148,24 @@ def applicable_template_versions(
             for code in (version.template.jurisdiction_state_codes or [])
             if str(code).strip()
         ]
-        if not codes or state and state in codes:
+        # Unrestricted templates apply everywhere. Jurisdiction-limited
+        # templates require a resolvable office state that matches.
+        if not codes or (state and state in codes):
             matching.append(version.pk)
     return queryset.filter(pk__in=matching).order_by("template__name", "version_label")
+
+
+def _office_jurisdiction_state(office: Office) -> str:
+    """Return the office US state, walking parents when the leaf is blank."""
+    current: Office | None = office
+    seen: set[int] = set()
+    while current is not None and current.pk not in seen:
+        seen.add(current.pk)
+        state = (current.state or "").strip().upper()
+        if state:
+            return state
+        current = current.parent
+    return ""
 
 
 def assert_template_applicable(
@@ -207,6 +222,9 @@ def search_contract_recipients(
             "email": row.email,
             "officeId": getattr(row, "office_id", None),
             "officeName": row.office.name if row.office else "",
+            "officeState": (
+                _office_jurisdiction_state(row.office) if row.office else ""
+            ),
             "licenseState": row.license_state or "",
             "agentIdentifier": row.agent_identifier or "",
         }
@@ -587,6 +605,10 @@ def workspace_payload(actor: User, contract: AgentContract) -> dict[str, Any]:
         },
         "office": office_snapshot(office),
         "templateOptions": template_options,
+        "commissionBasisOptions": [
+            {"value": value, "label": str(label)}
+            for value, label in CommissionBasis.choices
+        ],
         "commercialPreview": commercial,
         "statusOptions": [
             {"value": value, "label": str(label), "tone": status_tone(value)}

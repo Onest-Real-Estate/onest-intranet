@@ -5,6 +5,7 @@ from django.apps import apps as django_apps
 from django.contrib.auth.models import Group, Permission
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
+from django.urls import reverse
 from django.utils import timezone
 
 from apps.audit.query import query_audit_events
@@ -29,6 +30,7 @@ from apps.user.services.role_assignments import (
     get_effective_access,
     get_effective_permissions,
     revoke_role_assignment,
+    sync_default_agent_assignment,
     update_role_assignment,
 )
 from apps.user.tests.test_onboarding import assignable_office
@@ -322,3 +324,75 @@ def test_assignment_lock_compiles_to_valid_postgresql(monkeypatch):
     assert "LEFT OUTER JOIN" in sql
     assert 'FOR UPDATE OF "user_userroleassignment"' in sql
     assert not sql.rstrip().endswith("FOR UPDATE")
+
+
+@pytest.mark.django_db
+def test_sync_default_agent_skips_head_office_without_raising():
+    """HQ is a valid seat but not an OFFICE-scope target — profile must still save."""
+    seed_offices()
+    head = Office.objects.get(slug="onest-head-office")
+    branch = assignable_office()
+    actor = User.objects.create_superuser(email="admin@example.com", password="x")
+    user = User.objects.create_user(email="hq.agent@example.com", office=branch)
+    create_role_assignment(
+        actor=actor,
+        target_user=user,
+        role=AGENT,
+        scope_type=ScopeType.OFFICE,
+        scope_office=branch,
+    )
+
+    user.office = head
+    user.save(update_fields=["office"])
+    sync_default_agent_assignment(
+        user,
+        actor=user,
+        business_reason="Office changed from the profile page.",
+    )
+
+    live = UserRoleAssignment.objects.filter(
+        user=user,
+        role=AGENT,
+        status__in=[
+            UserRoleAssignment.Status.SCHEDULED,
+            UserRoleAssignment.Status.ACTIVE,
+        ],
+    )
+    assert live.count() == 0
+    revoked = UserRoleAssignment.objects.get(user=user, role=AGENT, scope_office=branch)
+    assert revoked.status == UserRoleAssignment.Status.REVOKED
+
+
+@pytest.mark.django_db
+def test_sync_default_agent_creates_for_branch_office():
+    seed_offices()
+    branch = assignable_office()
+    user = User.objects.create_user(email="branch.agent@example.com", office=branch)
+    sync_default_agent_assignment(
+        user,
+        actor=user,
+        business_reason="Office set during onboarding.",
+    )
+    assignment = UserRoleAssignment.objects.get(user=user, role=AGENT)
+    assert assignment.scope_office == branch
+    assert assignment.status == UserRoleAssignment.Status.ACTIVE
+
+
+@pytest.mark.django_db
+def test_profile_submit_succeeds_when_seated_at_head_office(client):
+    from apps.user.roles import seed_brokerage_roles, seed_role_groups
+    from apps.user.tests.test_profile import completed_user, valid_self_profile_post
+
+    seed_role_groups()
+    seed_brokerage_roles()
+    seed_offices()
+    head = Office.objects.get(slug="onest-head-office")
+    user = completed_user(email="sid.hq@example.com", office=head)
+    client.force_login(user)
+    response = client.post(
+        reverse("profile_submit"),
+        valid_self_profile_post(office=str(head.pk)),
+    )
+    assert response.status_code == 302
+    user.refresh_from_db()
+    assert user.preferred_name == "Bobby"

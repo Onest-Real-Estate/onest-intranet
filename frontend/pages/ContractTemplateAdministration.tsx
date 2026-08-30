@@ -13,6 +13,7 @@ import {
 } from "@/components/design-system";
 import { HubLayout } from "@/components/HubLayout";
 import { PermissionRequired } from "@/components/PermissionRequired";
+import { StateMultiSelect } from "@/components/StateMultiSelect";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -26,12 +27,20 @@ const ACCESS = {
 };
 
 export default function ContractTemplateAdministration() {
-  const { templates, capabilities, createSheet, errors } =
+  const { templates, capabilities, createSheet, errors, states } =
     usePage<ContractTemplateAdministrationPageProps>().props;
   const [createOpen, setCreateOpen] = useState(Boolean(createSheet?.open));
   const [query, setQuery] = useState(templates.filters.q ?? "");
   const rows = templates.items;
   const total = templates.pagination.totalItems;
+  const draftJurisdiction = Array.isArray(createSheet?.draft?.jurisdiction_state_codes)
+    ? (createSheet?.draft?.jurisdiction_state_codes as string[])
+    : typeof createSheet?.draft?.jurisdiction_state_codes === "string"
+      ? String(createSheet.draft.jurisdiction_state_codes)
+          .split(",")
+          .map((part) => part.trim())
+          .filter(Boolean)
+      : [];
   const activeFilters = useMemo(
     () =>
       [templates.filters.status, templates.filters.jurisdiction].filter(Boolean)
@@ -98,14 +107,15 @@ export default function ContractTemplateAdministration() {
                 required
               />
             </div>
-            <div className="grid gap-2">
-              <Label htmlFor="jurisdiction_state_codes">Jurisdiction states</Label>
-              <Input
-                id="jurisdiction_state_codes"
-                name="jurisdiction_state_codes"
-                placeholder="VA, MD"
-              />
-            </div>
+            <StateMultiSelect
+              id="jurisdiction_state_codes"
+              name="jurisdiction_state_codes"
+              label="Jurisdiction states"
+              options={states ?? []}
+              defaultValue={draftJurisdiction}
+              placeholder="Select states (optional)"
+              hint="Leave empty for all jurisdictions. Matching agent offices must use one of these states."
+            />
             <div className="grid gap-2">
               <Label htmlFor="description">Description</Label>
               <Textarea id="description" name="description" rows={4} />
@@ -190,17 +200,22 @@ export default function ContractTemplateAdministration() {
                   id: "actions",
                   header: <span className="sr-only">Actions</span>,
                   cell: (row) =>
-                    row.activeVersionPk ? (
+                    row.workspaceVersionPk ? (
                       <Button asChild variant="outline" size="sm">
                         <Link
-                          href={routes.contract_template_workspace(row.activeVersionPk)}
+                          href={routes.contract_template_workspace(
+                            row.workspaceVersionPk,
+                          )}
                         >
-                          Open
+                          {row.activeVersionPk &&
+                          row.workspaceVersionPk === row.activeVersionPk
+                            ? "Open"
+                            : "Edit draft"}
                         </Link>
                       </Button>
                     ) : (
                       <span className="text-muted-foreground text-xs">
-                        No active version
+                        No version yet
                       </span>
                     ),
                   className: "text-right",

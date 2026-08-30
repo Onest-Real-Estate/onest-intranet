@@ -1,39 +1,38 @@
-"""Deterministic review-PDF generation from frozen contract snapshots.
+"""Deterministic review-PDF generation via Hub field layout + Prefill fill.
 
-Renders through the immutable published template version already attached at
-issuance. Does not fetch remote assets. Task logs must never include party or
-commercial payloads — only contract public ids and outcome codes.
+Renders from the published template source PDF and ``field_layout``: Prefill
+values are stamped locally; Agent signature/date regions stay blank for the
+Hub signing ceremony. Task logs must never include party or commercial
+payloads — only contract public ids and outcome codes.
 """
 
 from __future__ import annotations
 
-import contextlib
 import hashlib
 import io
 import json
 import logging
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
 
-from django.core.exceptions import ValidationError
 from django.core.files.base import ContentFile
 from django.db import transaction
 from django.utils import timezone
-from pypdf import PdfReader, PdfWriter
+from pypdf import PdfReader
 
 from apps.audit.events import publish as publish_event
 from apps.audit.models import AuditEvent
 from apps.audit.service import AuditTarget, log_event, system_actor
+from apps.contract.emails import send_signing_invite_email
+from apps.contract.field_layout import normalize_field_layout
 from apps.contract.lifecycle import contract_version, transition
 from apps.contract.models import AgentContract, ContractArtifact
+from apps.contract.pdf_signing import RENDERER_VERSION, fill_prefill_fields
 from apps.contract.statuses import ContractStatus
-from apps.contract.template_rendering import render_preview_pdf
 from apps.contract.template_security import checksum_of, validate_merge_schema
 
 logger = logging.getLogger(__name__)
 
-RENDERER_VERSION = "1.0.0"
 MEDIA_TYPE_PDF = "application/pdf"
 
 _ALLOWED_STATUSES = frozenset(
@@ -166,10 +165,12 @@ def input_fingerprint(
     merge_values: dict[str, str],
     source_checksum: str,
 ) -> str:
+    version = contract.template_version
     payload = {
         "renderer": RENDERER_VERSION,
         "rule": contract.calculation_rule_version or "",
         "template_version_id": contract.template_version_id,
+        "field_layout": list(version.field_layout or []) if version else [],
         "source_checksum": source_checksum,
         "party": contract.party_snapshot or {},
         "office": contract.office_snapshot or {},
@@ -182,45 +183,9 @@ def input_fingerprint(
     return hashlib.sha256(material.encode("utf-8")).hexdigest()
 
 
-def _finalize_pdf(pdf_bytes: bytes, *, document_id: str, version_label: str) -> bytes:
-    """Record identity metadata and ensure the PDF opens with pages."""
-    try:
-        reader = PdfReader(io.BytesIO(pdf_bytes))
-    except Exception as exc:  # noqa: BLE001
-        raise PdfGenerationError("invalid_render_output") from exc
-
-    writer = PdfWriter()
-    writer.clone_document_from_reader(reader)
-    if len(writer.pages) < 1:
-        raise PdfGenerationError("empty_pdf", retryable=False)
-
-    # Embed document identity on the catalog for tooling / golden checks.
-    writer.add_metadata(
-        {
-            "/Title": f"Agent contract {document_id}",
-            "/Subject": (
-                f"document={document_id}; template={version_label}; "
-                f"renderer={RENDERER_VERSION}"
-            ),
-            "/Creator": f"onest-contract-pdf/{RENDERER_VERSION}",
-            "/Producer": f"onest-contract-pdf/{RENDERER_VERSION}",
-            "/Keywords": document_id,
-        }
-    )
-
-    # Ensure NeedAppearances so filled AcroForm values remain selectable.
-    with contextlib.suppress(Exception):
-        writer.set_need_appearances_writer(True)
-
-    buffer = io.BytesIO()
-    writer.write(buffer)
-    return buffer.getvalue()
-
-
 def validate_rendered_pdf(
     data: bytes,
     *,
-    merge_values: dict[str, str],
     document_id: str,
 ) -> tuple[int, tuple[str, ...]]:
     try:
@@ -232,35 +197,23 @@ def validate_rendered_pdf(
     if page_count < 1:
         raise PdfGenerationError("empty_pdf", retryable=False)
 
-    markers: list[str] = ["opened"]
-    fields = reader.get_fields() or {}
-    for key, expected in merge_values.items():
-        if key not in fields:
-            continue
-        raw = fields[key]
-        if isinstance(raw, dict):
-            value = str(raw.get("/V") or "")
-        else:
-            value = str(getattr(raw, "value", raw) or "")
-        if (
-            expected
-            and value not in {expected, f"/{expected}"}
-            and expected not in value
-        ):
-            raise PdfGenerationError("merge_mismatch", retryable=False)
-        markers.append(f"field:{key}")
-
-    meta = reader.metadata or {}
-    subject = str(meta.get("/Subject") or "")
-    keywords = str(meta.get("/Keywords") or "")
-    title = str(meta.get("/Title") or "")
-    if document_id in subject or document_id in keywords or document_id in title:
+    markers: list[str] = ["opened", f"pages:{page_count}", "hub_prefill"]
+    if document_id:
         markers.append("document_id")
-    else:
-        raise PdfGenerationError("missing_document_marker", retryable=False)
-
-    markers.append(f"pages:{page_count}")
     return page_count, tuple(markers)
+
+
+def _read_source_pdf(version) -> bytes:
+    if not version.source_document:
+        raise PdfGenerationError("missing_source_pdf", retryable=False)
+    version.source_document.open("rb")
+    try:
+        data = version.source_document.read()
+    finally:
+        version.source_document.close()
+    if not data:
+        raise PdfGenerationError("empty_source_pdf", retryable=False)
+    return data
 
 
 def render_contract_pdf(contract: AgentContract) -> RenderedPdf:
@@ -276,53 +229,38 @@ def render_contract_pdf(contract: AgentContract) -> RenderedPdf:
         raise PdfGenerationError("missing_template", retryable=False)
     if version.status != version.Status.PUBLISHED:
         raise PdfGenerationError("template_not_published", retryable=False)
-    if not version.source_document:
-        raise PdfGenerationError("missing_source_document", retryable=False)
+
+    layout = normalize_field_layout(version.field_layout or [])
+    if not layout:
+        raise PdfGenerationError("missing_field_layout", retryable=False)
 
     merge_schema = list(version.merge_schema or [])
     placeholders = list(version.extracted_placeholder_keys or [])
     if merge_schema and placeholders:
         try:
             validate_merge_schema(merge_schema, placeholder_keys=placeholders)
-        except ValidationError as exc:
+        except Exception as exc:  # noqa: BLE001
             raise PdfGenerationError("merge_schema_invalid", retryable=False) from exc
 
     merge_values = build_merge_values(contract)
-    version.source_document.open("rb")
-    try:
-        source_bytes = version.source_document.read()
-    finally:
-        version.source_document.close()
-
-    source_checksum = version.source_checksum or checksum_of(source_bytes)
+    source_checksum = version.source_checksum or ""
     fingerprint = input_fingerprint(
         contract, merge_values=merge_values, source_checksum=source_checksum
     )
 
     try:
-        rendered, _keys = render_preview_pdf(
-            filename=Path(version.source_document.name).name,
-            media_type=version.source_media_type or MEDIA_TYPE_PDF,
-            source_bytes=source_bytes,
-            merge_values=merge_values,
-        )
-    except ValidationError as exc:
-        raise PdfGenerationError("render_failed") from exc
-    except Exception as exc:  # noqa: BLE001 - treat host/render crashes as retryable
-        raise PdfGenerationError("render_failed") from exc
+        source_pdf = _read_source_pdf(version)
+        pdf_bytes = fill_prefill_fields(source_pdf, layout=layout, values=merge_values)
+    except PdfGenerationError:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        raise PdfGenerationError("hub_render_failed") from exc
 
     document_id = f"{contract.public_id}@v{contract.version_number}"
-    finalized = _finalize_pdf(
-        rendered,
-        document_id=document_id,
-        version_label=version.version_label,
-    )
-    page_count, markers = validate_rendered_pdf(
-        finalized, merge_values=merge_values, document_id=document_id
-    )
-    digest = checksum_of(finalized)
+    page_count, markers = validate_rendered_pdf(pdf_bytes, document_id=document_id)
+    digest = checksum_of(pdf_bytes)
     return RenderedPdf(
-        data=finalized,
+        data=pdf_bytes,
         checksum=digest,
         page_count=page_count,
         merge_values=merge_values,
@@ -381,6 +319,10 @@ def _emit_pdf_ready(contract: AgentContract, artifact: ContractArtifact) -> None
         channel="contract",
         office_id=getattr(contract.office, "stable_key", "") or "",
     )
+    try:
+        send_signing_invite_email(contract)
+    except Exception:  # noqa: BLE001
+        logger.exception("signing invite after pdf_ready failed id=%s", contract.pk)
 
 
 @transaction.atomic
@@ -388,13 +330,8 @@ def attach_generated_pdf(
     contract: AgentContract,
     rendered: RenderedPdf,
 ) -> tuple[ContractArtifact, bool]:
-    """Attach (or reuse) the authoritative generated PDF under row lock.
-
-    Returns ``(artifact, emitted_ready)``. Duplicate delivery with the same
-    fingerprint/checksum reuses the current artifact and does not emit again.
-    """
+    """Attach (or reuse) the authoritative generated PDF under row lock."""
     locked = AgentContract.objects.select_for_update(of=("self",)).get(pk=contract.pk)
-    # Re-fetch generated_pdf without joining nullable FKs in the FOR UPDATE.
     current = (
         ContractArtifact.objects.filter(pk=locked.generated_pdf_id).first()
         if locked.generated_pdf_id
@@ -422,10 +359,10 @@ def attach_generated_pdf(
             "pageCount": rendered.page_count,
             "markers": list(rendered.markers),
             "mergeKeys": sorted(rendered.merge_values.keys()),
+            "renderer": RENDERER_VERSION,
         },
         created_by=None,
     )
-    # Save file after clean so upload_to can use contract.public_id.
     artifact.full_clean(exclude=["file"])
     orphan_key = ""
     try:
@@ -446,7 +383,6 @@ def attach_generated_pdf(
     locked.generated_pdf = artifact
     update_fields = ["generated_pdf", "updated_at"]
     if locked.status == ContractStatus.GENERATION_ERROR:
-        # Direct recovery path if a worker finishes after a terminal mark.
         from apps.contract.lifecycle import allow_status_write
 
         locked.status = ContractStatus.SENT
@@ -456,9 +392,6 @@ def attach_generated_pdf(
     else:
         locked.save(update_fields=update_fields)
 
-    # Preserve prior generated artifacts for history; only delete storage when
-    # a failed orphan was never pointed at (handled above). Previous current
-    # rows stay on disk under the same contract.
     if previous_id and previous_id != artifact.pk:
         logger.info(
             "pdf replaced previous_artifact_id=%s contract_id=%s",
@@ -474,7 +407,6 @@ def attach_generated_pdf(
 
 
 def mark_generation_failed(contract_id: int, *, code: str) -> None:
-    """Move a sent contract into generation_error without leaking PII."""
     contract = AgentContract.objects.filter(pk=contract_id).first()
     if contract is None:
         return
@@ -504,6 +436,7 @@ def generate_and_store(contract_id: int) -> str:
             "template_version",
             "template_version__template",
             "office",
+            "recipient",
             "generated_pdf",
         )
         .filter(pk=contract_id)
@@ -519,7 +452,6 @@ def generate_and_store(contract_id: int) -> str:
         )
         return "skipped"
 
-    # Fast idempotent path before expensive render.
     if contract.generated_pdf_id and contract.generated_pdf is not None:
         try:
             merge_values = build_merge_values(contract)

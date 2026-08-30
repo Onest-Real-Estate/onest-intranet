@@ -15,11 +15,11 @@ from inertia import inertia, render
 from apps.contract.forms import (
     ContractTemplateActionForm,
     ContractTemplateCreateForm,
+    ContractTemplateFieldLayoutForm,
     ContractTemplateVersionForm,
 )
 from apps.contract.models import ContractTemplateVersion
-from apps.contract.tasks import generate_contract_template_preview
-from apps.contract.template_service import (
+from apps.contract.services.template_service import (
     activate_version,
     capabilities,
     create_draft_version,
@@ -30,15 +30,23 @@ from apps.contract.template_service import (
     publish_version,
     retire_version,
     save_draft_version,
+    save_field_layout,
     serialize_template_row,
     serialize_version_detail,
+    suggest_field_layout,
 )
+from apps.contract.tasks import generate_contract_template_preview
 from apps.user.models import User
+from apps.user.us import US_STATE_CHOICES
 from apps.web.authorization import enforce_policy
 from apps.web.contracts import empty_validation_errors, list_response, validation_errors
 
 INDEX_PAGE = "ContractTemplateAdministration"
 WORKSPACE_PAGE = "ContractTemplateWorkspace"
+
+
+def _state_options() -> list[dict[str, str]]:
+    return [{"code": code, "name": name} for code, name in US_STATE_CHOICES]
 
 
 def _page_param(request: HttpRequest) -> int:
@@ -83,6 +91,7 @@ def index_props(
         "capabilities": capabilities(actor).payload(),
         "createSheet": create_sheet,
         "errors": errors or empty_validation_errors(),
+        "states": _state_options(),
     }
 
 
@@ -130,9 +139,13 @@ def contract_template_create(request: HttpRequest):
     actor = cast(User, request.user)
     form = ContractTemplateCreateForm(request.POST, actor=actor)
     if not form.is_valid():
+        draft: dict[str, object] = {key: request.POST.get(key) for key in request.POST}
+        draft["jurisdiction_state_codes"] = request.POST.getlist(
+            "jurisdiction_state_codes"
+        )
         return _render_index(
             request,
-            create_sheet={"open": True, "draft": dict(request.POST)},
+            create_sheet={"open": True, "draft": draft},
             errors=validation_errors(form),
         )
     template = create_template_family(
@@ -163,15 +176,11 @@ def workspace_props(
     *,
     version: ContractTemplateVersion,
     errors: dict[str, Any] | None = None,
-    posted: dict[str, list[str]] | None = None,
+    posted: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     detail = serialize_version_detail(version)
     detail["template"] = serialize_template_row(version.template)
     detail["mergeSchemaJson"] = json.dumps(version.merge_schema or [], indent=2)
-    try:
-        detail["previewUrl"] = version.preview_pdf.url if version.preview_pdf else None
-    except ValueError:
-        detail["previewUrl"] = None
     return {
         "versionDetail": detail,
         "capabilities": capabilities(actor).payload(),
@@ -245,12 +254,27 @@ def contract_template_update(request: HttpRequest, version_id: int):
     return redirect("contract_template_workspace", version_id=version_id)
 
 
+def _inertia_post_data(request: HttpRequest) -> dict[str, Any]:
+    """Inertia ``router.post`` sends JSON; classic forms populate ``request.POST``."""
+    if request.POST:
+        return {key: request.POST.get(key) for key in request.POST}
+    if request.content_type and "json" in request.content_type:
+        try:
+            body = json.loads(request.body.decode("utf-8") or "{}")
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            return {}
+        if isinstance(body, dict):
+            return body
+    return {}
+
+
 @enforce_policy("contract_template_action")
 @require_POST
 def contract_template_action(request: HttpRequest, version_id: int):
     version = _target(request, version_id)
     actor = cast(User, request.user)
-    form = ContractTemplateActionForm(request.POST)
+    data = _inertia_post_data(request)
+    form = ContractTemplateActionForm(data)
     if not form.is_valid():
         return _render_workspace(
             request,
@@ -260,10 +284,21 @@ def contract_template_action(request: HttpRequest, version_id: int):
     action = form.cleaned_data["action"]
     try:
         if action == "preview":
-            if request.POST.get("background") == "1":
+            if str(data.get("background") or "") == "1":
                 generate_contract_template_preview.delay(version.pk)
             else:
                 generate_preview(version)
+        elif action == "suggest_fields":
+            suggestions = suggest_field_layout(actor, version=version)
+            return render(
+                request,
+                WORKSPACE_PAGE,
+                workspace_props(
+                    cast(User, request.user),
+                    version=_target(request, version_id),
+                    posted={"fieldSuggestions": suggestions},
+                ),
+            )
         elif action == "publish":
             publish_version(actor, version=version)
         elif action == "activate":
@@ -282,3 +317,101 @@ def contract_template_action(request: HttpRequest, version_id: int):
             errors=errors,
         )
     return redirect("contract_template_workspace", version_id=version_id)
+
+
+@enforce_policy("contract_template_field_layout")
+@require_POST
+def contract_template_field_layout(request: HttpRequest, version_id: int):
+    """Persist Hub field placer layout and reseed Prefill merge keys."""
+    version = _target(request, version_id)
+    actor = cast(User, request.user)
+    data = _inertia_post_data(request)
+    raw_layout = data.get("field_layout_json")
+    if raw_layout is None:
+        raw_layout = data.get("fieldLayoutJson")
+    if isinstance(raw_layout, list):
+        raw_layout = json.dumps(raw_layout)
+    form = ContractTemplateFieldLayoutForm(
+        {
+            "field_layout_json": raw_layout if raw_layout is not None else "[]",
+            "expected_version": data.get("expected_version")
+            or data.get("expectedVersion")
+            or "",
+        }
+    )
+    if not form.is_valid():
+        return _render_workspace(
+            request,
+            version=version,
+            errors=validation_errors(form),
+        )
+    expected = form.cleaned_data.get("expected_version") or ""
+    if expected and expected != version.updated_at.isoformat():
+        return _render_workspace(
+            request,
+            version=version,
+            errors={
+                "fields": {},
+                "form": ["This template changed in another tab. Reload and retry."],
+            },
+        )
+    try:
+        save_field_layout(
+            actor,
+            version=version,
+            layout=form.cleaned_data["field_layout_json"],
+        )
+    except ValidationError as exc:
+        errors = (
+            {"fields": exc.message_dict, "form": []}
+            if hasattr(exc, "message_dict")
+            else {"fields": {}, "form": [str(message) for message in exc.messages]}
+        )
+        return _render_workspace(
+            request,
+            version=_target(request, version_id),
+            errors=errors,
+        )
+    return redirect("contract_template_workspace", version_id=version_id)
+
+
+@enforce_policy("contract_template_source_pdf")
+@require_GET
+def contract_template_source_pdf(request: HttpRequest, version_id: int) -> HttpResponse:
+    """Session-auth PDF stream for the Hub field placer."""
+    version = _target(request, version_id)
+    if not version.source_document:
+        return HttpResponse(status=404)
+
+    version.source_document.open("rb")
+    try:
+        data = version.source_document.read()
+    finally:
+        version.source_document.close()
+
+    response = HttpResponse(data, content_type="application/pdf")
+    response["Content-Disposition"] = 'inline; filename="template-source.pdf"'
+    response["Cache-Control"] = "private, no-store"
+    return response
+
+
+@enforce_policy("contract_template_preview_pdf")
+@require_GET
+def contract_template_preview_pdf(
+    request: HttpRequest, version_id: int
+) -> HttpResponse:
+    """Session-auth stream for the synthetic template preview PDF."""
+    version = _target(request, version_id)
+    if not version.preview_pdf:
+        return HttpResponse(status=404)
+
+    version.preview_pdf.open("rb")
+    try:
+        data = version.preview_pdf.read()
+    finally:
+        version.preview_pdf.close()
+
+    response = HttpResponse(data, content_type="application/pdf")
+    response["Content-Disposition"] = 'inline; filename="template-preview.pdf"'
+    response["Cache-Control"] = "private, no-store"
+    return response

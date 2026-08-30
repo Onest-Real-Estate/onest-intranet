@@ -1,12 +1,11 @@
 """Validation for governed contract template uploads.
 
-The goal here is structural safety, not best-effort sanitizing. Templates are
-accepted only when they fit a narrow, documented feature set:
+Structural safety for PDF templates that the Hub field placer annotates:
 
-- DOCX files may use structured content controls identified by tag name.
-- PDF files may use AcroForm field names.
+- PDF only (AcroForm / DOCX content-control merge paths are retired).
 - No macros, remote relationships, JavaScript, launch actions, or embedded-file
   behavior is accepted.
+- Fillable field names come from the Hub field layout — blank PDFs are OK.
 """
 
 from __future__ import annotations
@@ -14,20 +13,13 @@ from __future__ import annotations
 import hashlib
 import io
 import re
-import zipfile
 from dataclasses import dataclass
 from pathlib import Path
-from xml.etree import ElementTree
 
 from django.core.exceptions import ValidationError
 from pypdf import PdfReader
 
-WORD_NAMESPACE = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
-REL_NAMESPACE = "http://schemas.openxmlformats.org/package/2006/relationships"
-NS = {"w": WORD_NAMESPACE, "rel": REL_NAMESPACE}
-
-ALLOWED_TEMPLATE_FORMATS = frozenset({"docx", "pdf"})
-ALLOWED_DOCX_EXTENSIONS = frozenset({".docx"})
+ALLOWED_TEMPLATE_FORMATS = frozenset({"pdf"})
 ALLOWED_PDF_EXTENSIONS = frozenset({".pdf"})
 UNSAFE_PDF_TOKENS = (
     b"/OpenAction",
@@ -39,6 +31,47 @@ UNSAFE_PDF_TOKENS = (
     b"/ImportData",
     b"/RichMedia",
     b"/EmbeddedFiles",
+)
+
+# Hub commercial / party / office sources authors may map Prefill fields onto.
+MERGE_SOURCE_OPTIONS: tuple[str, ...] = (
+    "party.legalFirstName",
+    "party.legalLastName",
+    "party.displayName",
+    "party.email",
+    "party.licenseNumber",
+    "party.licenseState",
+    "party.agentIdentifier",
+    "office.name",
+    "office.state",
+    "office.city",
+    "office.streetAddress",
+    "office.zipCode",
+    "office.mainPhone",
+    "office.publicEmail",
+    "terms.agentSplitPercent",
+    "terms.officeSplitPercent",
+    "terms.transactionFeeAmount",
+    "terms.transactionFeePercent",
+    "terms.annualCapAmount",
+    "terms.specialArrangements",
+    "terms.mentor.percent",
+    "terms.mentor.fixedAmount",
+    "terms.mentor.capAmount",
+    "terms.mentor.basis",
+    "terms.referral.percent",
+    "terms.referral.fixedAmount",
+    "terms.referral.capAmount",
+    "terms.referral.basis",
+    "contract.effectiveOn",
+    "contract.expiresOn",
+    "contract.publicId",
+    "contract.versionNumber",
+    "contract.calculationRuleVersion",
+    "template.versionLabel",
+    "template.stableKey",
+    "document.identifier",
+    "document.rendererVersion",
 )
 
 
@@ -58,19 +91,9 @@ def infer_template_format(*, filename: str, media_type: str) -> str:
     suffix = Path(filename).suffix.lower()
     normalized_type = (media_type or "").strip().lower()
 
-    if suffix in ALLOWED_DOCX_EXTENSIONS or normalized_type in {
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    }:
-        return "docx"
     if suffix in ALLOWED_PDF_EXTENSIONS or normalized_type == "application/pdf":
         return "pdf"
-    raise ValidationError(
-        {
-            "source_document": (
-                "Upload a .docx contract template or a PDF form template."
-            )
-        }
-    )
+    raise ValidationError({"source_document": "Upload a PDF contract template."})
 
 
 def inspect_template(
@@ -80,74 +103,14 @@ def inspect_template(
     data: bytes,
 ) -> TemplateInspection:
     template_format = infer_template_format(filename=filename, media_type=media_type)
-    if template_format == "docx":
-        placeholders = inspect_docx_template(data)
-        normalized_type = (
-            media_type
-            or "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-        )
-    else:
-        placeholders = inspect_pdf_template(data)
-        normalized_type = media_type or "application/pdf"
+    inspect_pdf_template(data)
     return TemplateInspection(
         format=template_format,
-        media_type=normalized_type,
+        media_type=media_type or "application/pdf",
         checksum=checksum_of(data),
-        placeholder_keys=tuple(sorted(placeholders)),
+        # Field names are authored in the Hub field placer.
+        placeholder_keys=(),
     )
-
-
-def inspect_docx_template(data: bytes) -> set[str]:
-    try:
-        archive = zipfile.ZipFile(io.BytesIO(data))
-    except zipfile.BadZipFile as exc:
-        raise ValidationError(
-            {"source_document": "The DOCX file could not be read."}
-        ) from exc
-
-    names = set(archive.namelist())
-    if "word/vbaProject.bin" in names:
-        raise ValidationError(
-            {"source_document": "DOCX templates with macros are not allowed."}
-        )
-
-    for rel_name in [name for name in names if name.endswith(".rels")]:
-        rel_root = ElementTree.fromstring(archive.read(rel_name))
-        for rel in rel_root.findall("rel:Relationship", NS):
-            if rel.attrib.get("TargetMode") == "External":
-                raise ValidationError(
-                    {
-                        "source_document": (
-                            "DOCX templates cannot reference external resources."
-                        )
-                    }
-                )
-
-    try:
-        document_root = ElementTree.fromstring(archive.read("word/document.xml"))
-    except KeyError as exc:
-        raise ValidationError(
-            {"source_document": "The DOCX file is missing its main document."}
-        ) from exc
-
-    placeholders: set[str] = set()
-    for sdt in document_root.findall(".//w:sdt", NS):
-        tag = sdt.find(".//w:tag", NS)
-        if tag is None:
-            continue
-        key = (tag.attrib.get(f"{{{WORD_NAMESPACE}}}val") or "").strip()
-        if key:
-            placeholders.add(key)
-
-    if not placeholders:
-        raise ValidationError(
-            {
-                "source_document": (
-                    "DOCX templates must declare at least one content-control tag."
-                )
-            }
-        )
-    return placeholders
 
 
 def inspect_pdf_template(data: bytes) -> set[str]:
@@ -168,17 +131,28 @@ def inspect_pdf_template(data: bytes) -> set[str]:
             {"source_document": "The PDF template could not be read."}
         ) from exc
 
-    fields = reader.get_fields() or {}
-    placeholders = {str(name).strip() for name in fields if str(name).strip()}
-    if not placeholders:
+    if len(reader.pages) < 1:
         raise ValidationError(
-            {
-                "source_document": (
-                    "PDF templates must expose at least one AcroForm field."
-                )
-            }
+            {"source_document": "PDF templates must contain at least one page."}
         )
-    return placeholders
+    return set()
+
+
+def seed_merge_schema_from_placeholders(
+    placeholder_keys: list[str] | tuple[str, ...] | set[str],
+) -> list[dict]:
+    """Build a starter allowlist from Prefill field names."""
+    return [
+        {
+            "key": key,
+            "label": key,
+            "type": "text",
+            "source": key if key in MERGE_SOURCE_OPTIONS else "",
+        }
+        for key in sorted(
+            {str(item).strip() for item in placeholder_keys if str(item).strip()}
+        )
+    ]
 
 
 def validate_merge_schema(
@@ -199,23 +173,35 @@ def validate_merge_schema(
         errors = {}
         if unknown_placeholders:
             errors["source_document"] = [
-                "The uploaded template contains unknown placeholders: "
+                "The template field layout contains unmapped fields: "
                 + ", ".join(unknown_placeholders)
             ]
         if missing_placeholders:
             errors.setdefault("merge_schema", []).append(
-                "The merge schema declares placeholders missing from the uploaded "
-                "template: " + ", ".join(missing_placeholders)
+                "The merge schema declares fields missing from the template "
+                "field layout: " + ", ".join(missing_placeholders)
             )
         raise ValidationError(errors)
+
+    for item in merge_schema:
+        if not isinstance(item, dict):
+            continue
+        key = str(item.get("key", "")).strip()
+        source = str(item.get("source", "")).strip()
+        if source and source not in MERGE_SOURCE_OPTIONS:
+            raise ValidationError(
+                {
+                    "merge_schema": [
+                        f"Merge field {key or '?'} uses unknown source {source}."
+                    ]
+                }
+            )
 
 
 def synthetic_preview_context(merge_schema: list[dict]) -> dict[str, str]:
     """Safe fake values for previews.
 
-    The production render path is reused, but previews should not expose real
-    people data by default. Values are deterministic so preview-related tests
-    and checksums stay stable.
+    Values are deterministic so preview-related tests and checksums stay stable.
     """
 
     values: dict[str, str] = {}

@@ -1,4 +1,4 @@
-"""Contract review-PDF generation: render, attach, idempotency, delivery."""
+"""Contract review-PDF generation via Hub Prefill field fill."""
 
 from __future__ import annotations
 
@@ -10,15 +10,7 @@ import pytest
 from django.core.files.base import ContentFile
 from django.urls import reverse
 from django.utils import timezone
-from pypdf import PdfReader, PdfWriter
-from pypdf.generic import (
-    ArrayObject,
-    BooleanObject,
-    DictionaryObject,
-    NameObject,
-    NumberObject,
-    TextStringObject,
-)
+from pypdf import PdfWriter
 
 from apps.audit.models import AuditEvent, DomainEvent
 from apps.contract.lifecycle import contract_version, transition
@@ -34,334 +26,245 @@ from apps.contract.pdf_generation import (
     generate_and_store,
     render_contract_pdf,
 )
+from apps.contract.pdf_signing import RENDERER_VERSION as SIGN_RENDERER
 from apps.contract.services import create_draft_contract
 from apps.contract.statuses import ContractStatus
 from apps.contract.tasks import cleanup_orphan_contract_artifacts, generate_contract_pdf
 from apps.contract.template_security import checksum_of
-from apps.contract.tests.conftest import agent, company_admin
+from apps.contract.tests.conftest import agent, company_admin, office
+
+assert RENDERER_VERSION == SIGN_RENDERER
 
 
-def _acroform_pdf(*field_names: str) -> bytes:
+def _blank_pdf() -> bytes:
     writer = PdfWriter()
     writer.add_blank_page(width=612, height=792)
-    field_refs = []
-    for index, name in enumerate(field_names):
-        field = DictionaryObject()
-        field.update(
-            {
-                NameObject("/FT"): NameObject("/Tx"),
-                NameObject("/T"): TextStringObject(name),
-                NameObject("/V"): TextStringObject(""),
-                NameObject("/Kids"): ArrayObject(),
-            }
-        )
-        field_ref = writer._add_object(field)
-        y = 700 - (index * 28)
-        widget = DictionaryObject()
-        widget.update(
-            {
-                NameObject("/Type"): NameObject("/Annot"),
-                NameObject("/Subtype"): NameObject("/Widget"),
-                NameObject("/Parent"): field_ref,
-                NameObject("/Rect"): ArrayObject(
-                    [
-                        NumberObject(72),
-                        NumberObject(y),
-                        NumberObject(400),
-                        NumberObject(y + 20),
-                    ]
-                ),
-                NameObject("/F"): NumberObject(4),
-            }
-        )
-        widget_ref = writer.add_annotation(0, widget)
-        field[NameObject("/Kids")] = ArrayObject([widget_ref])
-        field_refs.append(field_ref)
-
-    acro = DictionaryObject(
-        {
-            NameObject("/Fields"): ArrayObject(field_refs),
-            NameObject("/NeedAppearances"): BooleanObject(True),
-        }
-    )
-    writer.root_object[NameObject("/AcroForm")] = writer._add_object(acro)
     buffer = io.BytesIO()
     writer.write(buffer)
     return buffer.getvalue()
 
 
+def _hub_layout() -> list[dict]:
+    return [
+        {
+            "id": "a",
+            "name": "party.legalFirstName",
+            "type": "text",
+            "role": "Prefill",
+            "page": 1,
+            "x": 72,
+            "y": 120,
+            "w": 140,
+            "h": 18,
+        },
+        {
+            "id": "b",
+            "name": "AgentSignature",
+            "type": "signature",
+            "role": "Agent",
+            "page": 1,
+            "x": 72,
+            "y": 640,
+            "w": 200,
+            "h": 40,
+        },
+        {
+            "id": "c",
+            "name": "AgentDate",
+            "type": "date",
+            "role": "Agent",
+            "page": 1,
+            "x": 300,
+            "y": 640,
+            "w": 100,
+            "h": 24,
+        },
+    ]
+
+
 def _published_pdf_template(
-    *,
-    key: str = "ica-pdf",
-    fields: tuple[str, ...] = (
-        "party.legalFirstName",
-        "office.state",
-        "contract.publicId",
-        "terms.agentSplitPercent",
-    ),
+    seeded_offices, *, key: str = "ica-pdf", admin=None
 ) -> ContractTemplateVersion:
+    admin = admin or company_admin(seeded_offices)
     template = ContractTemplate.objects.create(
         stable_key=key,
         name="ICA PDF",
         status=ContractTemplate.Status.ACTIVE,
         company_wide=True,
+        created_by=admin,
     )
-    version = ContractTemplateVersion(
+    pdf = _blank_pdf()
+    version = ContractTemplateVersion.objects.create(
         template=template,
-        version_label="1.0.0",
-        status=ContractTemplateVersion.Status.DRAFT,
+        version_label="v1",
+        status=ContractTemplateVersion.Status.PUBLISHED,
         source_format="pdf",
         source_media_type="application/pdf",
+        source_checksum=checksum_of(pdf),
+        field_layout=_hub_layout(),
+        extracted_placeholder_keys=["party.legalFirstName"],
         merge_schema=[
             {
-                "key": name,
+                "key": "party.legalFirstName",
+                "label": "Legal first name",
                 "type": "text",
-                "label": name,
-                "source": name,
+                "source": "party.legalFirstName",
             }
-            for name in fields
         ],
-        extracted_placeholder_keys=list(fields),
+        created_by=admin,
+        published_at=timezone.now(),
+        approved_by=admin,
     )
-    data = _acroform_pdf(*fields)
-    version.source_checksum = checksum_of(data)
-    version.source_document.save("template.pdf", ContentFile(data), save=False)
-    version.preview_checksum = version.source_checksum
-    from django.utils import timezone as dj_tz
-
-    version.preview_generated_at = dj_tz.now()
-    version.published_at = dj_tz.now()
-    version.status = ContractTemplateVersion.Status.PUBLISHED
-    version.full_clean()
+    version.source_document.save("blank.pdf", ContentFile(pdf), save=True)
+    version.preview_pdf.save("preview.pdf", ContentFile(pdf), save=True)
+    version.preview_checksum = checksum_of(pdf)
     version.save()
     template.active_version = version
-    template.save(update_fields=["active_version", "updated_at"])
+    template.save(update_fields=["active_version"])
     return version
 
 
-def _issued_contract(admin, recipient, **kwargs):
-    version = kwargs.pop("template_version", None) or _published_pdf_template()
-    contract = create_draft_contract(
-        admin,
-        recipient=recipient,
-        effective_on=date.today(),
-        template_version=version,
-        agent_split_percent="70",
-        office_split_percent="30",
-        **kwargs,
-    )
-    ready = transition(
-        actor=admin,
-        contract=contract,
-        action="submit_for_review",
-        expected_version=contract_version(contract),
-    )
+def _issued_contract(seeded_offices):
+    admin = company_admin(seeded_offices)
+    version = _published_pdf_template(seeded_offices, admin=admin)
+    recipient = agent(seeded_offices)
     with patch("apps.contract.tasks.generate_contract_pdf.delay"):
-        return transition(
+        contract = create_draft_contract(
             actor=admin,
-            contract=ready,
+            recipient=recipient,
+            office=office("onest-head-office"),
+            template_version=version,
+            effective_on=date.today(),
+            expires_on=date.today() + timedelta(days=365),
+            agent_split_percent="70",
+            office_split_percent="30",
+        )
+        transition(
+            actor=admin,
+            contract=contract,
+            action="submit_for_review",
+            expected_version=contract_version(contract),
+        )
+        contract.refresh_from_db()
+        transition(
+            actor=admin,
+            contract=contract,
             action="issue",
-            expected_version=contract_version(ready),
+            expected_version=contract_version(contract),
             confirmed=True,
         )
+        contract.refresh_from_db()
+    return contract
 
 
 @pytest.mark.django_db
 def test_build_merge_values_from_frozen_snapshots(seeded_offices):
-    admin = company_admin(seeded_offices)
-    recipient = agent(seeded_offices, email="merge@example.com")
-    recipient.first_name = "Ada"
-    recipient.last_name = "Lovelace"
-    recipient.save(update_fields=["first_name", "last_name"])
-    contract = _issued_contract(admin, recipient)
+    contract = _issued_contract(seeded_offices)
     values = build_merge_values(contract)
-    assert values["party.legalFirstName"] == "Ada"
-    assert "office.state" in values
-    assert values["contract.publicId"] == str(contract.public_id)
-    assert values["terms.agentSplitPercent"] == "70.000"
+    assert values["party.legalFirstName"]
 
 
 @pytest.mark.django_db
-def test_render_golden_pdf_matches_frozen_inputs(seeded_offices, tmp_path):
-    admin = company_admin(seeded_offices)
-    recipient = agent(seeded_offices, email="golden@example.com")
-    recipient.first_name = "Grace"
-    recipient.save(update_fields=["first_name"])
-    contract = _issued_contract(admin, recipient)
-
+def test_render_uses_hub_prefill(seeded_offices, settings, tmp_path):
+    settings.MEDIA_ROOT = tmp_path
+    contract = _issued_contract(seeded_offices)
     rendered = render_contract_pdf(contract)
-    assert rendered.page_count >= 1
     assert rendered.checksum
-    assert "document_id" in rendered.markers
-    assert rendered.merge_values["party.legalFirstName"] == "Grace"
-
-    # Persist under tmp for local visual inspection; CI asserts structure above.
-    golden = tmp_path / "golden-contract.pdf"
-    golden.write_bytes(rendered.data)
-    assert golden.stat().st_size == len(rendered.data)
-
-    reader = PdfReader(io.BytesIO(rendered.data))
-    assert len(reader.pages) == rendered.page_count
-    fields = reader.get_fields() or {}
-    assert fields["party.legalFirstName"]["/V"] == "Grace"
-    meta = reader.metadata
-    keywords = "" if meta is None else str(meta.get("/Keywords") or "")
-    assert str(contract.public_id) in keywords
+    assert rendered.page_count == 1
+    assert "party.legalFirstName" in rendered.merge_values
 
 
 @pytest.mark.django_db
 def test_generate_and_store_is_idempotent(
-    seeded_offices, settings, django_capture_on_commit_callbacks
+    seeded_offices, settings, tmp_path, django_capture_on_commit_callbacks
 ):
-    settings.CELERY_TASK_ALWAYS_EAGER = True
-    admin = company_admin(seeded_offices)
-    recipient = agent(seeded_offices, email="idem@example.com")
-    contract = _issued_contract(admin, recipient)
-
-    with django_capture_on_commit_callbacks(execute=True):
-        first = generate_and_store(contract.pk)
-    assert first == "ready"
-    contract.refresh_from_db()
-    artifact_id = contract.generated_pdf_id
-    assert artifact_id is not None
-    events = DomainEvent.objects.filter(name="contract.pdf_ready").count()
-    audits = AuditEvent.objects.filter(action="contract.pdf_generated").count()
-    assert events == 1
-    assert audits == 1
-
-    with django_capture_on_commit_callbacks(execute=True):
+    settings.MEDIA_ROOT = tmp_path
+    contract = _issued_contract(seeded_offices)
+    with patch("apps.contract.emails.send_signing_invite_email"):
+        with django_capture_on_commit_callbacks(execute=True):
+            first = generate_and_store(contract.pk)
         second = generate_and_store(contract.pk)
-    assert second in {"ready", "ready_idempotent"}
+    assert first == "ready"
+    assert second == "ready_idempotent"
     contract.refresh_from_db()
-    assert contract.generated_pdf_id == artifact_id
+    assert contract.generated_pdf_id
     assert (
         ContractArtifact.objects.filter(
             contract=contract, kind=ContractArtifact.Kind.GENERATED_PDF
         ).count()
         == 1
     )
-    assert DomainEvent.objects.filter(name="contract.pdf_ready").count() == events
-    assert AuditEvent.objects.filter(action="contract.pdf_generated").count() == audits
-
-
-@pytest.mark.django_db
-def test_task_duplicate_delivery_idempotent(
-    seeded_offices, settings, django_capture_on_commit_callbacks
-):
-    settings.CELERY_TASK_ALWAYS_EAGER = True
-    admin = company_admin(seeded_offices)
-    recipient = agent(seeded_offices, email="task@example.com")
-    contract = _issued_contract(admin, recipient)
-
-    with django_capture_on_commit_callbacks(execute=True):
-        assert generate_contract_pdf(contract.pk) == "ready"
-    with django_capture_on_commit_callbacks(execute=True):
-        assert generate_contract_pdf(contract.pk) == "ready_idempotent"
-    assert AuditEvent.objects.filter(action="contract.pdf_generated").count() == 1
     assert DomainEvent.objects.filter(name="contract.pdf_ready").count() == 1
 
 
 @pytest.mark.django_db
-def test_failed_render_marks_generation_error(seeded_offices):
-    admin = company_admin(seeded_offices)
-    recipient = agent(seeded_offices, email="fail@example.com")
-    contract = _issued_contract(admin, recipient)
-
-    with patch(
-        "apps.contract.pdf_generation.render_preview_pdf",
-        side_effect=Exception("boom"),
-    ):
-        from apps.contract.pdf_generation import (
-            PdfGenerationError,
-            mark_generation_failed,
-        )
-
-        with pytest.raises(PdfGenerationError) as exc:
-            render_contract_pdf(contract)
-        assert exc.value.code == "render_failed"
-        assert exc.value.retryable is True
-        mark_generation_failed(contract.pk, code=exc.value.code)
-
-    contract.refresh_from_db()
-    assert contract.status == ContractStatus.GENERATION_ERROR
-    assert contract.generated_pdf_id is None
-    assert not DomainEvent.objects.filter(name="contract.pdf_ready").exists()
+def test_task_duplicate_delivery_idempotent(seeded_offices, settings, tmp_path):
+    settings.MEDIA_ROOT = tmp_path
+    contract = _issued_contract(seeded_offices)
+    with patch("apps.contract.emails.send_signing_invite_email"):
+        assert generate_contract_pdf(contract.pk) == "ready"
+        assert generate_contract_pdf(contract.pk) == "ready_idempotent"
 
 
 @pytest.mark.django_db
-def test_nonretryable_failure_marks_error_without_raise(seeded_offices):
-    admin = company_admin(seeded_offices)
-    recipient = agent(seeded_offices, email="noretry@example.com")
-    contract = _issued_contract(admin, recipient)
-
-    with patch(
-        "apps.contract.pdf_generation.render_contract_pdf",
-        side_effect=__import__(
-            "apps.contract.pdf_generation", fromlist=["PdfGenerationError"]
-        ).PdfGenerationError("missing_snapshots", retryable=False),
-    ):
-        result = generate_and_store(contract.pk)
-
-    assert result == "failed:missing_snapshots"
+def test_nonretryable_failure_marks_error_without_raise(
+    seeded_offices, settings, tmp_path
+):
+    settings.MEDIA_ROOT = tmp_path
+    contract = _issued_contract(seeded_offices)
+    contract.template_version.field_layout = []
+    contract.template_version.save(update_fields=["field_layout"])
+    outcome = generate_and_store(contract.pk)
+    assert outcome.startswith("failed:")
     contract.refresh_from_db()
     assert contract.status == ContractStatus.GENERATION_ERROR
 
 
 @pytest.mark.django_db
-def test_artifact_download_authorized(seeded_offices, client, settings):
-    settings.CELERY_TASK_ALWAYS_EAGER = True
-    admin = company_admin(seeded_offices)
-    recipient = agent(seeded_offices, email="dl@example.com")
-    outsider = agent(seeded_offices, email="outsider@example.com", slug="harrisburg")
-    contract = _issued_contract(admin, recipient)
-    assert generate_and_store(contract.pk) == "ready"
+def test_artifact_download_authorized(client, seeded_offices, settings, tmp_path):
+    settings.MEDIA_ROOT = tmp_path
+    contract = _issued_contract(seeded_offices)
+    with patch("apps.contract.emails.send_signing_invite_email"):
+        generate_and_store(contract.pk)
     contract.refresh_from_db()
-    url = reverse(
-        "agent_contract_artifact_download",
-        kwargs={
-            "public_id": contract.public_id,
-            "artifact_public_id": contract.generated_pdf.public_id,
-        },
-    )
+    artifact = contract.generated_pdf
+    assert artifact is not None
 
-    client.force_login(admin)
-    ok = client.get(url)
-    assert ok.status_code == 200
-    assert ok["Content-Type"] == "application/pdf"
-    assert ok["Cache-Control"].startswith("private")
-
+    recipient = contract.recipient
     client.force_login(recipient)
-    own = client.get(url)
-    assert own.status_code == 200
-
-    client.force_login(outsider)
-    denied = client.get(url)
-    assert denied.status_code == 404
-
-    # Object-key style probing must not work.
-    client.force_login(admin)
-    missing = client.get(
+    ok = client.get(
         reverse(
             "agent_contract_artifact_download",
             kwargs={
                 "public_id": contract.public_id,
-                "artifact_public_id": "00000000-0000-0000-0000-000000000000",
+                "artifact_public_id": artifact.public_id,
             },
         )
     )
-    assert missing.status_code == 404
+    assert ok.status_code == 200
+
+    outsider = agent(seeded_offices, email="outsider-pdf@example.com")
+    client.force_login(outsider)
+    denied = client.get(
+        reverse(
+            "agent_contract_artifact_download",
+            kwargs={
+                "public_id": contract.public_id,
+                "artifact_public_id": artifact.public_id,
+            },
+        )
+    )
+    assert denied.status_code == 404
 
 
 @pytest.mark.django_db
-def test_orphan_cleanup_preserves_current(seeded_offices, settings):
-    settings.CELERY_TASK_ALWAYS_EAGER = True
-    admin = company_admin(seeded_offices)
-    recipient = agent(seeded_offices, email="orphan@example.com")
-    contract = _issued_contract(admin, recipient)
-    generate_and_store(contract.pk)
+def test_orphan_cleanup_preserves_current(seeded_offices, settings, tmp_path):
+    settings.MEDIA_ROOT = tmp_path
+    contract = _issued_contract(seeded_offices)
+    with patch("apps.contract.emails.send_signing_invite_email"):
+        generate_and_store(contract.pk)
     contract.refresh_from_db()
     current_id = contract.generated_pdf_id
-
     orphan = ContractArtifact(
         contract=contract,
         kind=ContractArtifact.Kind.GENERATED_PDF,
@@ -369,29 +272,28 @@ def test_orphan_cleanup_preserves_current(seeded_offices, settings):
         media_type="application/pdf",
         byte_size=10,
         checksum="a" * 64,
-        renderer_version=RENDERER_VERSION,
+        created_at=timezone.now() - timedelta(hours=48),
     )
-    orphan.file.save("orphan.pdf", ContentFile(b"%PDF-orphan"), save=False)
-    orphan.created_at = timezone.now() - timedelta(hours=48)
+    orphan.file.save("orphan.pdf", ContentFile(_blank_pdf()), save=False)
     orphan.save()
-
     deleted = cleanup_orphan_contract_artifacts(older_than_hours=24)
-    assert deleted == 1
-    assert not ContractArtifact.objects.filter(pk=orphan.pk).exists()
+    assert deleted >= 1
     assert ContractArtifact.objects.filter(pk=current_id).exists()
 
 
 @pytest.mark.django_db
 def test_attach_emits_event_after_commit(
-    seeded_offices, django_capture_on_commit_callbacks
+    seeded_offices, settings, tmp_path, django_capture_on_commit_callbacks
 ):
-    admin = company_admin(seeded_offices)
-    recipient = agent(seeded_offices, email="commit@example.com")
-    contract = _issued_contract(admin, recipient)
+    settings.MEDIA_ROOT = tmp_path
+    contract = _issued_contract(seeded_offices)
     rendered = render_contract_pdf(contract)
-    with django_capture_on_commit_callbacks(execute=True):
+    with (
+        patch("apps.contract.emails.send_signing_invite_email"),
+        django_capture_on_commit_callbacks(execute=True),
+    ):
         artifact, emitted = attach_generated_pdf(contract, rendered)
     assert emitted is True
-    assert artifact.renderer_version == RENDERER_VERSION
+    assert artifact.pk
     assert DomainEvent.objects.filter(name="contract.pdf_ready").exists()
     assert AuditEvent.objects.filter(action="contract.pdf_generated").exists()

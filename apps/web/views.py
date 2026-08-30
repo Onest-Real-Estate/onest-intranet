@@ -5,8 +5,8 @@ from inertia import inertia, render
 from apps.announcements.administration_views import (
     announcement_administration_index,
 )
-from apps.contract.administration_views import contract_template_index
-from apps.contract.agent_contract_views import agent_contract_index
+from apps.contract.views.administration_views import contract_template_index
+from apps.contract.views.agent_contract_views import agent_contract_index
 from apps.feedback.views import feedback_inbox
 from apps.operational_tasks.views import tasks_index
 from apps.user.services.role_assignments import get_effective_access

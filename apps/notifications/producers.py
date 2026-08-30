@@ -100,32 +100,87 @@ def account_reactivated(envelope: EventEnvelope) -> list[NotificationRequest]:
     ]
 
 
-def contract_pdf_ready(envelope: EventEnvelope) -> list[NotificationRequest]:
-    """Tell the recipient agent their review PDF is ready.
-
-    Dedupe on contract identity (not event id) so a retried generation that
-    somehow re-emitted would still collapse — the publisher already avoids
-    duplicate events; this is belt-and-suspenders.
-    """
-    agent_id = _int_or_none(envelope.payload.get("agent_id"))
+def _agent_contract_change(
+    envelope: EventEnvelope,
+    *,
+    title: str,
+    recipient_payload_key: str = "agent_id",
+    action_key: str = "open_my_contract",
+    priority: int = NotificationPriority.HIGH,
+) -> list[NotificationRequest]:
+    """Shared builder for recipient-facing contract lifecycle notifications."""
+    recipient_id = _int_or_none(envelope.payload.get(recipient_payload_key))
     contract_id = str(envelope.payload.get("contract_id") or "").strip()
-    if agent_id is None or not contract_id:
+    if recipient_id is None or not contract_id:
         return []
     return [
         NotificationRequest(
-            recipient_id=agent_id,
+            recipient_id=recipient_id,
             notification_type=NotificationType.CONTRACT,
             event_key=envelope.name,
-            title="Your agent contract is ready to review",
-            dedupe_key=f"contract.pdf_ready:{contract_id}",
-            priority=NotificationPriority.HIGH,
+            title=title,
+            dedupe_key=f"{envelope.name}:{contract_id}",
+            priority=priority,
             source_module="contract",
             source_record_type="agent_contract",
             source_record_id=contract_id,
-            action_key="open_dashboard",
+            action_key=action_key,
             action_args=(),
         )
     ]
+
+
+def contract_pdf_ready(envelope: EventEnvelope) -> list[NotificationRequest]:
+    """Tell the recipient agent their review PDF is ready."""
+    return _agent_contract_change(
+        envelope,
+        title="Your agent contract is ready to sign",
+        action_key="open_my_contract_sign",
+    )
+
+
+def contract_issued(envelope: EventEnvelope) -> list[NotificationRequest]:
+    return _agent_contract_change(
+        envelope,
+        title="Your agent contract was issued",
+    )
+
+
+def contract_signed(envelope: EventEnvelope) -> list[NotificationRequest]:
+    """Confirm to the signing agent that the agreement was recorded."""
+    return _agent_contract_change(
+        envelope,
+        title="Your agent contract is signed",
+        recipient_payload_key="signer_id",
+    )
+
+
+def contract_activated(envelope: EventEnvelope) -> list[NotificationRequest]:
+    return _agent_contract_change(
+        envelope,
+        title="Your agent contract is now active",
+    )
+
+
+def contract_superseded(envelope: EventEnvelope) -> list[NotificationRequest]:
+    return _agent_contract_change(
+        envelope,
+        title="Your agent contract was superseded",
+    )
+
+
+def contract_terminated(envelope: EventEnvelope) -> list[NotificationRequest]:
+    return _agent_contract_change(
+        envelope,
+        title="Your agent contract was terminated",
+    )
+
+
+def contract_expired(envelope: EventEnvelope) -> list[NotificationRequest]:
+    return _agent_contract_change(
+        envelope,
+        title="Your agent contract has expired",
+    )
 
 
 EventBuilder = Callable[[EventEnvelope], list[NotificationRequest]]
@@ -134,6 +189,12 @@ EVENT_PRODUCERS: dict[str, EventBuilder] = {
     "user.onboarding.owner_assigned": onboarding_owner_assigned,
     "user.account.state_changed": account_reactivated,
     "contract.pdf_ready": contract_pdf_ready,
+    "contract.issued": contract_issued,
+    "contract.signed": contract_signed,
+    "contract.activated": contract_activated,
+    "contract.superseded": contract_superseded,
+    "contract.terminated": contract_terminated,
+    "contract.expired": contract_expired,
 }
 
 

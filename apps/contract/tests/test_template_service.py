@@ -1,94 +1,135 @@
 from __future__ import annotations
 
 import io
-import zipfile
 from datetime import date
 
 import pytest
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.urls import reverse
 from pypdf import PdfWriter
 
 from apps.audit.models import AuditEvent
+from apps.contract.field_layout import (
+    assert_publishable_layout,
+    normalize_field_layout,
+)
 from apps.contract.models import AgentContract, ContractTemplateVersion
-from apps.contract.template_security import inspect_template, validate_merge_schema
-from apps.contract.template_service import (
+from apps.contract.services.template_service import (
     activate_version,
     create_draft_version,
     create_template_family,
     publish_version,
     retire_version,
     save_draft_version,
+    save_field_layout,
+    serialize_template_row,
+    serialize_version_detail,
 )
+from apps.contract.template_security import inspect_template, validate_merge_schema
 from apps.contract.tests.conftest import agent, company_admin
 
 
-def _docx_with_tags(*tags: str) -> bytes:
-    document = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-  <w:body>
-    {controls}
-  </w:body>
-</w:document>"""
-    controls = []
-    for tag in tags:
-        controls.append(
-            f"""
-            <w:sdt>
-              <w:sdtPr><w:tag w:val="{tag}"/></w:sdtPr>
-              <w:sdtContent>
-                <w:p><w:r><w:t>{tag}</w:t></w:r></w:p>
-              </w:sdtContent>
-            </w:sdt>
-            """
-        )
-    content_types = """<?xml version="1.0" encoding="UTF-8"?>
-<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
-  <Default
-    Extension="rels"
-    ContentType="application/vnd.openxmlformats-package.relationships+xml"
-  />
-  <Default Extension="xml" ContentType="application/xml"/>
-  <Override
-    PartName="/word/document.xml"
-    ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"
-  />
-</Types>"""
-    rels = """<?xml version="1.0" encoding="UTF-8"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship
-    Id="rId1"
-    Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument"
-    Target="word/document.xml"
-  />
-</Relationships>"""
-    out = io.BytesIO()
-    with zipfile.ZipFile(out, "w") as archive:
-        archive.writestr("[Content_Types].xml", content_types)
-        archive.writestr("_rels/.rels", rels)
-        archive.writestr(
-            "word/document.xml", document.format(controls="".join(controls))
-        )
-    return out.getvalue()
+@pytest.mark.django_db
+def test_serialize_template_row_points_draft_families_at_draft_workspace(
+    seeded_offices,
+):
+    actor = company_admin(seeded_offices)
+    template = create_template_family(
+        actor,
+        stable_key="ica-draft-open",
+        name="Draft open",
+        company_wide=True,
+    )
+    version = create_draft_version(
+        actor,
+        template=template,
+        version_label="1.0.0",
+        display_name="Draft open",
+    )
+    row = serialize_template_row(
+        type(template)
+        .objects.prefetch_related("versions")
+        .select_related("active_version")
+        .get(pk=template.pk)
+    )
+    assert row["activeVersionPk"] is None
+    assert row["workspaceVersionPk"] == version.pk
 
 
-def _pdf_with_unsafe_token() -> bytes:
+def _blank_pdf() -> bytes:
     writer = PdfWriter()
     writer.add_blank_page(width=300, height=200)
     buf = io.BytesIO()
     writer.write(buf)
-    return buf.getvalue() + b"\n/OpenAction\n"
+    return buf.getvalue()
+
+
+def _pdf_with_unsafe_token() -> bytes:
+    return _blank_pdf() + b"\n/OpenAction\n"
+
+
+def _hub_layout() -> list[dict]:
+    return [
+        {
+            "id": "prefill-1",
+            "name": "party.legalFirstName",
+            "type": "text",
+            "role": "Prefill",
+            "page": 1,
+            "x": 20,
+            "y": 20,
+            "w": 140,
+            "h": 24,
+        },
+        {
+            "id": "sig-1",
+            "name": "AgentSignature",
+            "type": "signature",
+            "role": "Agent",
+            "page": 1,
+            "x": 20,
+            "y": 80,
+            "w": 180,
+            "h": 48,
+        },
+        {
+            "id": "date-1",
+            "name": "AgentSignedOn",
+            "type": "date",
+            "role": "Agent",
+            "page": 1,
+            "x": 20,
+            "y": 140,
+            "w": 120,
+            "h": 24,
+        },
+    ]
 
 
 @pytest.mark.django_db
-def test_docx_template_inspection_extracts_content_control_tags():
+def test_pdf_upload_without_acroform_is_accepted():
     inspection = inspect_template(
-        filename="template.docx",
-        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        data=_docx_with_tags("party.legalFirstName", "office.state"),
+        filename="template.pdf",
+        media_type="application/pdf",
+        data=_blank_pdf(),
     )
-    assert inspection.format == "docx"
-    assert inspection.placeholder_keys == ("office.state", "party.legalFirstName")
+    assert inspection.format == "pdf"
+    assert inspection.placeholder_keys == ()
+
+
+@pytest.mark.django_db
+def test_docx_template_is_rejected():
+    with pytest.raises(ValidationError) as exc:
+        inspect_template(
+            filename="template.docx",
+            media_type=(
+                "application/vnd.openxmlformats-officedocument."
+                "wordprocessingml.document"
+            ),
+            data=b"not-a-real-docx",
+        )
+    assert "source_document" in exc.value.message_dict
 
 
 @pytest.mark.django_db
@@ -119,6 +160,13 @@ def test_merge_schema_must_match_extracted_placeholders():
     assert "source_document" in exc.value.message_dict
 
 
+def test_normalize_field_layout_is_publishable():
+    layout = normalize_field_layout(_hub_layout())
+    assert len(layout) == 3
+    assert_publishable_layout(layout)
+    assert layout[1]["type"] == "signature"
+
+
 @pytest.mark.django_db
 def test_published_versions_are_immutable(seeded_offices):
     actor = company_admin(seeded_offices)
@@ -141,11 +189,10 @@ def test_published_versions_are_immutable(seeded_offices):
             }
         ],
     )
-    version.source_format = "docx"
-    version.source_media_type = (
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    )
+    version.source_format = "pdf"
+    version.source_media_type = "application/pdf"
     version.source_checksum = "a" * 64
+    version.field_layout = _hub_layout()
     version.extracted_placeholder_keys = ["party.legalFirstName"]
     version.preview_checksum = "b" * 64
     version.preview_generated_at = version.created_at
@@ -160,53 +207,84 @@ def test_published_versions_are_immutable(seeded_offices):
 
 
 @pytest.mark.django_db
-def test_save_draft_version_rejects_unknown_placeholder_upload(seeded_offices):
+def test_save_draft_uploads_pdf_and_resets_field_layout(seeded_offices):
     actor = company_admin(seeded_offices)
     template = create_template_family(
         actor,
         stable_key="ica-standard",
         name="ICA Standard",
         jurisdiction_state_codes=["VA"],
+        company_wide=True,
     )
     version = create_draft_version(
         actor,
         template=template,
         version_label="1.0.0",
-        merge_schema=[
-            {
-                "key": "party.legalFirstName",
-                "type": "text",
-                "label": "First name",
-                "source": "party.legalFirstName",
-            }
-        ],
+        merge_schema=[],
     )
     upload = SimpleUploadedFile(
-        "template.docx",
-        _docx_with_tags("party.legalFirstName", "office.state"),
-        content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "template.pdf",
+        _blank_pdf(),
+        content_type="application/pdf",
     )
-    with pytest.raises(ValidationError) as exc:
-        save_draft_version(
-            actor,
-            version=version,
-            expected_version=version.updated_at.isoformat(),
-            display_name="ICA Standard",
-            description="Draft",
-            merge_schema=list(version.merge_schema),
-            source_upload=upload,
-        )
-    assert "source_document" in exc.value.message_dict
+    saved = save_draft_version(
+        actor,
+        version=version,
+        expected_version=version.updated_at.isoformat(),
+        display_name="ICA Standard",
+        description="Draft",
+        merge_schema=[],
+        source_upload=upload,
+    )
+    assert saved.source_format == "pdf"
+    assert saved.field_layout == []
+    assert saved.extracted_placeholder_keys == []
 
 
 @pytest.mark.django_db
-def test_publish_activate_and_retire_are_audited(seeded_offices, monkeypatch):
+def test_save_field_layout_seeds_prefill_merge_keys(seeded_offices):
+    actor = company_admin(seeded_offices)
+    template = create_template_family(
+        actor,
+        stable_key="ica-layout",
+        name="ICA",
+        company_wide=True,
+    )
+    version = create_draft_version(
+        actor,
+        template=template,
+        version_label="1.0.0",
+        merge_schema=[],
+    )
+    upload = SimpleUploadedFile(
+        "template.pdf",
+        _blank_pdf(),
+        content_type="application/pdf",
+    )
+    save_draft_version(
+        actor,
+        version=version,
+        expected_version=version.updated_at.isoformat(),
+        display_name="ICA",
+        description="",
+        merge_schema=[],
+        source_upload=upload,
+    )
+    version.refresh_from_db()
+    saved = save_field_layout(actor, version=version, layout=_hub_layout())
+    assert saved.extracted_placeholder_keys == ["party.legalFirstName"]
+    assert saved.merge_schema[0]["key"] == "party.legalFirstName"
+
+
+@pytest.mark.django_db
+def test_publish_activate_and_retire_are_audited(seeded_offices):
     actor = company_admin(seeded_offices)
     template = create_template_family(
         actor,
         stable_key="ica-standard",
         name="ICA Standard",
         jurisdiction_state_codes=["VA"],
+        company_wide=True,
     )
     version = create_draft_version(
         actor,
@@ -222,9 +300,9 @@ def test_publish_activate_and_retire_are_audited(seeded_offices, monkeypatch):
         ],
     )
     upload = SimpleUploadedFile(
-        "template.docx",
-        _docx_with_tags("party.legalFirstName"),
-        content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "template.pdf",
+        _blank_pdf(),
+        content_type="application/pdf",
     )
     save_draft_version(
         actor,
@@ -232,19 +310,35 @@ def test_publish_activate_and_retire_are_audited(seeded_offices, monkeypatch):
         expected_version=version.updated_at.isoformat(),
         display_name="ICA Standard",
         description="Draft",
-        merge_schema=list(version.merge_schema),
+        merge_schema=[
+            {
+                "key": "party.legalFirstName",
+                "type": "text",
+                "label": "First name",
+                "source": "party.legalFirstName",
+            }
+        ],
         source_upload=upload,
     )
     version.refresh_from_db()
-
-    monkeypatch.setattr(
-        "apps.contract.template_service.render_preview_pdf",
-        lambda **kwargs: (b"%PDF-1.4 preview", ("party.legalFirstName",)),
-    )
-    from apps.contract.template_service import generate_preview
-
-    generate_preview(version)
+    save_field_layout(actor, version=version, layout=_hub_layout())
     version.refresh_from_db()
+    version.merge_schema = [
+        {
+            "key": "party.legalFirstName",
+            "type": "text",
+            "label": "First name",
+            "source": "party.legalFirstName",
+        }
+    ]
+    version.preview_pdf.save(
+        "preview.pdf",
+        SimpleUploadedFile("p.pdf", b"%PDF-1.4"),
+        save=False,
+    )
+    version.preview_checksum = "c" * 64
+    version.preview_generated_at = version.created_at
+    version.save()
 
     publish_version(actor, version=version)
     version.refresh_from_db()
@@ -259,7 +353,57 @@ def test_publish_activate_and_retire_are_audited(seeded_offices, monkeypatch):
 
 
 @pytest.mark.django_db
-def test_referenced_versions_cannot_be_retired(seeded_offices, monkeypatch):
+def test_publish_requires_agent_signature_field(seeded_offices):
+    actor = company_admin(seeded_offices)
+    template = create_template_family(
+        actor,
+        stable_key="ica-nosig",
+        name="ICA",
+        company_wide=True,
+    )
+    version = create_draft_version(
+        actor,
+        template=template,
+        version_label="1.0.0",
+        merge_schema=[
+            {
+                "key": "party.legalFirstName",
+                "type": "text",
+                "label": "First name",
+                "source": "party.legalFirstName",
+            }
+        ],
+    )
+    version.field_layout = [
+        {
+            "id": "prefill-1",
+            "name": "party.legalFirstName",
+            "type": "text",
+            "role": "Prefill",
+            "page": 1,
+            "x": 20,
+            "y": 20,
+            "w": 140,
+            "h": 24,
+        }
+    ]
+    version.extracted_placeholder_keys = ["party.legalFirstName"]
+    version.preview_pdf.save(
+        "preview.pdf",
+        SimpleUploadedFile("p.pdf", b"%PDF-1.4"),
+        save=False,
+    )
+    version.preview_checksum = "c" * 64
+    version.preview_generated_at = version.created_at
+    version.save()
+
+    with pytest.raises(ValidationError) as exc:
+        publish_version(actor, version=version)
+    assert "signature" in str(exc.value).lower()
+
+
+@pytest.mark.django_db
+def test_referenced_versions_cannot_be_retired(seeded_offices):
     actor = company_admin(seeded_offices)
     recipient = agent(seeded_offices)
     template = create_template_family(
@@ -267,6 +411,7 @@ def test_referenced_versions_cannot_be_retired(seeded_offices, monkeypatch):
         stable_key="ica-standard",
         name="ICA Standard",
         jurisdiction_state_codes=["VA"],
+        company_wide=True,
     )
     version = create_draft_version(
         actor,
@@ -282,27 +427,46 @@ def test_referenced_versions_cannot_be_retired(seeded_offices, monkeypatch):
         ],
     )
     upload = SimpleUploadedFile(
-        "template.docx",
-        _docx_with_tags("party.legalFirstName"),
-        content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "template.pdf",
+        _blank_pdf(),
+        content_type="application/pdf",
     )
     save_draft_version(
         actor,
         version=version,
         expected_version=version.updated_at.isoformat(),
         display_name="ICA Standard",
-        description="Draft",
-        merge_schema=list(version.merge_schema),
+        description="",
+        merge_schema=[
+            {
+                "key": "party.legalFirstName",
+                "type": "text",
+                "label": "First name",
+                "source": "party.legalFirstName",
+            }
+        ],
         source_upload=upload,
     )
     version.refresh_from_db()
-    monkeypatch.setattr(
-        "apps.contract.template_service.render_preview_pdf",
-        lambda **kwargs: (b"%PDF-1.4 preview", ("party.legalFirstName",)),
+    save_field_layout(actor, version=version, layout=_hub_layout())
+    version.refresh_from_db()
+    version.merge_schema = [
+        {
+            "key": "party.legalFirstName",
+            "type": "text",
+            "label": "First name",
+            "source": "party.legalFirstName",
+        }
+    ]
+    version.preview_pdf.save(
+        "preview.pdf",
+        SimpleUploadedFile("p.pdf", b"%PDF-1.4"),
+        save=False,
     )
-    from apps.contract.template_service import generate_preview
+    version.preview_checksum = "c" * 64
+    version.preview_generated_at = version.created_at
+    version.save()
 
-    generate_preview(version)
     publish_version(actor, version=version)
     activate_version(actor, version=version)
     AgentContract.objects.create(
@@ -314,7 +478,47 @@ def test_referenced_versions_cannot_be_retired(seeded_offices, monkeypatch):
         party_snapshot={},
         office_snapshot={},
         terms_snapshot={},
+        calculation_rule_version="1.0.0",
     )
 
     with pytest.raises(ValidationError):
         retire_version(actor, version=version)
+
+
+@pytest.mark.django_db
+def test_preview_url_is_hub_stream_not_storage_url(
+    client, seeded_offices, settings, tmp_path
+):
+    settings.MEDIA_ROOT = tmp_path
+    actor = company_admin(seeded_offices)
+    template = create_template_family(
+        actor,
+        stable_key="ica-preview-stream",
+        name="ICA",
+        company_wide=True,
+    )
+    version = create_draft_version(
+        actor,
+        template=template,
+        version_label="1.0.0",
+        merge_schema=[],
+    )
+    pdf = _blank_pdf()
+    version.preview_pdf.save(
+        "preview.pdf",
+        SimpleUploadedFile("preview.pdf", pdf, content_type="application/pdf"),
+        save=True,
+    )
+    detail = serialize_version_detail(version)
+    assert detail["previewUrl"] == (
+        f"/operations/contract-templates/templates/{version.pk}/preview.pdf"
+    )
+    assert "localhost:9000" not in (detail["previewUrl"] or "")
+
+    client.force_login(actor)
+    response = client.get(
+        reverse("contract_template_preview_pdf", kwargs={"version_id": version.pk})
+    )
+    assert response.status_code == 200
+    assert response["Content-Type"] == "application/pdf"
+    assert response.content[:4] == b"%PDF"

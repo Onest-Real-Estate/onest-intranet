@@ -1105,6 +1105,39 @@ ROUTE_POLICIES["contract_template_action"] = AuthorizationPolicy(
     ),
     scope_rule="user_office_scope",
 )
+ROUTE_POLICIES["contract_template_field_layout"] = AuthorizationPolicy(
+    key="contract_template_field_layout",
+    access="permission_protected",
+    description="Save Hub field placer layout for a contract template draft.",
+    methods=("POST",),
+    route_names=("contract_template_field_layout",),
+    all_permissions=("contract.manage_contract_templates",),
+    scope_rule="user_office_scope",
+)
+ROUTE_POLICIES["contract_template_source_pdf"] = AuthorizationPolicy(
+    key="contract_template_source_pdf",
+    access="permission_protected",
+    description="Stream the protected template PDF for the Hub field placer.",
+    methods=("GET",),
+    route_names=("contract_template_source_pdf",),
+    any_permissions=(
+        "contract.manage_contract_templates",
+        "contract.approve_contract_templates",
+    ),
+    scope_rule="user_office_scope",
+)
+ROUTE_POLICIES["contract_template_preview_pdf"] = AuthorizationPolicy(
+    key="contract_template_preview_pdf",
+    access="permission_protected",
+    description="Stream the protected synthetic template preview PDF.",
+    methods=("GET",),
+    route_names=("contract_template_preview_pdf",),
+    any_permissions=(
+        "contract.manage_contract_templates",
+        "contract.approve_contract_templates",
+    ),
+    scope_rule="user_office_scope",
+)
 
 ROUTE_POLICIES["agent_contract_admin"] = AuthorizationPolicy(
     key="agent_contract_admin",
@@ -1176,6 +1209,39 @@ ROUTE_POLICIES["my_contract_artifact_preview"] = AuthorizationPolicy(
     ),
     methods=("GET",),
     route_names=("my_contract_artifact_preview",),
+    scope_rule="self_only",
+)
+ROUTE_POLICIES["my_contract_sign"] = AuthorizationPolicy(
+    key="my_contract_sign",
+    access="authenticated",
+    description=(
+        "Recipient signing ceremony for the authenticated agent's own contract. "
+        "Admins cannot sign on an agent's behalf through this route."
+    ),
+    methods=("GET", "POST"),
+    route_names=("my_contract_sign",),
+    scope_rule="self_only",
+)
+ROUTE_POLICIES["my_contract_sign_status"] = AuthorizationPolicy(
+    key="my_contract_sign_status",
+    access="authenticated",
+    description=(
+        "Poll whether a durable signature record exists for the recipient's "
+        "signing ceremony success gate."
+    ),
+    methods=("GET",),
+    route_names=("my_contract_sign_status",),
+    scope_rule="self_only",
+)
+ROUTE_POLICIES["my_contract_sign_complete"] = AuthorizationPolicy(
+    key="my_contract_sign_complete",
+    access="authenticated",
+    description=(
+        "Commit Hub-native signature appearance, seal, and durable signature "
+        "record for the authenticated recipient."
+    ),
+    methods=("POST",),
+    route_names=("my_contract_sign_complete",),
     scope_rule="self_only",
 )
 

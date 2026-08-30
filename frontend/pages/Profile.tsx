@@ -1,4 +1,4 @@
-import { Head, usePage } from "@inertiajs/react";
+import { Head, router, usePage } from "@inertiajs/react";
 import { CheckCircle2, Lock } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
@@ -56,8 +56,8 @@ const ERROR_LABELS: Record<string, string> = {
  *
  * Two halves with different save semantics, and the page says which is which:
  * the photo panel writes straight through to its own endpoint, while every
- * editable field below posts as one form so a validation failure anywhere
- * leaves the whole set intact and re-rendered with what was typed.
+ * editable field below posts as one Inertia visit so a validation failure
+ * anywhere leaves the whole set intact and re-rendered with what was typed.
  */
 export default function Profile() {
   const {
@@ -81,8 +81,7 @@ export default function Profile() {
   const summaryRef = useRef<HTMLDivElement>(null);
   const hasErrors = hasValidationErrors(validation);
 
-  // Guard the browser's own navigation. Inertia link navigation away from this
-  // page is a full document request too, so this covers both.
+  // Guard the browser's own navigation away from unsaved edits.
   useEffect(() => {
     if (!dirty) {
       return;
@@ -94,8 +93,7 @@ export default function Profile() {
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, [dirty]);
 
-  // A 422 re-render arrives as a fresh document, so move focus to the summary
-  // rather than leaving it at the top of an apparently unchanged page.
+  // A 422 Inertia response re-renders with errors; move focus to the summary.
   useEffect(() => {
     if (hasErrors) {
       summaryRef.current?.focus();
@@ -136,9 +134,21 @@ export default function Profile() {
           // Delegated: every uncontrolled text input in the sections below
           // reports through here, so no field has to thread a callback.
           onInput={() => setDirty(true)}
-          onSubmit={() => {
-            setDirty(false);
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (submitting) {
+              return;
+            }
             setSubmitting(true);
+            const form = event.currentTarget;
+            // FormData so Django request.POST receives the fields (JSON bodies
+            // do not). Use the typed route rather than form.action, which the
+            // browser expands to an absolute URL.
+            router.post(routes.profile_submit(), new FormData(form), {
+              preserveScroll: true,
+              onSuccess: () => setDirty(false),
+              onFinish: () => setSubmitting(false),
+            });
           }}
         >
           <input type="hidden" name="csrfmiddlewaretoken" value={csrfToken} />

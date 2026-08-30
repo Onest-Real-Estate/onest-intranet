@@ -4,18 +4,18 @@ Brokerage agreements for recipient agents: commercial terms, lifecycle status,
 protected PDF artifacts, and immutable issuance snapshots.
 
 Admin authoring (create / validate / preview / issue) and the lifecycle
-transition service are documented below. Agent-facing **My Contract**
-(status, summary, secure PDF, history) is live; one-click signing lands in
-a later issue (P1-042).
+transition service are documented below. Agent-facing **My Contract** and
+**Hub-native one-click signing** (P1-042) are live.
 
 ## Models
 
 | Model | Role |
 | --- | --- |
-| `ContractTemplate` / `ContractTemplateVersion` | Originating template family and version (`PROTECT`). Full template admin is a separate issue. |
+| `ContractTemplate` / `ContractTemplateVersion` | Originating template family and version (`PROTECT`). Hub `field_layout` drives Prefill fill and Agent signature placement. Legacy DocuSeal id columns may still exist on historical rows. |
 | `AgentContract` | One agreement version for one recipient at one owning office. |
-| `ContractArtifact` | Protected file (generated/signed PDF, addendum) with SHA-256 checksum. |
-| `CommissionCalculation` | Immutable mentor/referral worksheet for one GCI input (rule version + snapshots). |
+| `ContractArtifact` | Protected file (generated/signed PDF, certificate of completion, addendum) with SHA-256 checksum. |
+| `ContractSigningIntent` | Short-lived recipient ceremony binding (checksum, session, disclosure version). |
+| `ContractSignature` | Immutable electronic signature record + signed PDF + certificate of completion. |
 
 `AgentContract.public_id` (UUID) is the client-facing identity. The integer PK
 is internal. Family history uses shared `family_id` + monotonic
@@ -53,13 +53,17 @@ audit or domain events). Scheduled expiry: Celery task
 
 PDF generation after issue runs through Celery
 (`generate_contract_pdf` → `apps.contract.pdf_generation`): frozen snapshots and
-the immutable published template version are merged, the PDF is validated
-(openable, page count, document-id markers, merge fields), stored privately as
-a `ContractArtifact`, and `contract.pdf_ready` is emitted once after commit.
+the template `field_layout` fill Prefill regions onto the blank PDF with pypdf /
+reportlab. The filled PDF becomes the review `ContractArtifact`, Hub sends the
+signing-invite email to the recipient, and `contract.pdf_ready` is emitted once
+after commit (in-app notification + preference-aware email). Lifecycle status
+changes that affect the agent (`issue`, `mark_signed`, `activate`, `supersede`,
+`terminate`, `expire`) each send a transactional email and a matching in-app
+notification via the domain event producers.
 Retries are idempotent on the input fingerprint + checksum. Failures move the
 contract to `generation_error` without falsely marking the agreement ready.
-Authorized download streams through
-`agent_contract_artifact_download` (no durable/presigned URL).
+Authorized download streams through `agent_contract_artifact_download` (no
+durable/presigned URL).
 
 ### Commercial terms
 
@@ -182,8 +186,25 @@ Operations → Agent Contracts (`/operations/agent-contracts`):
 
 Issuance freezes snapshots and queues `generate_contract_pdf`. Double-submit is
 idempotent via lifecycle locks. When the PDF lands, the workspace exposes a
-scoped download link; DocuSeal e-sign integration is a later issue and consumes
-this stored review PDF rather than re-rendering terms.
+scoped download link. Recipient signing (P1-042) uses the Hub-native ceremony
+against the issued review PDF.
+
+### Contract template administration (Hub field placer)
+
+Operations → Contract Templates:
+
+1. Create a family + draft version.
+2. Upload a blank PDF — hub stores it privately and streams it to the in-hub
+   field placer (`GET …/source.pdf`, session auth).
+3. Place fields with roles **Prefill** (commercial/party text) and **Agent**
+   (signature + date) in the Hub placer, then **Save fields**. Prefill names
+   seed the merge-schema mapping UI. Optional **Suggest fields (AI)** proposes
+   boxes; humans must review and save.
+4. Map Prefill fields to hub sources, generate a synthetic preview, then
+   publish / activate (gated on a validated non-empty `field_layout`).
+
+DOCX/AcroForm local fill is retired; templates are PDF-only with Hub-owned
+field placement and signing.
 
 # ---------------------------------------------------------------------------
 # Self-service My Contract (P1-041)
@@ -207,9 +228,10 @@ without disclosing other agents' contracts.
   download via the existing artifact delivery path.
 - Family/history of superseded agreements and amendments the recipient may
   view.
-- Sign CTA only when the focused version is signable (`sent`/`viewed` with a
-  generated PDF). The signing ceremony itself is P1-042
-  (`capabilities.signingReady` stays false until that lands).
+- Sign CTA when the focused version is signable (`sent`/`viewed` with a
+  generated PDF). `capabilities.signingReady` is true when Hub signing is
+  configured (org PKCS#12 present, or DEBUG with
+  `CONTRACT_SIGNING_ALLOW_UNSIGNED_DEV`).
 
 ### Viewed status
 
@@ -223,6 +245,54 @@ Recipient props omit `internalNotes`, admin ids, and other agents' rows.
 Commission keys require `web.view_own_commission` (or broader commission
 grants). Summary text is informational; the PDF controls on discrepancy.
 
+# ---------------------------------------------------------------------------
+# One-click signing ceremony (P1-042)
+# ---------------------------------------------------------------------------
+
+Recipients sign only through `/my-contract/sign` (Inertia `MyContractSign`).
+Admins cannot use this endpoint on an agent's behalf. Signing is Hub-owned:
+Prefill fill, SignaturePad, pyHanko org seal, and certificate of completion.
+
+1. **Consent gate** — versioned ESIGN/UETA disclosure from
+   `apps.contract.signing_disclosure` plus required acknowledgement. The
+   checkbox is informed consent, not the electronic signature.
+2. **Signing intent** — `POST /my-contract/sign` creates a short-lived
+   `ContractSigningIntent` bound to recipient, contract version token,
+   generated PDF checksum, disclosure version, and session hash. Issue-time
+   PDF generation also sends a Hub branded invite email linking to
+   `/my-contract/sign` (plus the existing `contract.pdf_ready` in-app notify
+   and preference-aware email). Completing the ceremony emits
+   `contract.signed`, sends a signed-confirmation email to the recipient, and
+   delivers an in-app notification. Other agent-facing lifecycle moves
+   (`issue`, `activate`, `supersede`, `terminate`, `expire`) likewise email
+   the recipient and notify in-app.
+3. **Ceremony** — Hub SignaturePad + required Agent date on the review PDF
+   overlay (`ContractSignaturePad`). Appearance is posted to
+   `POST /my-contract/sign/complete` (CSRF + intent binding).
+4. **Completion** — Hub stamps the appearance, optionally applies a PAdES seal
+   with the org PKCS#12 (`CONTRACT_SIGNING_CERT_*`), writes `signed_pdf` and a
+   `certificate_of_completion` artifact, creates immutable `ContractSignature`
+   (`signature_method=hub_embedded`), consumes the intent, and runs lifecycle
+   `mark_signed`. Success UI may poll `/my-contract/sign/status` — it must not
+   trust the browser alone.
+
+Replay and concurrent completes are idempotent (one signature, one signed
+artifact, one `contract.signed` effect). Stale version, expired intent,
+checksum drift, or non-signable status return recovery copy.
+
+Network metadata retained on the signature is minimized to hashed IP and
+hashed truncated user agent from intent start. Disclosure version, appearance
+checksum, and seal cert subject/fingerprint are stored with the signature.
+Retention: private storage + `PROTECT` FKs; brokerage policy owns statutory
+retention years. Legal must approve disclosure and CoC copy before production;
+bump `DISCLOSURE_VERSION` when text changes.
+
+### Ops
+
+- Set `SITE_BASE_URL` so invite emails link back to the hub.
+- Production requires `CONTRACT_SIGNING_CERT_PATH` (+ passphrase) for the org
+  PKCS#12 seal. Local DEBUG may set `CONTRACT_SIGNING_ALLOW_UNSIGNED_DEV=1`.
+- Optional field AI: `CONTRACT_FIELD_AI_*` (Azure OpenAI preferred).
 ## Constraints and indexes
 
 Database constraints cover date ranges, nonnegative/bounded terms, both-or-

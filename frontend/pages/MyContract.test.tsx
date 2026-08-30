@@ -243,6 +243,36 @@ describe("MyContract", () => {
     expect(sign).toHaveAttribute("aria-disabled");
   });
 
+  it("links to the signing ceremony when signable and ready", () => {
+    pageProps = {
+      ...pageProps,
+      state: "awaiting_signature",
+      capabilities: {
+        canViewCommission: true,
+        canSign: true,
+        signingReady: true,
+      },
+      nextAction: {
+        title: "Signature required",
+        description: "Review and sign.",
+        ctaLabel: "Sign contract",
+        ctaKind: "sign",
+        ctaHref: "",
+      },
+      contract: {
+        ...activeContract,
+        status: "viewed",
+        statusLabel: "Viewed",
+        statusTone: "info",
+      },
+    };
+    render(<MyContract />);
+    expect(screen.getByRole("link", { name: /Sign contract/i })).toHaveAttribute(
+      "href",
+      "/my-contract/sign",
+    );
+  });
+
   it("hides sign when the version is not signable", () => {
     render(<MyContract />);
     expect(
