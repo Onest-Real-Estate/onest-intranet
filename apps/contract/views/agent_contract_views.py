@@ -37,6 +37,7 @@ from apps.contract.lifecycle import (
 )
 from apps.contract.models import AgentContract, ContractTemplateVersion
 from apps.contract.services import scoped_contract_queryset, serialize_contract
+from apps.contract.signed_pdf_generation import integrity_payload
 from apps.contract.statuses import contract_status_options
 from apps.contract.versioning import (
     create_amendment_draft,
@@ -515,6 +516,20 @@ def agent_contract_artifact_download(
         contract_public_id=public_id,
         artifact_public_id=artifact_public_id,
     )
+
+
+@enforce_policy("agent_contract_signed_pdf_verify")
+@require_GET
+def agent_contract_signed_pdf_verify(
+    request: HttpRequest,
+    public_id: uuid.UUID,
+) -> JsonResponse:
+    """Checksum / finalization facts for ops — no PDF body."""
+    contract = _target(request, public_id)
+    payload = integrity_payload(contract)
+    if payload is None:
+        return JsonResponse({"error": "no_signature"}, status=404)
+    return JsonResponse(payload)
 
 
 def _render_workspace_error(

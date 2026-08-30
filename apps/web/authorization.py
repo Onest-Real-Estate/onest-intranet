@@ -1190,6 +1190,17 @@ ROUTE_POLICIES["agent_contract_artifact_download"] = AuthorizationPolicy(
     route_names=("agent_contract_artifact_download",),
     scope_rule="assigned_or_self",
 )
+ROUTE_POLICIES["agent_contract_signed_pdf_verify"] = AuthorizationPolicy(
+    key="agent_contract_signed_pdf_verify",
+    access="authenticated",
+    description=(
+        "Integrity metadata for a final signed contract PDF (checksums, "
+        "signature id, renderer version) without streaming private bytes."
+    ),
+    methods=("GET",),
+    route_names=("agent_contract_signed_pdf_verify",),
+    scope_rule="assigned_or_self",
+)
 ROUTE_POLICIES["my_contract"] = AuthorizationPolicy(
     key="my_contract",
     access="authenticated",
@@ -1211,6 +1222,17 @@ ROUTE_POLICIES["my_contract_artifact_preview"] = AuthorizationPolicy(
     ),
     methods=("GET",),
     route_names=("my_contract_artifact_preview",),
+    scope_rule="self_only",
+)
+ROUTE_POLICIES["my_contract_signed_pdf_verify"] = AuthorizationPolicy(
+    key="my_contract_signed_pdf_verify",
+    access="authenticated",
+    description=(
+        "Recipient integrity check for their own final signed PDF metadata. "
+        "Does not expose private PDF bytes."
+    ),
+    methods=("GET",),
+    route_names=("my_contract_signed_pdf_verify",),
     scope_rule="self_only",
 )
 ROUTE_POLICIES["my_contract_sign"] = AuthorizationPolicy(

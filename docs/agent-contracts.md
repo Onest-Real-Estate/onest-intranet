@@ -15,7 +15,7 @@ transition service are documented below. Agent-facing **My Contract** and
 | `AgentContract` | One agreement version for one recipient at one owning office. |
 | `ContractArtifact` | Protected file (generated/signed PDF, certificate of completion, addendum) with SHA-256 checksum. |
 | `ContractSigningIntent` | Short-lived recipient ceremony binding (checksum, session, disclosure version). |
-| `ContractSignature` | Immutable electronic signature record + signed PDF + certificate of completion. |
+| `ContractSignature` | Immutable electronic signature record; async final signed PDF + CoC. |
 
 `AgentContract.public_id` (UUID) is the client-facing identity. The integer PK
 is internal. Family history uses shared `family_id` + monotonic
@@ -142,9 +142,12 @@ Files use `private_storage` (no public URL). Each artifact carries `kind`,
 `checksum` (SHA-256 hex), `byte_size`, `media_type`, plus generation metadata
 (`renderer_version`, `rule_version`, `input_fingerprint`, page/marker facts).
 Current generated and signed PDFs are pointed at by nullable FKs on the
-contract. Downloads re-check `accessible_contract_queryset` and stream with
-`Cache-Control: private, no-store`. Orphan generated objects (never current)
-are cleaned by `cleanup_orphan_contract_artifacts`.
+contract. Signed PDFs are write-once: application attach, model `save`, and
+Django admin refuse replace/delete. Downloads re-check
+`accessible_contract_queryset` and stream with `Cache-Control: private,
+no-store`. Orphan generated objects (never current) are cleaned by
+`cleanup_orphan_contract_artifacts` (signed / CoC rows referenced by
+signatures are preserved).
 
 ## Permissions
 
@@ -313,12 +316,11 @@ Prefill fill, SignaturePad, pyHanko org seal, and certificate of completion.
 3. **Ceremony** — Hub SignaturePad + required Agent date on the review PDF
    overlay (`ContractSignaturePad`). Appearance is posted to
    `POST /my-contract/sign/complete` (CSRF + intent binding).
-4. **Completion** — Hub stamps the appearance, optionally applies a PAdES seal
-   with the org PKCS#12 (`CONTRACT_SIGNING_CERT_*`), writes `signed_pdf` and a
-   `certificate_of_completion` artifact, creates immutable `ContractSignature`
-   (`signature_method=hub_embedded`), consumes the intent, and runs lifecycle
-   `mark_signed`. Success UI may poll `/my-contract/sign/status` — it must not
-   trust the browser alone.
+4. **Completion** — Hub persists an immutable `ContractSignature`
+   (`signature_method=hub_embedded`) bound to the review PDF checksum and
+   appearance bytes, consumes the intent, runs lifecycle `mark_signed`, and
+   queues asynchronous final signed-PDF generation (P1-043). Success UI may
+   poll `/my-contract/sign/status` — it must not trust the browser alone.
 
 Replay and concurrent completes are idempotent (one signature, one signed
 artifact, one `contract.signed` effect). Stale version, expired intent,
@@ -331,12 +333,52 @@ Retention: private storage + `PROTECT` FKs; brokerage policy owns statutory
 retention years. Legal must approve disclosure and CoC copy before production;
 bump `DISCLOSURE_VERSION` when text changes.
 
+# ---------------------------------------------------------------------------
+# Final signed PDF (P1-043)
+# ---------------------------------------------------------------------------
+
+After the durable signature exists, Celery task
+`generate_signed_contract_pdf` builds the authoritative final artifact:
+
+1. Re-read the issued review PDF and verify its live SHA-256 matches
+   `ContractSignature.source_checksum` (never re-render legal terms from
+   mutable party/office/terms rows).
+2. Stamp Agent appearance + date from the stored ceremony files onto those
+   exact bytes; append the approved certificate/audit page (signer name,
+   contract/version id, signed timestamp, signature method, disclosure
+   version, document/verification identifiers, minimized IP/UA hashes).
+3. Optionally apply the org PKCS#12 PAdES seal so the seal covers legal +
+   certificate pages.
+4. Validate readability, page/content markers, source binding, and output
+   checksum; only then attach a write-once `ContractArtifact(kind=signed_pdf)`
+   and point `AgentContract.signed_pdf` / `ContractSignature.artifact` at it.
+5. Emit `contract.signed_pdf_ready` once. Metadata records source checksum,
+   output checksum, renderer version (`hub-signed-final-1.0.0`), byte size,
+   storage key, created time, generation task id, and signature public id.
+
+Idempotent retries reuse an already-attached final artifact and never replace
+it. Application attach paths, Django admin, and model `save()` refuse
+overwrite/delete of final signed / CoC artifacts. Generation failure sets
+`finalization_status=failed` with a non-PII code while retaining the signature
+so ops can re-queue from the unchanged source.
+
+Integrity without streaming private bytes:
+
+- Recipient: `GET /my-contract/<public_id>/signed-pdf/verify`
+- Scoped ops: `GET /operations/agent-contracts/<public_id>/signed-pdf/verify`
+
+Both return camelCase checksum / status facts after re-checking
+recipient or scoped admin access. Downloads continue to stream through the
+existing authorized artifact delivery path (no durable/presigned URL).
+
 ### Ops
 
 - Set `SITE_BASE_URL` so invite emails link back to the hub.
 - Production requires `CONTRACT_SIGNING_CERT_PATH` (+ passphrase) for the org
   PKCS#12 seal. Local DEBUG may set `CONTRACT_SIGNING_ALLOW_UNSIGNED_DEV=1`.
 - Optional field AI: `CONTRACT_FIELD_AI_*` (Azure OpenAI preferred).
+- S3 private storage uses `file_overwrite=False`; application no-replace
+  semantics remain the primary immutability guarantee.
 ## Constraints and indexes
 
 Database constraints cover date ranges, nonnegative/bounded terms, both-or-

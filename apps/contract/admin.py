@@ -83,6 +83,8 @@ class AgentContractAdmin(admin.ModelAdmin):
         "office_snapshot",
         "terms_snapshot",
         "calculation_rule_version",
+        "generated_pdf",
+        "signed_pdf",
         "created_at",
         "updated_at",
         "viewed_at",
@@ -112,14 +114,30 @@ class ContractArtifactAdmin(admin.ModelAdmin):
     search_fields = ("public_id", "display_name", "checksum")
     readonly_fields = (
         "public_id",
+        "contract",
+        "kind",
+        "display_name",
+        "file",
+        "media_type",
         "checksum",
         "byte_size",
         "renderer_version",
         "rule_version",
         "input_fingerprint",
         "generation_metadata",
+        "created_by",
         "created_at",
     )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        # Final signed / CoC artifacts must not be deleted through admin.
+        return False
 
 
 @admin.register(CommissionCalculation)
@@ -210,9 +228,11 @@ class ContractSignatureAdmin(admin.ModelAdmin):
         "contract",
         "signer",
         "signature_method",
+        "finalization_status",
         "disclosure_version",
         "signed_at",
     )
+    list_filter = ("finalization_status", "signature_method")
     search_fields = ("public_id", "signer__email", "docuseal_submission_id")
     readonly_fields = (
         "public_id",
@@ -220,9 +240,21 @@ class ContractSignatureAdmin(admin.ModelAdmin):
         "intent",
         "signer",
         "artifact",
+        "certificate_of_completion",
+        "source_checksum",
+        "signed_date_value",
+        "appearance_file",
+        "initials_file",
+        "agent_text_values",
+        "finalization_status",
+        "finalization_error",
+        "generation_task_id",
         "signed_at",
         "disclosure_version",
         "signature_method",
+        "appearance_checksum",
+        "seal_cert_subject",
+        "seal_cert_fingerprint",
         "docuseal_submission_id",
         "docuseal_submitter_slug",
         "request_ip_hash",
@@ -234,4 +266,7 @@ class ContractSignatureAdmin(admin.ModelAdmin):
         return False
 
     def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
         return False

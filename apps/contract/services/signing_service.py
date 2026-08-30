@@ -1,8 +1,9 @@
 """Recipient contract signing ceremony (Hub-native).
 
 Creates short-lived intents, completes via authenticated Hub POST with
-immutable signature records + certificate of completion, and transitions
-through the lifecycle service.
+immutable signature records, and queues asynchronous final signed-PDF
+generation. Lifecycle ``mark_signed`` runs once the durable signature exists —
+final PDF failure retains the signature for idempotent regeneration.
 """
 
 from __future__ import annotations
@@ -24,7 +25,6 @@ from django.utils.translation import gettext as _
 
 from apps.audit.models import AuditEvent
 from apps.audit.service import AuditTarget, actor_from_user, log_event
-from apps.contract.certificate_of_completion import build_certificate_of_completion
 from apps.contract.field_layout import FieldType, agent_fields, normalize_field_layout
 from apps.contract.lifecycle import (
     StaleContractVersion,
@@ -47,9 +47,7 @@ from apps.contract.pdf_signing import (
     appearance_checksum,
     decode_data_url_image,
     require_signing_cert_or_raise,
-    seal_pdf_with_org_cert,
     signing_is_ready,
-    stamp_agent_signatures,
 )
 from apps.contract.signing_disclosure import (
     DISCLOSURE_VERSION,
@@ -434,82 +432,33 @@ def signing_status_payload(
             "status": None,
             "signaturePublicId": None,
             "contractPublicId": None,
+            "finalArtifactReady": False,
+            "finalizationStatus": None,
         }
 
     signature = ContractSignature.objects.filter(contract=contract).first()
+    final_ready = bool(
+        signature is not None
+        and signature.finalization_status == ContractSignature.FinalizationStatus.READY
+        and (signature.artifact_id or contract.signed_pdf_id)
+    )
     return {
         "signed": signature is not None
         and contract.status in {ContractStatus.SIGNED, ContractStatus.ACTIVE},
         "status": contract.status,
         "signaturePublicId": str(signature.public_id) if signature else None,
         "contractPublicId": str(contract.public_id),
+        "finalArtifactReady": final_ready,
+        "finalizationStatus": (
+            signature.finalization_status if signature is not None else None
+        ),
     }
 
 
-def _attach_signed_pdf(
-    locked: AgentContract,
-    *,
-    pdf_bytes: bytes,
-    signer: User,
-) -> ContractArtifact:
-    digest = checksum_of(pdf_bytes)
-    current = (
-        ContractArtifact.objects.filter(pk=locked.signed_pdf_id).first()
-        if locked.signed_pdf_id
-        else None
-    )
-    if current is not None and current.checksum == digest:
-        return current
+def _queue_signed_pdf_generation(signature_id: int) -> None:
+    from apps.contract.tasks import generate_signed_contract_pdf
 
-    display_name = f"contract-{locked.public_id}-v{locked.version_number}-signed.pdf"
-    artifact = ContractArtifact(
-        contract=locked,
-        kind=ContractArtifact.Kind.SIGNED_PDF,
-        display_name=display_name,
-        media_type=MEDIA_TYPE_PDF,
-        byte_size=len(pdf_bytes),
-        checksum=digest,
-        renderer_version="hub-sign",
-        rule_version=locked.calculation_rule_version or "",
-        generation_metadata={"source": "hub_embedded"},
-        created_by=signer,
-    )
-    artifact.full_clean(exclude=["file"])
-    artifact.file.save(display_name, ContentFile(pdf_bytes), save=False)
-    artifact.full_clean()
-    artifact.save()
-    locked.signed_pdf = artifact
-    locked.save(update_fields=["signed_pdf", "updated_at"])
-    return artifact
-
-
-def _attach_certificate(
-    locked: AgentContract,
-    *,
-    pdf_bytes: bytes,
-    signer: User,
-) -> ContractArtifact:
-    digest = checksum_of(pdf_bytes)
-    display_name = (
-        f"contract-{locked.public_id}-v{locked.version_number}-certificate.pdf"
-    )
-    artifact = ContractArtifact(
-        contract=locked,
-        kind=ContractArtifact.Kind.CERTIFICATE_OF_COMPLETION,
-        display_name=display_name,
-        media_type=MEDIA_TYPE_PDF,
-        byte_size=len(pdf_bytes),
-        checksum=digest,
-        renderer_version="hub-coc-1.0.0",
-        rule_version=locked.calculation_rule_version or "",
-        generation_metadata={"source": "certificate_of_completion"},
-        created_by=signer,
-    )
-    artifact.full_clean(exclude=["file"])
-    artifact.file.save(display_name, ContentFile(pdf_bytes), save=False)
-    artifact.full_clean()
-    artifact.save()
-    return artifact
+    generate_signed_contract_pdf.delay(signature_id)
 
 
 @transaction.atomic
@@ -523,7 +472,7 @@ def complete_signing(
     text_values: dict[str, str] | None = None,
     request_meta: RequestMeta,
 ) -> dict[str, Any]:
-    """Idempotent Hub completion: stamp + seal + CoC + signature + mark_signed."""
+    """Idempotent Hub completion: durable signature + mark_signed + queue final PDF."""
     require_signing_cert_or_raise()
 
     intent = (
@@ -551,11 +500,19 @@ def complete_signing(
 
     existing = ContractSignature.objects.filter(contract_id=locked.pk).first()
     if existing is not None:
+        if (
+            existing.finalization_status != ContractSignature.FinalizationStatus.READY
+            and not existing.artifact_id
+        ):
+            existing_pk = existing.pk
+            transaction.on_commit(lambda: _queue_signed_pdf_generation(existing_pk))
         return {
             "ok": True,
             "idempotent": True,
             "signaturePublicId": str(existing.public_id),
             "signed": True,
+            "finalArtifactReady": existing.finalization_status
+            == ContractSignature.FinalizationStatus.READY,
         }
 
     now = timezone.now()
@@ -590,6 +547,13 @@ def complete_signing(
             str(_("Agreement PDF checksum no longer matches the signing intent."))
         )
 
+    review_bytes = _read_artifact_bytes(artifact)
+    live_checksum = checksum_of(review_bytes)
+    if live_checksum != intent.artifact_checksum.lower():
+        raise TransitionRefused(
+            str(_("Agreement PDF checksum no longer matches the signing intent."))
+        )
+
     date_value = (signed_date or "").strip()
     if not date_value:
         raise SigningCeremonyError(
@@ -605,66 +569,36 @@ def complete_signing(
         decode_data_url_image(initials_data_url) if initials_data_url else b""
     )
 
-    version = locked.template_version
-    layout = normalize_field_layout(version.field_layout or []) if version else []
-    review_bytes = _read_artifact_bytes(artifact)
-    stamped = stamp_agent_signatures(
-        review_bytes,
-        layout=layout,
-        signature_png=signature_png,
-        signed_date=date_value,
-        initials_png=initials_png,
-        text_values=text_values or {},
-    )
-    sealed = seal_pdf_with_org_cert(stamped)
-
     expected = contract_version(locked)
-    signed_artifact = _attach_signed_pdf(
-        locked, pdf_bytes=sealed.pdf_bytes, signer=intent.actor
-    )
-    locked = AgentContract.objects.select_for_update(of=("self",)).get(pk=locked.pk)
-    expected = contract_version(locked)
-
     appearance_digest = appearance_checksum(signature_png)
-    # Allocate signature identity before CoC so the certificate is write-once.
+
     signature = ContractSignature(
         contract=locked,
         intent=intent,
         signer=intent.actor,
-        artifact=signed_artifact,
+        artifact=None,
         signed_at=now,
         disclosure_version=intent.disclosure_version,
         signature_method=ContractSignature.Method.HUB_EMBEDDED,
         appearance_checksum=appearance_digest,
-        seal_cert_subject=sealed.cert_subject,
-        seal_cert_fingerprint=sealed.cert_fingerprint,
+        source_checksum=intent.artifact_checksum.lower(),
+        signed_date_value=date_value,
+        agent_text_values=dict(text_values or {}),
+        finalization_status=ContractSignature.FinalizationStatus.PENDING,
         request_ip_hash=intent.request_ip_hash,
         request_ua_hash=intent.request_ua_hash,
     )
-    coc_bytes = build_certificate_of_completion(
-        facts={
-            "contractPublicId": str(locked.public_id),
-            "versionNumber": locked.version_number,
-            "partyDisplayName": _party_display_name(locked, intent.actor),
-            "signerEmail": intent.actor.email,
-            "signerUserId": intent.actor.pk,
-            "signedAt": now.isoformat(),
-            "consentAcceptedAt": intent.consent_accepted_at.isoformat(),
-            "disclosureVersion": intent.disclosure_version,
-            "signatureMethod": ContractSignature.Method.HUB_EMBEDDED,
-            "intentPublicId": str(intent.public_id),
-            "signaturePublicId": str(signature.public_id),
-            "reviewChecksum": artifact.checksum,
-            "signedChecksum": signed_artifact.checksum,
-            "appearanceChecksum": appearance_digest,
-            "requestIpHash": intent.request_ip_hash,
-            "requestUaHash": intent.request_ua_hash,
-            "sealCertSubject": sealed.cert_subject,
-            "sealCertFingerprint": sealed.cert_fingerprint,
-        }
+    signature.appearance_file.save(
+        f"appearance-{signature.public_id}.png",
+        ContentFile(signature_png),
+        save=False,
     )
-    coc_artifact = _attach_certificate(locked, pdf_bytes=coc_bytes, signer=intent.actor)
-    signature.certificate_of_completion = coc_artifact
+    if initials_png:
+        signature.initials_file.save(
+            f"initials-{signature.public_id}.png",
+            ContentFile(initials_png),
+            save=False,
+        )
     signature.full_clean()
     signature.save()
 
@@ -691,6 +625,7 @@ def complete_signing(
                 "intent_id": str(intent.public_id),
                 "disclosure_version": intent.disclosure_version,
                 "method": signature.signature_method,
+                "source_checksum": signature.source_checksum,
             },
         ),
         outcome=AuditEvent.Outcome.SUCCESS,
@@ -698,8 +633,13 @@ def complete_signing(
         channel="contract",
         office_id=getattr(locked.office, "stable_key", "") or "",
     )
+
+    signature_pk = signature.pk
+    transaction.on_commit(lambda: _queue_signed_pdf_generation(signature_pk))
+
     return {
         "ok": True,
         "signed": True,
         "signaturePublicId": str(signature.public_id),
+        "finalArtifactReady": False,
     }

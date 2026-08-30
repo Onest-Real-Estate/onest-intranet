@@ -6,7 +6,8 @@ import uuid
 from typing import cast
 from uuid import UUID
 
-from django.http import FileResponse, HttpRequest
+from django.http import FileResponse, HttpRequest, JsonResponse
+from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_GET
 from inertia import inertia
 
@@ -15,6 +16,7 @@ from apps.contract.my_contract import (
     my_contract_page_payload,
     recipient_visible_queryset,
 )
+from apps.contract.signed_pdf_generation import integrity_payload
 from apps.user.models import User
 from apps.web.authorization import enforce_policy
 
@@ -66,3 +68,19 @@ def my_contract_artifact_preview(
         as_attachment=False,
         queryset=recipient_visible_queryset(_actor(request)),
     )
+
+
+@enforce_policy("my_contract_signed_pdf_verify")
+@require_GET
+def my_contract_signed_pdf_verify(
+    request: HttpRequest,
+    public_id: uuid.UUID,
+) -> JsonResponse:
+    """Recipient integrity metadata for their own final signed PDF."""
+    contract = get_object_or_404(
+        recipient_visible_queryset(_actor(request)), public_id=public_id
+    )
+    payload = integrity_payload(contract)
+    if payload is None:
+        return JsonResponse({"error": "no_signature"}, status=404)
+    return JsonResponse(payload)

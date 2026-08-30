@@ -18,6 +18,7 @@ from apps.contract.views.agent_contract_views import (
     agent_contract_new,
     agent_contract_preview,
     agent_contract_recipient_search,
+    agent_contract_signed_pdf_verify,
     agent_contract_template_options,
     agent_contract_update,
     agent_contract_validate,
@@ -26,6 +27,7 @@ from apps.contract.views.agent_contract_views import (
 from apps.contract.views.my_contract_views import (
     my_contract,
     my_contract_artifact_preview,
+    my_contract_signed_pdf_verify,
 )
 from apps.contract.views.signing_views import (
     my_contract_sign,
@@ -50,6 +52,11 @@ urlpatterns = [
         "my-contract/<uuid:public_id>/artifacts/<uuid:artifact_public_id>/preview",
         my_contract_artifact_preview,
         name="my_contract_artifact_preview",
+    ),
+    path(
+        "my-contract/<uuid:public_id>/signed-pdf/verify",
+        my_contract_signed_pdf_verify,
+        name="my_contract_signed_pdf_verify",
     ),
     path(
         "operations/contract-templates/templates/create",
@@ -146,5 +153,10 @@ urlpatterns = [
         "<uuid:artifact_public_id>/download",
         agent_contract_artifact_download,
         name="agent_contract_artifact_download",
+    ),
+    path(
+        "operations/agent-contracts/<uuid:public_id>/signed-pdf/verify",
+        agent_contract_signed_pdf_verify,
+        name="agent_contract_signed_pdf_verify",
     ),
 ]

@@ -177,6 +177,26 @@ registry.register(
 )
 
 registry.register(
+    name="contract.signed_pdf_ready",
+    version=1,
+    required_payload_keys={
+        "contract_id",
+        "office_id",
+        "agent_id",
+        "signature_id",
+        "artifact_id",
+        "checksum",
+        "source_checksum",
+        "occurred_at",
+    },
+    description=(
+        "Emitted once when the authoritative final signed PDF (legal pages + "
+        "certificate) is stored for a signature record. Idempotent retries "
+        "must not emit a second event."
+    ),
+)
+
+registry.register(
     name="contract.viewed",
     version=1,
     required_payload_keys={

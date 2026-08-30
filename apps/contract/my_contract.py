@@ -17,7 +17,7 @@ from django.utils.translation import gettext as _
 from apps.contract.calculations import summarize_terms_for_display
 from apps.contract.change_kinds import change_kind_label
 from apps.contract.lifecycle import contract_version, transition
-from apps.contract.models import AgentContract
+from apps.contract.models import AgentContract, ContractSignature
 from apps.contract.pdf_signing import signing_is_ready
 from apps.contract.permissions import VIEW_OWN_COMMISSION
 from apps.contract.services import (
@@ -260,9 +260,18 @@ def serialize_recipient_contract(
         "expectedVersion": contract_version(contract),
         "generatedPdf": _artifact_meta(contract.generated_pdf),
         "signedPdf": _artifact_meta(contract.signed_pdf),
+        "signedPdfFinalization": _signed_pdf_finalization(contract),
         "previewUrl": urls["previewUrl"],
         "downloadUrl": urls["downloadUrl"],
         "artifactKind": urls["artifactKind"],
+        "verifyUrl": (
+            reverse(
+                "my_contract_signed_pdf_verify",
+                kwargs={"public_id": contract.public_id},
+            )
+            if ContractSignature.objects.filter(contract_id=contract.pk).exists()
+            else None
+        ),
         "isCurrentFocus": True,
         "amendsPublicId": _related_public_id(contract.amends),
         "supersedesPublicId": _related_public_id(contract.supersedes),
@@ -283,6 +292,24 @@ def serialize_recipient_contract(
             (contract.terms_snapshot or {}).get("annualCapAmount")
         )
     return payload
+
+
+def _signed_pdf_finalization(contract: AgentContract) -> dict[str, Any] | None:
+    signature = (
+        ContractSignature.objects.filter(contract_id=contract.pk)
+        .only("finalization_status", "finalization_error", "public_id")
+        .first()
+    )
+    if signature is None:
+        return None
+    return {
+        "status": signature.finalization_status,
+        "error": signature.finalization_error or None,
+        "signaturePublicId": str(signature.public_id),
+        "ready": signature.finalization_status
+        == ContractSignature.FinalizationStatus.READY
+        and bool(contract.signed_pdf_id),
+    }
 
 
 def _commission_block(contract: AgentContract) -> dict[str, Any]:

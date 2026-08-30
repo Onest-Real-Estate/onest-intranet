@@ -98,6 +98,63 @@ def generate_contract_pdf(self, contract_id: int) -> str:
         raise self.retry(exc=exc) from exc
 
 
+@shared_task(
+    bind=True,
+    max_retries=2,
+    default_retry_delay=30,
+    soft_time_limit=_PDF_SOFT_TIME_LIMIT,
+    time_limit=_PDF_HARD_TIME_LIMIT,
+    acks_late=True,
+)
+def generate_signed_contract_pdf(self, signature_id: int) -> str:
+    """Build the authoritative final signed PDF from a durable signature.
+
+    Idempotent: an already-attached final artifact is reused. Failures retain
+    the signature record and set ``finalization_status=failed`` for safe retry.
+    Logs only ids and outcome codes — never party or commercial content.
+    """
+    from apps.contract.signed_pdf_generation import (
+        SignedPdfGenerationError,
+        generate_and_store_signed_pdf,
+        mark_finalization_failed,
+    )
+
+    task_id = str(getattr(self.request, "id", "") or "")
+    try:
+        return generate_and_store_signed_pdf(signature_id, task_id=task_id)
+    except SoftTimeLimitExceeded as exc:
+        logger.warning(
+            "generate_signed_contract_pdf timeout signature_id=%s",
+            signature_id,
+        )
+        if self.request.retries >= self.max_retries:
+            mark_finalization_failed(signature_id, code="timeout", task_id=task_id)
+            return "failed:timeout"
+        raise self.retry(exc=exc) from exc
+    except SignedPdfGenerationError as exc:
+        if not exc.retryable:
+            return f"failed:{exc.code}"
+        logger.warning(
+            "generate_signed_contract_pdf retryable signature_id=%s code=%s attempt=%s",
+            signature_id,
+            exc.code,
+            self.request.retries,
+        )
+        if self.request.retries >= self.max_retries:
+            mark_finalization_failed(signature_id, code=exc.code, task_id=task_id)
+            return f"failed:{exc.code}"
+        raise self.retry(exc=exc) from exc
+    except Exception as exc:  # noqa: BLE001
+        logger.exception(
+            "generate_signed_contract_pdf unexpected signature_id=%s",
+            signature_id,
+        )
+        if self.request.retries >= self.max_retries:
+            mark_finalization_failed(signature_id, code="unexpected", task_id=task_id)
+            return "failed:unexpected"
+        raise self.retry(exc=exc) from exc
+
+
 @shared_task
 def expire_due_contracts() -> int:
     """Beat-safe expiry: active contracts past ``expires_on`` become expired."""
@@ -144,12 +201,25 @@ def cleanup_orphan_contract_artifacts(*, older_than_hours: int = 24) -> int:
     signed_refs = AgentContract.objects.exclude(signed_pdf_id=None).values_list(
         "signed_pdf_id", flat=True
     )
+    from apps.contract.models import ContractSignature
+
+    signature_artifact_refs = ContractSignature.objects.exclude(
+        artifact_id=None
+    ).values_list("artifact_id", flat=True)
+    coc_refs = ContractSignature.objects.exclude(
+        certificate_of_completion_id=None
+    ).values_list("certificate_of_completion_id", flat=True)
     orphans = list(
         ContractArtifact.objects.filter(
             kind=ContractArtifact.Kind.GENERATED_PDF,
             created_at__lt=cutoff,
         )
-        .exclude(Q(pk__in=referenced) | Q(pk__in=signed_refs))
+        .exclude(
+            Q(pk__in=referenced)
+            | Q(pk__in=signed_refs)
+            | Q(pk__in=signature_artifact_refs)
+            | Q(pk__in=coc_refs)
+        )
         .order_by("pk")[:200]
     )
     deleted = 0
