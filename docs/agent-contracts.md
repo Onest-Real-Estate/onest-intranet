@@ -59,7 +59,25 @@ signing-invite email to the recipient, and `contract.pdf_ready` is emitted once
 after commit (in-app notification + preference-aware email). Lifecycle status
 changes that affect the agent (`issue`, `mark_signed`, `activate`, `supersede`,
 `terminate`, `expire`) each send a transactional email and a matching in-app
-notification via the domain event producers.
+notification via the domain event producers. Additional contract notification
+events:
+
+| Event | Recipients | Mandatory |
+| --- | --- | --- |
+| `contract.issued` / `pdf_ready` / lifecycle | Agent | Yes |
+| `contract.viewed` | Operational staff (creator + scoped managers) | No |
+| `contract.signed` | Agent + staff | Agent yes / staff no |
+| `contract.generation_error` | Operational staff | Yes |
+| `contract.signature_reminder` | Agent (cadence days) | Yes |
+| `contract.expiration_warning` | Agent + staff | Agent yes / staff no |
+
+Signature reminders and expiration warnings are published by Celery beat tasks
+(`send_contract_signature_reminders`, `send_contract_expiration_warnings`) which
+re-check status before emitting. Signing, activation, supersession, termination,
+and expiry expire outstanding signature-reminder notifications so they stop
+appearing and are suppressed on push channels. Cadence defaults:
+`CONTRACT_SIGNATURE_REMINDER_DAYS = (3, 7, 14)`,
+`CONTRACT_EXPIRATION_WARNING_DAYS = (30, 14, 7)`.
 Retries are idempotent on the input fingerprint + checksum. Failures move the
 contract to `generation_error` without falsely marking the agreement ready.
 Authorized download streams through `agent_contract_artifact_download` (no

@@ -12,6 +12,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from django.db import transaction
+
 
 @dataclass
 class SeedReport:
@@ -204,10 +206,22 @@ def upsert_office(
 
 
 def seed_offices(office_model=None) -> SeedReport:
-    """Idempotent: safe to re-run. Returns a SeedReport."""
+    """Idempotent: safe to re-run. Returns a SeedReport.
+
+    Runs inside ``transaction.atomic`` because :func:`upsert_office` locks rows
+    with ``select_for_update``. Callers that already open a transaction (the
+    management command, default ``django_db`` tests) nest a savepoint; callers
+    that do not (``django_db(transaction=True)`` fixtures on PostgreSQL) get a
+    real transaction so the lock is legal.
+    """
     from apps.user.models import Office as LiveOffice
 
     Office = office_model or LiveOffice
+    with transaction.atomic():
+        return _seed_offices(Office)
+
+
+def _seed_offices(Office) -> SeedReport:
     report = SeedReport()
 
     # String literals so this also runs against historical migration models

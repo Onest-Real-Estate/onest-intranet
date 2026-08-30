@@ -192,6 +192,7 @@ def test_contract_signed_producer_targets_signer():
             "contract_id": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
             "signer_id": "42",
             "signed_at": "2026-08-30T00:00:00+00:00",
+            "staff_ids": [],
         },
     )
     [request] = contract_signed(envelope)
@@ -244,3 +245,4 @@ def test_lifecycle_producers_registered(event_name):
     [request] = notifications_for_event(envelope)
     assert request.recipient_id == 9
     assert request.action_key == "open_my_contract"
+    assert request.is_mandatory is True

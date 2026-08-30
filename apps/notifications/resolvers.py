@@ -76,10 +76,14 @@ def resolve_contracts(user, notifications: Sequence) -> dict[UUID, SourceResolut
     from apps.contract.statuses import ContractStatus
 
     by_notification: dict[UUID, str] = {}
+    event_by_id: dict[UUID, str] = {}
     for notification in notifications:
         raw = str(notification.source_record_id or "").strip()
         if raw:
             by_notification[notification.public_id] = raw
+            event_by_id[notification.public_id] = str(
+                getattr(notification, "event_key", "") or ""
+            )
     if not by_notification:
         return {}
 
@@ -99,12 +103,26 @@ def resolve_contracts(user, notifications: Sequence) -> dict[UUID, SourceResolut
         ContractStatus.EXPIRED: "Agreement has expired",
         ContractStatus.GENERATION_ERROR: "PDF preparation needs attention",
     }
+    signable = {ContractStatus.SENT, ContractStatus.VIEWED}
     resolutions: dict[UUID, SourceResolution] = {}
     for note_id, contract_id in by_notification.items():
         contract = contracts.get(contract_id)
         if contract is None:
             continue
         status = contract.status
+        event_key = event_by_id.get(note_id, "")
+        # Stale signature reminders must not stay actionable after signing or
+        # terminal lifecycle moves — the source check fails closed here and
+        # the email ledger suppresses the push copy.
+        if event_key == "contract.signature_reminder" and (
+            status not in signable or not contract.generated_pdf_id
+        ):
+            continue
+        if (
+            event_key == "contract.expiration_warning"
+            and status != ContractStatus.ACTIVE
+        ):
+            continue
         if (
             status
             in {
@@ -117,7 +135,9 @@ def resolve_contracts(user, notifications: Sequence) -> dict[UUID, SourceResolut
         else:
             detail = detail_by_status.get(status)
             if detail is None:
-                if contract.generated_pdf_id is None:
+                if contract.generated_pdf_id is None and status != (
+                    ContractStatus.GENERATION_ERROR
+                ):
                     continue
                 detail = "Contract update"
         resolutions[note_id] = SourceResolution(

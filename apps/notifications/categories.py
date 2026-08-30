@@ -41,10 +41,12 @@ from apps.notifications.contract import NOTIFICATION_TYPES
 #: Bumped whenever the category set, the channel set, or a default changes.
 #: Stored alongside each reader's choices so the settings page can tell a
 #: reader their saved set predates the current catalog.
-PREFERENCE_POLICY_VERSION = 1
+PREFERENCE_POLICY_VERSION = 2
 
 CHANNEL_IN_APP = "in_app"
 CHANNEL_EMAIL = "email"
+CHANNEL_MICROSOFT = "microsoft"
+CHANNEL_SLACK = "slack"
 
 
 @dataclass(frozen=True)
@@ -57,6 +59,12 @@ class NotificationChannel:
     #: does not appear reads as a channel that does not exist.
     configurable: bool
     locked_reason: str = ""
+    #: For optional categories when the reader has never chosen. Email still
+    #: defers to each category's ``default_email``; other push channels use this.
+    default_opt_in: bool = True
+    #: When ``False``, the settings page hides the channel until a provider is
+    #: enabled for the deployment (see :func:`visible_channels`).
+    always_visible: bool = True
 
 
 CHANNEL_DEFINITIONS: tuple[NotificationChannel, ...] = (
@@ -72,6 +80,7 @@ CHANNEL_DEFINITIONS: tuple[NotificationChannel, ...] = (
             "The notification centre is the record of what was sent to you, so "
             "it stays on."
         ),
+        always_visible=True,
     ),
     NotificationChannel(
         key=CHANNEL_EMAIL,
@@ -81,6 +90,27 @@ CHANNEL_DEFINITIONS: tuple[NotificationChannel, ...] = (
             "waiting. The details stay in the hub."
         ),
         configurable=True,
+        default_opt_in=True,
+        always_visible=True,
+    ),
+    NotificationChannel(
+        key=CHANNEL_MICROSOFT,
+        label="Microsoft 365",
+        description=(
+            "A short alert in Microsoft 365 or Teams when the brokerage "
+            "enables that channel."
+        ),
+        configurable=True,
+        default_opt_in=False,
+        always_visible=False,
+    ),
+    NotificationChannel(
+        key=CHANNEL_SLACK,
+        label="Slack",
+        description=("A short Slack message when the brokerage connects a workspace."),
+        configurable=True,
+        default_opt_in=False,
+        always_visible=False,
     ),
 )
 
@@ -195,6 +225,26 @@ def _assert_registry_matches_types() -> None:
 _assert_registry_matches_types()
 
 
+def visible_channels() -> tuple[NotificationChannel, ...]:
+    """Channels the settings page may show for this deployment.
+
+    Always-visible channels (hub + email) stay. Optional push providers
+    (Microsoft, Slack, …) appear only while their delivery provider is enabled,
+    so a reader never sees a switch for a channel that cannot deliver.
+    """
+    from apps.notifications.providers.registry import get_provider
+
+    visible: list[NotificationChannel] = []
+    for channel in CHANNEL_DEFINITIONS:
+        if channel.always_visible:
+            visible.append(channel)
+            continue
+        provider = get_provider(channel.key)
+        if provider is not None and provider.is_enabled():
+            visible.append(channel)
+    return tuple(visible)
+
+
 def category_default(category_key: str, channel_key: str) -> bool:
     """The value that applies before a reader has chosen anything.
 
@@ -212,7 +262,7 @@ def category_default(category_key: str, channel_key: str) -> bool:
         return True
     if channel.key == CHANNEL_EMAIL:
         return category.default_email
-    return True
+    return channel.default_opt_in
 
 
 def is_locked(category_key: str, channel_key: str) -> bool:

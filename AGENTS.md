@@ -54,7 +54,7 @@ Two ways to run things. Pick one and stay consistent within a task.
 | --- | --- |
 | `uv run python manage.py runserver` | Django on :8000 |
 | `pnpm run dev` | Vite dev server on :5173 (HMR) |
-| `uv run pytest` | Backend tests |
+| `uv run pytest` | Backend tests (`-n auto --reuse-db`) |
 | `pnpm test` | Frontend tests (vitest) |
 | `pnpm run typecheck` | `tsc --noEmit` |
 | `pnpm run routes:generate` | Regenerate `frontend/types/routes.ts` |

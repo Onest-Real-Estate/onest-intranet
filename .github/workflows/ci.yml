@@ -7,7 +7,7 @@ on:
 
 # Pre-commit (.husky/pre-commit) runs lint, types, and migration drift only.
 # This workflow adds the slow suites that stay out of the local hook:
-#   uv run pytest
+#   uv run pytest   # -n auto --reuse-db via pyproject.toml addopts
 #   pnpm test
 # Plus the same lint/type/migration checks as pre-commit (minus lint-staged).
 
