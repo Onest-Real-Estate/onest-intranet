@@ -873,6 +873,47 @@
 }
 
 /*
+ * Sonner's richColors ship their own light/dark HSL palette. Remap every
+ * surface onto hub tokens so toasts match Callout / StatusBadge chips and
+ * follow the document ``.dark`` class instead of Sonner's private theme sheet.
+ * Specificity matches Sonner's ``[data-sonner-toaster][data-sonner-theme=…]``
+ * rules so the remapping wins.
+ */
+[data-sonner-toaster][data-sonner-theme="light"],
+[data-sonner-toaster][data-sonner-theme="dark"] {
+  --normal-bg: var(--card);
+  --normal-bg-hover: var(--muted);
+  --normal-border: var(--border);
+  --normal-border-hover: var(--border-strong);
+  --normal-text: var(--foreground);
+
+  --success-bg: var(--chip-success);
+  --success-border: var(--chip-success-edge);
+  --success-text: var(--success);
+
+  --info-bg: var(--chip-info);
+  --info-border: var(--chip-info-edge);
+  --info-text: var(--info);
+
+  --warning-bg: var(--chip-warning);
+  --warning-border: var(--chip-warning-edge);
+  --warning-text: var(--warning-ink);
+
+  --error-bg: var(--chip-destructive);
+  --error-border: var(--chip-destructive-edge);
+  --error-text: var(--destructive);
+}
+
+[data-sonner-toaster][data-sonner-theme="light"]
+  [data-sonner-toast][data-invert="true"],
+[data-sonner-toaster][data-sonner-theme="dark"]
+  [data-sonner-toast][data-invert="true"] {
+  --normal-bg: var(--foreground);
+  --normal-border: var(--foreground);
+  --normal-text: var(--background);
+}
+
+/*
  * Windows High Contrast and friends replace the palette wholesale and drop
  * background colours, which would take every border defined as a background
  * with them. This app is mostly borders, so they are restated in system
