@@ -1,5 +1,7 @@
 # Onest — Django · Inertia.js · React · shadcn/ui starter
 
+[![CI](https://github.com/Onest-Real-Estate/onest-intranet/actions/workflows/ci.yml/badge.svg)](https://github.com/Onest-Real-Estate/onest-intranet/actions/workflows/ci.yml)
+
 A modern full-stack starter with a **Django** backend serving an **Inertia.js** **React**
 frontend, **Microsoft (Entra ID) SSO** via **django-allauth**, and type-safe Django
 URLs in TypeScript via **django-typescript-routes**. The UI is built with **shadcn/ui**

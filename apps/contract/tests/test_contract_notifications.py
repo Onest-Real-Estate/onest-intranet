@@ -11,7 +11,11 @@ from django.utils import timezone
 
 from apps.audit.events import EventEnvelope
 from apps.contract.lifecycle import contract_version, transition
-from apps.contract.models import ContractTemplate, ContractTemplateVersion
+from apps.contract.models import (
+    AgentContract,
+    ContractTemplate,
+    ContractTemplateVersion,
+)
 from apps.contract.notification_recipients import operational_staff_ids
 from apps.contract.notification_schedule import (
     publish_expiration_warnings,
@@ -313,8 +317,8 @@ def test_expiration_warning_publishes_for_active(seeded_offices, settings):
             confirmed=True,
         )
     target = timezone.localdate() + timedelta(days=14)
-    active.expires_on = target
-    active.save(update_fields=["expires_on", "updated_at"])
+    # Bypass model.save immutability — same pattern as expire_due_contracts tests.
+    AgentContract.objects.filter(pk=active.pk).update(expires_on=target)
     with patch("apps.contract.notification_schedule.publish_event") as publish:
         assert publish_expiration_warnings(as_of=timezone.localdate()) == 1
         assert publish.call_args.args[0] == "contract.expiration_warning"
