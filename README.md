@@ -352,8 +352,11 @@ MICROSOFT_TENANT=common
 > `AWS_S3_CUSTOM_DOMAIN` at it).
 
 > **Local development** uses a different stack: `deployment/compose.dev.yaml`
-> (via `make up`) bundles Postgres, Redis, Mailpit, MinIO, DocuSeal, and the
-> Celery worker + beat scheduler, so nothing external is needed.
+> (via `make up`) bundles Postgres, Redis, Mailpit, MinIO, and the Celery
+> worker + beat scheduler, so nothing external is needed. Agent contract
+> templates and signing are Hub-native (field placer + SignaturePad + optional
+> org PKCS#12 seal). See `docs/agent-contracts.md` and set
+> `CONTRACT_SIGNING_*` / optional `CONTRACT_FIELD_AI_*` in `.env`.
 
 ## Background tasks (Celery)
 

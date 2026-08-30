@@ -1,0 +1,659 @@
+import { Calendar, CheckSquare, PenLine, Signature, Trash2, Type } from "lucide-react";
+import { GlobalWorkerOptions, getDocument, type PDFDocumentProxy } from "pdfjs-dist";
+import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
+import {
+  type DragEvent as ReactDragEvent,
+  type PointerEvent as ReactPointerEvent,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { cn } from "@/lib/utils";
+
+GlobalWorkerOptions.workerSrc = pdfWorker;
+
+export type TemplateFieldType = "text" | "signature" | "date" | "initials" | "checkbox";
+
+export type TemplateFieldRole = "Prefill" | "Agent";
+
+export type TemplateFieldLayoutItem = {
+  id: string;
+  name: string;
+  type: TemplateFieldType;
+  role: TemplateFieldRole;
+  page: number;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+};
+
+const PALETTE: Array<{
+  type: TemplateFieldType;
+  label: string;
+  icon: typeof Type;
+  hint: string;
+}> = [
+  { type: "signature", label: "Signature", icon: Signature, hint: "Draw / type sign" },
+  { type: "initials", label: "Initials", icon: PenLine, hint: "Short mark" },
+  { type: "date", label: "Date", icon: Calendar, hint: "Signed-on date" },
+  { type: "text", label: "Text", icon: Type, hint: "Fillable text" },
+  { type: "checkbox", label: "Checkbox", icon: CheckSquare, hint: "Yes / no" },
+];
+
+const DEFAULT_SIZE: Record<TemplateFieldType, { w: number; h: number }> = {
+  text: { w: 180, h: 28 },
+  signature: { w: 200, h: 56 },
+  date: { w: 140, h: 28 },
+  initials: { w: 80, h: 40 },
+  checkbox: { w: 22, h: 22 },
+};
+
+const DND_MIME = "application/x-onest-field-type";
+
+type PageSize = { width: number; height: number };
+
+type ContractTemplateFieldPlacerProps = {
+  pdfUrl: string;
+  value: TemplateFieldLayoutItem[];
+  onChange: (next: TemplateFieldLayoutItem[]) => void;
+  readOnly?: boolean;
+  className?: string;
+  onSave?: () => void;
+  saving?: boolean;
+};
+
+function newId(): string {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+  return `field-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function uniqueName(base: string, existing: TemplateFieldLayoutItem[]): string {
+  const taken = new Set(existing.map((item) => item.name));
+  if (!taken.has(base)) return base;
+  let index = 2;
+  while (taken.has(`${base}${index}`)) index += 1;
+  return `${base}${index}`;
+}
+
+function defaultName(type: TemplateFieldType, role: TemplateFieldRole): string {
+  if (role === "Agent") {
+    if (type === "signature") return "AgentSignature";
+    if (type === "date") return "AgentSignedOn";
+    if (type === "initials") return "AgentInitials";
+  }
+  const label = type[0]?.toUpperCase() + type.slice(1);
+  return role === "Prefill" ? `Prefill${label}` : `Agent${label}`;
+}
+
+export function ContractTemplateFieldPlacer({
+  pdfUrl,
+  value,
+  onChange,
+  readOnly = false,
+  className,
+  onSave,
+  saving = false,
+}: ContractTemplateFieldPlacerProps) {
+  const labelId = useId();
+  const [doc, setDoc] = useState<PDFDocumentProxy | null>(null);
+  const [pageSizes, setPageSizes] = useState<PageSize[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [placeRole, setPlaceRole] = useState<TemplateFieldRole>("Prefill");
+  const [armedType, setArmedType] = useState<TemplateFieldType | null>(null);
+  const dragRef = useRef<{
+    id: string;
+    mode: "move" | "resize";
+    startX: number;
+    startY: number;
+    orig: TemplateFieldLayoutItem;
+  } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoadError(null);
+    setDoc(null);
+    setPageSizes([]);
+
+    const task = getDocument(pdfUrl);
+    void task.promise
+      .then(async (pdf) => {
+        if (cancelled) {
+          await pdf.destroy();
+          return;
+        }
+        const sizes: PageSize[] = [];
+        for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+          const page = await pdf.getPage(pageNumber);
+          const viewport = page.getViewport({ scale: 1 });
+          sizes.push({ width: viewport.width, height: viewport.height });
+        }
+        if (cancelled) {
+          await pdf.destroy();
+          return;
+        }
+        setPageSizes(sizes);
+        setDoc(pdf);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLoadError("Could not load the template PDF.");
+        }
+      });
+
+    return () => {
+      cancelled = true;
+      void task.destroy();
+    };
+  }, [pdfUrl]);
+
+  const selected = useMemo(
+    () => value.find((item) => item.id === selectedId) ?? null,
+    [selectedId, value],
+  );
+
+  function updateField(id: string, patch: Partial<TemplateFieldLayoutItem>) {
+    onChange(value.map((item) => (item.id === id ? { ...item, ...patch } : item)));
+  }
+
+  function removeField(id: string) {
+    onChange(value.filter((item) => item.id !== id));
+    if (selectedId === id) setSelectedId(null);
+  }
+
+  function placeField(
+    type: TemplateFieldType,
+    role: TemplateFieldRole,
+    page: number,
+    pdfX: number,
+    pdfY: number,
+  ) {
+    if (readOnly) return;
+    const size = DEFAULT_SIZE[type];
+    const pageSize = pageSizes[page - 1];
+    if (!pageSize) return;
+    const w = size.w;
+    const h = size.h;
+    const x = Math.max(0, Math.min(pdfX - w / 2, pageSize.width - w));
+    const y = Math.max(0, Math.min(pdfY - h / 2, pageSize.height - h));
+    const next: TemplateFieldLayoutItem = {
+      id: newId(),
+      name: uniqueName(defaultName(type, role), value),
+      type,
+      role,
+      page,
+      x: Math.round(x * 1000) / 1000,
+      y: Math.round(y * 1000) / 1000,
+      w,
+      h,
+    };
+    onChange([...value, next]);
+    setSelectedId(next.id);
+    setArmedType(null);
+  }
+
+  function onFieldPointerDown(
+    event: ReactPointerEvent<HTMLButtonElement>,
+    field: TemplateFieldLayoutItem,
+    mode: "move" | "resize",
+  ) {
+    if (readOnly) return;
+    event.preventDefault();
+    event.stopPropagation();
+    setSelectedId(field.id);
+    setArmedType(null);
+    dragRef.current = {
+      id: field.id,
+      mode,
+      startX: event.clientX,
+      startY: event.clientY,
+      orig: { ...field },
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function onFieldPointerMove(event: ReactPointerEvent<HTMLButtonElement>) {
+    const drag = dragRef.current;
+    if (!drag) return;
+    const pageEl = event.currentTarget.closest("[data-page]") as HTMLElement | null;
+    if (!pageEl) return;
+    const rect = pageEl.getBoundingClientRect();
+    const scaleX = (pageSizes[drag.orig.page - 1]?.width ?? rect.width) / rect.width;
+    const scaleY = (pageSizes[drag.orig.page - 1]?.height ?? rect.height) / rect.height;
+    const dx = (event.clientX - drag.startX) * scaleX;
+    const dy = (event.clientY - drag.startY) * scaleY;
+    const pageSize = pageSizes[drag.orig.page - 1];
+    if (!pageSize) return;
+
+    if (drag.mode === "move") {
+      const x = Math.max(0, Math.min(drag.orig.x + dx, pageSize.width - drag.orig.w));
+      const y = Math.max(0, Math.min(drag.orig.y + dy, pageSize.height - drag.orig.h));
+      updateField(drag.id, {
+        x: Math.round(x * 1000) / 1000,
+        y: Math.round(y * 1000) / 1000,
+      });
+      return;
+    }
+
+    const w = Math.max(16, Math.min(drag.orig.w + dx, pageSize.width - drag.orig.x));
+    const h = Math.max(16, Math.min(drag.orig.h + dy, pageSize.height - drag.orig.y));
+    updateField(drag.id, {
+      w: Math.round(w * 1000) / 1000,
+      h: Math.round(h * 1000) / 1000,
+    });
+  }
+
+  function onFieldPointerUp(event: ReactPointerEvent<HTMLButtonElement>) {
+    if (!dragRef.current) return;
+    dragRef.current = null;
+    try {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    } catch {
+      // already released
+    }
+  }
+
+  return (
+    <div
+      className={cn(
+        "border-border bg-muted/20 grid gap-0 overflow-hidden rounded-lg border lg:grid-cols-[14rem_minmax(0,1fr)_16rem]",
+        className,
+      )}
+    >
+      <aside className="border-border grid gap-4 border-b p-4 lg:border-r lg:border-b-0">
+        <div className="grid gap-2">
+          <p className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
+            Signer role
+          </p>
+          <div className="bg-background grid grid-cols-2 gap-1 rounded-md border p-1">
+            {(["Prefill", "Agent"] as const).map((role) => (
+              <Button
+                key={role}
+                type="button"
+                size="sm"
+                variant={placeRole === role ? "default" : "ghost"}
+                disabled={readOnly}
+                onClick={() => setPlaceRole(role)}
+              >
+                {role}
+              </Button>
+            ))}
+          </div>
+          <p className="text-muted-foreground text-xs">
+            Prefill = hub-filled commercial fields. Agent = signature ceremony.
+          </p>
+        </div>
+
+        <div className="grid gap-2">
+          <p className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
+            Fields
+          </p>
+          <div className="grid gap-2">
+            {PALETTE.map((item) => {
+              const Icon = item.icon;
+              const armed = armedType === item.type;
+              return (
+                <button
+                  key={item.type}
+                  type="button"
+                  draggable={!readOnly}
+                  disabled={readOnly}
+                  onDragStart={(event) => {
+                    event.dataTransfer.setData(DND_MIME, item.type);
+                    event.dataTransfer.effectAllowed = "copy";
+                  }}
+                  onClick={() =>
+                    setArmedType((current) =>
+                      current === item.type ? null : item.type,
+                    )
+                  }
+                  className={cn(
+                    "bg-background hover:border-primary/50 flex items-start gap-3 rounded-md border px-3 py-2 text-left transition-colors",
+                    armed ? "border-primary ring-ring ring-2" : "border-border",
+                    readOnly ? "opacity-60" : "cursor-grab active:cursor-grabbing",
+                  )}
+                >
+                  <Icon className="text-primary mt-0.5 size-4 shrink-0" aria-hidden />
+                  <span className="min-w-0">
+                    <span className="block text-sm font-medium">{item.label}</span>
+                    <span className="text-muted-foreground block text-xs">
+                      {item.hint}
+                    </span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-muted-foreground text-xs">
+            Drag onto the page, or click a field then click the PDF.
+          </p>
+        </div>
+
+        {!readOnly && onSave ? (
+          <Button type="button" onClick={onSave} disabled={saving}>
+            {saving ? "Saving…" : "Save fields"}
+          </Button>
+        ) : null}
+      </aside>
+
+      <div className="bg-background min-h-[28rem] overflow-auto p-4">
+        {loadError ? (
+          <p className="text-destructive text-sm">{loadError}</p>
+        ) : !doc ? (
+          <p className="text-muted-foreground text-sm">Loading PDF…</p>
+        ) : (
+          <div className="mx-auto grid max-w-3xl gap-6">
+            {armedType ? (
+              <p className="bg-primary/10 text-primary rounded-md px-3 py-2 text-sm">
+                Click the document to place a {armedType} field for {placeRole}.
+              </p>
+            ) : null}
+            {pageSizes.map((size, index) => {
+              const page = index + 1;
+              return (
+                <PdfPageCanvas
+                  key={page}
+                  doc={doc}
+                  pageNumber={page}
+                  pageWidth={size.width}
+                  pageHeight={size.height}
+                  fields={value.filter((item) => item.page === page)}
+                  selectedId={selectedId}
+                  armedType={armedType}
+                  placeRole={placeRole}
+                  readOnly={readOnly}
+                  onPlace={(type, role, x, y) => placeField(type, role, page, x, y)}
+                  onSelect={setSelectedId}
+                  onFieldPointerDown={onFieldPointerDown}
+                  onFieldPointerMove={onFieldPointerMove}
+                  onFieldPointerUp={onFieldPointerUp}
+                />
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      <aside className="border-border grid content-start gap-4 border-t p-4 lg:border-t-0 lg:border-l">
+        <p className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
+          Field settings
+        </p>
+        {selected ? (
+          <div className="grid gap-3">
+            <div className="grid gap-2">
+              <Label htmlFor={`${labelId}-name`}>Name</Label>
+              <Input
+                id={`${labelId}-name`}
+                value={selected.name}
+                disabled={readOnly}
+                onChange={(event) =>
+                  updateField(selected.id, { name: event.target.value })
+                }
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label>Type</Label>
+              <Input value={selected.type} disabled />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor={`${labelId}-role`}>Role</Label>
+              <Select
+                value={selected.role}
+                disabled={readOnly}
+                onValueChange={(next) =>
+                  updateField(selected.id, {
+                    role: next as TemplateFieldRole,
+                  })
+                }
+              >
+                <SelectTrigger id={`${labelId}-role`}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Prefill">Prefill</SelectItem>
+                  <SelectItem value="Agent">Agent</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <p className="text-muted-foreground text-xs">
+              Page {selected.page} · {Math.round(selected.w)}×{Math.round(selected.h)}
+            </p>
+            {!readOnly ? (
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={() => removeField(selected.id)}
+              >
+                <Trash2 className="size-4" aria-hidden />
+                Delete field
+              </Button>
+            ) : null}
+          </div>
+        ) : (
+          <p className="text-muted-foreground text-sm">
+            Select a placed field to rename it, change role, or delete it.
+          </p>
+        )}
+
+        <div className="border-border grid gap-2 border-t pt-4">
+          <p className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
+            On this document
+          </p>
+          {value.length === 0 ? (
+            <p className="text-muted-foreground text-sm">No fields yet.</p>
+          ) : (
+            <ul className="grid gap-1">
+              {value.map((field) => (
+                <li key={field.id}>
+                  <button
+                    type="button"
+                    className={cn(
+                      "hover:bg-muted w-full rounded-md px-2 py-1.5 text-left text-sm",
+                      field.id === selectedId ? "bg-muted font-medium" : null,
+                    )}
+                    onClick={() => setSelectedId(field.id)}
+                  >
+                    <span className="block truncate">{field.name}</span>
+                    <span className="text-muted-foreground text-xs">
+                      {field.role} · {field.type} · p{field.page}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </aside>
+    </div>
+  );
+}
+
+type PdfPageCanvasProps = {
+  doc: PDFDocumentProxy;
+  pageNumber: number;
+  pageWidth: number;
+  pageHeight: number;
+  fields: TemplateFieldLayoutItem[];
+  selectedId: string | null;
+  armedType: TemplateFieldType | null;
+  placeRole: TemplateFieldRole;
+  readOnly: boolean;
+  onPlace: (
+    type: TemplateFieldType,
+    role: TemplateFieldRole,
+    x: number,
+    y: number,
+  ) => void;
+  onSelect: (id: string) => void;
+  onFieldPointerDown: (
+    event: ReactPointerEvent<HTMLButtonElement>,
+    field: TemplateFieldLayoutItem,
+    mode: "move" | "resize",
+  ) => void;
+  onFieldPointerMove: (event: ReactPointerEvent<HTMLButtonElement>) => void;
+  onFieldPointerUp: (event: ReactPointerEvent<HTMLButtonElement>) => void;
+};
+
+function PdfPageCanvas({
+  doc,
+  pageNumber,
+  pageWidth,
+  pageHeight,
+  fields,
+  selectedId,
+  armedType,
+  placeRole,
+  readOnly,
+  onPlace,
+  onSelect,
+  onFieldPointerDown,
+  onFieldPointerMove,
+  onFieldPointerUp,
+}: PdfPageCanvasProps) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const displayWidth = Math.min(760, pageWidth);
+  const scale = displayWidth / pageWidth;
+  const displayHeight = pageHeight * scale;
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const page = await doc.getPage(pageNumber);
+      if (cancelled) return;
+      const viewport = page.getViewport({ scale });
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const context = canvas.getContext("2d");
+      if (!context) return;
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      await page.render({ canvasContext: context, viewport }).promise;
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [doc, pageNumber, scale]);
+
+  function eventToPdfPoint(
+    event: { clientX: number; clientY: number },
+    el: HTMLElement,
+  ) {
+    const rect = el.getBoundingClientRect();
+    return {
+      x: ((event.clientX - rect.left) / rect.width) * pageWidth,
+      y: ((event.clientY - rect.top) / rect.height) * pageHeight,
+    };
+  }
+
+  function onDrop(event: ReactDragEvent<HTMLDivElement>) {
+    if (readOnly) return;
+    event.preventDefault();
+    const type = event.dataTransfer.getData(DND_MIME) as TemplateFieldType;
+    if (!type || !DEFAULT_SIZE[type]) return;
+    const point = eventToPdfPoint(event, event.currentTarget);
+    onPlace(type, placeRole, point.x, point.y);
+  }
+
+  return (
+    <div className="grid gap-2">
+      <p className="text-muted-foreground text-xs font-medium">Page {pageNumber}</p>
+      <div
+        data-page={pageNumber}
+        role="application"
+        aria-label={`PDF page ${pageNumber} drop target`}
+        className={cn(
+          "relative overflow-hidden rounded-md border bg-card shadow-sm",
+          armedType ? "ring-primary/40 cursor-crosshair ring-2" : null,
+        )}
+        style={{ width: displayWidth, height: displayHeight }}
+        onDragOver={(event) => {
+          if (readOnly) return;
+          if ([...event.dataTransfer.types].includes(DND_MIME)) {
+            event.preventDefault();
+            event.dataTransfer.dropEffect = "copy";
+          }
+        }}
+        onDrop={onDrop}
+      >
+        <canvas ref={canvasRef} className="block h-full w-full" />
+        {armedType && !readOnly ? (
+          <button
+            type="button"
+            className="absolute inset-0 z-10 cursor-crosshair bg-transparent"
+            aria-label={`Place ${armedType} on page ${pageNumber}`}
+            onClick={(event) => {
+              const point = eventToPdfPoint(event, event.currentTarget);
+              onPlace(armedType, placeRole, point.x, point.y);
+            }}
+          />
+        ) : null}
+        {fields.map((field) => {
+          const selected = field.id === selectedId;
+          const meta = PALETTE.find((item) => item.type === field.type);
+          const Icon = meta?.icon ?? Type;
+          return (
+            <button
+              key={field.id}
+              type="button"
+              className={cn(
+                "absolute z-20 flex items-stretch overflow-hidden rounded-sm border text-left text-[10px] leading-tight shadow-sm",
+                field.role === "Agent"
+                  ? "border-primary bg-primary/15 text-foreground"
+                  : "border-accent-foreground/30 bg-accent/50 text-foreground",
+                selected ? "ring-ring z-30 ring-2" : null,
+              )}
+              style={{
+                left: `${(field.x / pageWidth) * 100}%`,
+                top: `${(field.y / pageHeight) * 100}%`,
+                width: `${(field.w / pageWidth) * 100}%`,
+                height: `${(field.h / pageHeight) * 100}%`,
+              }}
+              onClick={(event) => {
+                event.stopPropagation();
+                onSelect(field.id);
+              }}
+              onPointerDown={(event) => onFieldPointerDown(event, field, "move")}
+              onPointerMove={onFieldPointerMove}
+              onPointerUp={onFieldPointerUp}
+            >
+              <span className="bg-background/70 flex items-center px-1">
+                <Icon className="size-3 shrink-0" aria-hidden />
+              </span>
+              <span className="block min-w-0 flex-1 truncate px-1 py-0.5 font-medium">
+                {field.name}
+              </span>
+              {!readOnly && selected ? (
+                <span
+                  className="bg-primary absolute right-0 bottom-0 size-2.5 cursor-se-resize"
+                  onPointerDown={(event) => {
+                    event.stopPropagation();
+                    onFieldPointerDown(
+                      event as unknown as ReactPointerEvent<HTMLButtonElement>,
+                      field,
+                      "resize",
+                    );
+                  }}
+                />
+              ) : null}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}

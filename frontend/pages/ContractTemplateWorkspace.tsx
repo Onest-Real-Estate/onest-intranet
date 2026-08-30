@@ -1,5 +1,11 @@
 import { Head, router, usePage } from "@inertiajs/react";
+import { useEffect, useMemo, useState } from "react";
 import {
+  ContractTemplateFieldPlacer,
+  type TemplateFieldLayoutItem,
+} from "@/components/ContractTemplateFieldPlacer";
+import {
+  Callout,
   FormErrorSummary,
   PageHeader,
   PanelHeader,
@@ -11,6 +17,13 @@ import { PermissionRequired } from "@/components/PermissionRequired";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { routes } from "@/lib/routes";
 import type { ContractTemplateWorkspacePageProps } from "@/types";
@@ -19,15 +32,116 @@ const ACCESS = {
   any: ["contract.manage_contract_templates", "contract.approve_contract_templates"],
 };
 
+type MergeRow = {
+  key: string;
+  label: string;
+  type: string;
+  source: string;
+};
+
+function normalizeMergeSchema(schema: Array<Record<string, unknown>>): MergeRow[] {
+  return schema.map((item) => ({
+    key: String(item.key ?? "").trim(),
+    label: String(item.label ?? item.key ?? "").trim(),
+    type: String(item.type ?? "text").trim() || "text",
+    source: String(item.source ?? "").trim(),
+  }));
+}
+
+function normalizeLayout(
+  layout: Array<{
+    id?: string;
+    name?: string;
+    type?: string;
+    role?: string;
+    page?: number;
+    x?: number;
+    y?: number;
+    w?: number;
+    h?: number;
+  }>,
+): TemplateFieldLayoutItem[] {
+  return layout.map((item) => ({
+    id: String(item.id ?? crypto.randomUUID()),
+    name: String(item.name ?? "").trim(),
+    type: (String(item.type ?? "text") as TemplateFieldLayoutItem["type"]) || "text",
+    role:
+      (String(item.role ?? "Prefill") as TemplateFieldLayoutItem["role"]) || "Prefill",
+    page: Number(item.page) || 1,
+    x: Number(item.x) || 0,
+    y: Number(item.y) || 0,
+    w: Number(item.w) || 120,
+    h: Number(item.h) || 24,
+  }));
+}
+
 export default function ContractTemplateWorkspace() {
-  const { versionDetail, capabilities, errors, csrfToken } =
+  const { versionDetail, capabilities, errors, posted, csrfToken } =
     usePage<ContractTemplateWorkspacePageProps>().props;
 
-  function postAction(action: "preview" | "publish" | "activate" | "retire") {
+  const [mergeRows, setMergeRows] = useState<MergeRow[]>(() =>
+    normalizeMergeSchema(versionDetail.mergeSchema ?? []),
+  );
+  const [fieldLayout, setFieldLayout] = useState<TemplateFieldLayoutItem[]>(() =>
+    normalizeLayout(versionDetail.fieldLayout ?? []),
+  );
+  const [suggesting, setSuggesting] = useState(false);
+
+  useEffect(() => {
+    setMergeRows(normalizeMergeSchema(versionDetail.mergeSchema ?? []));
+    setFieldLayout(normalizeLayout(versionDetail.fieldLayout ?? []));
+  }, [versionDetail.mergeSchema, versionDetail.fieldLayout]);
+
+  const mergeSchemaJson = useMemo(
+    () => JSON.stringify(mergeRows, null, 2),
+    [mergeRows],
+  );
+
+  const sourceOptions = versionDetail.mergeSourceOptions ?? [];
+  const canEdit = Boolean(capabilities.canManage && versionDetail.status === "draft");
+
+  const [savingFields, setSavingFields] = useState(false);
+
+  function postAction(
+    action: "preview" | "suggest_fields" | "publish" | "activate" | "retire",
+  ) {
+    if (action === "suggest_fields") setSuggesting(true);
     router.post(
       routes.contract_template_action(versionDetail.id),
       { action },
-      { preserveScroll: true },
+      {
+        preserveScroll: true,
+        onFinish: () => setSuggesting(false),
+      },
+    );
+  }
+
+  function saveFieldLayout() {
+    setSavingFields(true);
+    router.post(
+      routes.contract_template_field_layout(versionDetail.id),
+      {
+        fieldLayoutJson: JSON.stringify(fieldLayout),
+        expectedVersion: versionDetail.version,
+      },
+      {
+        preserveScroll: true,
+        onFinish: () => setSavingFields(false),
+      },
+    );
+  }
+
+  useEffect(() => {
+    const suggestions = posted?.fieldSuggestions;
+    if (!Array.isArray(suggestions) || suggestions.length === 0) return;
+    setFieldLayout(
+      normalizeLayout(suggestions as unknown as TemplateFieldLayoutItem[]),
+    );
+  }, [posted]);
+
+  function updateRowSource(key: string, source: string) {
+    setMergeRows((rows) =>
+      rows.map((row) => (row.key === key ? { ...row, source } : row)),
     );
   }
 
@@ -42,10 +156,21 @@ export default function ContractTemplateWorkspace() {
           description={`${versionDetail.template.name} · ${versionDetail.versionLabel} · ${versionDetail.status}`}
           actions={
             <div className="flex flex-wrap gap-2">
+              {capabilities.canManage && versionDetail.fieldAiConfigured ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => postAction("suggest_fields")}
+                  disabled={!versionDetail.sourcePdfUrl || suggesting}
+                >
+                  {suggesting ? "Suggesting…" : "Suggest fields (AI)"}
+                </Button>
+              ) : null}
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => postAction("preview")}
+                disabled={!versionDetail.sourcePdfUrl || fieldLayout.length === 0}
               >
                 Generate preview
               </Button>
@@ -82,16 +207,16 @@ export default function ContractTemplateWorkspace() {
         <SurfaceCard>
           <PanelHeader
             title="Draft workspace"
-            description="Upload the protected source, document the merge schema, and use the production render path for synthetic previews."
+            description="Upload a blank PDF, place Prefill and Agent fields in the Hub placer, map merge sources, then preview and publish."
           />
           <SurfaceCardContent>
             <div className="text-muted-foreground mb-4 grid gap-1 text-xs">
               <span>Source format: {versionDetail.sourceFormat || "Not uploaded"}</span>
               <span>
-                Placeholders:{" "}
+                Prefill fields:{" "}
                 {versionDetail.placeholderKeys.length
                   ? versionDetail.placeholderKeys.join(", ")
-                  : "None extracted yet"}
+                  : "None yet — place Prefill fields and save layout"}
               </span>
               <span>
                 Preview checksum:{" "}
@@ -118,12 +243,13 @@ export default function ContractTemplateWorkspace() {
                 encType="multipart/form-data"
                 className="grid gap-4"
               >
-                <input type="hidden" name="_token" value={csrfToken} />
+                <input type="hidden" name="csrfmiddlewaretoken" value={csrfToken} />
                 <input
                   type="hidden"
                   name="expected_version"
                   value={versionDetail.version}
                 />
+                <input type="hidden" name="merge_schema_json" value={mergeSchemaJson} />
                 <div className="grid gap-2">
                   <Label htmlFor="display_name">Display name</Label>
                   <Input
@@ -142,19 +268,60 @@ export default function ContractTemplateWorkspace() {
                   />
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="merge_schema_json">Merge schema JSON</Label>
-                  <Textarea
-                    id="merge_schema_json"
-                    name="merge_schema_json"
-                    defaultValue={versionDetail.mergeSchemaJson}
-                    rows={16}
-                    className="font-mono text-xs"
+                  <Label htmlFor="source_document">Source PDF</Label>
+                  <Input
+                    id="source_document"
+                    name="source_document"
+                    type="file"
+                    accept="application/pdf,.pdf"
                   />
+                  <p className="text-muted-foreground text-xs">
+                    Upload a blank PDF, then place Prefill (commercial terms) and Agent
+                    (signature/date) fields below.
+                  </p>
                 </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="source_document">Source document</Label>
-                  <Input id="source_document" name="source_document" type="file" />
+
+                <div className="grid gap-3">
+                  <Label>Merge field mapping</Label>
+                  {mergeRows.length === 0 ? (
+                    <p className="text-muted-foreground text-sm">
+                      No Prefill fields yet. Place Prefill fields in the Hub placer,
+                      save the layout, then map each field to a hub source.
+                    </p>
+                  ) : (
+                    <div className="grid gap-3">
+                      {mergeRows.map((row) => (
+                        <div
+                          key={row.key}
+                          className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] sm:items-center"
+                        >
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium">{row.key}</p>
+                            <p className="text-muted-foreground truncate text-xs">
+                              {row.label || row.type}
+                            </p>
+                          </div>
+                          <Select
+                            value={row.source || undefined}
+                            onValueChange={(value) => updateRowSource(row.key, value)}
+                          >
+                            <SelectTrigger aria-label={`Source for ${row.key}`}>
+                              <SelectValue placeholder="Select hub source" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {sourceOptions.map((option) => (
+                                <SelectItem key={option} value={option}>
+                                  {option}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
+
                 <Button type="submit">Save draft</Button>
               </form>
             ) : (
@@ -162,6 +329,37 @@ export default function ContractTemplateWorkspace() {
                 You can review, preview, publish, and activate this version, but draft
                 edits stay restricted to template authors.
               </p>
+            )}
+          </SurfaceCardContent>
+        </SurfaceCard>
+
+        <SurfaceCard>
+          <PanelHeader
+            title="Field placer"
+            description="Drag fields from the palette onto the PDF. Prefill for commercial terms, Agent for signature and date. AI suggestions must be reviewed before save."
+          />
+          <SurfaceCardContent className="space-y-4">
+            {!versionDetail.sourcePdfUrl ? (
+              <p className="text-muted-foreground text-sm">
+                Upload a PDF and save the draft to open the field placer.
+              </p>
+            ) : (
+              <>
+                {!versionDetail.fieldAiConfigured ? (
+                  <Callout tone="warning" title="Field AI optional">
+                    Configure CONTRACT_FIELD_AI_ENDPOINT and CONTRACT_FIELD_AI_API_KEY
+                    to suggest field boxes from the PDF. Manual placement always works.
+                  </Callout>
+                ) : null}
+                <ContractTemplateFieldPlacer
+                  pdfUrl={versionDetail.sourcePdfUrl}
+                  value={fieldLayout}
+                  onChange={setFieldLayout}
+                  readOnly={!canEdit}
+                  onSave={canEdit ? saveFieldLayout : undefined}
+                  saving={savingFields}
+                />
+              </>
             )}
           </SurfaceCardContent>
         </SurfaceCard>

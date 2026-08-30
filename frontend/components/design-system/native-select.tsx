@@ -28,7 +28,11 @@ export function NativeSelect({
         className={cn(
           // Deliberately the same recipe as `Input`, minus the file:/placeholder
           // parts a select cannot have. `pr-10` leaves room for the chevron.
-          "border-input dark:bg-input/30 flex h-10 w-full min-w-0 appearance-none rounded-lg border bg-transparent py-2 pr-10 pl-3.5 text-base shadow-xs transition-[color,background-color,border-color,box-shadow] duration-(--motion-fast) outline-none disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-70 md:text-sm",
+          "border-input bg-background text-foreground dark:bg-input/30 flex h-10 w-full min-w-0 appearance-none rounded-lg border py-2 pr-10 pl-3.5 text-base shadow-xs transition-[color,background-color,border-color,box-shadow] duration-(--motion-fast) outline-none disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-70 md:text-sm",
+          // Native option menus ignore most CSS; color-scheme + option colors
+          // reduce light-on-white popup text when the OS list stays light.
+          "scheme-light dark:scheme-dark",
+          "[&_option]:bg-popover [&_option]:text-popover-foreground",
           "focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]",
           "aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive",
           className,

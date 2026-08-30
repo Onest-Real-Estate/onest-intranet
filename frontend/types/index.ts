@@ -347,6 +347,11 @@ export interface ShellSharedProps {
   };
 }
 
+export interface FlashMessage {
+  level: "success" | "error" | "info" | "warning";
+  message: string;
+}
+
 export interface PageProps {
   user: User | null;
   csrfToken: string;
@@ -358,6 +363,8 @@ export interface PageProps {
   notifications: NotificationShell | null;
   /** Quick Create actions, already filtered to what this actor may start. */
   quickCreate?: QuickCreate;
+  /** One-shot toast from the previous mutating request; absent or null when none. */
+  flash?: FlashMessage | null;
   [key: string]: unknown;
 }
 
@@ -2248,6 +2255,20 @@ export interface ContractTemplateRow {
   effectiveUntil: string;
   activeVersionPk?: number | null;
   activeVersionId: string | null;
+  /** Version workspace to open: latest draft, else active, else newest. */
+  workspaceVersionPk?: number | null;
+}
+
+export interface ContractTemplateFieldLayoutItem {
+  id: string;
+  name: string;
+  type: string;
+  role: string;
+  page: number;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
 }
 
 export interface ContractTemplateVersionDetail {
@@ -2261,6 +2282,10 @@ export interface ContractTemplateVersionDetail {
   sourceFormat: string;
   sourceMediaType: string;
   sourceChecksum: string;
+  sourcePdfUrl: string;
+  fieldLayout: ContractTemplateFieldLayoutItem[];
+  fieldAiConfigured: boolean;
+  mergeSourceOptions: string[];
   placeholderKeys: string[];
   mergeSchema: Array<Record<string, unknown>>;
   mergeSchemaJson: string;
@@ -2293,6 +2318,7 @@ export interface ContractTemplateAdministrationPageProps extends PageProps {
   capabilities: ContractTemplateCapabilities;
   createSheet: ContractTemplateCreateSheet | null;
   errors: ValidationErrors;
+  states: StateOption[];
 }
 
 export interface ContractTemplateWorkspacePageProps extends PageProps {
@@ -2330,12 +2356,21 @@ export interface AgentContractAdministrationPageProps extends PageProps {
   errors: ValidationErrors;
 }
 
+export interface AgentContractPayeeSummary {
+  id: number;
+  name: string;
+  email: string;
+  officeId?: number | null;
+  officeName?: string;
+}
+
 export interface AgentContractRecipientResult {
   id: number;
   name: string;
   email: string;
   officeId: number | null;
   officeName: string;
+  officeState?: string;
   licenseState: string;
   agentIdentifier: string;
 }
@@ -2393,6 +2428,7 @@ export interface AgentContractWorkspacePageProps extends PageProps {
   recipient: AgentContractRecipientResult & { agentStatus?: string };
   office: Record<string, unknown>;
   templateOptions: AgentContractTemplateOption[];
+  commissionBasisOptions: Array<{ value: string; label: string }>;
   commercialPreview: AgentContractCommercialPreview | null;
   statusOptions: Array<{ value: string; label: string; tone: string }>;
   errors: ValidationErrors;
@@ -2506,7 +2542,7 @@ export interface MyContractNextAction {
 export interface MyContractCapabilities {
   canViewCommission: boolean;
   canSign: boolean;
-  /** False until P1-042 wires the signing ceremony. */
+  /** True when Hub signing (and org seal when required) is available. */
   signingReady: boolean;
 }
 
@@ -2518,6 +2554,57 @@ export interface MyContractPageProps extends PageProps {
   capabilities: MyContractCapabilities;
   disclaimer: string;
   empty: { kind: string; title: string; description: string } | null;
+}
+
+export interface SigningDisclosure {
+  version: string;
+  title: string;
+  body: string;
+  acknowledgementLabel: string;
+}
+
+export interface SigningCeremonyContract {
+  publicId: string;
+  versionNumber: number;
+  status: string;
+  statusLabel: string;
+  effectiveOn: string;
+  expectedVersion: string;
+  artifactChecksum: string;
+  partyDisplayName: string;
+  signerEmail: string;
+}
+
+export interface SigningCeremonyEmbed {
+  intentPublicId: string;
+  expiresAt: string;
+  reviewPdfUrl: string;
+  agentFields: Array<{
+    id: string;
+    name: string;
+    type: string;
+    role: string;
+    page: number;
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+  }>;
+}
+
+export interface SigningCeremonyRecovery {
+  code: string;
+  message: string;
+}
+
+export interface MyContractSignPageProps extends PageProps {
+  canSign: boolean;
+  signingReady: boolean;
+  recovery: SigningCeremonyRecovery | null;
+  disclosure: SigningDisclosure;
+  contract: SigningCeremonyContract | null;
+  ceremony: SigningCeremonyEmbed | null;
+  errors: { fields: Record<string, string[]>; form: string[] };
 }
 
 export interface ReportScopePayload {

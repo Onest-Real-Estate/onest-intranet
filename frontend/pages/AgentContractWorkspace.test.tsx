@@ -6,6 +6,8 @@ import AgentContractWorkspace from "./AgentContractWorkspace";
 const post = vi.fn();
 const get = vi.fn();
 
+let pageProps: Record<string, unknown>;
+
 vi.mock("@inertiajs/react", () => ({
   Head: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
   Link: ({ children, href }: { children: React.ReactNode; href: string }) => (
@@ -15,75 +17,83 @@ vi.mock("@inertiajs/react", () => ({
     post: (...args: unknown[]) => post(...args),
     get: (...args: unknown[]) => get(...args),
   },
-  usePage: () => ({
-    props: {
-      csrfToken: "test-csrf",
-      contract: {
-        publicId: "11111111-1111-1111-1111-111111111111",
-        status: "ready_for_review",
-        statusLabel: "Ready for review",
-        statusTone: "warning",
-        effectiveOn: "2026-08-24",
-        expiresOn: null,
-        templateVersionId: 1,
-        commission: {
-          agentSplitPercent: "70.000",
-          officeSplitPercent: "30.000",
-          mentor: {},
-          referral: {},
-        },
-      },
-      expectedVersion: "2026-08-24T00:00:00.000000",
-      capabilities: {
-        canView: true,
-        canManage: true,
-        canViewCommission: true,
-        canViewNotes: true,
-      },
-      allowedActions: ["issue", "reopen"],
-      recipient: {
-        id: 1,
-        name: "Ada Agent",
-        email: "ada@example.com",
-        officeId: 2,
-        officeName: "Fairfax VA",
-        licenseState: "VA",
-        agentIdentifier: "A1",
-      },
-      office: { officeId: 2, name: "Fairfax VA" },
-      templateOptions: [
-        {
-          id: 1,
-          publicId: "t1",
-          versionLabel: "1.0.0",
-          displayName: "ICA",
-          templateName: "ICA",
-          templateStableKey: "ica",
-          jurisdictionStateCodes: ["VA"],
-        },
-      ],
-      commercialPreview: {
-        summaryLines: ["70% agent / 30% office"],
-        breakdown: {
-          ruleVersion: "1.0.0",
-          currency: "USD",
-          grossCommission: "10000",
-          agentNet: "7000.00",
-          officeNet: "3000.00",
-          transactionFee: "0.00",
-          mentorAmount: null,
-          referralAmount: null,
-          explanation: [],
-        },
-        units: {},
-      },
-      statusOptions: [],
-      agreementPreview: null,
-      generatedPdfUrl: null,
-      errors: { fields: {}, form: [] },
-    },
-  }),
+  usePage: () => ({ props: pageProps }),
 }));
+
+function buildPageProps(overrides: Record<string, unknown> = {}) {
+  return {
+    csrfToken: "test-csrf",
+    contract: {
+      publicId: "11111111-1111-1111-1111-111111111111",
+      status: "ready_for_review",
+      statusLabel: "Ready for review",
+      statusTone: "warning",
+      effectiveOn: "2026-08-24",
+      expiresOn: null,
+      templateVersionId: 1,
+      commission: {
+        agentSplitPercent: "70.000",
+        officeSplitPercent: "30.000",
+        mentor: {},
+        referral: {},
+      },
+    },
+    expectedVersion: "2026-08-24T00:00:00.000000",
+    capabilities: {
+      canView: true,
+      canManage: true,
+      canViewCommission: true,
+      canViewNotes: true,
+    },
+    allowedActions: ["issue", "reopen"],
+    recipient: {
+      id: 1,
+      name: "Ada Agent",
+      email: "ada@example.com",
+      officeId: 2,
+      officeName: "Fairfax VA",
+      licenseState: "VA",
+      agentIdentifier: "A1",
+    },
+    office: { officeId: 2, name: "Fairfax VA" },
+    templateOptions: [
+      {
+        id: 1,
+        publicId: "t1",
+        versionLabel: "1.0.0",
+        displayName: "ICA",
+        templateName: "ICA",
+        templateStableKey: "ica",
+        jurisdictionStateCodes: ["VA"],
+      },
+    ],
+    commissionBasisOptions: [
+      { value: "agent_side_before_fees", label: "Agent side before fees" },
+      { value: "gross_commission", label: "Gross commission income" },
+      { value: "fixed_only", label: "Fixed amount only" },
+    ],
+    commercialPreview: {
+      summaryLines: ["70% agent / 30% office"],
+      breakdown: {
+        ruleVersion: "1.0.0",
+        currency: "USD",
+        grossCommission: "10000",
+        agentNet: "7000.00",
+        officeNet: "3000.00",
+        transactionFee: "0.00",
+        mentorAmount: null,
+        referralAmount: null,
+        explanation: [],
+      },
+      units: {},
+    },
+    statusOptions: [],
+    agreementPreview: null,
+    generatedPdfUrl: null,
+    errors: { fields: {}, form: [] },
+    ...overrides,
+  };
+}
 
 vi.mock("@/components/PermissionRequired", () => ({
   PermissionRequired: ({ children }: { children: React.ReactNode }) => <>{children}</>,
@@ -121,6 +131,7 @@ vi.mock("@/lib/routes", () => ({
     agent_contract_update: () => "/save",
     agent_contract_lifecycle: () => "/lifecycle",
     agent_contract_preview: () => "/preview",
+    agent_contract_recipient_search: () => "/recipients",
     agent_contract_validate: (publicId: string) =>
       `/operations/agent-contracts/${publicId}/validate`,
   },
@@ -128,6 +139,7 @@ vi.mock("@/lib/routes", () => ({
 
 describe("AgentContractWorkspace", () => {
   beforeEach(() => {
+    pageProps = buildPageProps();
     post.mockReset();
     get.mockReset();
   });
@@ -141,9 +153,36 @@ describe("AgentContractWorkspace", () => {
     ).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /confirm issue/i }));
     expect(post).toHaveBeenCalled();
-    const body = post.mock.calls[0][1];
-    expect(body.action).toBe("issue");
-    expect(body.confirmed).toBe("1");
+    const body = post.mock.calls[0][1] as FormData;
+    expect(body).toBeInstanceOf(FormData);
+    expect(body.get("action")).toBe("issue");
+    expect(body.get("confirmed")).toBe("1");
+  });
+
+  it("requires confirmation before activate", async () => {
+    pageProps = buildPageProps({
+      contract: {
+        ...(pageProps.contract as object),
+        status: "signed",
+        statusLabel: "Signed",
+        statusTone: "info",
+      },
+      allowedActions: ["activate", "supersede", "terminate"],
+    });
+    const user = userEvent.setup();
+    render(<AgentContractWorkspace />);
+    expect(screen.getByRole("button", { name: /^activate$/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^supersede$/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^terminate$/i })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /^activate$/i }));
+    expect(
+      screen.getByRole("heading", { name: /activate this contract/i }),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /confirm activate/i }));
+    expect(post).toHaveBeenCalled();
+    const body = post.mock.calls[0][1] as FormData;
+    expect(body.get("action")).toBe("activate");
+    expect(body.get("confirmed")).toBe("1");
   });
 
   afterEach(() => vi.unstubAllGlobals());
@@ -216,4 +255,120 @@ describe("AgentContractWorkspace", () => {
     // The gross is editable: this panel prices a deal, it does not just report.
     expect(screen.getByLabelText(/gross commission/i)).toHaveValue("10000");
   });
+});
+
+it("hides percent when mentor basis is fixed-only", async () => {
+  pageProps = buildPageProps({
+    contract: {
+      ...(pageProps.contract as object),
+      status: "draft",
+      statusLabel: "Draft",
+      statusTone: "neutral",
+      commission: {
+        agentSplitPercent: "70.000",
+        officeSplitPercent: "30.000",
+        mentor: { percent: "10", basis: "agent_side_before_fees" },
+        referral: {},
+      },
+    },
+  });
+  const user = userEvent.setup();
+  render(<AgentContractWorkspace />);
+  expect(screen.getByLabelText(/mentor percent/i)).toBeInTheDocument();
+  await user.click(screen.getByRole("combobox", { name: /mentor basis/i }));
+  await user.click(await screen.findByRole("option", { name: /fixed amount only/i }));
+  expect(screen.queryByLabelText(/mentor percent/i)).not.toBeInTheDocument();
+  expect(screen.getByLabelText(/mentor fixed \(usd\)/i)).toBeInTheDocument();
+});
+
+it("hides mentor payee when basis is none", async () => {
+  pageProps = buildPageProps({
+    contract: {
+      ...(pageProps.contract as object),
+      status: "draft",
+      statusLabel: "Draft",
+      statusTone: "neutral",
+      commission: {
+        agentSplitPercent: "70.000",
+        officeSplitPercent: "30.000",
+        mentor: {
+          percent: "10",
+          basis: "",
+          payee: {
+            id: 9,
+            name: "Sid",
+            email: "sid@example.com",
+            officeName: "Harrisburg",
+          },
+        },
+        referral: {},
+      },
+    },
+  });
+  const user = userEvent.setup();
+  render(<AgentContractWorkspace />);
+  expect(screen.queryByLabelText(/mentor payee/i)).not.toBeInTheDocument();
+  expect(screen.queryByText(/sid@example.com/i)).not.toBeInTheDocument();
+
+  await user.click(screen.getByRole("combobox", { name: /mentor basis/i }));
+  await user.click(
+    await screen.findByRole("option", { name: /agent side before fees/i }),
+  );
+  // Amount already present from props — payee appears once basis is chosen.
+  expect(screen.getByLabelText(/mentor payee/i)).toBeInTheDocument();
+});
+
+it("hides referral payee until basis and an amount are set", async () => {
+  pageProps = buildPageProps({
+    contract: {
+      ...(pageProps.contract as object),
+      status: "draft",
+      statusLabel: "Draft",
+      statusTone: "neutral",
+      commission: {
+        agentSplitPercent: "70.000",
+        officeSplitPercent: "30.000",
+        mentor: {},
+        referral: { basis: "", percent: "", fixedAmount: "" },
+      },
+    },
+  });
+  const user = userEvent.setup();
+  render(<AgentContractWorkspace />);
+  expect(screen.queryByLabelText(/referral payee/i)).not.toBeInTheDocument();
+
+  await user.click(screen.getByRole("combobox", { name: /referral basis/i }));
+  await user.click(
+    await screen.findByRole("option", { name: /agent side before fees/i }),
+  );
+  expect(screen.queryByLabelText(/referral payee/i)).not.toBeInTheDocument();
+  expect(
+    screen.getByText(/enter a percent or fixed amount to choose a referral payee/i),
+  ).toBeInTheDocument();
+
+  await user.type(screen.getByLabelText(/referral percent/i), "5");
+  expect(screen.getByLabelText(/referral payee/i)).toBeInTheDocument();
+});
+
+it("saves the draft through Inertia instead of a full document post", async () => {
+  pageProps = buildPageProps({
+    contract: {
+      ...(pageProps.contract as object),
+      status: "draft",
+      statusLabel: "Draft",
+      statusTone: "neutral",
+    },
+  });
+  const user = userEvent.setup();
+  render(<AgentContractWorkspace />);
+  await user.click(screen.getByRole("button", { name: /save draft/i }));
+  expect(post).toHaveBeenCalled();
+  const [url, body, options] = post.mock.calls.at(-1) as [
+    string,
+    FormData,
+    { preserveScroll?: boolean; onSuccess?: () => void },
+  ];
+  expect(typeof url).toBe("string");
+  expect(body).toBeInstanceOf(FormData);
+  expect(options).toEqual(expect.objectContaining({ preserveScroll: true }));
 });

@@ -382,9 +382,11 @@ function SignAction({
 
   if (signingReady) {
     return (
-      <Button type="button">
-        <PenLine className="size-3.5" aria-hidden />
-        Sign contract
+      <Button type="button" asChild>
+        <Link href={routes.my_contract_sign()}>
+          <PenLine className="size-3.5" aria-hidden />
+          Sign contract
+        </Link>
       </Button>
     );
   }
@@ -394,7 +396,7 @@ function SignAction({
       <TooltipTrigger asChild>
         <Button
           type="button"
-          aria-label="Sign contract — one-click signing is not available yet"
+          aria-label="Sign contract — electronic signing is not available yet"
           aria-disabled
           onClick={(event) => event.preventDefault()}
         >
@@ -403,8 +405,8 @@ function SignAction({
         </Button>
       </TooltipTrigger>
       <TooltipContent>
-        One-click signing is not wired up yet. You can still review and download the
-        PDF.
+        Electronic signing is temporarily unavailable. You can still review and download
+        the PDF.
       </TooltipContent>
     </Tooltip>
   );

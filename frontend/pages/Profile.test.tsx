@@ -10,6 +10,11 @@ import type { ProfilePageProps, SelfProfileValues } from "@/types";
 import type { ValidationErrors } from "@/types/design-system";
 
 const pageProps = vi.hoisted(() => ({ current: {} as ProfilePageProps }));
+const routerPost = vi.hoisted(() =>
+  vi.fn((_url: string, _data: unknown, options?: { onFinish?: () => void }) => {
+    options?.onFinish?.();
+  }),
+);
 
 vi.mock("@inertiajs/react", () => ({
   usePage: () => ({ props: pageProps.current, url: "/profile" }),
@@ -17,7 +22,7 @@ vi.mock("@inertiajs/react", () => ({
   Link: ({ href, children }: { href: string; children: ReactNode }) => (
     <a href={href}>{children}</a>
   ),
-  router: { post: vi.fn(), reload: vi.fn() },
+  router: { post: routerPost, reload: vi.fn() },
 }));
 
 const emptyValidation: ValidationErrors = { fields: {}, form: [] };
@@ -171,10 +176,16 @@ function setPage(overrides: Partial<ProfilePageProps> = {}) {
 describe("Profile", () => {
   beforeEach(() => {
     setPage();
-    vi.restoreAllMocks();
+    routerPost.mockReset();
+    routerPost.mockImplementation(
+      (_url: string, _data: unknown, options?: { onFinish?: () => void }) => {
+        options?.onFinish?.();
+      },
+    );
   });
 
-  it("posts to the self-service endpoint with the CSRF token", () => {
+  it("posts to the self-service endpoint via Inertia FormData", async () => {
+    const user = userEvent.setup();
     const { container } = render(<Profile />);
     const form = container.querySelector("form");
     expect(form).toHaveAttribute("action", "/profile/submit");
@@ -182,6 +193,16 @@ describe("Profile", () => {
     expect(container.querySelector("input[name='csrfmiddlewaretoken']")).toHaveValue(
       "token",
     );
+
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+    expect(routerPost).toHaveBeenCalledWith(
+      "/profile/submit",
+      expect.any(FormData),
+      expect.objectContaining({ preserveScroll: true }),
+    );
+    const body = routerPost.mock.calls[0][1] as FormData;
+    expect(body.get("csrfmiddlewaretoken")).toBe("token");
+    expect(body.get("preferred_name")).toBe("Bobby");
   });
 
   it("pre-fills every self-editable field from the server payload", () => {
@@ -301,11 +322,11 @@ describe("Profile", () => {
     );
   });
 
-  it("tracks unsaved changes and locks the button once submitted", async () => {
+  it("tracks unsaved changes and posts through Inertia without a full refresh", async () => {
     const user = userEvent.setup();
-    const { container } = render(<Profile />);
-    const form = container.querySelector("form") as HTMLFormElement;
-    form.submit = vi.fn();
+    // Hold the visit open so the Saving… state is observable.
+    routerPost.mockImplementationOnce(() => undefined);
+    render(<Profile />);
 
     expect(screen.getByText("All changes saved.")).toBeInTheDocument();
     await user.type(screen.getByLabelText(/^Preferred name/), "!");
@@ -314,6 +335,11 @@ describe("Profile", () => {
     const save = screen.getByRole("button", { name: "Save changes" });
     await user.click(save);
     expect(screen.getByRole("button", { name: "Saving…" })).toBeDisabled();
+    expect(routerPost).toHaveBeenCalledWith(
+      "/profile/submit",
+      expect.any(FormData),
+      expect.objectContaining({ preserveScroll: true }),
+    );
   });
 
   it("keeps the language selection in hidden inputs the form can post", async () => {

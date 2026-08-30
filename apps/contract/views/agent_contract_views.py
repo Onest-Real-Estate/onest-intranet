@@ -40,6 +40,7 @@ from apps.contract.statuses import contract_status_options
 from apps.user.models import Office, User
 from apps.web.authorization import enforce_policy
 from apps.web.contracts import empty_validation_errors, list_response
+from apps.web.flash import set_flash
 
 INDEX_PAGE = "AgentContractAdministration"
 WORKSPACE_PAGE = "AgentContractWorkspace"
@@ -307,6 +308,7 @@ def agent_contract_update(request: HttpRequest, public_id: uuid.UUID):
     except (ValidationError, PermissionDenied, StaleContractVersion) as exc:
         return _render_workspace_error(request, contract, exc)
 
+    set_flash(request, level="success", message="Draft saved")
     return redirect("agent_contract_workspace", public_id=contract.public_id)
 
 
@@ -347,6 +349,20 @@ def agent_contract_lifecycle(request: HttpRequest, public_id: uuid.UUID):
     ) as exc:
         return _render_workspace_error(request, contract, exc)
 
+    labels = {
+        "submit_for_review": "Submitted for review",
+        "reopen": "Draft reopened",
+        "issue": "Contract issued",
+        "activate": "Contract activated",
+        "supersede": "Contract superseded",
+        "retry_generation": "PDF generation retried",
+        "terminate": "Contract terminated",
+    }
+    set_flash(
+        request,
+        level="success",
+        message=labels.get(action, "Lifecycle update saved"),
+    )
     return redirect("agent_contract_workspace", public_id=public_id)
 
 

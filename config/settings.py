@@ -320,6 +320,27 @@ DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default="Onest <noreply@onest.
 # this must point at the hub itself and never at a storage or document host.
 SITE_BASE_URL = config("SITE_BASE_URL", default="http://localhost:8000").rstrip("/")
 
+# Hub-native agent contract e-sign (PKCS#12 org seal + ceremony TTL).
+CONTRACT_SIGNING_INTENT_TTL_SECONDS = config(
+    "CONTRACT_SIGNING_INTENT_TTL_SECONDS", default=900, cast=int
+)
+CONTRACT_SIGNING_CERT_PATH = config("CONTRACT_SIGNING_CERT_PATH", default="")
+CONTRACT_SIGNING_CERT_PASSPHRASE = config(
+    "CONTRACT_SIGNING_CERT_PASSPHRASE", default=""
+)
+# When DEBUG is true and no cert is configured, allow unsigned completion.
+CONTRACT_SIGNING_ALLOW_UNSIGNED_DEV = config(
+    "CONTRACT_SIGNING_ALLOW_UNSIGNED_DEV", default=True, cast=bool
+)
+# Azure OpenAI / OpenAI-compatible vision for field suggestions (optional).
+CONTRACT_FIELD_AI_ENDPOINT = config("CONTRACT_FIELD_AI_ENDPOINT", default="")
+CONTRACT_FIELD_AI_API_KEY = config("CONTRACT_FIELD_AI_API_KEY", default="")
+CONTRACT_FIELD_AI_DEPLOYMENT = config("CONTRACT_FIELD_AI_DEPLOYMENT", default="")
+CONTRACT_FIELD_AI_API_VERSION = config(
+    "CONTRACT_FIELD_AI_API_VERSION", default="2024-08-01-preview"
+)
+CONTRACT_FIELD_AI_MODEL = config("CONTRACT_FIELD_AI_MODEL", default="gpt-4o")
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # ---------------------------------------------------------------------------
@@ -341,7 +362,7 @@ DJANGO_VITE = {
 # ---------------------------------------------------------------------------
 INERTIA_LAYOUT = "layout.html"
 # Bump whenever the frontend bundle changes so stale clients get a full reload.
-INERTIA_VERSION = "22"
+INERTIA_VERSION = "25"
 
 # Optional external help centre. The shell exposes it only when it is an
 # absolute, credential-free HTTPS URL; an empty or unsafe value leaves the

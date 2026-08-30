@@ -204,7 +204,10 @@ describe("NotificationPreferences", () => {
     expect(routerPost).toHaveBeenCalledTimes(1);
     const [url, data] = routerPost.mock.calls[0];
     expect(url).toBe("/notifications/preferences/submit");
-    expect(data).toEqual({ email__training: false });
+    expect(data).toBeInstanceOf(FormData);
+    expect(Object.fromEntries((data as FormData).entries())).toEqual({
+      email__training: "false",
+    });
   });
 
   it("says the catalog moved on without claiming anything was reset", () => {

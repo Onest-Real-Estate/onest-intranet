@@ -104,6 +104,30 @@ OFFICE_DETAILS: dict[str, dict] = {
         "main_phone": "(571) 222-5555",
         "public_email": "prashanna@onest.realestate",
     },
+    "fairfax-va": {
+        "street_address": "",
+        "city": "Fairfax",
+        "state": "VA",
+        "zip_code": "",
+        "main_phone": "",
+        "public_email": "",
+    },
+    "maryland": {
+        "street_address": "",
+        "city": "",
+        "state": "MD",
+        "zip_code": "",
+        "main_phone": "",
+        "public_email": "",
+    },
+    "ro-virginia": {
+        "street_address": "",
+        "city": "",
+        "state": "VA",
+        "zip_code": "",
+        "main_phone": "",
+        "public_email": "",
+    },
 }
 
 

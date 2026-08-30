@@ -25,6 +25,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { toFormData } from "@/lib/form-data";
 import { routes } from "@/lib/routes";
 import type {
   NotificationFilterOption,
@@ -113,13 +114,13 @@ export default function Notifications() {
     setPendingId(row.id);
     router.post(
       routes.notification_state(row.id),
-      {
+      toFormData({
         action,
         status: filters.status,
         type: filters.type,
         priority: filters.priority,
         page: String(pagination.page),
-      },
+      }),
       {
         preserveScroll: true,
         onFinish: () => setPendingId(null),
@@ -131,11 +132,11 @@ export default function Notifications() {
     setBusy(true);
     router.post(
       routes.notification_read_all(),
-      {
+      toFormData({
         status: filters.status,
         type: filters.type,
         priority: filters.priority,
-      },
+      }),
       { preserveScroll: true, onFinish: () => setBusy(false) },
     );
   }

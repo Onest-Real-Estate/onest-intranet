@@ -25,6 +25,9 @@ dependencies = [
     "pillow>=12.3.0",
     "python-docx>=1.2.0",
     "pypdf>=6.16.2",
+    "pyjwt>=2.13.0",
+    "reportlab>=5.0.1",
+    "pyhanko[opentype]>=0.36.2",
 ]
 
 [dependency-groups]
@@ -45,7 +48,7 @@ testpaths = ["apps"]
 [tool.ruff]
 line-length = 88
 target-version = "py313"
-exclude = ["assets", "staticfiles", "frontend", "apps/**/migrations"]
+exclude = ["assets", "staticfiles", "frontend", "apps/**/migrations", ".agents"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "SIM", "C4"]

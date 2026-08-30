@@ -15,6 +15,7 @@ from apps.contract.administration import (
     issue_contract,
     search_contract_recipients,
     update_draft_contract,
+    workspace_payload,
 )
 from apps.contract.lifecycle import contract_version, transition
 from apps.contract.models import ContractTemplate, ContractTemplateVersion
@@ -211,3 +212,19 @@ def test_assert_template_applicable_helper(seeded_offices):
     version = _template(key="assert-md", company_wide=True, states=["MD"])
     with pytest.raises(ValidationError):
         assert_template_applicable(version, office=fairfax, effective_on=date.today())
+
+
+@pytest.mark.django_db
+def test_workspace_payload_includes_basis_options(seeded_offices):
+    admin = company_admin(seeded_offices)
+    recipient = agent(seeded_offices)
+    contract = create_draft_contract(
+        admin,
+        recipient=recipient,
+        effective_on=date.today(),
+        template_version=_template(),
+    )
+    payload = workspace_payload(admin, contract)
+    values = {row["value"] for row in payload["commissionBasisOptions"]}
+    assert "agent_side_before_fees" in values
+    assert all("label" in row for row in payload["commissionBasisOptions"])

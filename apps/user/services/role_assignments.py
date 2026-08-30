@@ -633,6 +633,10 @@ def sync_default_agent_assignment(
     assignment mirrors ``user.office`` rather than granting anything new, so it
     follows whoever was authorized to move the office — the agent themselves
     from ``/profile``, or an administrator from the administration page.
+
+    Head-office and region seats are valid work locations but are not valid
+    ``OFFICE``-scope targets, so those users get stale branch assignments
+    revoked and no new default Agent row — company/region roles cover them.
     """
     if user.office is None:
         return
@@ -658,6 +662,15 @@ def sync_default_agent_assignment(
             )
 
     if any(item.scope_office == user.office for item in live):
+        return
+
+    # Office-scoped roles may only target branch / regional_office kinds
+    # (see UserRoleAssignment.clean). Skipping here keeps profile and admin
+    # office moves from raising ValidationError for HQ/region seats.
+    if user.office.kind not in {
+        Office.Kind.BRANCH,
+        Office.Kind.REGIONAL_OFFICE,
+    }:
         return
 
     assignment = UserRoleAssignment(

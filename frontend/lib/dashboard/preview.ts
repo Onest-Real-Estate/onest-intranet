@@ -305,7 +305,7 @@ const supportQueue: DashboardQueue = {
     },
     {
       id: "sup-398",
-      title: "Requesting DocuSeal access",
+      title: "Requesting contract signing access",
       subtitle: "Chris Doyle · Fairfax VA",
       meta: "Opened yesterday",
       badge: "Normal",

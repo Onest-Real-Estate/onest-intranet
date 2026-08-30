@@ -6,6 +6,7 @@ import type { ComponentType } from "react";
 import { createRoot } from "react-dom/client";
 
 import { AppErrorBoundary, RecoverableError } from "@/components/AppErrorBoundary";
+import { Toaster } from "@/components/ui/sonner";
 import type { PageProps } from "@/types";
 
 const pages = import.meta.glob("./pages/**/*.tsx");
@@ -24,6 +25,7 @@ const application = createInertiaApp<PageProps>({
       <LucideProvider strokeWidth={1.5} size={20}>
         <AppErrorBoundary>
           <App {...props} />
+          <Toaster />
         </AppErrorBoundary>
       </LucideProvider>,
     );

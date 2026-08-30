@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
 
 from django.core.exceptions import PermissionDenied, ValidationError
@@ -14,14 +13,22 @@ from django.utils import timezone
 
 from apps.audit.models import AuditEvent
 from apps.audit.service import AuditTarget, actor_from_user, log_event
+from apps.contract.field_ai import field_ai_configured, suggest_fields_for_pdf
+from apps.contract.field_layout import (
+    assert_publishable_layout,
+    normalize_field_layout,
+    prefill_field_names,
+)
 from apps.contract.models import (
     AgentContract,
     ContractTemplate,
     ContractTemplateVersion,
 )
-from apps.contract.template_rendering import render_preview_pdf
+from apps.contract.pdf_signing import fill_prefill_fields
 from apps.contract.template_security import (
+    MERGE_SOURCE_OPTIONS,
     inspect_template,
+    seed_merge_schema_from_placeholders,
     synthetic_preview_context,
     validate_merge_schema,
 )
@@ -224,6 +231,147 @@ def create_template_family(
     return template
 
 
+SOURCE_FETCH_SALT = "contract-source-fetch"
+SOURCE_FETCH_MAX_AGE = 60 * 60  # 1 hour
+
+
+def _read_version_source_bytes(version: ContractTemplateVersion) -> bytes:
+    if not version.source_document:
+        raise ValidationError({"source_document": ["Upload a PDF first."]})
+    version.source_document.open("rb")
+    try:
+        data = version.source_document.read()
+    finally:
+        version.source_document.close()
+    if not data:
+        raise ValidationError({"source_document": ["Template PDF is empty."]})
+    return data
+
+
+def prepare_template_after_pdf_upload(
+    version: ContractTemplateVersion,
+    *,
+    pdf_bytes: bytes | None = None,
+) -> ContractTemplateVersion:
+    """Reset field layout after a new blank PDF upload."""
+    del pdf_bytes  # retained for call-site compatibility
+    if version.status != ContractTemplateVersion.Status.DRAFT:
+        raise ValidationError(
+            {"form": ["Only draft versions can replace the template PDF."]}
+        )
+    if not version.source_document:
+        raise ValidationError({"source_document": ["Upload a PDF first."]})
+
+    version.field_layout = []
+    version.extracted_placeholder_keys = []
+    version.merge_schema = []
+    version.save(
+        update_fields=[
+            "field_layout",
+            "extracted_placeholder_keys",
+            "merge_schema",
+            "updated_at",
+        ]
+    )
+    return version
+
+
+def save_field_layout(
+    actor: User,
+    *,
+    version: ContractTemplateVersion,
+    layout: Any,
+) -> ContractTemplateVersion:
+    """Persist Hub field placement and reseed Prefill merge keys."""
+    _ensure_manage(actor)
+    if version.status != ContractTemplateVersion.Status.DRAFT:
+        raise ValidationError(
+            {"form": ["Only draft versions can edit field placement."]}
+        )
+    if not version.source_document:
+        raise ValidationError({"source_document": ["Upload a PDF first."]})
+
+    normalized = normalize_field_layout(layout)
+    merge_keys = prefill_field_names(normalized)
+    existing = {
+        str(item.get("key", "")).strip(): item
+        for item in (version.merge_schema or [])
+        if isinstance(item, dict) and str(item.get("key", "")).strip()
+    }
+    merged: list[dict] = []
+    for key in merge_keys:
+        prior = existing.get(key)
+        if prior is not None:
+            merged.append(dict(prior))
+        else:
+            merged.extend(seed_merge_schema_from_placeholders([key]))
+
+    version.field_layout = normalized
+    version.extracted_placeholder_keys = merge_keys
+    version.merge_schema = merged
+    version.full_clean()
+    version.save(
+        update_fields=[
+            "field_layout",
+            "extracted_placeholder_keys",
+            "merge_schema",
+            "updated_at",
+        ]
+    )
+    return version
+
+
+def suggest_field_layout(
+    actor: User,
+    *,
+    version: ContractTemplateVersion,
+) -> list[dict]:
+    """Return AI field suggestions for the draft PDF (human must accept)."""
+    _ensure_manage(actor)
+    if version.status != ContractTemplateVersion.Status.DRAFT:
+        raise ValidationError({"form": ["Only draft versions can run field AI."]})
+    if not field_ai_configured():
+        raise ValidationError(
+            {
+                "form": [
+                    "Field AI is not configured. Set CONTRACT_FIELD_AI_ENDPOINT "
+                    "and CONTRACT_FIELD_AI_API_KEY."
+                ]
+            }
+        )
+    pdf_bytes = _read_version_source_bytes(version)
+    return suggest_fields_for_pdf(pdf_bytes)
+
+
+def _assert_publishable(version: ContractTemplateVersion) -> None:
+    layout = normalize_field_layout(version.field_layout or [])
+    assert_publishable_layout(layout)
+    merge_keys = prefill_field_names(layout)
+    version.extracted_placeholder_keys = merge_keys
+    validate_merge_schema(
+        list(version.merge_schema or []),
+        placeholder_keys=merge_keys,
+    )
+    missing_sources = [
+        str(item.get("key", "")).strip()
+        for item in (version.merge_schema or [])
+        if isinstance(item, dict)
+        and str(item.get("key", "")).strip()
+        and not str(item.get("source", "")).strip()
+    ]
+    if missing_sources:
+        raise ValidationError(
+            {
+                "merge_schema": [
+                    "Map every Prefill field to a hub source before publishing: "
+                    + ", ".join(missing_sources)
+                ]
+            }
+        )
+    if not version.source_document:
+        raise ValidationError({"source_document": ["Upload a PDF before publishing."]})
+
+
 def create_draft_version(
     actor: User,
     *,
@@ -317,16 +465,29 @@ def save_draft_version(
                 media_type=getattr(source_upload, "content_type", ""),
                 data=data,
             )
-            validate_merge_schema(
-                locked.merge_schema,
-                placeholder_keys=inspection.placeholder_keys,
-            )
             locked.source_format = inspection.format
             locked.source_media_type = inspection.media_type
             locked.source_checksum = inspection.checksum
-            locked.extracted_placeholder_keys = list(inspection.placeholder_keys)
             locked.source_document.save(
                 source_upload.name, ContentFile(data), save=False
+            )
+            locked.full_clean()
+            locked.save()
+            prepare_template_after_pdf_upload(locked, pdf_bytes=data)
+            locked.refresh_from_db()
+            # Keep existing merge mappings when re-uploading; Prefill keys are
+            # reseeded when the Hub field layout is saved.
+            if not locked.merge_schema and locked.extracted_placeholder_keys:
+                locked.merge_schema = seed_merge_schema_from_placeholders(
+                    locked.extracted_placeholder_keys
+                )
+                locked.save(update_fields=["merge_schema", "updated_at"])
+            return locked
+
+        if locked.extracted_placeholder_keys:
+            validate_merge_schema(
+                locked.merge_schema,
+                placeholder_keys=list(locked.extracted_placeholder_keys or []),
             )
 
         locked.full_clean()
@@ -337,28 +498,29 @@ def save_draft_version(
 def generate_preview(version: ContractTemplateVersion) -> ContractTemplateVersion:
     if version.status != ContractTemplateVersion.Status.DRAFT:
         raise ValidationError({"form": ["Only draft versions can generate a preview."]})
-    if not version.source_document:
-        raise ValidationError({"source_document": ["Upload a source document first."]})
-
-    version.source_document.open("rb")
-    try:
-        source_bytes = version.source_document.read()
-    finally:
-        version.source_document.close()
-
+    layout = normalize_field_layout(version.field_layout or [])
+    if not layout:
+        raise ValidationError(
+            {"form": ["Upload a PDF and place fields in the Hub placer first."]}
+        )
+    assert_publishable_layout(layout)
+    merge_keys = prefill_field_names(layout)
     validate_merge_schema(
         list(version.merge_schema or []),
-        placeholder_keys=list(version.extracted_placeholder_keys or []),
+        placeholder_keys=merge_keys,
     )
     preview_context = synthetic_preview_context(list(version.merge_schema or []))
-    preview_bytes, placeholder_keys = render_preview_pdf(
-        filename=Path(version.source_document.name).name,
-        media_type=version.source_media_type,
-        source_bytes=source_bytes,
-        merge_values=preview_context,
-    )
+    source_pdf = _read_version_source_bytes(version)
+    try:
+        preview_bytes = fill_prefill_fields(
+            source_pdf, layout=layout, values=preview_context
+        )
+    except Exception as exc:  # noqa: BLE001
+        raise ValidationError(
+            {"form": ["Could not generate a Hub preview from the field layout."]}
+        ) from exc
+
     version.preview_context = preview_context
-    version.extracted_placeholder_keys = list(placeholder_keys)
     version.preview_generated_at = timezone.now()
     version.validation_errors = []
     version.preview_pdf.save(
@@ -386,10 +548,7 @@ def publish_version(
         )
         if locked.status != ContractTemplateVersion.Status.DRAFT:
             raise ValidationError({"form": ["Only draft versions can be published."]})
-        validate_merge_schema(
-            list(locked.merge_schema or []),
-            placeholder_keys=list(locked.extracted_placeholder_keys or []),
-        )
+        _assert_publishable(locked)
         if not locked.preview_pdf:
             raise ValidationError(
                 {"preview_pdf": ["Generate a synthetic preview before publishing."]}
@@ -513,6 +672,34 @@ def retire_version(
     return locked
 
 
+def _workspace_version_pk(template: ContractTemplate) -> int | None:
+    """Version to open from the family list: latest draft, else active, else newest."""
+    # Query the version table directly — reverse managers are invisible to ty.
+    versions = list(
+        ContractTemplateVersion.objects.filter(template=template).order_by(
+            "-created_at", "-pk"
+        )
+    )
+    draft = next(
+        (
+            version
+            for version in sorted(
+                versions, key=lambda item: (item.created_at, item.pk), reverse=True
+            )
+            if version.status == ContractTemplateVersion.Status.DRAFT
+        ),
+        None,
+    )
+    if draft is not None:
+        return draft.pk
+    if template.active_version_id is not None:
+        return template.active_version_id
+    if not versions:
+        return None
+    newest = max(versions, key=lambda item: (item.created_at, item.pk))
+    return newest.pk
+
+
 def serialize_template_row(template: ContractTemplate) -> dict[str, Any]:
     return {
         "publicId": str(template.public_id),
@@ -534,10 +721,12 @@ def serialize_template_row(template: ContractTemplate) -> dict[str, Any]:
             if template.active_version is not None
             else None
         ),
+        "workspaceVersionPk": _workspace_version_pk(template),
     }
 
 
 def serialize_version_detail(version: ContractTemplateVersion) -> dict[str, Any]:
+    has_source = bool(version.source_document)
     return {
         "id": version.pk,
         "publicId": str(version.public_id),
@@ -549,6 +738,19 @@ def serialize_version_detail(version: ContractTemplateVersion) -> dict[str, Any]
         "sourceFormat": version.source_format,
         "sourceMediaType": version.source_media_type,
         "sourceChecksum": version.source_checksum,
+        "sourcePdfUrl": (
+            f"/operations/contract-templates/templates/{version.pk}/source.pdf"
+            if has_source
+            else ""
+        ),
+        "previewUrl": (
+            f"/operations/contract-templates/templates/{version.pk}/preview.pdf"
+            if version.preview_pdf
+            else None
+        ),
+        "fieldLayout": list(version.field_layout or []),
+        "fieldAiConfigured": field_ai_configured(),
+        "mergeSourceOptions": list(MERGE_SOURCE_OPTIONS),
         "placeholderKeys": list(version.extracted_placeholder_keys or []),
         "mergeSchema": list(version.merge_schema or []),
         "previewChecksum": version.preview_checksum,

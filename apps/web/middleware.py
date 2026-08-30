@@ -14,6 +14,7 @@ from apps.web.authorization import (
     get_authorization_policy,
     is_non_route_exempt_path,
 )
+from apps.web.flash import pop_flash
 from apps.web.navigation import hub_feature_states, primary_office_payload
 from apps.web.permission_catalog import CATALOG_VERSION
 from apps.web.quick_actions import quick_create_payload
@@ -156,5 +157,7 @@ class InertiaShareMiddleware:
             # an office aggregate. See apps/notifications/shell.py.
             notifications=lambda: notification_shell_payload(request.user),
             shell=lambda: self.shell_context(request),
+            # One-shot toast payload; popped so a refresh does not repeat it.
+            flash=lambda: pop_flash(request),
         )
         return self.get_response(request)

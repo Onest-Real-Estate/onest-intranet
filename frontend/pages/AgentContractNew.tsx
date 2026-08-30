@@ -2,7 +2,6 @@ import { Head, router, usePage } from "@inertiajs/react";
 import { useEffect, useId, useState } from "react";
 import {
   FormErrorSummary,
-  NativeSelect,
   PageHeader,
   SurfaceCard,
   SurfaceCardContent,
@@ -12,6 +11,13 @@ import { PermissionRequired } from "@/components/PermissionRequired";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { routes } from "@/lib/routes";
 import type {
   AgentContractNewPageProps,
@@ -28,6 +34,7 @@ export default function AgentContractNew() {
   const [results, setResults] = useState<AgentContractRecipientResult[]>([]);
   const [selected, setSelected] = useState<AgentContractRecipientResult | null>(null);
   const [templates, setTemplates] = useState<AgentContractTemplateOption[]>([]);
+  const [templateVersionId, setTemplateVersionId] = useState("");
   const [effectiveOn, setEffectiveOn] = useState(
     draft.effective_on || draft.effectiveOn || new Date().toISOString().slice(0, 10),
   );
@@ -55,6 +62,7 @@ export default function AgentContractNew() {
   useEffect(() => {
     if (!selected?.officeId) {
       setTemplates([]);
+      setTemplateVersionId("");
       return;
     }
     void fetch(
@@ -64,8 +72,12 @@ export default function AgentContractNew() {
       .then((response) => response.json())
       .then((payload: { results: AgentContractTemplateOption[] }) => {
         setTemplates(payload.results ?? []);
+        setTemplateVersionId("");
       })
-      .catch(() => setTemplates([]));
+      .catch(() => {
+        setTemplates([]);
+        setTemplateVersionId("");
+      });
   }, [effectiveOn, selected]);
 
   return (
@@ -85,13 +97,24 @@ export default function AgentContractNew() {
               action={routes.agent_contract_create()}
               className="grid max-w-xl gap-4"
               onSubmit={(event) => {
-                if (!selected) {
+                if (!selected || !templateVersionId) {
                   event.preventDefault();
+                  return;
                 }
+                event.preventDefault();
+                const form = event.currentTarget;
+                router.post(form.action, new FormData(form), {
+                  preserveScroll: true,
+                });
               }}
             >
               <input type="hidden" name="csrfmiddlewaretoken" value={csrfToken} />
               <input type="hidden" name="recipient_id" value={selected?.id ?? ""} />
+              <input
+                type="hidden"
+                name="template_version_id"
+                value={templateVersionId}
+              />
               {selected?.officeId ? (
                 <input type="hidden" name="office_id" value={selected.officeId} />
               ) : null}
@@ -104,6 +127,13 @@ export default function AgentContractNew() {
                   aria-expanded={results.length > 0}
                   aria-controls={listId}
                   aria-autocomplete="list"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
+                  data-1p-ignore
+                  data-lpignore="true"
+                  data-form-type="other"
                   value={selected ? `${selected.name} <${selected.email}>` : query}
                   onChange={(event) => {
                     setSelected(null);
@@ -131,9 +161,28 @@ export default function AgentContractNew() {
                         <span className="font-medium">{row.name}</span>
                         <span className="block text-muted-foreground">
                           {row.email} · {row.officeName}
+                          {row.officeState ? ` · ${row.officeState}` : ""}
                         </span>
                       </button>
                     ))}
+                  </div>
+                ) : null}
+                {selected ? (
+                  <div className="rounded-md border border-border bg-muted/40 px-3 py-2 text-sm">
+                    <p>
+                      <span className="text-muted-foreground">Office: </span>
+                      {selected.officeName || "—"}
+                    </p>
+                    <p>
+                      <span className="text-muted-foreground">Jurisdiction: </span>
+                      {selected.officeState || "Not set on office"}
+                    </p>
+                    {selected.licenseState ? (
+                      <p>
+                        <span className="text-muted-foreground">License state: </span>
+                        {selected.licenseState}
+                      </p>
+                    ) : null}
                   </div>
                 ) : null}
               </div>
@@ -152,19 +201,39 @@ export default function AgentContractNew() {
 
               <div className="grid gap-2">
                 <Label htmlFor="template_version_id">Template version</Label>
-                <NativeSelect
-                  id="template_version_id"
-                  name="template_version_id"
-                  required
-                  disabled={!selected}
+                <Select
+                  value={templateVersionId || undefined}
+                  onValueChange={setTemplateVersionId}
+                  disabled={!selected || templates.length === 0}
                 >
-                  <option value="">Select a published template</option>
-                  {templates.map((option) => (
-                    <option key={option.id} value={option.id}>
-                      {option.templateName} ({option.versionLabel})
-                    </option>
-                  ))}
-                </NativeSelect>
+                  <SelectTrigger id="template_version_id" aria-required>
+                    <SelectValue placeholder="Select a published template" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {templates.map((option) => (
+                      <SelectItem key={option.id} value={String(option.id)}>
+                        {option.templateName} ({option.versionLabel})
+                        {option.jurisdictionStateCodes?.length
+                          ? ` · ${option.jurisdictionStateCodes.join(", ")}`
+                          : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {!selected ? (
+                  <p className="text-sm text-muted-foreground">
+                    Select an agent first. Templates are filtered to that office&apos;s
+                    jurisdiction.
+                  </p>
+                ) : templates.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    No published active templates apply to{" "}
+                    {selected.officeName || "this office"}
+                    {selected.officeState ? ` (${selected.officeState})` : ""}. Drafts
+                    are excluded; jurisdiction-limited templates (for example VA-only)
+                    only appear for matching offices.
+                  </p>
+                ) : null}
               </div>
 
               <div className="grid grid-cols-2 gap-4">

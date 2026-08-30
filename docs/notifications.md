@@ -67,6 +67,13 @@ idempotent for free (see `apps/audit/tasks.dispatch_event`).
 EVENT_PRODUCERS = {
     "user.onboarding.owner_assigned": onboarding_owner_assigned,
     "user.account.state_changed": account_reactivated,
+    "contract.pdf_ready": contract_pdf_ready,
+    "contract.issued": contract_issued,
+    "contract.signed": contract_signed,
+    "contract.activated": contract_activated,
+    "contract.superseded": contract_superseded,
+    "contract.terminated": contract_terminated,
+    "contract.expired": contract_expired,
 }
 ```
 
