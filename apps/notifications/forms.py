@@ -13,9 +13,9 @@ from django import forms
 from apps.notifications.categories import (
     CATEGORY_DEFINITIONS,
     CHANNEL_BY_KEY,
-    CONFIGURABLE_CHANNELS,
     field_name,
     is_locked,
+    visible_channels,
 )
 
 ACTION_READ = "read"
@@ -46,7 +46,10 @@ class NotificationPreferencesForm(forms.Form):
 
     def __init__(self, data=None) -> None:
         super().__init__(data)
-        for channel_key in CONFIGURABLE_CHANNELS:
+        configurable = tuple(
+            channel.key for channel in visible_channels() if channel.configurable
+        )
+        for channel_key in configurable:
             for category in CATEGORY_DEFINITIONS:
                 if is_locked(category.key, channel_key):
                     continue
@@ -58,7 +61,10 @@ class NotificationPreferencesForm(forms.Form):
     def choices(self) -> dict[str, dict[str, bool]]:
         """The submitted set, shaped the way the preference store expects."""
         chosen: dict[str, dict[str, bool]] = {}
-        for channel_key in CONFIGURABLE_CHANNELS:
+        configurable = tuple(
+            channel.key for channel in visible_channels() if channel.configurable
+        )
+        for channel_key in configurable:
             for category in CATEGORY_DEFINITIONS:
                 name = field_name(channel_key, category.key)
                 if name not in self.fields:

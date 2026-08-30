@@ -37,6 +37,7 @@ dev = [
     "faker>=40.36.0",
     "pytest>=8.3.0",
     "pytest-django>=4.9.0",
+    "pytest-xdist>=3.8.0",
     "ruff>=0.16.3",
     "ty>=0.0.72",
 ]
@@ -44,6 +45,7 @@ dev = [
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "config.settings_test"
 testpaths = ["apps"]
+addopts = ["-n", "auto", "--reuse-db"]
 
 [tool.ruff]
 line-length = 88

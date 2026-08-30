@@ -348,6 +348,31 @@ CONTRACT_FIELD_AI_API_VERSION = config(
 )
 CONTRACT_FIELD_AI_MODEL = config("CONTRACT_FIELD_AI_MODEL", default="gpt-4o")
 
+# ---------------------------------------------------------------------------
+# Notification push providers (email is always on; others opt-in)
+# ---------------------------------------------------------------------------
+# Microsoft Graph / Slack stay registered but dormant until enabled *and*
+# credentialed. Producers queue every enabled channel through the shared
+# delivery ledger — swapping a provider never rewrites domain code.
+NOTIFICATION_MICROSOFT_ENABLED = config(
+    "NOTIFICATION_MICROSOFT_ENABLED", default=False, cast=bool
+)
+NOTIFICATION_MICROSOFT_CLIENT_ID = config(
+    "NOTIFICATION_MICROSOFT_CLIENT_ID", default=""
+)
+NOTIFICATION_MICROSOFT_CLIENT_SECRET = config(
+    "NOTIFICATION_MICROSOFT_CLIENT_SECRET", default=""
+)
+NOTIFICATION_MICROSOFT_TENANT = config("NOTIFICATION_MICROSOFT_TENANT", default="")
+NOTIFICATION_SLACK_ENABLED = config(
+    "NOTIFICATION_SLACK_ENABLED", default=False, cast=bool
+)
+NOTIFICATION_SLACK_BOT_TOKEN = config("NOTIFICATION_SLACK_BOT_TOKEN", default="")
+
+# Contract reminder / warning cadences (Celery beat tasks re-check state).
+CONTRACT_SIGNATURE_REMINDER_DAYS = (3, 7, 14)
+CONTRACT_EXPIRATION_WARNING_DAYS = (30, 14, 7)
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # ---------------------------------------------------------------------------

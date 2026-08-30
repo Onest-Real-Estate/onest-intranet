@@ -25,14 +25,13 @@ from apps.notifications.categories import (
     CATEGORY_BY_KEY,
     CATEGORY_DEFINITIONS,
     CHANNEL_BY_KEY,
-    CHANNEL_DEFINITIONS,
     CHANNEL_EMAIL,
-    CONFIGURABLE_CHANNELS,
     PREFERENCE_POLICY_VERSION,
     category_default,
     field_name,
     is_locked,
     lock_reason,
+    visible_channels,
 )
 from apps.notifications.models import Notification, NotificationPreference
 
@@ -116,7 +115,7 @@ def channel_allows(
 
 
 def resolved_matrix(user) -> dict[str, dict[str, bool]]:
-    """Every channel × category cell, with defaults and locks applied."""
+    """Every visible channel × category cell, with defaults and locks applied."""
     stored = stored_choices(user)
     return {
         channel.key: {
@@ -125,7 +124,7 @@ def resolved_matrix(user) -> dict[str, dict[str, bool]]:
             )
             for category in CATEGORY_DEFINITIONS
         }
-        for channel in CHANNEL_DEFINITIONS
+        for channel in visible_channels()
     }
 
 
@@ -216,10 +215,13 @@ def preference_payload(user) -> dict[str, Any]:
 
     The whole matrix is sent, locked cells included, because a switch that is
     simply missing reads as a channel that does not exist. Locked cells arrive
-    on, disabled, and carrying the sentence that says why.
+    on, disabled, and carrying the sentence that says why. Push providers that
+    are not enabled for this deployment are omitted entirely.
     """
     preference = get_preference(user)
     matrix = resolved_matrix(user)
+    channels = visible_channels()
+    configurable = tuple(channel.key for channel in channels if channel.configurable)
     return {
         "channels": [
             {
@@ -229,7 +231,7 @@ def preference_payload(user) -> dict[str, Any]:
                 "configurable": channel.configurable,
                 "lockedReason": channel.locked_reason,
             }
-            for channel in CHANNEL_DEFINITIONS
+            for channel in channels
         ],
         "categories": [
             {
@@ -247,7 +249,7 @@ def preference_payload(user) -> dict[str, Any]:
                         "lockedReason": lock_reason(category.key, channel.key),
                         "defaultEnabled": category_default(category.key, channel.key),
                     }
-                    for channel in CHANNEL_DEFINITIONS
+                    for channel in channels
                 ],
             }
             for category in CATEGORY_DEFINITIONS
@@ -262,6 +264,6 @@ def preference_payload(user) -> dict[str, Any]:
             "updatedAt": preference.updated_at.isoformat()
             if preference.updated_at
             else None,
-            "configurableChannels": list(CONFIGURABLE_CHANNELS),
+            "configurableChannels": list(configurable),
         },
     }

@@ -107,6 +107,22 @@ def expire_due_contracts() -> int:
 
 
 @shared_task
+def send_contract_signature_reminders() -> int:
+    """Beat-safe signature reminders while contracts remain signable."""
+    from apps.contract.notification_schedule import publish_signature_reminders
+
+    return publish_signature_reminders()
+
+
+@shared_task
+def send_contract_expiration_warnings() -> int:
+    """Beat-safe warnings for active contracts approaching ``expires_on``."""
+    from apps.contract.notification_schedule import publish_expiration_warnings
+
+    return publish_expiration_warnings()
+
+
+@shared_task
 def cleanup_orphan_contract_artifacts(*, older_than_hours: int = 24) -> int:
     """Remove generated PDFs that were never pointed at by a contract.
 

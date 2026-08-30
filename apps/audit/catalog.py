@@ -176,6 +176,67 @@ registry.register(
     ),
 )
 
+registry.register(
+    name="contract.viewed",
+    version=1,
+    required_payload_keys={
+        "contract_id",
+        "office_id",
+        "agent_id",
+        "status",
+        "occurred_at",
+    },
+    description="Emitted when the recipient first views an issued contract.",
+)
+
+registry.register(
+    name="contract.generation_error",
+    version=1,
+    required_payload_keys={
+        "contract_id",
+        "office_id",
+        "agent_id",
+        "status",
+        "occurred_at",
+    },
+    description=(
+        "Emitted when PDF/finalization fails. Payload carries ids only — never "
+        "party or commercial content."
+    ),
+)
+
+registry.register(
+    name="contract.signature_reminder",
+    version=1,
+    required_payload_keys={
+        "contract_id",
+        "office_id",
+        "agent_id",
+        "reminder_day",
+        "occurred_at",
+    },
+    description=(
+        "Emitted on an approved cadence while a contract remains signable. "
+        "Beat tasks re-check status before publishing."
+    ),
+)
+
+registry.register(
+    name="contract.expiration_warning",
+    version=1,
+    required_payload_keys={
+        "contract_id",
+        "office_id",
+        "agent_id",
+        "warning_day",
+        "occurred_at",
+    },
+    description=(
+        "Emitted when an active contract is within an approved window of "
+        "expires_on. Beat tasks re-check status before publishing."
+    ),
+)
+
 # ---------------------------------------------------------------------------
 # transaction domain  (publisher: apps.transaction — future)
 # ---------------------------------------------------------------------------

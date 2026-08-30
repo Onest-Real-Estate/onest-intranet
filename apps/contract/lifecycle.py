@@ -110,11 +110,13 @@ _AUDIT_ACTION: dict[str, str] = {
 
 _DOMAIN_EVENT: dict[str, str] = {
     "issue": "contract.issued",
+    "mark_viewed": "contract.viewed",
     "mark_signed": "contract.signed",
     "activate": "contract.activated",
     "supersede": "contract.superseded",
     "terminate": "contract.terminated",
     "expire": "contract.expired",
+    "mark_generation_error": "contract.generation_error",
 }
 
 
@@ -527,7 +529,33 @@ def _transition(
     if action in AGENT_EMAIL_ACTIONS:
         _queue_agent_status_email(locked.pk, action=action)
 
+    if action in {
+        "mark_signed",
+        "activate",
+        "supersede",
+        "terminate",
+        "expire",
+    }:
+        _queue_suppress_stale_reminders(locked.pk)
+
     return locked
+
+
+def _queue_suppress_stale_reminders(contract_pk: int) -> None:
+    def _run() -> None:
+        from apps.contract.notification_schedule import suppress_stale_reminders
+
+        refreshed = AgentContract.objects.filter(pk=contract_pk).first()
+        if refreshed is None:
+            return
+        try:
+            suppress_stale_reminders(refreshed)
+        except Exception:  # noqa: BLE001
+            logger.exception(
+                "suppress stale contract reminders failed id=%s", contract_pk
+            )
+
+    transaction.on_commit(_run)
 
 
 def _queue_agent_status_email(contract_pk: int, *, action: str) -> None:
