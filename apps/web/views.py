@@ -8,6 +8,7 @@ from apps.announcements.administration_views import (
 from apps.contract.administration_views import contract_template_index
 from apps.contract.agent_contract_views import agent_contract_index
 from apps.feedback.views import feedback_inbox
+from apps.it_support.views import it_support_queue
 from apps.operational_tasks.views import tasks_index
 from apps.user.services.role_assignments import get_effective_access
 from apps.user.views.directory_views import user_directory
@@ -123,6 +124,7 @@ OPERATIONS_VIEWS["admin_office_resources"] = office_resources_admin_index
 # to the placeholder however the module was actually built.
 OPERATIONS_VIEWS["admin_feedback"] = feedback_inbox
 OPERATIONS_VIEWS["operational_tasks"] = tasks_index
+OPERATIONS_VIEWS["admin_it_support"] = it_support_queue
 
 
 _CATALOG_CONTRACTS = (

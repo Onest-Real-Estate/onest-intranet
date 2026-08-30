@@ -45,7 +45,11 @@ def branch_office():
 
 def test_every_hub_section_declares_its_availability():
     assert set(HUB_FEATURES) == (
-        set(HUB_SECTIONS) | set(OPERATIONS_FEATURES) | {"reports"}
+        set(HUB_SECTIONS)
+        | set(OPERATIONS_FEATURES)
+        # Live destinations that are neither an agent section nor an operations
+        # Coming Soon stub.
+        | {"reports", "admin-tool-catalog"}
     )
 
 
@@ -60,9 +64,12 @@ def test_only_the_live_destinations_are_enabled():
             "office-info": True,
             "office-resources": True,
             "my-contract": True,
+            "my-tools": True,
             "reports": True,
+            "admin-tool-catalog": True,
             "admin-operational-tasks": True,
             "admin-feedback": True,
+            "admin-it-support": True,
         }.items()
         if enabled
     }
@@ -77,7 +84,10 @@ def test_only_the_live_destinations_are_enabled():
     assert HUB_FEATURES["office-info"] is True
     assert HUB_FEATURES["office-resources"] is True
     assert HUB_FEATURES["my-contract"] is True
+    assert HUB_FEATURES["my-tools"] is True
     assert HUB_FEATURES["reports"] is True
+    assert HUB_FEATURES["admin-tool-catalog"] is True
+    assert HUB_FEATURES["admin-it-support"] is True
 
 
 def test_feature_states_are_a_copy_callers_cannot_corrupt():
@@ -99,6 +109,7 @@ def test_unauthorized_administrative_feature_keys_are_not_shared(client):
         "office-info": True,
         "office-resources": True,
         "my-contract": True,
+        "my-tools": True,
     }
     assert not any(key.startswith("admin-") for key in props["features"])
 
@@ -194,6 +205,7 @@ def test_shared_props_carry_feature_state_and_office(client):
         "office-info": True,
         "office-resources": True,
         "my-contract": True,
+        "my-tools": True,
     }
     assert props["primaryOffice"] == {
         "id": office.id,

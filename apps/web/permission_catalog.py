@@ -572,11 +572,55 @@ PERMISSION_DEFINITIONS: tuple[PermissionDefinition, ...] = (
         risk="high",
     ),
     PermissionDefinition(
+        codename="web.manage_onboarding_tools",
+        name="Can manage the agent tool catalog",
+        domain="platform",
+        action="manage",
+        description=(
+            "Add, edit, reorder, and retire the tools every agent is set up "
+            "with, including which offices each applies to and the setup guide "
+            "agents follow. Brokerage-wide configuration, distinct from moving "
+            "one agent's checklist."
+        ),
+        default_roles=_BROKERAGE_ADMINS,
+        risk="high",
+    ),
+    PermissionDefinition(
         codename="web.view_it_support",
         name="Can view scoped IT support requests",
         domain="platform",
         action="view",
         description="View IT support requests in scope.",
+        default_roles=(*_BROKERAGE_ADMINS, IT_SUPPORT),
+    ),
+    PermissionDefinition(
+        codename="web.triage_it_support",
+        name="Can triage scoped IT support requests",
+        domain="platform",
+        action="manage",
+        description=(
+            "Read other people's IT requests in scope, move them through the "
+            "lifecycle, and set priority."
+        ),
+        default_roles=(*_BROKERAGE_ADMINS, IT_SUPPORT),
+    ),
+    PermissionDefinition(
+        codename="web.assign_it_support",
+        name="Can assign IT support requests",
+        domain="platform",
+        action="manage",
+        description="Set or clear the owner of an IT support request.",
+        default_roles=(*_BROKERAGE_ADMINS, IT_SUPPORT),
+    ),
+    PermissionDefinition(
+        codename="web.note_it_support",
+        name="Can write internal notes on IT support requests",
+        domain="platform",
+        action="manage",
+        description=(
+            "Write IT-only notes and attach IT-only files. Never visible to "
+            "the requester."
+        ),
         default_roles=(*_BROKERAGE_ADMINS, IT_SUPPORT),
     ),
     # --- Dashboard metrics ---

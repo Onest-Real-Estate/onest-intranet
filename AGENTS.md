@@ -105,6 +105,8 @@ docs/office-resources.md  Scoped office resources: inheritance, precedence, prot
 docs/announcements.md  Announcements: taxonomy, audience union semantics, media pipeline
 docs/operational-tasks.md  Operational tasks: lifecycle, scope, conversion seam
 docs/feedback.md   Feedback intake: diagnostic redaction, idempotency, triage
+docs/it-support.md IT help desk: lifecycle, scope, internal notes, onboarding seam
+docs/onboarding-tools.md  Agent tool catalog: location rules, guides, readiness
 DESIGN.md          Design tokens + visual world (values win over docs/design-system.md)
 ```
 

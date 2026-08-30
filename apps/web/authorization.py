@@ -368,6 +368,112 @@ ROUTE_POLICIES: dict[str, AuthorizationPolicy] = {
         route_names=("office_resources",),
         scope_rule="self_only",
     ),
+    "onboarding_tool_catalog": AuthorizationPolicy(
+        key="onboarding_tool_catalog",
+        access="permission_protected",
+        description=(
+            "Add, edit, reorder, and retire the agent tool catalog, including "
+            "which offices each tool applies to and the guide agents follow. "
+            "Brokerage-wide configuration, so it is a separate grant from "
+            "moving one agent's checklist — a branch manager runs onboarding "
+            "for their branch without redefining what every office needs."
+        ),
+        methods=("GET", "POST"),
+        route_names=(
+            "onboarding_tool_catalog",
+            "onboarding_tool_create",
+            "onboarding_tool_save",
+            "onboarding_tool_reorder",
+        ),
+        all_permissions=("web.manage_onboarding_tools",),
+        scope_rule="brokerage_wide",
+    ),
+    "my_tools": AuthorizationPolicy(
+        key="my_tools",
+        access="authenticated",
+        description=(
+            "The signed-in agent's own tool checklist and setup guides. No "
+            "grant: a person is always entitled to know what they are expected "
+            "to have and how to obtain it. Reads only their own row set."
+        ),
+        methods=("GET",),
+        route_names=("my_tools",),
+        scope_rule="self_only",
+    ),
+    "team_tool_readiness": AuthorizationPolicy(
+        key="team_tool_readiness",
+        access="permission_protected",
+        description=(
+            "Tool readiness for the people this reader covers, and the write "
+            "that moves one row. Scoped by the office tree in SQL before "
+            "counting; an agent outside that reach is a 404. The write "
+            "additionally requires the onboarding grant and refuses "
+            "self-management."
+        ),
+        methods=("GET", "POST"),
+        route_names=("team_tool_readiness", "agent_tools", "agent_tool_state"),
+        all_permissions=("web.view_new_agents",),
+        scope_rule="office_tree_scope",
+    ),
+    "it_support_submit": AuthorizationPolicy(
+        key="it_support_submit",
+        access="authenticated",
+        description=(
+            "The IT request form and the requester's own ticket list. Open to "
+            "every authenticated person on purpose: gating it would mean the "
+            "people most likely to hit an account or access bug are the ones "
+            "who cannot report it. The list is filtered to tickets the reader "
+            "raised or is the subject of."
+        ),
+        methods=("GET", "POST"),
+        route_names=("it_support", "it_support_create"),
+        scope_rule="self_only",
+    ),
+    "it_support_detail": AuthorizationPolicy(
+        key="it_support_detail",
+        access="authenticated",
+        description=(
+            "One ticket by public id. Loaded through the reader's own scoped "
+            "queryset, so a ticket they neither raised nor may triage is a 404 "
+            "rather than a 403. Internal notes and diagnostics are excluded "
+            "from the payload for a reader without the note grant."
+        ),
+        methods=("GET",),
+        route_names=("it_support_ticket",),
+        scope_rule="support_request_scope",
+    ),
+    "it_support_write": AuthorizationPolicy(
+        key="it_support_write",
+        access="authenticated",
+        description=(
+            "Reply, attach, transition, assign, and prioritise. Authenticated "
+            "at the route because a requester may reply on and attach to their "
+            "own ticket; each write then re-checks its own specific grant in "
+            "the service, where the ticket's submitter is also known."
+        ),
+        methods=("POST",),
+        route_names=(
+            "it_support_reply",
+            "it_support_attach",
+            "it_support_transition",
+            "it_support_assign",
+            "it_support_priority",
+        ),
+        scope_rule="support_request_scope",
+    ),
+    "it_support_attachment": AuthorizationPolicy(
+        key="it_support_attachment",
+        access="authenticated",
+        description=(
+            "Streams one ticket attachment from protected storage. The parent "
+            "ticket is resolved inside the reader's scope and the file inside "
+            "the visible-attachment queryset, so an IT-only file is a 404 "
+            "rather than a 403 for a requester. No signed link, no public URL."
+        ),
+        methods=("GET",),
+        route_names=("it_support_attachment",),
+        scope_rule="support_request_scope",
+    ),
     "feedback_submit": AuthorizationPolicy(
         key="feedback_submit",
         access="authenticated",

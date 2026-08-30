@@ -53,6 +53,8 @@ INSTALLED_APPS = [
     "apps.announcements",
     "apps.contract",
     "apps.operational_tasks",
+    "apps.it_support",
+    "apps.onboarding_tools",
     "apps.feedback",
 ]
 

@@ -1,0 +1,177 @@
+# Agent tool catalog
+
+What a new agent needs set up, where to get each one, and how far they have got.
+Lives in `apps/onboarding_tools`.
+
+## Why this is data
+
+The list used to be four values in a `TextChoices` enum. That shape cannot
+express this catalog:
+
+- it is ~23 tools across three groups, and it grows;
+- it changes whenever a vendor does;
+- **the MLS and association entries depend on where the agent works.** SmartMLS
+  and CT Realtors belong to Connecticut; an agent in Virginia needs neither.
+
+Every one of those facts would otherwise be a deploy. So the catalog is a table,
+modelled on `web.QuickAccessLink`, which learned the same lesson: *"The panel
+used to be a tuple… changing it meant a deploy."*
+
+## Every tool says how to get it
+
+This is what makes the catalog worth having rather than a list of names. Each
+row carries either:
+
+- **`setup_steps`** — an ordered list of plain strings the agent follows now, or
+- **`contact_label`** — who at oNEST turns it on ("your branch admin", "IT
+  support"), optionally with `request_path` pointing at the IT support form.
+
+`provisioning` names which case applies: `self_serve`, `onest`, or `both` (the
+agent signs up, oNEST then activates). A **database constraint refuses a row
+with neither steps nor a contact** — a checklist that says "you need HiHello"
+without saying how to get it has moved the problem, not solved it.
+
+`contact_label` is free text on purpose: it is "your branch admin" as often as a
+named person, and modelling it as a user would break the moment somebody leaves.
+
+## Location
+
+`OnboardingTool.objects.for_office(office)` resolves what applies:
+
+1. `company_wide` tools always apply.
+2. Otherwise the tool names offices or regions in
+   `OnboardingToolOfficeAudience`. `include_descendants` covers every branch
+   beneath a node, so SmartMLS attaches **once** to Connecticut.
+
+An agent with **no office** gets only the company-wide set. Guessing an
+association from a blank field would tell somebody to join the wrong MLS.
+
+Cost is one query for the catalog, one for the agent's statuses, plus a walk up
+the office tree. That walk is O(tree depth) and **not** O(tools) — the cost does
+not grow as the catalog does.
+
+## Progress
+
+`AgentToolStatus` holds one agent's state on one tool:
+`not_started · in_progress · ready · blocked · not_applicable`.
+
+- **Rows are created lazily.** A tool with no row reads as "not started", so
+  adding a tool to the catalog does not write a row for every agent.
+- **`ready` and `ready_at` travel together**, enforced by a constraint, so any
+  figure asking "when did this agent become workable" has one answer.
+- **`not_applicable` counts as settled.** Somebody excused from a tool is not
+  outstanding work.
+- **`is_required=False` tools are excluded from the figure.** Facebook and
+  Instagram are available, not expected; counting them would make 100%
+  unreachable.
+
+### Who may change it
+
+`services.set_state` requires `web.manage_new_agent_onboarding` — the grant that
+already runs onboarding. There is deliberately **no new permission**: the people
+who do this work already hold it, and a second grant is one more thing to forget.
+
+**Self-management is refused**, matching the New Agent List. An agent marking
+their own Office 365 "ready" tells nobody anything, and the figure would stop
+meaning "IT confirmed this works".
+
+### Who may watch it
+
+`AgentToolStatus.objects.for_reader(user, access=…)` is the ordinary office-tree
+reach, with no extra grant:
+
+| Reader | Sees |
+| --- | --- |
+| Any agent | Their own |
+| Branch manager | Their branch |
+| Regional | Their region |
+| Broker / admin | The brokerage |
+
+If you may already see the agent in the directory, you may see whether their
+email works.
+
+## Relationship to IT Support
+
+`apps/it_support` has a **New agent setup** category and an `about_user` field:
+that is the *request* asking IT to do the provisioning. The **checklist is here**
+and nowhere else. Two sources of truth would disagree within a week.
+
+## Seeding
+
+`migrations/0002_seed_catalog` writes the initial rows from
+`apps.onboarding_tools.catalog`. It is idempotent by slug and **never updates an
+existing row** — an administrator who corrected a contact name should not have
+that overwritten by a redeploy. Reversing it deletes only rows nobody has
+recorded progress against.
+
+Office slugs the deployment does not have are skipped rather than failing the
+migration: the seed must not depend on one brokerage's office tree.
+
+## Managing the catalog
+
+`/operations/tool-catalog` behind **`web.manage_onboarding_tools`**.
+
+That is a **separate grant from `manage_new_agent_onboarding`** on purpose: a
+branch manager runs onboarding for their branch, and deciding what every office
+in the brokerage needs is a different, wider decision. Holding one does not
+imply the other.
+
+Editing happens **in place** — a row opens into its own form rather than sending
+an administrator to a separate page and back. At two dozen rows across three
+shelves, keeping the list on screen is what makes "does this read right next to
+its neighbours" answerable while editing.
+
+### The guide editor
+
+Steps are edited as an ordered list of fields, not a textarea split on newlines.
+The textarea looks simpler right up to the moment somebody pastes a wrapped
+sentence and silently gains two steps. Each step posts as a repeated `step`
+value, read with `getlist`, so the form still works as a plain POST.
+
+A guide is capped at 12 steps. Longer than that is a document, and the tool
+should link to it instead.
+
+### What a save enforces
+
+- **Steps or a contact.** The form raises it on the field so the writer knows
+  what to fix; the database constraint catches it regardless.
+- **A location-specific tool must name somewhere.** Otherwise it applies to
+  nobody and silently disappears from every checklist.
+- **Office choices are the editor's own scoped set**, so a posted id outside it
+  fails validation rather than being quietly accepted.
+- **Audience rows are replaced wholesale**, never diffed. Reconciling a partial
+  edit is how an office quietly survives being unticked.
+- **Reordering only touches rows already in that group**, so a crafted post
+  cannot drag a marketing tool onto the company shelf.
+
+Every save and reorder writes an audit event.
+
+## Surface
+
+| Route | Who | What |
+| --- | --- | --- |
+| `/my-tools` | Everyone | Your own checklist and every setup guide |
+| `/operations/tool-readiness` | `web.view_new_agents` | How far the people you cover have got |
+| `/operations/tool-readiness/<id>` | Same, scoped | One agent's checklist, editable |
+
+`/my-tools` and the per-agent page are the **same component**. What differs is
+`canManage`, which the server decides — and which is false for an administrator
+looking at their own rows, because self-attestation would make the figure
+meaningless.
+
+### Why rows and not cards
+
+The live system this replaces draws the catalog as a grid of bordered cards with
+status chips. Two dozen same-sized boxes float independently, so the eye compares
+their *edges* rather than reading them, and DESIGN.md's Rule Before The Box calls
+that out by name. Ruled rows put every state mark on one left edge, which is the
+column a reader actually scans to find what is left.
+
+The **guide opens in place**, using `<details>`. It is the only reason this page
+beats a spreadsheet, so it must not sit behind a navigation — and the native
+element carries its own keyboard and screen-reader behaviour rather than a
+hand-rolled disclosure that forgets half of it.
+
+A blocked row shows its note **to the agent**, not only to staff: the reason you
+are stuck is the one thing you most need. Only the control that changes the state
+is restricted.

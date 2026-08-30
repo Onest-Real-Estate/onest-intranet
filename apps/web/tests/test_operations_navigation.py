@@ -125,6 +125,7 @@ def test_registry_has_exact_destinations_order_routes_and_permissions():
                 "admin_announcements",
                 "operational_tasks",
                 "admin_feedback",
+                "admin_it_support",
             }
         )
 
@@ -268,6 +269,12 @@ def test_brokerage_admin_can_reach_every_registered_destination(client):
             assert "filterOptions" in props
             assert "summary" in props
             continue
+        if destination.route_name == "admin_it_support":
+            assert "tickets" in props
+            assert "metrics" in props
+            assert "options" in props
+            assert "offices" in props
+            continue
         assert props["title"] == destination.label
         assert props["administrative"] is True
         assert props["scope"] == {
@@ -377,11 +384,15 @@ def test_permission_revocation_takes_effect_on_the_next_nested_visit(client):
             "admin_documents",
         ),
         (
+            # IT Support has a real queue now, so the specialty persona is
+            # checked against a destination that still renders the placeholder.
+            # Its scoped queue access is covered by
+            # ``apps/it_support/tests/test_scope.py``.
             "it-support",
             AGENT,
             ScopeType.OFFICE,
-            "web.view_it_support",
-            "admin_it_support",
+            "web.view_inventory",
+            "admin_inventory",
         ),
     ],
 )
