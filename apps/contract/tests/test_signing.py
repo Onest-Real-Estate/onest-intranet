@@ -250,19 +250,30 @@ def test_start_and_complete_signing(seeded_offices, settings):
     assert payload["ceremony"]["reviewPdfUrl"]
     assert any(f["type"] == "signature" for f in payload["ceremony"]["agentFields"])
 
-    result = complete_signing(
-        recipient,
-        intent_public_id=uuid.UUID(payload["ceremony"]["intentPublicId"]),
-        signature_data_url=_PNG_DATA_URL,
-        signed_date="2026-08-29",
-        request_meta=_meta("sess-complete"),
-    )
+    with patch("apps.contract.services.signing_service._queue_signed_pdf_generation"):
+        result = complete_signing(
+            recipient,
+            intent_public_id=uuid.UUID(payload["ceremony"]["intentPublicId"]),
+            signature_data_url=_PNG_DATA_URL,
+            signed_date="2026-08-29",
+            request_meta=_meta("sess-complete"),
+        )
     assert result["ok"] is True
     contract.refresh_from_db()
     assert contract.status == ContractStatus.SIGNED
     sig = ContractSignature.objects.get(contract=contract)
     assert sig.signature_method == ContractSignature.Method.HUB_EMBEDDED
+    assert sig.source_checksum
+    assert sig.appearance_file
+    assert sig.finalization_status == ContractSignature.FinalizationStatus.PENDING
+    # Final PDF is async; run the pipeline inline for the ceremony smoke test.
+    from apps.contract.signed_pdf_generation import generate_and_store_signed_pdf
+
+    assert generate_and_store_signed_pdf(sig.pk).startswith("ready")
+    sig.refresh_from_db()
+    contract.refresh_from_db()
     assert sig.certificate_of_completion is not None
+    assert contract.signed_pdf_id == sig.artifact_id
 
 
 @pytest.mark.django_db

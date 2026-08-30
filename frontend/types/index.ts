@@ -2916,9 +2916,16 @@ export interface MyContractDetail {
   expectedVersion: string;
   generatedPdf: MyContractArtifactMeta | null;
   signedPdf: MyContractArtifactMeta | null;
+  signedPdfFinalization?: {
+    status: string;
+    error: string | null;
+    signaturePublicId: string;
+    ready: boolean;
+  } | null;
   previewUrl: string | null;
   downloadUrl: string | null;
   artifactKind: string | null;
+  verifyUrl?: string | null;
   isCurrentFocus: boolean;
   isGoverning?: boolean;
   amendsPublicId: string | null;

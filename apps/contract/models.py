@@ -79,6 +79,18 @@ def _template_preview_upload_to(
     )
 
 
+def _signature_appearance_upload_to(instance: ContractSignature, filename: str) -> str:
+    safe = Path(filename).name or "appearance.png"
+    suffix = f"{uuid.uuid4().hex}_{safe}"
+    return f"contracts/{instance.contract.public_id}/signature-appearance/{suffix}"
+
+
+def _signature_initials_upload_to(instance: ContractSignature, filename: str) -> str:
+    safe = Path(filename).name or "initials.png"
+    suffix = f"{uuid.uuid4().hex}_{safe}"
+    return f"contracts/{instance.contract.public_id}/signature-initials/{suffix}"
+
+
 class ContractTemplate(models.Model):
     """Template family. Full management workflow lands in a later issue.
 
@@ -1616,11 +1628,21 @@ class ContractSigningIntent(models.Model):
 
 
 class ContractSignature(models.Model):
-    """Immutable recipient electronic signature record for one contract version."""
+    """Durable recipient electronic signature for one contract version.
+
+    Ceremony facts (signer, disclosure, appearance, source checksum) are
+    immutable after create. Final signed-PDF attachment and finalization
+    status may update once through the signed-PDF generation pipeline.
+    """
 
     class Method(models.TextChoices):
         HUB_EMBEDDED = "hub_embedded", _("Hub embedded")
         DOCUSEAL_EMBEDDED = "docuseal_embedded", _("DocuSeal embedded (legacy)")
+
+    class FinalizationStatus(models.TextChoices):
+        PENDING = "pending", _("Pending")
+        READY = "ready", _("Ready")
+        FAILED = "failed", _("Failed")
 
     public_id = models.UUIDField(
         _("public id"), default=uuid.uuid4, unique=True, editable=False
@@ -1648,6 +1670,12 @@ class ContractSignature(models.Model):
         verbose_name=_("signed artifact"),
         related_name="signature_records",
         on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        help_text=_(
+            "Authoritative final signed PDF once generation succeeds. "
+            "Null while finalization is pending or failed."
+        ),
     )
     certificate_of_completion = models.ForeignKey(
         ContractArtifact,
@@ -1656,6 +1684,67 @@ class ContractSignature(models.Model):
         on_delete=models.PROTECT,
         null=True,
         blank=True,
+    )
+    source_checksum = models.CharField(
+        _("source review PDF checksum"),
+        max_length=64,
+        blank=True,
+        default="",
+        help_text=_(
+            "SHA-256 of the issued/reviewed PDF bytes used as signing input. "
+            "Final generation must bind to this checksum, never re-render terms."
+        ),
+    )
+    signed_date_value = models.CharField(
+        _("signed date value"),
+        max_length=64,
+        blank=True,
+        default="",
+        help_text=_("Date text stamped onto Agent date fields during finalization."),
+    )
+    appearance_file = models.FileField(
+        _("signature appearance"),
+        max_length=255,
+        storage=private_storage,
+        upload_to=_signature_appearance_upload_to,
+        blank=True,
+        default="",
+        help_text=_("Protected PNG/JPEG used to stamp Agent signature fields."),
+    )
+    initials_file = models.FileField(
+        _("initials appearance"),
+        max_length=255,
+        storage=private_storage,
+        upload_to=_signature_initials_upload_to,
+        blank=True,
+        default="",
+    )
+    agent_text_values = models.JSONField(
+        _("agent text values"),
+        default=dict,
+        blank=True,
+        help_text=_("Optional Agent text/checkbox values applied during finalization."),
+    )
+    finalization_status = models.CharField(
+        _("finalization status"),
+        max_length=16,
+        choices=FinalizationStatus.choices,
+        default=FinalizationStatus.PENDING,
+        db_index=True,
+    )
+    finalization_error = models.CharField(
+        _("finalization error code"),
+        max_length=64,
+        blank=True,
+        default="",
+        help_text=_("Non-PII outcome code when final PDF generation fails."),
+    )
+    generation_task_id = models.CharField(
+        _("generation task id"),
+        max_length=255,
+        blank=True,
+        default="",
+        help_text=_("Celery task identity for the latest finalization attempt."),
     )
     signed_at = models.DateTimeField(_("signed at"), default=timezone.now)
     disclosure_version = models.CharField(_("disclosure version"), max_length=64)
@@ -1718,18 +1807,121 @@ class ContractSignature(models.Model):
         contract_id: int
         intent_id: int
         signer_id: int
-        artifact_id: int
+        artifact_id: int | None
+        certificate_of_completion_id: int | None
 
     class Meta:
         ordering = ["-signed_at", "-pk"]
         verbose_name = _("contract signature")
         verbose_name_plural = _("contract signatures")
 
+    #: Ceremony facts never change after the durable signature row is created.
+    _CEREMONY_IMMUTABLE_FIELDS = (
+        "contract_id",
+        "intent_id",
+        "signer_id",
+        "source_checksum",
+        "signed_date_value",
+        "agent_text_values",
+        "signed_at",
+        "disclosure_version",
+        "signature_method",
+        "appearance_checksum",
+        "request_ip_hash",
+        "request_ua_hash",
+        "docuseal_submission_id",
+        "docuseal_submitter_slug",
+    )
+
+    #: Final PDF pipeline may set these exactly once (or update failure status).
+    _FINALIZATION_FIELDS = (
+        "artifact",
+        "certificate_of_completion",
+        "finalization_status",
+        "finalization_error",
+        "generation_task_id",
+        "seal_cert_subject",
+        "seal_cert_fingerprint",
+    )
+
     def save(self, *args, **kwargs):
         if self.pk is not None:
-            raise ValidationError(
-                {"__all__": _("Contract signatures are immutable after create.")}
-            )
+            original = type(self).objects.filter(pk=self.pk).first()
+            if original is not None:
+                changed_ceremony = [
+                    field
+                    for field in self._CEREMONY_IMMUTABLE_FIELDS
+                    if getattr(original, field) != getattr(self, field)
+                ]
+                if changed_ceremony:
+                    raise ValidationError(
+                        {
+                            "__all__": _(
+                                "Contract signature ceremony facts are immutable "
+                                "after create."
+                            )
+                        }
+                    )
+                # Appearance files are write-once; empty→set is allowed on create path
+                # only (handled by excluding them from ceremony list and blocking
+                # replacement here).
+                if original.appearance_file and self.appearance_file != (
+                    original.appearance_file
+                ):
+                    raise ValidationError(
+                        {
+                            "appearance_file": _(
+                                "Signature appearance cannot be replaced."
+                            )
+                        }
+                    )
+                if original.initials_file and self.initials_file != (
+                    original.initials_file
+                ):
+                    raise ValidationError(
+                        {"initials_file": _("Signature initials cannot be replaced.")}
+                    )
+                if (
+                    original.artifact_id
+                    and self.artifact_id
+                    and original.artifact_id != self.artifact_id
+                ):
+                    raise ValidationError(
+                        {
+                            "artifact": _(
+                                "Final signed PDF cannot be replaced once attached."
+                            )
+                        }
+                    )
+                original_coc_id = getattr(
+                    original, "certificate_of_completion_id", None
+                )
+                self_coc_id = getattr(self, "certificate_of_completion_id", None)
+                if original_coc_id and self_coc_id and original_coc_id != self_coc_id:
+                    raise ValidationError(
+                        {
+                            "certificate_of_completion": _(
+                                "Certificate of completion cannot be replaced."
+                            )
+                        }
+                    )
+                # Disallow unknown field mutations beyond finalization allowlist.
+                update_fields = kwargs.get("update_fields")
+                if update_fields is not None:
+                    allowed = set(self._FINALIZATION_FIELDS) | {
+                        "appearance_file",
+                        "initials_file",
+                    }
+                    illegal = set(update_fields) - allowed
+                    if illegal:
+                        raise ValidationError(
+                            {
+                                "__all__": _(
+                                    "Only finalization fields may change on an "
+                                    "existing signature record."
+                                )
+                            }
+                        )
         super().save(*args, **kwargs)
 
     def __str__(self) -> str:
