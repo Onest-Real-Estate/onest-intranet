@@ -83,6 +83,11 @@ export const DASHBOARD_PROFILES: readonly DashboardProfile[] = [
       "roomUtilization",
       "overdueInventory",
       "quickDocuments",
+      // A system admin has deadlines assigned to them like anybody else, and
+      // My Day is about the reader's *own* obligations rather than the
+      // brokerage's. Leaving it out here meant a colleague with no catalogued
+      // role at all saw their day while an administrator did not.
+      "myDay",
     ],
   },
   {

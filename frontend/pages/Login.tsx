@@ -33,7 +33,7 @@ export default function Login() {
       </aside>
 
       <main className="flex items-center justify-center px-6 py-16 sm:px-10">
-        <Card className="w-full max-w-md rounded-xl py-8 shadow-popover">
+        <Card className="w-full max-w-md rounded-(--radius-card) py-8 shadow-popover">
           <CardHeader className="items-center text-center">
             <img
               src={onestLogo}
@@ -68,7 +68,7 @@ export default function Login() {
               <Button
                 type="submit"
                 size="lg"
-                className="brand-action h-12 w-full rounded-full font-semibold shadow-none"
+                className="brand-action h-11 w-full rounded-md font-semibold shadow-none"
               >
                 <MicrosoftLogo className="size-5" />
                 Sign in with Microsoft

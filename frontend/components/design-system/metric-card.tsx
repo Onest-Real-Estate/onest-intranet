@@ -1,5 +1,5 @@
 import { ArrowDownRight, ArrowRight, ArrowUpRight, LoaderCircle } from "lucide-react";
-import type * as React from "react";
+import * as React from "react";
 
 import { cn } from "@/lib/utils";
 
@@ -18,10 +18,17 @@ const deltaPill: Record<MetricTone, string> = {
 };
 
 /**
- * One headline figure, in the shape a leader scans first: the label and its
- * mark on top, the number with its change pill beside it, and one quiet line
- * of context underneath. The pill renders only when a signed change actually
- * arrived — an absent comparison is never drawn as a fake flat zero.
+ * One headline figure.
+ *
+ * The label leads in the same 12px caps a table column header uses, the figure
+ * sits under it at the metric step, and the change chip rides the figure's
+ * baseline. Reading order matches scanning order: a leader looks for *which*
+ * number before *what* it says.
+ *
+ * `frame` defaults to `"cell"`: no border and no radius of its own, because a
+ * figure almost always appears in a row of figures and `MetricStrip` draws the
+ * rules between them. `frame="card"` re-adds the border for the rare figure
+ * that genuinely stands alone.
  */
 export function MetricCard({
   label,
@@ -31,6 +38,7 @@ export function MetricCard({
   trend = "flat",
   tone = "neutral",
   loading = false,
+  frame = "cell",
   icon,
   className,
   ...props
@@ -44,7 +52,9 @@ export function MetricCard({
   trend?: MetricTrend;
   tone?: MetricTone;
   loading?: boolean;
-  /** Drawn top-right; pass `undefined` when no mark is approved for this figure. */
+  /** `cell` inside a `MetricStrip`; `card` when the figure stands alone. */
+  frame?: "card" | "cell";
+  /** Drawn beside the label; pass `undefined` when no mark is approved. */
   icon?: React.ReactNode;
 }) {
   const TrendIcon =
@@ -53,35 +63,39 @@ export function MetricCard({
     <article
       aria-busy={loading || undefined}
       className={cn(
-        "bg-card min-w-0 rounded-xl border px-5 py-4",
+        "bg-card min-w-0 px-5 py-4",
+        frame === "card" && "rounded-(--radius-card) border",
         loading && "text-muted-foreground",
         className,
       )}
       {...props}
     >
-      <div className="flex items-center justify-between gap-3">
-        <p className="min-w-0 text-sm font-semibold tracking-[-0.01em]">{label}</p>
+      {/* The mark sits *with* the label rather than opposite it. Parked in the
+          far corner it reads as a button and pulls the eye away from the
+          figure, which is the only thing on the tile worth looking at. */}
+      <p className="text-muted-foreground flex min-w-0 items-center gap-1.5 text-xs font-semibold tracking-[0.06em] uppercase">
         {icon ? (
-          <span className="text-primary shrink-0 [&_svg]:size-5" aria-hidden>
+          <span className="shrink-0 [&_svg]:size-3.5" aria-hidden>
             {icon}
           </span>
         ) : null}
-      </div>
+        <span className="min-w-0 truncate">{label}</span>
+      </p>
       {loading ? (
-        <div className="mt-3 flex h-9 items-center gap-2 text-sm">
+        <div className="mt-2 flex h-9 items-center gap-2 text-sm">
           <LoaderCircle className="size-4 animate-spin" aria-hidden />
           Loading
         </div>
       ) : (
         <>
-          <div className="mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1">
-            <p className="text-metric font-bold tracking-[-0.02em] tabular-nums">
+          <div className="mt-1.5 flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
+            <p className="text-metric text-foreground font-bold tracking-[-0.02em] tabular-nums">
               {value}
             </p>
             {delta && delta !== "0%" ? (
               <span
                 className={cn(
-                  "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-semibold tabular-nums",
+                  "inline-flex translate-y-px items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs font-semibold tabular-nums",
                   deltaPill[tone],
                 )}
               >
@@ -100,9 +114,67 @@ export function MetricCard({
 }
 
 /**
- * A titled well holding two or more related metrics. The recessed background
- * is what makes the white metric surfaces inside it read as one comparison
- * rather than four unrelated cards in a row.
+ * A row of figures read as one instrument, not as a shelf of separate cards.
+ *
+ * The strip is a single surface divided by hairlines: the same rules that run
+ * between the columns of a table, turned on a row of numbers. Four bordered
+ * cards float four ways and invite the eye to compare their *edges*; one ruled
+ * panel puts the figures on a common baseline, which is what makes them
+ * comparable at a glance — and it is one object on the page instead of four.
+ *
+ * Cells auto-fit, so the same strip is four across on a monitor and one across
+ * on a phone with no breakpoint anywhere. Each cell draws its own top and left
+ * rule and the grid is pulled a pixel into the frame, so the outermost rules
+ * land underneath the panel border rather than doubling it.
+ */
+export function MetricStrip({
+  min = "13rem",
+  max = "22rem",
+  className,
+  children,
+  ...props
+}: React.ComponentProps<"div"> & {
+  /** Narrowest a cell may get before the row rewraps. */
+  min?: string;
+  /** Widest a single cell may grow. Caps the strip, not the cells. */
+  max?: string;
+}) {
+  // The strip is capped at what its own cells can fill. Auto-fit alone would
+  // stretch a lone figure across the whole band, putting its label and its
+  // number a screen apart and turning one fact into a billboard — so the frame
+  // stops where the figures do. At four across the cap clears any real page
+  // width, so a full row still runs edge to edge.
+  const cells = React.Children.count(children);
+
+  return (
+    <div
+      className={cn(
+        "bg-card rounded-(--radius-card) border",
+        // The clip is what makes the technique work: it crops the pixel the
+        // grid is pulled by, so the outermost cell rules land outside the
+        // padding box and the frame's own border is the only line there.
+        "overflow-hidden",
+        className,
+      )}
+      style={{ maxWidth: `calc(${cells} * ${max})` }}
+      {...props}
+    >
+      <div
+        className="-m-px grid [&>*]:border-t [&>*]:border-l [&>*]:border-border"
+        style={{
+          gridTemplateColumns: `repeat(auto-fit, minmax(${min}, 1fr))`,
+        }}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * A titled well holding two or more related metrics. The heading is what makes
+ * the strip under it read as one comparison rather than a second unrelated row
+ * of numbers.
  */
 export function MetricGroup({
   title,
@@ -115,18 +187,14 @@ export function MetricGroup({
   description?: string;
 }) {
   return (
-    <section className={cn("bg-muted/40 rounded-2xl border p-2", className)} {...props}>
-      <header className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 px-3 pt-2 pb-3">
-        <h2 className="text-sm font-bold">{title}</h2>
+    <section className={cn("grid content-start gap-2", className)} {...props}>
+      <header className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+        <h2 className="text-sm font-semibold">{title}</h2>
         {description ? (
           <p className="text-muted-foreground text-xs">{description}</p>
         ) : null}
       </header>
-      {/* Auto-fit rather than a fixed two-up: a group holding one figure
-          should fill its well, not sit in half of it. */}
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(11rem,1fr))] gap-2">
-        {children}
-      </div>
+      <MetricStrip min="11rem">{children}</MetricStrip>
     </section>
   );
 }

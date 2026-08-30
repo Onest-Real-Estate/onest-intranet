@@ -6,14 +6,13 @@ import {
   Unplug,
 } from "lucide-react";
 import { useId, useState } from "react";
-
+import { brandMark } from "@/components/BrandMarks";
 import {
   PanelHeader,
   SurfaceCard,
   SurfaceCardContent,
 } from "@/components/design-system/surface-card";
 import { IconWell } from "@/components/IconWell";
-import { MicrosoftLogo } from "@/components/MicrosoftLogo";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -22,7 +21,7 @@ import {
   quickAppStatus,
   reportQuickAppClick,
 } from "@/lib/quick-access";
-import { MICROSOFT_ICON_KEY, quickAccessIcon } from "@/lib/quick-access-icons";
+import { quickAccessIcon } from "@/lib/quick-access-icons";
 import type { DashboardQuickApp } from "@/types";
 
 /**
@@ -109,19 +108,27 @@ function QuickAppBody({
   app: DashboardQuickApp;
   status: QuickAppStatus;
 }) {
-  const isMicrosoft = app.icon === MICROSOFT_ICON_KEY;
-  const Icon = isMicrosoft ? undefined : quickAccessIcon(app.icon);
+  // A vendor whose official artwork ships draws that; everyone else draws the
+  // approved category glyph.
+  const brand = brandMark(app.icon);
+  const Icon = brand ? undefined : quickAccessIcon(app.icon);
   const secondLine = status.state === "ready" ? app.description : status.label;
 
   return (
     <>
-      <IconWell
-        icon={Icon}
-        tone={status.state === "unavailable" ? "muted" : "brand"}
-        className="size-9 shrink-0"
-      >
-        {isMicrosoft ? <MicrosoftLogo className="size-[1.125rem]" /> : null}
-      </IconWell>
+      {brand?.bleed ? (
+        // The mark carries its own background, so it *is* the tile. Nesting it
+        // in the tinted well would put two squares inside each other.
+        <brand.Component className="size-9 shrink-0 rounded-md object-contain" />
+      ) : (
+        <IconWell
+          icon={Icon}
+          tone={status.state === "unavailable" ? "muted" : "brand"}
+          className="size-9 shrink-0"
+        >
+          {brand ? <brand.Component className="size-[1.125rem]" /> : null}
+        </IconWell>
+      )}
       {/* Two short lines beat "Micros…" in a half-width tile. A long name
           wraps to two lines and then clips, so one verbose tool cannot push
           the rest of the panel out of shape. */}

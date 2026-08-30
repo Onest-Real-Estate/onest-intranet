@@ -148,7 +148,7 @@ export default function UserAdministration() {
   const readOnly = !editable.administration;
 
   return (
-    <div className="grid gap-10">
+    <div className="grid gap-8">
       <Head title={`Administer ${subject.displayName}`} />
       <PageHeader
         title={

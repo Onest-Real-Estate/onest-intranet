@@ -157,7 +157,7 @@ export function FileUploader({
       <button
         type="button"
         className={cn(
-          "focus-visible:ring-ring group relative grid min-h-40 place-items-center overflow-hidden rounded-xl border border-dashed p-5 text-center outline-none transition-[background-color,border-color,box-shadow] focus-visible:ring-3 disabled:cursor-not-allowed disabled:opacity-50",
+          "focus-visible:ring-ring group relative grid min-h-40 place-items-center overflow-hidden rounded-lg border border-dashed p-5 text-center outline-none transition-[background-color,border-color,box-shadow] focus-visible:ring-3 disabled:cursor-not-allowed disabled:opacity-50",
           dragging ? "border-primary bg-primary/5" : "border-input bg-muted/20",
           state === "error" && "border-destructive/50 bg-destructive/5",
           !disabled && "hover:border-primary/60 hover:bg-primary/4",
@@ -190,7 +190,7 @@ export function FileUploader({
           />
         ) : null}
         <span className="relative grid justify-items-center gap-2">
-          <span className="brand-well text-primary grid size-10 place-items-center rounded-xl">
+          <span className="brand-well text-primary grid size-10 place-items-center rounded-md">
             {preview ? (
               <ImageIcon className="size-5" aria-hidden />
             ) : (

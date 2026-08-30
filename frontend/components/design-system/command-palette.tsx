@@ -43,7 +43,7 @@ export function CommandPalette({
             // opens where the eye already is, and a growing result list then
             // extends downward instead of shifting the input under the cursor.
             "fixed top-[12vh] left-1/2 z-50 w-[calc(100%-2rem)] max-w-xl -translate-x-1/2",
-            "grid overflow-hidden rounded-2xl border p-0 outline-none",
+            "grid overflow-hidden rounded-(--radius-card) border p-0 outline-none",
           )}
         >
           <DialogPrimitive.Title className="sr-only">{label}</DialogPrimitive.Title>
@@ -183,7 +183,7 @@ export function CommandPaletteTab({
       aria-selected={active}
       tabIndex={active ? 0 : -1}
       className={cn(
-        "focus-visible:ring-ring flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium whitespace-nowrap transition-colors focus-visible:ring-2 focus-visible:outline-none",
+        "focus-visible:ring-ring flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium whitespace-nowrap transition-colors focus-visible:ring-2 focus-visible:outline-none",
         active
           ? "bg-primary text-primary-foreground"
           : "text-muted-foreground hover:bg-muted",

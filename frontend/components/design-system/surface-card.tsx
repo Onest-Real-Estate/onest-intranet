@@ -29,9 +29,9 @@ export function SurfaceCard({
       data-state={state}
       aria-busy={state === "loading" || undefined}
       className={cn(
-        "@container shadow-card gap-6 overflow-hidden py-6",
+        "@container shadow-card gap-5 overflow-hidden py-5",
         interactive &&
-          "hover:border-primary/30 hover:shadow-card-hover focus-within:border-ring transition-[transform,box-shadow,border-color] duration-(--motion-fast) hover:-translate-y-px",
+          "hover:border-border-strong hover:bg-accent/30 focus-within:border-ring transition-[background-color,border-color] duration-(--motion-fast)",
         state === "error" && "border-destructive/40",
         state === "success" && "border-success/35",
         state === "read-only" && "bg-muted/30 shadow-none",
@@ -48,7 +48,7 @@ export function SurfaceCardHeader({
   className,
   ...props
 }: React.ComponentProps<typeof CardHeader>) {
-  return <CardHeader className={cn("gap-2 px-6", className)} {...props} />;
+  return <CardHeader className={cn("gap-2 px-5", className)} {...props} />;
 }
 
 export function SurfaceCardTitle(props: React.ComponentProps<typeof CardTitle>) {
@@ -65,14 +65,14 @@ export function SurfaceCardContent({
   className,
   ...props
 }: React.ComponentProps<typeof CardContent>) {
-  return <CardContent className={cn("px-6", className)} {...props} />;
+  return <CardContent className={cn("px-5", className)} {...props} />;
 }
 
 export function SurfaceCardFooter({
   className,
   ...props
 }: React.ComponentProps<typeof CardFooter>) {
-  return <CardFooter className={cn("gap-2 px-6", className)} {...props} />;
+  return <CardFooter className={cn("gap-2 px-5", className)} {...props} />;
 }
 
 /**
@@ -124,20 +124,22 @@ export function PanelHeader({
   return (
     <SurfaceCardHeader
       className={cn(
-        "flex flex-col items-stretch justify-between gap-3 @md:flex-row @md:items-start",
-        divided && "border-border/60 border-b pb-6",
+        "flex flex-col items-stretch justify-between gap-2 @md:flex-row @md:items-start",
+        divided && "border-border/60 border-b pb-4",
         className,
       )}
       {...props}
     >
       <div className="min-w-0">
         <CardTitle asChild>
-          <Heading className="text-lg leading-7 font-bold tracking-[-0.02em]">
+          <Heading className="text-base leading-6 font-semibold tracking-[-0.01em]">
             {title}
           </Heading>
         </CardTitle>
         {description ? (
-          <p className="text-muted-foreground mt-1 text-sm leading-5">{description}</p>
+          <p className="text-muted-foreground mt-1 max-w-measure text-sm leading-5">
+            {description}
+          </p>
         ) : null}
       </div>
       {meta || action ? (
@@ -164,7 +166,8 @@ export function CardStateMessage({
       className={cn(
         "flex items-center gap-2 rounded-lg border px-3 py-2 text-sm",
         state === "loading" && "bg-muted/50 text-muted-foreground",
-        state === "error" && "border-destructive/25 bg-destructive/5 text-destructive",
+        state === "error" &&
+          "border-chip-destructive-edge bg-chip-destructive text-destructive",
       )}
     >
       <Icon

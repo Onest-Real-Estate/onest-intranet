@@ -15,7 +15,7 @@ export function RecoverableError({
   return (
     <main className="bg-background flex min-h-svh items-center justify-center px-6 py-16">
       <div className="grid w-full max-w-md justify-items-center gap-5 text-center">
-        <span className="bg-destructive/10 text-destructive grid size-12 place-items-center rounded-full">
+        <span className="bg-chip-destructive text-destructive grid size-12 place-items-center rounded-lg">
           <AlertTriangle aria-hidden className="size-6" />
         </span>
         <div className="grid gap-2">

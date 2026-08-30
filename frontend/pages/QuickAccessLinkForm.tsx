@@ -240,7 +240,7 @@ function QuickAccessLinkFormPage() {
   const isInternal = draft.destinationType === "internal_route";
 
   return (
-    <div className="grid max-w-4xl gap-10">
+    <div className="grid max-w-4xl gap-8">
       <Head title={editing ? `Edit ${link.name}` : "New Quick Access link"} />
       <PageHeader
         title={editing ? link.name : "New Quick Access link"}

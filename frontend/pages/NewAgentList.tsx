@@ -55,16 +55,16 @@ function FilterSelect({
   onChange: (value: string) => void;
 }) {
   return (
-    <FilterField label={label}>
+    <FilterField label={label} hideLabel>
       <Select
         value={value || ALL}
         onValueChange={(next) => onChange(next === ALL ? "" : next)}
       >
-        <SelectTrigger aria-label={label} className="w-full sm:w-44">
-          <SelectValue placeholder={`All ${label.toLowerCase()}`} />
+        <SelectTrigger size="sm" aria-label={label} className="w-full sm:w-44">
+          <SelectValue placeholder={`Any ${label.toLowerCase()}`} />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value={ALL}>All {label.toLowerCase()}</SelectItem>
+          <SelectItem value={ALL}>Any {label.toLowerCase()}</SelectItem>
           {options.map((option) => (
             <SelectItem key={option.value} value={option.value}>
               {option.label}
@@ -107,7 +107,7 @@ export default function NewAgentList() {
 
   return (
     <PermissionRequired permission={{ all: ["web.view_new_agents"] }}>
-      <div className="grid gap-10">
+      <div className="grid gap-8">
         <Head title="New Agent List" />
         <PageHeader
           title="New Agent List"
@@ -131,18 +131,18 @@ export default function NewAgentList() {
             }
           />
           <SurfaceCardContent className="grid gap-4">
-            <SearchControl
-              label="Search new agents"
-              value={filters.q}
-              onValueChange={(q) => setFilters((current) => ({ ...current, q }))}
-              onSearch={(q) => visit({ q }, 1)}
-              onClear={() => visit({ q: "" }, 1)}
-              placeholder="Name or work email"
-              className="max-w-xl"
-            />
-
             <FilterControls
               activeCount={activeCount}
+              leading={
+                <SearchControl
+                  label="Search new agents"
+                  value={filters.q}
+                  onValueChange={(q) => setFilters((current) => ({ ...current, q }))}
+                  onSearch={(q) => visit({ q }, 1)}
+                  onClear={() => visit({ q: "" }, 1)}
+                  placeholder="Name or work email"
+                />
+              }
               onReset={() =>
                 visit({
                   office: "",

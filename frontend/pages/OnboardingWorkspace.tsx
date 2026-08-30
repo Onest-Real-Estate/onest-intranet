@@ -184,7 +184,7 @@ export default function OnboardingWorkspace() {
 
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_21rem] xl:items-start xl:gap-8">
           <main className="grid gap-6">
-            <SurfaceCard className="border-border/70 rounded-2xl shadow-card">
+            <SurfaceCard className="border-border/70 rounded-(--radius-card) shadow-card">
               <PanelHeader
                 title="Activation path"
                 description="Source-owned milestones update from their systems; there are no manual completion boxes here."
@@ -262,7 +262,7 @@ export default function OnboardingWorkspace() {
               </SurfaceCardContent>
             </SurfaceCard>
 
-            <SurfaceCard className="border-border/70 rounded-2xl shadow-card">
+            <SurfaceCard className="border-border/70 rounded-(--radius-card) shadow-card">
               <PanelHeader
                 title="Tool setup"
                 description="Only the approved operational states below are editable."
@@ -284,7 +284,7 @@ export default function OnboardingWorkspace() {
               </SurfaceCardContent>
             </SurfaceCard>
 
-            <SurfaceCard className="border-border/70 rounded-2xl shadow-card">
+            <SurfaceCard className="border-border/70 rounded-(--radius-card) shadow-card">
               <PanelHeader
                 title="Operational tasks"
                 description="Tasks coordinate work; they never override a derived milestone."
@@ -301,7 +301,7 @@ export default function OnboardingWorkspace() {
                     {onboarding.tasks.map((task) => (
                       <li
                         key={task.id}
-                        className="border-border/60 bg-muted/25 flex flex-col gap-3 rounded-xl border p-4 sm:flex-row sm:items-center sm:justify-between"
+                        className="border-border/60 bg-muted/25 flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between"
                       >
                         <div className="min-w-0">
                           <p className="flex items-center gap-2 font-semibold">
@@ -348,7 +348,7 @@ export default function OnboardingWorkspace() {
                     ))}
                   </ul>
                 ) : (
-                  <div className="bg-muted/30 rounded-xl px-4 py-5 text-sm">
+                  <div className="bg-muted/30 rounded-lg px-4 py-5 text-sm">
                     <p className="font-semibold">No operational tasks are open.</p>
                     <p className="text-muted-foreground mt-1">
                       Source milestones may still need attention; use their correction
@@ -370,7 +370,7 @@ export default function OnboardingWorkspace() {
           </main>
 
           <aside className="grid gap-6 xl:sticky xl:top-6">
-            <SurfaceCard className="border-border/70 rounded-2xl shadow-card">
+            <SurfaceCard className="border-border/70 rounded-(--radius-card) shadow-card">
               <PanelHeader
                 title="Ownership"
                 description="One accountable coordinator; source teams still own their milestones."
@@ -409,7 +409,7 @@ export default function OnboardingWorkspace() {
             {onboarding.blockers.length ? (
               <SurfaceCard
                 state="error"
-                className="border-destructive/30 rounded-2xl bg-destructive/3"
+                className="border-destructive/30 rounded-(--radius-card) bg-destructive/3"
               >
                 <PanelHeader title="Activation blockers" />
                 <SurfaceCardContent>
@@ -427,7 +427,7 @@ export default function OnboardingWorkspace() {
                 </SurfaceCardContent>
               </SurfaceCard>
             ) : (
-              <SurfaceCard state="success" className="rounded-2xl">
+              <SurfaceCard state="success" className="rounded-(--radius-card)">
                 <SurfaceCardContent className="flex gap-3 pt-5">
                   <ShieldCheck className="text-success size-5" aria-hidden />
                   <p className="text-sm font-medium">No activation blockers.</p>
@@ -436,7 +436,7 @@ export default function OnboardingWorkspace() {
             )}
 
             {onboarding.eligibleNotices.length ? (
-              <SurfaceCard className="border-border/70 rounded-2xl shadow-card">
+              <SurfaceCard className="border-border/70 rounded-(--radius-card) shadow-card">
                 <PanelHeader title="Eligible notices" />
                 <SurfaceCardContent className="grid gap-2">
                   {onboarding.eligibleNotices.map((notice) => (
@@ -467,7 +467,7 @@ export default function OnboardingWorkspace() {
               </SurfaceCard>
             ) : null}
 
-            <SurfaceCard state="read-only" className="rounded-2xl">
+            <SurfaceCard state="read-only" className="rounded-(--radius-card)">
               <PanelHeader
                 title="Record policy"
                 meta={
@@ -492,7 +492,7 @@ export default function OnboardingWorkspace() {
               </SurfaceCardContent>
             </SurfaceCard>
 
-            <SurfaceCard className="border-border/70 rounded-2xl shadow-card">
+            <SurfaceCard className="border-border/70 rounded-(--radius-card) shadow-card">
               <PanelHeader title="Recent activity" />
               <SurfaceCardContent>
                 {activity.length ? (

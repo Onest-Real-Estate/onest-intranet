@@ -292,7 +292,7 @@ export function GlobalSearch() {
         onClick={openPalette}
         aria-haspopup="dialog"
         aria-expanded={open}
-        className="text-muted-foreground border-border/60 bg-muted/40 hover:bg-muted focus-visible:ring-ring hidden w-full max-w-sm items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors focus-visible:ring-2 focus-visible:outline-none xl:flex"
+        className="text-muted-foreground border-border/60 bg-muted/40 hover:bg-muted focus-visible:ring-ring hidden h-9 w-full max-w-md items-center gap-2 rounded-md border px-3 text-sm transition-colors focus-visible:ring-2 focus-visible:outline-none lg:flex"
       >
         <SearchIcon className="size-4 shrink-0" aria-hidden />
         <span className="min-w-0 flex-1 truncate text-left">Search ONEST</span>
@@ -306,7 +306,7 @@ export function GlobalSearch() {
         onClick={openPalette}
         aria-label="Search ONEST"
         aria-haspopup="dialog"
-        className="text-muted-foreground hover:bg-muted focus-visible:ring-ring grid size-9 shrink-0 place-items-center rounded-lg transition-colors focus-visible:ring-2 focus-visible:outline-none xl:hidden"
+        className="text-muted-foreground hover:bg-muted focus-visible:ring-ring grid size-9 shrink-0 place-items-center rounded-md transition-colors focus-visible:ring-2 focus-visible:outline-none lg:hidden"
       >
         <SearchIcon className="size-5" strokeWidth={1.5} aria-hidden />
       </button>

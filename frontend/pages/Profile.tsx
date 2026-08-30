@@ -103,14 +103,14 @@ export default function Profile() {
   const sectionProps = { initial, validation, onDirty: () => setDirty(true) };
 
   return (
-    <div className="grid gap-10">
+    <div className="grid gap-8">
       <Head title="Your profile" />
       <PageHeader
         title="Your profile"
         description="Keep your contact details, credentials, and public introduction current. Everything here is yours alone — no one else can read or change it from this page."
         meta={
           <>
-            <span className="bg-primary/10 text-primary inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold tabular-nums">
+            <span className="border-chip-primary-edge bg-chip-primary text-primary inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-semibold tabular-nums">
               {completeness.percent}% complete
               <span className="text-primary/60 font-medium">
                 {" "}

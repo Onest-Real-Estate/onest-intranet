@@ -6,10 +6,8 @@ import { DashboardProfileSwitcher } from "@/components/dashboard/DashboardProfil
 import { DashboardScopeSelector } from "@/components/dashboard/DashboardScopeSelector";
 import { DashboardWidgetSlot } from "@/components/dashboard/DashboardWidgetSlot";
 import { HubLayout } from "@/components/HubLayout";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useAuthorizationStaleness } from "@/hooks/use-authorization-staleness";
-import { PREVIEW_SCOPE_OPTIONS } from "@/lib/dashboard/preview";
 import {
   readRememberedProfile,
   rememberProfile,
@@ -74,12 +72,11 @@ export default function Dashboard() {
     [resolved.profile, user, scopeLevel],
   );
 
-  const scopeOptions = serverScope ? serverScope.options : PREVIEW_SCOPE_OPTIONS;
+  // No server scope means the reader has one breadth and nothing to choose;
+  // the control is absent rather than offering breadths that do not apply.
+  const scopeOptions = serverScope ? serverScope.options : [];
   const showsScopeControl = scopeOptions.length > 0;
   const showsProfileControl = resolved.available.length > 1;
-  const [previewScopeKey, setPreviewScopeKey] = useState(
-    PREVIEW_SCOPE_OPTIONS[0]?.key ?? null,
-  );
 
   if (!user) {
     return null;
@@ -100,77 +97,59 @@ export default function Dashboard() {
   const column = (name: DashboardWidgetColumn) =>
     widgets.filter((widget) => widget.definition.column === name);
 
-  // Said once, at the top, rather than under every badge below.
-  const hasPreview = widgets.some(
-    (widget) => !widget.withheld && !widget.definition.backed,
-  );
-
   const wide = column("wide");
   const main = column("main");
   const rail = column("rail");
 
   return (
-    <div className="flex flex-1 flex-col gap-10">
+    <div className="flex flex-1 flex-col gap-8">
       <Head title="Dashboard" />
 
-      {/* Orientation is one compact band: identity and controls first, then
-          only the qualifiers that affect the figures below. */}
+      {/* Orientation is one masthead: identity, the qualifiers that affect
+          every figure below, and a rule closing the block. The controls ride
+          inside the header rather than beside it, so the rule spans the page
+          and the title has something to sit on. */}
       <div className="grid gap-4">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <DashboardGreeting greeting={greeting} user={user} />
-          {showsScopeControl || showsProfileControl ? (
-            <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center lg:shrink-0">
-              <DashboardScopeSelector
-                options={scopeOptions}
-                selectedKey={serverScope ? serverScope.selectedKey : previewScopeKey}
-                reloadProps={widgets.map((widget) => widget.definition.prop)}
-                interactive={serverScope !== null}
-                onSelect={serverScope ? undefined : setPreviewScopeKey}
-              />
-              <DashboardProfileSwitcher
-                profiles={resolved.available}
-                activeId={resolved.profile.id}
-                onSelect={selectProfile}
-              />
-            </div>
-          ) : null}
-        </div>
-
-        {hasPreview || stale ? (
-          <div className="grid gap-3">
-            {hasPreview ? (
-              <p className="text-muted-foreground flex items-start gap-2 text-sm leading-5">
-                <Badge variant="warning" className="mt-0.5 shrink-0">
-                  Preview data
-                </Badge>
-                <span>
-                  Panels marked this way show illustrative figures while their data
-                  sources are being connected.
-                </span>
-              </p>
-            ) : null}
-
-            {/* One announcement for a page-wide condition. Individual panels carry
-                a quiet stale mark; the action to fix it lives here, once. */}
-            {stale ? (
-              <div
-                role="status"
-                className="border-warning/30 bg-warning/10 text-warning-ink flex flex-wrap items-center gap-3 rounded-lg border px-4 py-3 text-sm"
-              >
-                <span>
-                  Your roles or scope changed while this page was open. Refresh to see
-                  the dashboard you are entitled to now.
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="ms-auto"
-                  onClick={refreshAll}
-                >
-                  Refresh
-                </Button>
+        <DashboardGreeting
+          greeting={greeting}
+          user={user}
+          actions={
+            showsScopeControl || showsProfileControl ? (
+              <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center">
+                <DashboardScopeSelector
+                  options={scopeOptions}
+                  selectedKey={serverScope ? serverScope.selectedKey : null}
+                  reloadProps={widgets.map((widget) => widget.definition.prop)}
+                />
+                <DashboardProfileSwitcher
+                  profiles={resolved.available}
+                  activeId={resolved.profile.id}
+                  onSelect={selectProfile}
+                />
               </div>
-            ) : null}
+            ) : null
+          }
+        />
+
+        {/* One announcement for a page-wide condition. Individual panels carry
+            a quiet stale mark; the action to fix it lives here, once. */}
+        {stale ? (
+          <div
+            role="status"
+            className="border-chip-warning-edge bg-chip-warning text-warning-ink flex flex-wrap items-center gap-3 rounded-lg border px-4 py-3 text-sm"
+          >
+            <span>
+              Your roles or scope changed while this page was open. Refresh to see the
+              dashboard you are entitled to now.
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              className="ms-auto"
+              onClick={refreshAll}
+            >
+              Refresh
+            </Button>
           </div>
         ) : null}
       </div>
@@ -179,7 +158,7 @@ export default function Dashboard() {
           launchers are one thought, so they sit a section apart (24px) rather
           than a page apart. */}
       {wide.length > 0 ? (
-        <div className="grid items-stretch gap-6 xl:grid-cols-12">
+        <div className="-mt-2 grid items-stretch gap-6 xl:grid-cols-12">
           {wide.map((widget) => (
             <div
               key={widget.definition.id}

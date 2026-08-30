@@ -7,6 +7,8 @@ from apps.announcements.administration_views import (
 )
 from apps.contract.views.administration_views import contract_template_index
 from apps.contract.views.agent_contract_views import agent_contract_index
+from apps.feedback.views import feedback_inbox
+from apps.operational_tasks.views import tasks_index
 from apps.user.services.role_assignments import get_effective_access
 from apps.user.views.directory_views import user_directory
 from apps.user.views.office_administration_views import office_administration_index
@@ -115,6 +117,12 @@ OPERATIONS_VIEWS["admin_quick_access"] = quick_access_index
 OPERATIONS_VIEWS["admin_assign_roles"] = role_assignment_index
 OPERATIONS_VIEWS["admin_offices"] = office_administration_index
 OPERATIONS_VIEWS["admin_office_resources"] = office_resources_admin_index
+# Registered here rather than as a second `path()` in each app's own urls.py:
+# `apps.web.urls` builds a Coming Soon route for *every* destination, and
+# `apps.web` is included before those apps, so a duplicate path would resolve
+# to the placeholder however the module was actually built.
+OPERATIONS_VIEWS["admin_feedback"] = feedback_inbox
+OPERATIONS_VIEWS["operational_tasks"] = tasks_index
 
 
 _CATALOG_CONTRACTS = (

@@ -3,7 +3,6 @@ import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import { DashboardWidgetSlot } from "@/components/dashboard/DashboardWidgetSlot";
-import { PREVIEW_WIDGETS } from "@/lib/dashboard/preview";
 import { DASHBOARD_WIDGETS } from "@/lib/dashboard/widget-registry";
 import type { DashboardPageProps, DashboardWidget, DashboardWidgetProp } from "@/types";
 
@@ -77,16 +76,24 @@ describe("DashboardWidgetSlot", () => {
     expect(container).not.toBeEmptyDOMElement();
   });
 
-  it("gives every unbacked widget a preview payload to render", () => {
-    // Without one, the slot renders nothing at all — worse than a panel that
-    // says it has no data.
-    for (const widget of DASHBOARD_WIDGETS) {
-      if (!widget.backed) {
-        expect(
-          Object.hasOwn(PREVIEW_WIDGETS, widget.id),
-          `${widget.id} is unbacked and has no preview fixture`,
-        ).toBe(true);
-      }
+  it("says an unbacked widget is not connected rather than inventing figures", () => {
+    // The page has no prop for these, so the alternative to saying so is a
+    // slot that renders nothing at all — or, worse, a fixture whose numbers a
+    // reader cannot tell apart from real ones.
+    const unbacked = DASHBOARD_WIDGETS.filter((widget) => !widget.backed);
+    expect(unbacked.length).toBeGreaterThan(0);
+    for (const definition of unbacked) {
+      const { getByText, unmount } = render(
+        <DashboardWidgetSlot
+          resolved={{ definition, withheld: false }}
+          page={page()}
+          stale={false}
+        />,
+      );
+      expect(
+        getByText("This panel fills in once its data source is connected."),
+      ).toBeVisible();
+      unmount();
     }
   });
 

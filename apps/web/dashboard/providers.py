@@ -10,7 +10,8 @@ is the whole point of this layer: the page is honest about what it does not
 know, and it becomes useful one provider at a time as remaining domain modules
 ship, with no change to the view or the page. Live today: performance metrics
 (``web.metrics``), Quick Access, and Action Items (``web.action_items``, with
-profile-backed sources and slots for contract/transaction/CRM modules).
+profile-backed sources and slots for contract/transaction/CRM modules), and
+My Day (``web.my_day``, aggregating every registered calendar source).
 """
 
 from __future__ import annotations
@@ -206,10 +207,23 @@ def training(context: DashboardContext) -> ProviderResult:
 
 
 def my_day(context: DashboardContext) -> ProviderResult:
-    return unavailable(
-        "Your calendar is not connected to the hub yet.",
-        action_label="Go to reservations",
-        action_href=_section_href("my-reservations"),
+    """Every time-bound obligation this reader has, in one chronology.
+
+    Sources live in ``apps.web.my_day``; this provider only supplies the day
+    boundaries and asks the composer for the capped slice. Boundaries come from
+    ``timeframes`` rather than being computed here, so the agenda's idea of
+    "today" is the same one the greeting and every other provider use.
+    """
+    from apps.web.dashboard.timeframes import start_of_local_day, user_timezone
+    from apps.web.my_day import day_for_user
+
+    return day_for_user(
+        context.user,
+        context.access,
+        now=context.now,
+        tz=user_timezone(context.user),
+        window_start=start_of_local_day(context.user, at=context.now),
+        feed_limit=context.feed_limit,
     )
 
 

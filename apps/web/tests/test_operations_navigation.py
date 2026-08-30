@@ -68,6 +68,7 @@ def test_registry_has_exact_destinations_order_routes_and_permissions():
         "Quick Access",
         "Compliance",
         "Feedback",
+        "Tasks",
         "Platform Tasks",
         "Office Resources",
         "Offices",
@@ -89,6 +90,7 @@ def test_registry_has_exact_destinations_order_routes_and_permissions():
         120,
         130,
         140,
+        145,
         150,
         35,
         160,
@@ -98,16 +100,16 @@ def test_registry_has_exact_destinations_order_routes_and_permissions():
         *("People" for _ in range(6)),
         *("Operations" for _ in range(3)),
         *("Content" for _ in range(4)),
-        *("Governance & support" for _ in range(3)),
+        *("Governance & support" for _ in range(4)),
         *("Content" for _ in range(1)),
         *("Governance & support" for _ in range(2)),
     ]
-    assert len({destination.key for destination in OPERATIONS_DESTINATIONS}) == 19
+    assert len({destination.key for destination in OPERATIONS_DESTINATIONS}) == 20
     assert (
-        len({destination.route_name for destination in OPERATIONS_DESTINATIONS}) == 19
+        len({destination.route_name for destination in OPERATIONS_DESTINATIONS}) == 20
     )
     assert (
-        len({destination.permission for destination in OPERATIONS_DESTINATIONS}) == 19
+        len({destination.permission for destination in OPERATIONS_DESTINATIONS}) == 20
     )
     for destination in OPERATIONS_DESTINATIONS:
         assert reverse(destination.route_name) == f"/{destination.path}"
@@ -125,6 +127,8 @@ def test_registry_has_exact_destinations_order_routes_and_permissions():
                 "admin_offices",
                 "admin_announcements",
                 "admin_contract_templates",
+                "operational_tasks",
+                "admin_feedback",
             }
         )
 
@@ -166,7 +170,7 @@ def test_scoped_management_role_permission_matrix():
             "Training",
             "Documents",
             "Quick Access",
-            "Feedback",
+            "Tasks",
             "Office Resources",
             "Offices",
         },
@@ -180,7 +184,7 @@ def test_scoped_management_role_permission_matrix():
             "Training",
             "Documents",
             "Quick Access",
-            "Feedback",
+            "Tasks",
             "Office Resources",
             "Offices",
         },
@@ -263,6 +267,17 @@ def test_brokerage_admin_can_reach_every_registered_destination(client):
         if destination.route_name == "admin_contract_templates":
             assert "templates" in props
             assert "capabilities" in props
+            continue
+        if destination.route_name == "admin_feedback":
+            assert "tickets" in props
+            assert "filterOptions" in props
+            assert "summary" in props
+            continue
+        if destination.route_name == "operational_tasks":
+            assert "tasks" in props
+            assert "board" in props
+            assert "filterOptions" in props
+            assert "summary" in props
             continue
         assert props["title"] == destination.label
         assert props["administrative"] is True

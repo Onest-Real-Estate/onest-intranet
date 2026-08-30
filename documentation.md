@@ -93,7 +93,7 @@ source yet" or "I failed", so every widget either lied or would have to 500.
   raises; every policy needs a written `rationale`. `widget_cache_key` puts the
   user pk *and* `authorization_version(access)` in per-user keys, so a role
   change invalidates. Transient failures are never cached.
-- **Quick Access stays populated.** Lofty / SkySlope / Microsoft 365 / dotloop
+- **Quick Access stays populated.** Lofty / SkySlope / Microsoft 365 / RPR
   are the brokerage's real vendor systems — reviewed configuration that changes
   by commit, not invented business records. Everything that was a fabricated
   *record* (transactions, announcements, documents, training %, mortgage rates,

@@ -96,6 +96,7 @@ docs/permissions.md    Permission catalog, capability vs scope, frontend payload
 docs/dashboard-metrics.md  Metric registry: permissions, scope, calculations
 docs/dashboard-profiles.md  Per-role dashboard profiles, widget registry, resolution
 docs/dashboard-action-items.md  Action-item contract, sources, ordering, CTAs
+docs/dashboard-my-day.md  My Day agenda: provider contract, timezone/DST, buckets
 docs/quick-access.md   Administered dashboard launchers: audience, grants, ordering
 docs/quick-create.md   Global Quick Create menu: action registry, scope, safe returns
 docs/search.md     Global search: provider contract, isolation, caps, palette
@@ -109,6 +110,8 @@ docs/reporting.md  Scoped operational reports registry, exports, reconciliation
 docs/role-assignment-administration.md  Assign User Roles: preview, concurrency, scopes
 docs/office-resources.md  Scoped office resources: inheritance, precedence, protected files
 docs/announcements.md  Announcements: taxonomy, audience union semantics, media pipeline
+docs/operational-tasks.md  Operational tasks: lifecycle, scope, conversion seam
+docs/feedback.md   Feedback intake: diagnostic redaction, idempotency, triage
 DESIGN.md          Design tokens + visual world (values win over docs/design-system.md)
 ```
 
@@ -217,5 +220,14 @@ indent. Types: `ty` on the backend, `tsc --noEmit` on the frontend — both must
 - **pnpm blocks fresh releases.** `minimumReleaseAge: 10080` (7 days) in
   `pnpm-workspace.yaml` — a brand-new package version will refuse to install.
   That is supply-chain hardening, not a bug; don't disable it to unblock yourself.
+- **Inertia posts JSON; `request.POST` reads it only via middleware.** Inertia
+  serializes a visit's data as `application/json` unless it carries a file, and
+  Django parses `request.POST` only for form-encoded and multipart bodies.
+  `apps.web.middleware.InertiaJsonPostMiddleware` translates the body at the
+  edge so every view keeps one input contract. Two consequences: don't remove
+  it, and **don't write a write-path test that only posts form-encoded** — the
+  Django test client's default hid this bug across the whole app while every
+  test passed. Post `content_type="application/json"` in at least one test per
+  write surface.
 - **Secrets live in `.env`** (python-decouple). Never commit them, never print
   them into logs, output, or artifacts.

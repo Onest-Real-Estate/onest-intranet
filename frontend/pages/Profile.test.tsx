@@ -376,10 +376,11 @@ describe("Profile", () => {
 
   it("links missing optional details to the section that owns them", () => {
     render(<Profile />);
-    expect(screen.getByRole("link", { name: "MLS number" })).toHaveAttribute(
-      "href",
-      "#profile-credentials",
-    );
+    // The link names its destination section as well as the field now, so a
+    // screen-reader user hears where the jump lands, not just what is missing.
+    expect(
+      screen.getByRole("link", { name: "MLS numberOffice and credentials" }),
+    ).toHaveAttribute("href", "#profile-credentials");
     expect(screen.getByText("15 of 19 details filled in.")).toBeInTheDocument();
   });
 

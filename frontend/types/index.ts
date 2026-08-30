@@ -116,15 +116,71 @@ export interface DashboardTraining {
   resourceHint: string;
 }
 
-export interface DashboardScheduleEvent {
-  time: string;
+/** Where an agenda row came from. Mirrors `my_day.contract.EventSource`; a
+ *  chip label, never something to authorize from. */
+export type AgendaSource =
+  | "operational_task"
+  | "training"
+  | "consultation"
+  | "closing"
+  | "meeting"
+  | "room_booking"
+  | "inventory"
+  | "microsoft_calendar";
+
+/**
+ * One time-bound obligation.
+ *
+ * Every label is rendered server-side in the reader's timezone. `startAt` and
+ * `endAt` travel alongside for grouping and tests — never to be reformatted
+ * against the browser clock, which would let a laptop on the wrong timezone
+ * disagree with the buckets the server computed.
+ */
+export interface AgendaEvent {
+  id: string;
+  dedupeKey: string;
+  source: AgendaSource;
+  sourceLabel: string;
   title: string;
-  place: string;
+  startAt: string;
+  endAt: string | null;
+  allDay: boolean;
+  localDate: string;
+  /** "9:00 a.m. – 10:30 a.m.", or "All day" — never a synthesized midnight. */
+  timeLabel: string;
+  /** "Today", "Tomorrow", or a short date. */
+  dayLabel: string;
+  /** Server-decided. A row on another day must say so, or a later time on an
+   *  earlier day reads as a sorting bug. */
+  isToday: boolean;
+  location: string;
+  status: "confirmed" | "tentative";
+  /** Empty for a confirmed event: the default state needs no chip. */
+  statusLabel: string;
+  priority: "critical" | "high" | "normal" | "low";
+  overdue: boolean;
+  context: string;
+  ctaLabel: string;
+  ctaHref: string;
 }
 
+/**
+ * The agenda, already bucketed by the server.
+ *
+ * Three lists rather than one sorted array, because past-due work must never
+ * be filed among future appointments — the split is the contract, not a
+ * presentation choice the client could undo.
+ */
 export interface DashboardSchedule {
   dateLabel: string;
-  events: DashboardScheduleEvent[];
+  timezone: string;
+  overdue: AgendaEvent[];
+  today: AgendaEvent[];
+  upcoming: AgendaEvent[];
+  /** Uncapped, so a "+N more" count is honest about what was trimmed. */
+  total: number;
+  viewAllHref: string;
+  viewAllLabel: string;
 }
 
 export interface DashboardActionItem {
@@ -304,7 +360,7 @@ export type DashboardWidgetProp =
   | "documents"
   // Administrative widgets. Registered here so `router.reload({ only: [...] })`
   // stays typed; each is marked `backed: false` in the widget registry until
-  // its provider ships, and renders preview data in the meantime.
+  // its provider ships, and renders as not connected in the meantime.
   | "agentOnboarding"
   | "closingPipeline"
   | "contractsAwaitingSignature"
@@ -315,6 +371,305 @@ export type DashboardWidgetProp =
   | "operationalActivity"
   | "supportQueue"
   | "feedbackSignals";
+
+/* -------------------------------------------------------------------------- */
+/* Feedback and support                                                       */
+/* -------------------------------------------------------------------------- */
+
+export interface FeedbackBadge {
+  code: string;
+  label: string;
+  tone: StatusTone;
+}
+
+export interface FeedbackStatusBadge extends FeedbackBadge {
+  known: boolean;
+}
+
+export interface FeedbackPriorityBadge extends FeedbackBadge {
+  rank: number;
+}
+
+export interface FeedbackPerson {
+  id: number;
+  name: string;
+}
+
+export interface FeedbackRow {
+  id: string;
+  reference: string;
+  summary: string;
+  category: { code: string; label: string };
+  status: FeedbackStatusBadge;
+  priority: FeedbackPriorityBadge;
+  /** What the submitter said. Distinct from the staff-set priority. */
+  urgency: { code: string; label: string };
+  submitter: FeedbackPerson | null;
+  assignee: FeedbackPerson | null;
+  office: { id: number; name: string } | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FeedbackNote {
+  id: string;
+  author: FeedbackPerson | null;
+  body: string;
+  /** Staff-only. The server never serializes one to the submitter, so this is
+   *  a display hint and never the boundary. */
+  internal: boolean;
+  createdAt: string;
+}
+
+/** `href` is a route that re-authorizes, never a storage path. */
+export interface FeedbackScreenshot {
+  id: string;
+  displayName: string;
+  mediaType: string;
+  byteSize: number;
+  width: number | null;
+  height: number | null;
+  href: string;
+}
+
+export interface FeedbackTransition {
+  target: string;
+  label: string;
+  requiresReply: boolean;
+  tone: StatusTone;
+}
+
+export interface FeedbackDetail extends FeedbackRow {
+  description: string;
+  notes: FeedbackNote[];
+  screenshots: FeedbackScreenshot[];
+  transitions: FeedbackTransition[];
+  resolvedAt: string | null;
+  closedAt: string | null;
+  convertedTaskId: string;
+  /** Present only for a reader who may triage — already scrubbed server-side. */
+  diagnostics?: { pageUrl: string; metadata: Record<string, string> };
+}
+
+export interface FeedbackCapabilities {
+  triage: boolean;
+  assign: boolean;
+  note: boolean;
+}
+
+/** A real office assignment, narrowed to what somebody stuck actually needs. */
+export interface SupportContact {
+  key: string;
+  role: string;
+  purpose: string;
+  name: string;
+  email: string;
+  phone: string;
+}
+
+export interface FeedbackSubmitPageProps extends PageProps {
+  categories: FilterOption[];
+  urgencies: FilterOption[];
+  /** Generated from the constants that do the capturing, so the promise and
+   *  the behaviour cannot drift apart. */
+  disclosure: string[];
+  contacts: SupportContact[];
+  /** The page the reader came from, already scrubbed and same-origin checked. */
+  pageUrl: string;
+  errors: ValidationErrors;
+}
+
+export interface FeedbackMinePageProps extends PageProps {
+  tickets: ListResponse<FeedbackRow, Record<string, never>>;
+  errors: ValidationErrors;
+}
+
+export interface FeedbackDetailPageProps extends PageProps {
+  ticket: FeedbackDetail;
+  can: FeedbackCapabilities;
+  /** Support staff inside the reader's own reach. Empty without triage. */
+  assignees: FeedbackPerson[];
+  priorities: FilterOption[];
+  errors: ValidationErrors;
+}
+
+export interface FeedbackInboxFilters {
+  status: string;
+  category: string;
+  assigned: string;
+  q: string;
+  [key: string]: string | string[];
+}
+
+export interface FeedbackInboxPageProps extends PageProps {
+  tickets: ListResponse<FeedbackRow, FeedbackInboxFilters>;
+  filterOptions: {
+    statuses: FilterOption[];
+    categories: FilterOption[];
+    priorities: FilterOption[];
+    urgencies: FilterOption[];
+  };
+  summary: { open: number; mine: number };
+  can: { triage: boolean; assign: boolean };
+  errors: ValidationErrors;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Operational tasks                                                          */
+/* -------------------------------------------------------------------------- */
+
+/** A resolved code plus everything a surface needs to draw it. */
+export interface TaskBadge {
+  code: string;
+  label: string;
+  tone: StatusTone;
+}
+
+export interface TaskStatusBadge extends TaskBadge {
+  /** False when the row holds a code this build does not recognise. */
+  known: boolean;
+}
+
+export interface TaskPriorityBadge extends TaskBadge {
+  /** Sort key; lower is more urgent. */
+  rank: number;
+}
+
+/** Just enough to name somebody — never an email. */
+export interface TaskPerson {
+  id: number;
+  name: string;
+}
+
+export interface TaskRow {
+  id: string;
+  reference: string;
+  title: string;
+  category: { code: string; label: string };
+  status: TaskStatusBadge;
+  priority: TaskPriorityBadge;
+  office: { id: number; name: string };
+  assignee: TaskPerson | null;
+  team: string;
+  dueAt: string | null;
+  isOverdue: boolean;
+  source: string;
+  tags: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TaskComment {
+  id: string;
+  author: TaskPerson | null;
+  body: string;
+  /** Staff-only. The server never serializes one to a reader without the
+   *  management grant, so this is a display hint, never the boundary. */
+  internal: boolean;
+  createdAt: string;
+}
+
+/** No URL: files are fetched through `routes.operational_task_attachment`,
+ *  which re-authorizes the reader against the parent task on every request. */
+export interface TaskAttachment {
+  id: string;
+  displayName: string;
+  mediaType: string;
+  byteSize: number;
+  internal: boolean;
+  uploadedBy: TaskPerson | null;
+  createdAt: string;
+}
+
+/** One legal move, already filtered to what this actor may make. */
+export interface TaskTransition {
+  target: string;
+  label: string;
+  requiresNote: boolean;
+  tone: StatusTone;
+}
+
+export interface TaskDetail extends TaskRow {
+  description: string;
+  reporter: TaskPerson | null;
+  sourceReference: string;
+  relatedObject: { type: string; id: string } | null;
+  startedAt: string | null;
+  resolvedAt: string | null;
+  closedAt: string | null;
+  comments: TaskComment[];
+  attachments: TaskAttachment[];
+  transitions: TaskTransition[];
+}
+
+export interface TaskBoardColumn {
+  status: TaskStatusBadge;
+  items: TaskRow[];
+  count: number;
+}
+
+export interface TaskFilters {
+  status: string;
+  category: string;
+  priority: string;
+  assigned: string;
+  q: string;
+  /** Matches the shape `buildListUrl` and `ListResponse` both expect. */
+  [key: string]: string | string[];
+}
+
+/** Mirrors the service's grants so the UI can hide what it may not do. It is
+ *  never the authorization — every write re-checks server-side. */
+export interface TaskCapabilities {
+  manage: boolean;
+  assign: boolean;
+  comment: boolean;
+}
+
+/** The create drawer's fields, echoed verbatim when a save is refused. Mirrors
+ *  `views.DRAFT_FIELDS`; every value is a form string, never a parsed one. */
+export interface TaskDraft {
+  office: string;
+  category: string;
+  title: string;
+  description: string;
+  priority: string;
+  team: string;
+  assignee: string;
+  dueAt: string;
+  tags: string;
+}
+
+export interface OperationalTasksPageProps extends PageProps {
+  tasks: ListResponse<TaskRow, TaskFilters>;
+  /** Present only in board view; the list view sends null. */
+  board: TaskBoardColumn[] | null;
+  view: "list" | "board";
+  filterOptions: {
+    statuses: FilterOption[];
+    categories: FilterOption[];
+    priorities: FilterOption[];
+  };
+  summary: { open: number; overdue: number; mine: number };
+  can: TaskCapabilities;
+  /** Offices this actor may file a task against, scoped server-side. Empty for
+   *  a reader without the management grant — the create form never renders. */
+  offices: { id: number; name: string }[];
+  categories: FilterOption[];
+  /** Reopened by the server on a refused save, with the draft echoed back:
+   *  the drawer posts natively, so anything not returned is lost. */
+  createSheet: { open: boolean; draft: TaskDraft };
+  errors: ValidationErrors;
+}
+
+export interface OperationalTaskDetailPageProps extends PageProps {
+  task: TaskDetail;
+  can: TaskCapabilities;
+  /** Candidate assignees inside this actor's own reach. Empty for somebody
+   *  without the assign grant, so the picker never becomes a staff directory. */
+  assignees: TaskPerson[];
+  errors: ValidationErrors;
+}
 
 /**
  * Props available on every Inertia page. `user` and `csrfToken` are shared by

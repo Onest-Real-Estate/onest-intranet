@@ -70,6 +70,16 @@ describe("dashboard registry integrity", () => {
     }
   });
 
+  it("gives every profile the reader's own day", () => {
+    // My Day is personal: it shows the signed-in user's own obligations, not
+    // the brokerage's. No role should hide somebody's deadlines from them —
+    // and `systemAdmin` once did, so a colleague with no catalogued role saw
+    // their day while an administrator did not.
+    for (const profile of DASHBOARD_PROFILES) {
+      expect(profile.widgets, `${profile.id} omits myDay`).toContain("myDay");
+    }
+  });
+
   it("never lists a widget twice in one profile", () => {
     for (const profile of DASHBOARD_PROFILES) {
       expect(new Set(profile.widgets).size).toBe(profile.widgets.length);

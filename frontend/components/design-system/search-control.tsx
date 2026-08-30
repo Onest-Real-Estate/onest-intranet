@@ -84,7 +84,7 @@ export function SearchControl({
             disabled={disabled}
             className={cn(
               "pr-10 pl-9 [&::-webkit-search-cancel-button]:hidden",
-              size === "sm" ? "h-9" : "h-10",
+              size === "sm" ? "h-8" : "h-9",
               tone === "subtle" && "bg-muted/60 border-transparent shadow-none",
             )}
           />

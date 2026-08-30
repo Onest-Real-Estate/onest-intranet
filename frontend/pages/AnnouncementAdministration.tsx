@@ -174,7 +174,7 @@ function AnnouncementAdministrationPage() {
   const activeCount = FILTER_KEYS.filter((key) => Boolean(filters[key])).length;
 
   return (
-    <div className="grid gap-10">
+    <div className="grid gap-8">
       <Head title="Announcements" />
       <PageHeader
         title="Announcements"
@@ -227,17 +227,20 @@ function AnnouncementAdministrationPage() {
           }
         />
         <SurfaceCardContent className="grid gap-4">
-          <SearchControl
-            label="Search announcements"
-            value={query}
-            onValueChange={setQuery}
-            onSearch={(next) => visit({ q: next })}
-            onClear={() => visit({ q: "" })}
-            placeholder="Title, summary, or slug"
-            className="max-w-xl"
-          />
-
-          <FilterControls activeCount={activeCount} onReset={reset}>
+          <FilterControls
+            activeCount={activeCount}
+            onReset={reset}
+            leading={
+              <SearchControl
+                label="Search announcements"
+                value={query}
+                onValueChange={setQuery}
+                onSearch={(next) => visit({ q: next })}
+                onClear={() => visit({ q: "" })}
+                placeholder="Title, summary, or slug"
+              />
+            }
+          >
             <FilterField label="Lifecycle">
               <Select
                 value={filters.lifecycle || "all"}

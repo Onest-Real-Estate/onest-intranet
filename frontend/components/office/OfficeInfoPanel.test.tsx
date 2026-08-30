@@ -134,8 +134,13 @@ describe("OfficeInfoPanel", () => {
         }}
       />,
     );
-    expect(screen.getByText("Monday: 09:00–17:00")).toBeInTheDocument();
-    expect(screen.getByText("Sunday: Closed")).toBeInTheDocument();
+    // The week is a definition list now, so the day and its hours are separate
+    // elements: today's row can be called out without reformatting the string.
+    expect(screen.getByText("Monday")).toBeInTheDocument();
+    // Monday and Friday both open at nine, so this is a pair, not a single.
+    expect(screen.getAllByText("09:00–17:00", { selector: "dd" })).toHaveLength(2);
+    expect(screen.getByText("Sunday")).toBeInTheDocument();
+    expect(screen.getAllByText("Closed").length).toBeGreaterThan(0);
     expect(screen.getByText("Times shown in Eastern Time.")).toBeInTheDocument();
   });
 
@@ -170,8 +175,13 @@ describe("OfficeInfoPanel", () => {
       />,
     );
     expect(screen.getByText("Companywide support")).toBeInTheDocument();
+    expect(screen.getByText("Anjana Budhathoki")).toBeInTheDocument();
     expect(screen.getByText("Principal broker")).toBeInTheDocument();
-    expect(screen.getByText("info@onest.realestate")).toBeInTheDocument();
+    // The address is the control's destination now rather than wrapped text.
+    expect(screen.getByRole("link", { name: /email/i })).toHaveAttribute(
+      "href",
+      "mailto:info@onest.realestate",
+    );
   });
 
   it("omits the corporate section when there are no corporate contacts", () => {

@@ -2,9 +2,13 @@ import { Link, router, usePage } from "@inertiajs/react";
 import {
   AlertTriangle,
   ArrowLeft,
+  BookOpen,
   Building2,
   ChevronDown,
   CircleHelp,
+  ExternalLink,
+  Inbox,
+  LifeBuoy,
   LogOut,
   Monitor,
   Moon,
@@ -15,9 +19,15 @@ import {
   UserRound,
   WifiOff,
 } from "lucide-react";
-import { type CSSProperties, type ReactNode, useEffect, useRef, useState } from "react";
+import {
+  type CSSProperties,
+  type ReactNode,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+} from "react";
 
-import { BrandMark } from "@/components/BrandMark";
 import { FlashToasts } from "@/components/FlashToasts";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { QuickCreateMenu } from "@/components/QuickCreateMenu";
@@ -50,6 +60,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useTheme } from "@/hooks/use-theme";
+import onestLogo from "@/images/onest-logo.png";
 import {
   HUB_NAV_EXPANSION_STORAGE_KEY,
   HUB_NAV_SECTIONS,
@@ -57,6 +68,7 @@ import {
   hubNavItemDescription,
   isHubNavItemActive,
   parseHubNavExpansion,
+  partitionByAvailability,
   type ResolvedHubNavGroup,
   type ResolvedHubNavItem,
   resolveHubNav,
@@ -162,7 +174,7 @@ function NavList({ items, current }: { items: ResolvedHubNavItem[]; current: str
               asChild
               isActive={active}
               tooltip={description ?? item.label}
-              className="h-9 rounded-lg px-2.5 font-normal transition-[background-color,color] duration-(--motion-fast) data-[active=true]:font-semibold group-data-[collapsible=icon]:rounded-lg"
+              className="h-9 rounded-lg px-2.5 font-normal transition-[background-color,color] duration-(--motion-fast) data-[active=true]:font-medium group-data-[collapsible=icon]:rounded-lg"
             >
               <Link
                 href={item.route.href}
@@ -172,8 +184,8 @@ function NavList({ items, current }: { items: ResolvedHubNavItem[]; current: str
                 <item.icon
                   className={
                     active
-                      ? "text-primary size-[1.125rem] transition-colors"
-                      : "text-muted-foreground group-hover/menu-item:text-foreground size-[1.125rem] transition-colors"
+                      ? "text-primary size-4 transition-colors"
+                      : "text-muted-foreground group-hover/menu-item:text-foreground size-4 transition-colors"
                   }
                   strokeWidth={1.5}
                 />
@@ -232,12 +244,12 @@ function NavGroupItems({
               aria-expanded={open}
               aria-controls={panelId}
               onClick={() => onSectionToggle(section.key, active)}
-              className="text-muted-foreground hover:text-foreground focus-visible:ring-sidebar-ring flex w-full items-center gap-2 rounded-md px-2.5 pt-1 pb-1 text-left text-micro font-medium tracking-[0.02em] focus-visible:ring-2 focus-visible:outline-none group-data-[collapsible=icon]:hidden"
+              className="text-muted-foreground hover:bg-sidebar-accent/55 hover:text-foreground focus-visible:ring-sidebar-ring flex h-9 w-full items-center gap-2 rounded-lg px-2.5 text-left text-sm transition-[background-color,color] duration-(--motion-fast) focus-visible:ring-2 focus-visible:outline-none group-data-[collapsible=icon]:hidden"
             >
               <span className="min-w-0 flex-1 truncate">{section.label}</span>
               <ChevronDown
                 aria-hidden
-                className={`size-3.5 shrink-0 transition-transform motion-reduce:transition-none ${
+                className={`size-4 shrink-0 transition-transform duration-(--motion-fast) motion-reduce:transition-none ${
                   open ? "rotate-0" : "-rotate-90"
                 }`}
                 strokeWidth={1.5}
@@ -262,39 +274,6 @@ function NavGroupItems({
         );
       })}
     </div>
-  );
-}
-
-/**
- * Header affordances whose backend does not exist yet. `aria-disabled` rather
- * than `disabled` so the control keeps focus and can still explain itself —
- * a dead control that looks live is worse than one that says it is not ready.
- */
-function PendingAction({
-  label,
-  note,
-  children,
-}: {
-  label: string;
-  note: string;
-  children: ReactNode;
-}) {
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label={`${label} — ${note}`}
-          aria-disabled
-          className="text-muted-foreground size-9"
-          onClick={(event) => event.preventDefault()}
-        >
-          {children}
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent>{note}</TooltipContent>
-    </Tooltip>
   );
 }
 
@@ -352,12 +331,140 @@ function ThemeToggle() {
   );
 }
 
+/**
+ * The pinned help row.
+ *
+ * Built to the nav rows' own metrics so the rail still reads as one column,
+ * and it answers the pointer the same way. Collapsed to the icon rail it keeps
+ * a tooltip, because an unlabelled lifebuoy is a guess.
+ */
+/**
+ * What is registered but not built yet, in one row instead of eight.
+ *
+ * Kept visible because seeing what is coming is the point of registering it,
+ * and collapsed because an agent should be able to read their rail as a list
+ * of things that work first. The rows keep everything they had — the link to
+ * their Coming Soon page, the Soon marker, the spoken description — so this
+ * takes nothing away from a reader who goes looking.
+ */
+function SidebarComingSoon({
+  items,
+  current,
+}: {
+  items: ResolvedHubNavItem[];
+  current: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const panelId = useId();
+
+  if (items.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="px-2.5 pt-4 group-data-[collapsible=icon]:hidden">
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-controls={panelId}
+        onClick={() => setOpen((current) => !current)}
+        className="text-muted-foreground hover:text-foreground focus-visible:ring-sidebar-ring flex w-full items-center gap-2 rounded-md px-2.5 py-1 text-left text-micro font-semibold tracking-[0.09em] uppercase transition-colors duration-(--motion-fast) focus-visible:ring-2 focus-visible:outline-none"
+      >
+        <span className="min-w-0 flex-1 truncate">Coming soon</span>
+        <span className="text-muted-foreground/80 tabular-nums">{items.length}</span>
+        <ChevronDown
+          aria-hidden
+          className={cn(
+            "size-3.5 shrink-0 transition-transform duration-(--motion-fast) motion-reduce:transition-none",
+            open ? "rotate-0" : "-rotate-90",
+          )}
+          strokeWidth={1.5}
+        />
+      </button>
+      {/* Still real links: each resolves to its own protected Coming Soon page
+          that explains the module, and each keeps its Soon marker and spoken
+          description. The simplification here is the *grouping* — nothing is
+          taken away. */}
+      <div id={panelId} className={open ? undefined : "hidden"}>
+        <NavList items={items} current={current} />
+      </div>
+    </div>
+  );
+}
+
+function SidebarSupportLink({
+  current,
+  fullUrl,
+}: {
+  current: string;
+  fullUrl: string;
+}) {
+  const active =
+    current === routes.feedback_submit() ||
+    current.startsWith(`${routes.feedback_submit()}/`) ||
+    current === routes.feedback_mine();
+
+  // The page the reader is on travels with the click. `document.referrer` is
+  // empty for an Inertia visit, which is every visit here, so capturing it at
+  // the source is the only way the report knows where it came from.
+  //
+  // The *full* url, not the path: `current` has its query stripped for
+  // active-matching, and the query is often the whole story — "page 3 of the
+  // filtered list" is where the thing broke. The redaction layer keeps an
+  // allowlist of exactly those filter parameters and drops the rest, so
+  // sending them is safe and dropping them here would waste that work.
+  const href = `${routes.feedback_submit()}?from=${encodeURIComponent(fullUrl)}`;
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Link
+          href={href}
+          aria-current={active ? "page" : undefined}
+          className={cn(
+            // An *outlined* row, not a nav row. Every destination above it is
+            // a place in the product; this is a utility, and giving it the
+            // same treatment made it read as an orphaned twelfth link rather
+            // than the thing you reach for when something breaks.
+            "focus-visible:ring-sidebar-ring group/help flex items-center gap-2.5 rounded-lg border px-2.5 py-2 text-left transition-[background-color,border-color,color] duration-(--motion-fast) focus-visible:ring-2 focus-visible:outline-none",
+            "group-data-[collapsible=icon]:size-9 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:gap-0 group-data-[collapsible=icon]:border-transparent group-data-[collapsible=icon]:px-0 group-data-[collapsible=icon]:py-0",
+            active
+              ? "border-chip-primary-edge bg-chip-primary"
+              : "border-sidebar-border/70 hover:border-border-strong hover:bg-sidebar-accent/45 bg-transparent",
+          )}
+        >
+          <span
+            aria-hidden
+            className={cn(
+              "grid size-7 shrink-0 place-items-center rounded-md transition-colors",
+              active
+                ? "bg-brand-gold/25 text-primary"
+                : "brand-well text-primary group-hover/help:bg-brand-gold/25",
+            )}
+          >
+            <LifeBuoy className="size-4" strokeWidth={1.5} />
+          </span>
+          <span className="grid min-w-0 leading-tight group-data-[collapsible=icon]:hidden">
+            <span className="text-sidebar-foreground truncate text-sm font-medium">
+              Get help
+            </span>
+            <span className="text-muted-foreground truncate text-xs">
+              Report a problem
+            </span>
+          </span>
+        </Link>
+      </TooltipTrigger>
+      <TooltipContent side="right">Report a problem or ask for help</TooltipContent>
+    </Tooltip>
+  );
+}
+
 function SidebarAccount({ user, onSignOut }: { user: User; onSignOut: () => void }) {
   return (
     <div className="flex items-center gap-1">
       <Link
         href={routes.profile()}
-        className="hover:bg-sidebar-accent/50 focus-visible:ring-sidebar-ring flex min-w-0 flex-1 items-center gap-2.5 rounded-md px-1.5 py-1.5 transition-colors duration-(--motion-fast) focus-visible:ring-2 focus-visible:outline-none group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
+        className="hover:bg-sidebar-accent/55 focus-visible:ring-sidebar-ring flex min-w-0 flex-1 items-center gap-2.5 rounded-lg px-1.5 py-1.5 transition-colors duration-(--motion-fast) focus-visible:ring-2 focus-visible:outline-none group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
       >
         <UserAvatar user={user} className="size-8 shrink-0" />
         <span className="min-w-0 flex-1 text-left leading-tight group-data-[collapsible=icon]:hidden">
@@ -443,49 +550,70 @@ function ShellFeedback({
   );
 }
 
+/**
+ * Where the reader is, on one line.
+ *
+ * The trail already ends in the page's own name, so the stacked title that
+ * used to sit under it restated — inside a 56px band — what the crumb above it
+ * and the page's `<h1>` below it both said. One line reads as a location and
+ * leaves the bar room to breathe; the ancestors fold away on a narrow screen
+ * and the current page always survives.
+ */
 function PageContext({ context }: { context: HubPageContext }) {
   const breadcrumbs = context.breadcrumbs ?? [];
-  return (
-    <div className="min-w-0 flex-1">
-      {breadcrumbs.length ? (
-        <nav
-          aria-label="Breadcrumb"
-          className="text-muted-foreground hidden min-w-0 text-micro sm:block"
-        >
-          <ol className="flex min-w-0 items-center gap-1.5 overflow-hidden">
-            {breadcrumbs.map((item, index) => {
-              const current = index === breadcrumbs.length - 1;
-              return (
-                <li
-                  key={`${item.href ?? "current"}:${item.label}`}
-                  className="flex min-w-0 items-center gap-1.5"
-                >
-                  {index > 0 ? <span aria-hidden>/</span> : null}
-                  {item.href && !current ? (
-                    <Link
-                      href={safeInternalHref(item.href)}
-                      className="hover:text-foreground focus-visible:ring-ring truncate rounded-sm focus-visible:ring-2 focus-visible:outline-none"
-                    >
-                      {item.label}
-                    </Link>
-                  ) : (
-                    <span
-                      aria-current={current ? "page" : undefined}
-                      className="truncate"
-                    >
-                      {item.label}
-                    </span>
-                  )}
-                </li>
-              );
-            })}
-          </ol>
-        </nav>
-      ) : null}
-      <p className="truncate text-sm font-semibold tracking-[-0.01em]">
+
+  if (!breadcrumbs.length) {
+    return (
+      <p className="min-w-0 flex-1 truncate text-sm font-medium tracking-[-0.01em]">
         {context.title}
       </p>
-    </div>
+    );
+  }
+
+  return (
+    <nav aria-label="Breadcrumb" className="min-w-0 flex-1">
+      <ol className="flex min-w-0 items-center gap-1.5 overflow-hidden text-sm">
+        {breadcrumbs.map((item, index) => {
+          const current = index === breadcrumbs.length - 1;
+          return (
+            <li
+              key={`${item.href ?? "current"}:${item.label}`}
+              className={cn(
+                "flex min-w-0 items-center gap-1.5",
+                !current && "hidden sm:flex",
+              )}
+            >
+              {index > 0 ? (
+                <span
+                  aria-hidden
+                  className={cn(
+                    "text-muted-foreground/60",
+                    current && "hidden sm:inline",
+                  )}
+                >
+                  /
+                </span>
+              ) : null}
+              {item.href && !current ? (
+                <Link
+                  href={safeInternalHref(item.href)}
+                  className="text-muted-foreground hover:text-foreground focus-visible:ring-ring truncate rounded-sm transition-colors duration-(--motion-fast) focus-visible:ring-2 focus-visible:outline-none"
+                >
+                  {item.label}
+                </Link>
+              ) : (
+                <span
+                  aria-current={current ? "page" : undefined}
+                  className="truncate font-medium tracking-[-0.01em]"
+                >
+                  {item.label}
+                </span>
+              )}
+            </li>
+          );
+        })}
+      </ol>
+    </nav>
   );
 }
 
@@ -594,7 +722,21 @@ function ShellWorkspace({
 
   return (
     <SidebarInset>
-      <header className="bg-background/92 sticky top-0 z-10 flex h-16 items-center gap-1.5 border-b px-3 backdrop-blur-sm sm:gap-2 sm:px-4 lg:px-6">
+      <header className="bg-background/92 sticky top-0 z-10 flex h-16 items-center gap-1.5 border-b px-3 backdrop-blur-sm sm:gap-2 sm:px-4 lg:px-6 print:hidden">
+        {/* An Inertia visit swaps the page without a browser navigation, so
+            none of the usual chrome moves and a slow request reads as a dead
+            click. This is the only sighted feedback that one is in flight; the
+            polite status below carries the same fact to a screen reader. It
+            rides the header's own border, so nothing on the page shifts when
+            it appears. */}
+        {navigating ? (
+          <span
+            aria-hidden
+            className="pointer-events-none absolute inset-x-0 -bottom-px h-0.5 overflow-hidden"
+          >
+            <span className="bg-brand-gold animate-route-progress block h-full w-full" />
+          </span>
+        ) : null}
         <SidebarTrigger className="md:hidden" />
         {context.back ? (
           <Button variant="ghost" size="icon" asChild className="size-9 shrink-0">
@@ -610,28 +752,67 @@ function ShellWorkspace({
         {/* Live global search. Results are authorized and scoped server-side
             before serialization — see apps/web/search. */}
         <GlobalSearch />
-        <div className="ml-auto flex shrink-0 items-center gap-0.5">
-          {helpUrl ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button asChild variant="ghost" size="icon" className="size-9">
-                  <a
-                    href={helpUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label="Open help centre in a new tab"
-                  >
-                    <CircleHelp aria-hidden className="size-5" />
-                  </a>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Help centre</TooltipContent>
-            </Tooltip>
-          ) : (
-            <PendingAction label="Help" note="Help centre is not wired up yet">
-              <CircleHelp className="size-5" strokeWidth={1.5} />
-            </PendingAction>
-          )}
+        <div className="border-border/70 ml-auto flex shrink-0 items-center gap-0.5 border-l pl-1.5 sm:pl-2">
+          {/* Help always does something now. The in-app support surface is the
+              destination that always exists; an external help centre, when one
+              is configured, is offered beside it rather than instead of it —
+              the two answer different questions ("how does this work" versus
+              "this is broken"). */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="text-muted-foreground hover:text-foreground size-9"
+                aria-label="Help and support"
+              >
+                <CircleHelp aria-hidden className="size-5" strokeWidth={1.5} />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-64">
+              <DropdownMenuLabel className="font-normal">
+                <p className="text-sm font-medium">Need a hand?</p>
+                <p className="text-muted-foreground text-xs">
+                  Report a problem or check something you already sent.
+                </p>
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem asChild>
+                <Link
+                  href={`${routes.feedback_submit()}?from=${encodeURIComponent(
+                    typeof window === "undefined"
+                      ? ""
+                      : window.location.pathname + window.location.search,
+                  )}`}
+                >
+                  <LifeBuoy className="size-4" strokeWidth={1.5} />
+                  Get help
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href={routes.feedback_mine()}>
+                  <Inbox className="size-4" strokeWidth={1.5} />
+                  My reports
+                </Link>
+              </DropdownMenuItem>
+              {helpUrl ? (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem asChild>
+                    <a href={helpUrl} target="_blank" rel="noopener noreferrer">
+                      <BookOpen className="size-4" strokeWidth={1.5} />
+                      Help centre
+                      <ExternalLink
+                        className="text-muted-foreground ml-auto size-3.5"
+                        aria-hidden
+                      />
+                      <span className="sr-only">(opens in a new tab)</span>
+                    </a>
+                  </DropdownMenuItem>
+                </>
+              ) : null}
+            </DropdownMenuContent>
+          </DropdownMenu>
           <NotificationBell summary={notifications} />
           {/* One registry, both entry points: this header is the mobile header
               too, so desktop and mobile can never offer different actions. */}
@@ -641,7 +822,7 @@ function ShellWorkspace({
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="ghost"
-                  className="ml-1 h-10 max-w-52 gap-2 rounded-full px-1 lg:pr-3"
+                  className="ml-1 h-9 max-w-52 gap-2 rounded-md px-1 lg:pr-3"
                   aria-label={`${firstName(user.name)} account menu`}
                 >
                   <UserAvatar user={user} className="size-8" />
@@ -708,6 +889,7 @@ function ShellWorkspace({
         aria-busy={navigating}
         className={cn(
           "flex flex-1 flex-col py-6 outline-none lg:py-8",
+          "print:px-0 print:py-0",
           contentVariants[variant],
         )}
       >
@@ -721,7 +903,11 @@ export function HubLayout({ children, context, variant = "standard" }: HubLayout
   const page = usePage<PageProps>();
   const { user, features, primaryOffice, notifications, quickCreate } = page.props;
   const current = page.url.split("?")[0];
-  const navGroups = resolveHubNav(user, features, primaryOffice);
+  // The rail lists what works; what is registered but unbuilt is gathered into
+  // one disclosure at the bottom rather than scattered through the groups.
+  const { live: navGroups, pending } = partitionByAvailability(
+    resolveHubNav(user, features, primaryOffice),
+  );
   const [expandedSections, setExpandedSections] = useState<Set<HubNavSectionKey>>(() =>
     parseHubNavExpansion(storedExpansionState()),
   );
@@ -775,34 +961,53 @@ export function HubLayout({ children, context, variant = "standard" }: HubLayout
       >
         Skip to content
       </a>
-      <Sidebar collapsible="icon" className="border-sidebar-border/70">
-        {/* Collapsed, the rail keeps only the expand control — the wordmark has
-            no room and the mark alone would read as a dead button beside it. */}
-        <SidebarHeader className="h-16 flex-row items-center justify-between gap-1 px-3.5 py-0 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-2">
+      <Sidebar collapsible="icon" className="border-sidebar-border/70 print:hidden">
+        {/* Collapsed, the rail keeps only the expand control — the lockup has
+            no room and the mark alone would read as a dead button beside it.
+
+            The band is 64px rather than the 56px it used to share with the top
+            bar: this is a stacked lockup (mark over wordmark over tagline) and
+            at 56px the tagline collapsed into a smudge. The workspace header
+            matches, so the two hairlines still meet across the window. */}
+        <SidebarHeader className="border-sidebar-border/70 h-16 flex-row items-center justify-between gap-1 border-b px-3.5 py-0 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-2">
           <Link
             href={routes.dashboard()}
-            className="focus-visible:ring-sidebar-ring flex min-w-0 items-center gap-2.5 rounded-md py-1 focus-visible:ring-2 focus-visible:outline-none group-data-[collapsible=icon]:hidden"
-            aria-label="ONEST HUB home"
+            className="focus-visible:ring-sidebar-ring flex min-w-0 items-center rounded-md py-1 focus-visible:ring-2 focus-visible:outline-none group-data-[collapsible=icon]:hidden"
+            aria-label="oNEST Real Estate — go to dashboard"
           >
-            <span className="brand-surface shadow-xs grid size-8 shrink-0 place-items-center rounded-lg">
-              <BrandMark className="size-5" />
-            </span>
-            <span className="truncate text-sm font-bold tracking-[-0.025em]">
-              ONEST HUB
-            </span>
+            {/* The gold artwork carries its own contrast on both the near-white
+                rail and the dark one, so it needs no theme variant. Width and
+                height are stated to reserve the box before the file decodes —
+                a logo that pops in is the first thing a reader sees shift. */}
+            <img
+              src={onestLogo}
+              width={397}
+              height={251}
+              alt=""
+              className="h-11 w-auto max-w-full object-contain"
+            />
           </Link>
-          <SidebarTrigger className="text-muted-foreground hidden size-8 md:flex" />
+          {/* Cmd-B collapses the rail and nothing said so; a shortcut nobody
+              can find is a feature that does not exist. The hint is a `title`
+              and `aria-keyshortcuts` rather than a Radix tooltip on purpose:
+              this header also renders inside the mobile drawer, and a tooltip
+              there takes the Escape key that should be closing the drawer. */}
+          <SidebarTrigger
+            title="Collapse sidebar (⌘B)"
+            aria-keyshortcuts="Meta+B Control+B"
+            className="text-muted-foreground hover:text-foreground hidden size-8 md:flex"
+          />
         </SidebarHeader>
-        <SidebarContent className="gap-0 overflow-x-hidden">
+        <SidebarContent className="gap-0 overflow-x-hidden [mask-image:linear-gradient(to_bottom,#000_calc(100%-1.5rem),transparent)]">
           {/* Group labels carry the separation. Rules between them would add a
               second divider to a rail that is already one column of type. */}
           <nav aria-label="Hub sections" className="flex min-h-0 flex-col">
             {navGroups.map((group) => (
               <SidebarGroup
                 key={group.label}
-                className="px-2.5 pt-4 pb-0 group-data-[collapsible=icon]:px-1.5"
+                className="px-2.5 pt-4 pb-0 first:pt-3 group-data-[collapsible=icon]:px-1.5"
               >
-                <SidebarGroupLabel className="text-muted-foreground h-6 px-2.5 text-micro font-semibold tracking-[0.09em] uppercase">
+                <SidebarGroupLabel className="text-muted-foreground mb-1 h-5 px-2.5 text-micro font-semibold tracking-[0.09em] uppercase">
                   {group.label}
                 </SidebarGroupLabel>
                 <SidebarGroupContent>
@@ -815,6 +1020,7 @@ export function HubLayout({ children, context, variant = "standard" }: HubLayout
                 </SidebarGroupContent>
               </SidebarGroup>
             ))}
+            <SidebarComingSoon items={pending} current={current} />
           </nav>
         </SidebarContent>
         {/* The wordmark in the header already names the company; under a real
@@ -822,7 +1028,14 @@ export function HubLayout({ children, context, variant = "standard" }: HubLayout
             This rule is the one divider in the rail — group labels carry the
             separation above it, but the account is a different kind of thing
             from a destination and earns the seam. */}
-        <SidebarFooter className="border-sidebar-border/70 mt-2 border-t px-2.5 py-2.5 group-data-[collapsible=icon]:px-1.5">
+        {/* Help is pinned rather than listed. It is the one destination whose
+            value is being findable the moment something goes wrong — putting
+            it in the scrolling list means the reader who needs it most has to
+            scroll past everything that just failed them. It sits above the
+            account card because both are about the person rather than the
+            work, and the footer is already the rail's one seam. */}
+        <SidebarFooter className="border-sidebar-border/70 mt-2 gap-1 border-t px-2.5 py-2.5 group-data-[collapsible=icon]:px-1.5">
+          <SidebarSupportLink current={current} fullUrl={page.url} />
           {user ? <SidebarAccount user={user} onSignOut={signOut} /> : null}
         </SidebarFooter>
       </Sidebar>

@@ -114,7 +114,7 @@ function OfficeAdministrationDetailPage() {
   }
 
   return (
-    <div className="flex flex-col gap-10">
+    <div className="flex flex-col gap-8">
       <Head title={`${office.name} · Offices`} />
       <PageHeader
         title={office.name}

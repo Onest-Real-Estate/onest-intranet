@@ -36,7 +36,6 @@ import {
 } from "@/components/dashboard/UtilizationMeter";
 import { WidgetPanel, WithheldPanel } from "@/components/dashboard/WidgetPanel";
 import { WorkQueue, WorkQueueSkeleton } from "@/components/dashboard/WorkQueue";
-import { PREVIEW_WIDGETS } from "@/lib/dashboard/preview";
 import type { ResolvedDashboardWidget } from "@/lib/dashboard/resolve";
 import type { DashboardWidgetDefinition } from "@/lib/dashboard/widget-registry";
 import type { DashboardPageProps, DashboardWidget } from "@/types";
@@ -51,22 +50,44 @@ interface SlotProps<T> {
 }
 
 /**
- * Choose between the server's envelope and the preview fixture.
+ * The envelope a widget renders, for a widget whose provider has not shipped.
+ *
+ * The dashboard states the gap rather than filling it. An unbacked widget has
+ * no prop to read, so inventing a figure for it would put a number on the page
+ * that no record anywhere produced — and a reader cannot tell an illustrative
+ * 42 from a real one once they have scrolled past the caveat that said so.
+ */
+function notConnected<T>(): DashboardWidget<T> {
+  return {
+    status: "unavailable",
+    version: 0,
+    generatedAt: "",
+    data: null,
+    emptyState: null,
+    unavailable: {
+      reason: "This panel fills in once its data source is connected.",
+      retryable: false,
+    },
+    meta: {},
+  };
+}
+
+/**
+ * Choose between the server's envelope and the not-connected placeholder.
  *
  * A `ready` server envelope always wins, whatever the registry says: real data
- * must never end up hidden behind a fixture because someone forgot to flip
- * `backed`. Otherwise an unbacked widget shows its preview, and a backed one
- * shows whatever the provider actually said — including empty and failed.
+ * must never end up hidden behind a placeholder because someone forgot to flip
+ * `backed`. Otherwise a backed widget shows whatever the provider actually
+ * said — including empty and failed — and an unbacked one says so plainly.
  */
 function envelope<T>(
   definition: DashboardWidgetDefinition,
   fromServer: DashboardWidget<T> | undefined,
-  preview: DashboardWidget<T>,
 ): DashboardWidget<T> | undefined {
   if (fromServer?.status === "ready" || definition.backed) {
     return fromServer;
   }
-  return preview;
+  return notConnected<T>();
 }
 
 /**
@@ -83,7 +104,6 @@ function Slot<T>({ definition, widget, skeleton, render, stale }: SlotProps<T>) 
       propName={definition.prop}
       widget={widget}
       stale={stale}
-      preview={widget.meta.preview === true}
     >
       {render}
     </WidgetPanel>
@@ -128,7 +148,7 @@ export function DashboardWidgetSlot({
       return (
         <Slot
           definition={definition}
-          widget={page.metrics}
+          widget={envelope(definition, page.metrics)}
           skeleton={<MetricCardsSkeleton />}
           stale={stale}
           render={(data) => <MetricCards metrics={data} />}
@@ -138,7 +158,7 @@ export function DashboardWidgetSlot({
       return (
         <Slot
           definition={definition}
-          widget={page.quickApps}
+          widget={envelope(definition, page.quickApps)}
           skeleton={<QuickAppsSkeleton />}
           stale={stale}
           render={(data) => (
@@ -154,17 +174,23 @@ export function DashboardWidgetSlot({
       return (
         <Slot
           definition={definition}
-          widget={page.schedule}
+          widget={envelope(definition, page.schedule)}
           skeleton={<MyDaySkeleton />}
           stale={stale}
-          render={(data) => <MyDay schedule={data} />}
+          render={(data) => (
+            <MyDay
+              schedule={data}
+              partialFailure={page.schedule?.meta.partialFailure === true}
+              truncated={page.schedule?.meta.truncated === true}
+            />
+          )}
         />
       );
     case "actionItems":
       return (
         <Slot
           definition={definition}
-          widget={page.actionItems}
+          widget={envelope(definition, page.actionItems)}
           skeleton={<ActionItemsSkeleton />}
           stale={stale}
           render={(data) => (
@@ -179,7 +205,7 @@ export function DashboardWidgetSlot({
       return (
         <Slot
           definition={definition}
-          widget={page.transactions}
+          widget={envelope(definition, page.transactions)}
           skeleton={<ActiveTransactionsSkeleton />}
           stale={stale}
           render={(data) => <ActiveTransactions transactions={data} />}
@@ -189,11 +215,7 @@ export function DashboardWidgetSlot({
       return (
         <Slot
           definition={definition}
-          widget={envelope(
-            definition,
-            page.announcements,
-            PREVIEW_WIDGETS.announcements,
-          )}
+          widget={envelope(definition, page.announcements)}
           skeleton={<AnnouncementsSkeleton />}
           stale={stale}
           render={(data) => <Announcements data={data} />}
@@ -203,7 +225,7 @@ export function DashboardWidgetSlot({
       return (
         <Slot
           definition={definition}
-          widget={page.training}
+          widget={envelope(definition, page.training)}
           skeleton={<TrainingResourcesSkeleton />}
           stale={stale}
           render={(data) => <TrainingResources training={data} />}
@@ -213,7 +235,7 @@ export function DashboardWidgetSlot({
       return (
         <Slot
           definition={definition}
-          widget={page.market}
+          widget={envelope(definition, page.market)}
           skeleton={<MarketSnapshotSkeleton />}
           stale={stale}
           render={(data) => <MarketSnapshot market={data} />}
@@ -223,7 +245,7 @@ export function DashboardWidgetSlot({
       return (
         <Slot
           definition={definition}
-          widget={page.documents}
+          widget={envelope(definition, page.documents)}
           skeleton={<QuickDocumentsSkeleton />}
           stale={stale}
           render={(data) => <QuickDocuments documents={data} />}
@@ -233,11 +255,7 @@ export function DashboardWidgetSlot({
       return (
         <Slot
           definition={definition}
-          widget={envelope(
-            definition,
-            page.agentOnboarding,
-            PREVIEW_WIDGETS.agentOnboarding,
-          )}
+          widget={envelope(definition, page.agentOnboarding)}
           skeleton={<StageFunnelSkeleton title={title} />}
           stale={stale}
           render={(data) => <StageFunnel title={title} data={data} />}
@@ -247,11 +265,7 @@ export function DashboardWidgetSlot({
       return (
         <Slot
           definition={definition}
-          widget={envelope(
-            definition,
-            page.closingPipeline,
-            PREVIEW_WIDGETS.closingPipeline,
-          )}
+          widget={envelope(definition, page.closingPipeline)}
           skeleton={<StageFunnelSkeleton title={title} />}
           stale={stale}
           render={(data) => <StageFunnel title={title} data={data} />}
@@ -261,11 +275,7 @@ export function DashboardWidgetSlot({
       return (
         <Slot
           definition={definition}
-          widget={envelope(
-            definition,
-            page.contractsAwaitingSignature,
-            PREVIEW_WIDGETS.contractsAwaitingSignature,
-          )}
+          widget={envelope(definition, page.contractsAwaitingSignature)}
           skeleton={<WorkQueueSkeleton title={title} />}
           stale={stale}
           render={(data) => <WorkQueue title={title} data={data} />}
@@ -275,11 +285,7 @@ export function DashboardWidgetSlot({
       return (
         <Slot
           definition={definition}
-          widget={envelope(
-            definition,
-            page.complianceExceptions,
-            PREVIEW_WIDGETS.complianceExceptions,
-          )}
+          widget={envelope(definition, page.complianceExceptions)}
           skeleton={<WorkQueueSkeleton title={title} />}
           stale={stale}
           render={(data) => <WorkQueue title={title} data={data} />}
@@ -289,7 +295,7 @@ export function DashboardWidgetSlot({
       return (
         <Slot
           definition={definition}
-          widget={envelope(definition, page.teamTasks, PREVIEW_WIDGETS.teamTasks)}
+          widget={envelope(definition, page.teamTasks)}
           skeleton={<WorkQueueSkeleton title={title} />}
           stale={stale}
           render={(data) => <WorkQueue title={title} data={data} />}
@@ -299,11 +305,7 @@ export function DashboardWidgetSlot({
       return (
         <Slot
           definition={definition}
-          widget={envelope(
-            definition,
-            page.overdueInventory,
-            PREVIEW_WIDGETS.overdueInventory,
-          )}
+          widget={envelope(definition, page.overdueInventory)}
           skeleton={<WorkQueueSkeleton title={title} />}
           stale={stale}
           render={(data) => <WorkQueue title={title} data={data} />}
@@ -313,11 +315,7 @@ export function DashboardWidgetSlot({
       return (
         <Slot
           definition={definition}
-          widget={envelope(
-            definition,
-            page.roomUtilization,
-            PREVIEW_WIDGETS.roomUtilization,
-          )}
+          widget={envelope(definition, page.roomUtilization)}
           skeleton={<UtilizationMeterSkeleton title={title} />}
           stale={stale}
           render={(data) => <UtilizationMeter title={title} data={data} />}
@@ -327,11 +325,7 @@ export function DashboardWidgetSlot({
       return (
         <Slot
           definition={definition}
-          widget={envelope(
-            definition,
-            page.operationalActivity,
-            PREVIEW_WIDGETS.operationalActivity,
-          )}
+          widget={envelope(definition, page.operationalActivity)}
           skeleton={<ActivityFeedSkeleton title={title} />}
           stale={stale}
           render={(data) => <ActivityFeed title={title} data={data} />}
@@ -341,7 +335,7 @@ export function DashboardWidgetSlot({
       return (
         <Slot
           definition={definition}
-          widget={envelope(definition, page.supportQueue, PREVIEW_WIDGETS.supportQueue)}
+          widget={envelope(definition, page.supportQueue)}
           skeleton={<WorkQueueSkeleton title={title} />}
           stale={stale}
           render={(data) => <WorkQueue title={title} data={data} />}
@@ -351,11 +345,7 @@ export function DashboardWidgetSlot({
       return (
         <Slot
           definition={definition}
-          widget={envelope(
-            definition,
-            page.feedbackSignals,
-            PREVIEW_WIDGETS.feedbackSignals,
-          )}
+          widget={envelope(definition, page.feedbackSignals)}
           skeleton={<WorkQueueSkeleton title={title} />}
           stale={stale}
           render={(data) => <WorkQueue title={title} data={data} />}
