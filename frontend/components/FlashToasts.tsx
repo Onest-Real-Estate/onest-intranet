@@ -1,7 +1,7 @@
 import { usePage } from "@inertiajs/react";
 import { useEffect, useRef } from "react";
-import { toast } from "sonner";
 
+import { showFlashToast } from "@/lib/flash-toast";
 import type { PageProps } from "@/types";
 
 /**
@@ -21,14 +21,7 @@ export function FlashToasts() {
       return;
     }
     lastKey.current = key;
-
-    if (flash.level === "success") {
-      toast.success(flash.message);
-    } else if (flash.level === "error") {
-      toast.error(flash.message);
-    } else {
-      toast.message(flash.message);
-    }
+    showFlashToast(flash.level, flash.message);
   }, [flash]);
 
   return null;

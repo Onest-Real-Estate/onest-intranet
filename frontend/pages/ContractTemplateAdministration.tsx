@@ -5,6 +5,8 @@ import {
   CreateSheet,
   DataTable,
   FormErrorSummary,
+  FormFieldError,
+  fieldA11yProps,
   PageHeader,
   PanelHeader,
   SearchControl,
@@ -20,6 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { routes } from "@/lib/routes";
+import { firstFieldError } from "@/lib/validation";
 import type { ContractTemplateAdministrationPageProps } from "@/types";
 
 const ACCESS = {
@@ -92,20 +95,36 @@ export default function ContractTemplateAdministration() {
           <div className="grid gap-4" id="contract-template-create-form">
             <div className="grid gap-2">
               <Label htmlFor="stable_key">Stable key</Label>
-              <Input id="stable_key" name="stable_key" required />
+              <Input
+                id="stable_key"
+                name="stable_key"
+                required
+                defaultValue={String(createSheet?.draft?.stable_key ?? "")}
+                {...fieldA11yProps("stable_key", errors)}
+              />
+              <FormFieldError message={firstFieldError(errors, "stable_key")} />
             </div>
             <div className="grid gap-2">
               <Label htmlFor="name">Display name</Label>
-              <Input id="name" name="name" required />
+              <Input
+                id="name"
+                name="name"
+                required
+                defaultValue={String(createSheet?.draft?.name ?? "")}
+                {...fieldA11yProps("name", errors)}
+              />
+              <FormFieldError message={firstFieldError(errors, "name")} />
             </div>
             <div className="grid gap-2">
               <Label htmlFor="version_label">Initial version</Label>
               <Input
                 id="version_label"
                 name="version_label"
-                defaultValue="1.0.0"
+                defaultValue={String(createSheet?.draft?.version_label ?? "1.0.0")}
                 required
+                {...fieldA11yProps("version_label", errors)}
               />
+              <FormFieldError message={firstFieldError(errors, "version_label")} />
             </div>
             <StateMultiSelect
               id="jurisdiction_state_codes"
@@ -118,13 +137,28 @@ export default function ContractTemplateAdministration() {
             />
             <div className="grid gap-2">
               <Label htmlFor="description">Description</Label>
-              <Textarea id="description" name="description" rows={4} />
+              <Textarea
+                id="description"
+                name="description"
+                rows={4}
+                defaultValue={String(createSheet?.draft?.description ?? "")}
+                {...fieldA11yProps("description", errors)}
+              />
+              <FormFieldError message={firstFieldError(errors, "description")} />
             </div>
             <label
               className="flex items-center gap-2 text-sm font-medium"
               htmlFor="company_wide"
             >
-              <Checkbox id="company_wide" name="company_wide" value="on" />
+              <Checkbox
+                id="company_wide"
+                name="company_wide"
+                value="on"
+                defaultChecked={
+                  createSheet?.draft?.company_wide === "on" ||
+                  createSheet?.draft?.company_wide === true
+                }
+              />
               Company-wide applicability
             </label>
           </div>

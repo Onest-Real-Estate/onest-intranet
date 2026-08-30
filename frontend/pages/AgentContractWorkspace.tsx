@@ -1,4 +1,4 @@
-import { Head, router, usePage } from "@inertiajs/react";
+import { Head, Link, router, usePage } from "@inertiajs/react";
 import { useMemo, useState } from "react";
 import { AccessChangeDialog } from "@/components/administration/AccessChangeDialog";
 import { CommissionCalculator } from "@/components/administration/CommissionCalculator";
@@ -153,6 +153,8 @@ export default function AgentContractWorkspace() {
     errors,
     agreementPreview,
     generatedPdfUrl,
+    familyHistory = [],
+    termComparison = null,
     csrfToken,
   } = usePage<AgentContractWorkspacePageProps>().props;
   const commission = contract.commission as Record<string, unknown> | undefined;
@@ -163,6 +165,9 @@ export default function AgentContractWorkspace() {
   const canEdit = capabilities.canManage && contract.status === "draft";
   useValidationToasts(errors);
   const confirmCopy = confirmAction ? CONFIRM_LIFECYCLE[confirmAction] : null;
+  const versionLabel = `v${contract.versionNumber ?? "—"} · ${
+    contract.changeKindLabel ?? "Agreement"
+  }`;
   const [mentorBasis, setMentorBasis] = useState(() =>
     nested(commission, "mentor", "basis"),
   );
@@ -234,7 +239,7 @@ export default function AgentContractWorkspace() {
         <div className="grid gap-6">
           <PageHeader
             title={recipient.name}
-            description={`${recipient.email} · ${officeName}`}
+            description={`${recipient.email} · ${officeName} · ${versionLabel}`}
             meta={
               <StatusBadge
                 status={{
@@ -245,6 +250,12 @@ export default function AgentContractWorkspace() {
             }
           />
 
+          {!canEdit ? (
+            <p className="text-muted-foreground text-sm" role="status">
+              Issued and historical versions are immutable. Create an amendment or
+              replacement draft to change terms.
+            </p>
+          ) : null}
           <form
             method="post"
             action={routes.agent_contract_update(contract.publicId)}
@@ -281,6 +292,88 @@ export default function AgentContractWorkspace() {
               </SurfaceCardContent>
             </SurfaceCard>
 
+            {(contract.changeKind === "amendment" ||
+              contract.changeKind === "addendum" ||
+              contract.changeKind === "replacement" ||
+              canEdit) && (
+              <SurfaceCard>
+                <PanelHeader
+                  title="Change summary"
+                  description="Legal narrative for amendments and addenda. Shown on the agreement package."
+                />
+                <SurfaceCardContent>
+                  <Label htmlFor="change_summary">Summary of changes</Label>
+                  <Textarea
+                    id="change_summary"
+                    name="change_summary"
+                    rows={4}
+                    defaultValue={contract.changeSummary ?? ""}
+                    disabled={!canEdit}
+                    className="mt-2"
+                  />
+                </SurfaceCardContent>
+              </SurfaceCard>
+            )}
+
+            {termComparison ? (
+              <SurfaceCard>
+                <PanelHeader
+                  title="Before / after terms"
+                  description={`Compared to base version ${termComparison.baseVersionNumber} (${termComparison.baseStatusLabel}). Review before issuing.`}
+                />
+                <SurfaceCardContent className="grid gap-4">
+                  <p className="text-muted-foreground text-sm" role="note">
+                    {termComparison.effectiveDateNote}
+                  </p>
+                  {termComparison.changeSummary ? (
+                    <p className="text-sm whitespace-pre-line">
+                      {termComparison.changeSummary}
+                    </p>
+                  ) : null}
+                  {termComparison.rows.length === 0 ? (
+                    <p className="text-muted-foreground text-sm">
+                      No commercial term differences from the base yet.
+                    </p>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <caption className="sr-only">
+                          Term changes between base version{" "}
+                          {termComparison.baseVersionNumber} and this draft
+                        </caption>
+                        <thead>
+                          <tr className="border-b border-border text-left">
+                            <th scope="col" className="py-2 pr-3 font-medium">
+                              Term
+                            </th>
+                            <th scope="col" className="py-2 pr-3 font-medium">
+                              Before
+                            </th>
+                            <th scope="col" className="py-2 font-medium">
+                              After
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {termComparison.rows.map((row) => (
+                            <tr key={row.key} className="border-b border-border/60">
+                              <th
+                                scope="row"
+                                className="py-2 pr-3 text-left font-normal text-muted-foreground"
+                              >
+                                {row.label}
+                              </th>
+                              <td className="py-2 pr-3">{row.before}</td>
+                              <td className="py-2 font-medium">{row.after}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </SurfaceCardContent>
+              </SurfaceCard>
+            ) : null}
             <SurfaceCard>
               <PanelHeader title="Template and dates" />
               <SurfaceCardContent className="grid gap-4 md:grid-cols-2">
@@ -678,6 +771,34 @@ export default function AgentContractWorkspace() {
                   Terminate
                 </Button>
               ) : null}
+              {capabilities.canCreateAmendment ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() =>
+                    router.post(
+                      routes.agent_contract_create_amendment(contract.publicId),
+                      toFormData({ change_kind: "amendment" }),
+                    )
+                  }
+                >
+                  Create amendment
+                </Button>
+              ) : null}
+              {capabilities.canCreateReplacement ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() =>
+                    router.post(
+                      routes.agent_contract_create_replacement(contract.publicId),
+                      toFormData({}),
+                    )
+                  }
+                >
+                  Create replacement
+                </Button>
+              ) : null}
               {generatedPdfUrl ? (
                 <Button type="button" variant="outline" asChild>
                   <a href={generatedPdfUrl}>Download review PDF</a>
@@ -714,6 +835,54 @@ export default function AgentContractWorkspace() {
               initial={commercialPreview}
             />
           ) : null}
+
+          {familyHistory.length > 0 ? (
+            <SurfaceCard>
+              <PanelHeader
+                title="Family history"
+                description="Base, amendments, replacements, and supersession in this family."
+              />
+              <SurfaceCardContent>
+                <ul className="grid gap-2">
+                  {familyHistory.map((row) => (
+                    <li key={row.publicId}>
+                      <Link
+                        href={row.href}
+                        className={`border-border flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3 text-sm ${
+                          row.isFocus ? "bg-muted/40" : "hover:bg-muted/30"
+                        }`}
+                        aria-current={row.isFocus ? "page" : undefined}
+                        preserveScroll
+                      >
+                        <div className="grid min-w-0 gap-0.5">
+                          <span className="font-medium">
+                            Version {row.versionNumber} · {row.changeKindLabel}
+                          </span>
+                          <span className="text-muted-foreground text-xs">
+                            {row.governing === "current"
+                              ? "Currently governing"
+                              : row.governing === "historical"
+                                ? "Historical"
+                                : "In flight"}
+                            {row.amendsPublicId ? " · Amends prior version" : ""}
+                            {row.supersedesPublicId
+                              ? " · Supersedes prior version"
+                              : ""}
+                          </span>
+                        </div>
+                        <StatusBadge
+                          status={{
+                            label: row.statusLabel,
+                            tone: toTone(row.statusTone),
+                          }}
+                        />
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </SurfaceCardContent>
+            </SurfaceCard>
+          ) : null}
         </aside>
 
         {confirmCopy && confirmAction ? (
@@ -723,7 +892,11 @@ export default function AgentContractWorkspace() {
               if (!open) setConfirmAction(null);
             }}
             title={confirmCopy.title}
-            description={confirmCopy.description}
+            description={
+              confirmAction === "issue" && termComparison
+                ? `${confirmCopy.description} ${termComparison.rows.length} term difference(s) vs base v${termComparison.baseVersionNumber}. ${termComparison.effectiveDateNote}`
+                : confirmCopy.description
+            }
             changes={[
               {
                 label: "Status",

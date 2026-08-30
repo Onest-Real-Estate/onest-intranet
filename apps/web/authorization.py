@@ -1169,6 +1169,8 @@ ROUTE_POLICIES["agent_contract_manage"] = AuthorizationPolicy(
         "agent_contract_new",
         "agent_contract_create",
         "agent_contract_update",
+        "agent_contract_create_amendment",
+        "agent_contract_create_replacement",
         "agent_contract_lifecycle",
         "agent_contract_recipient_search",
         "agent_contract_template_options",

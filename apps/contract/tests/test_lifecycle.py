@@ -19,7 +19,11 @@ from apps.contract.lifecycle import (
     expire_due_contracts,
     transition,
 )
-from apps.contract.models import ContractTemplate, ContractTemplateVersion
+from apps.contract.models import (
+    AgentContract,
+    ContractTemplate,
+    ContractTemplateVersion,
+)
 from apps.contract.services import create_draft_contract
 from apps.contract.statuses import ContractStatus
 from apps.contract.tests.conftest import agent, branch_admin, company_admin
@@ -267,9 +271,12 @@ def test_expire_due_contracts_idempotent(seeded_offices):
         "mark_signed",
         "activate",
     )
-    active.effective_on = date.today() - timedelta(days=30)
-    active.expires_on = date.today() - timedelta(days=1)
-    active.save(update_fields=["effective_on", "expires_on", "updated_at"])
+    # Simulate calendar time passing without rewriting immutable issued fields
+    # through the model save path.
+    AgentContract.objects.filter(pk=active.pk).update(
+        effective_on=date.today() - timedelta(days=30),
+        expires_on=date.today() - timedelta(days=1),
+    )
 
     with patch("apps.audit.tasks.dispatch_event.delay"):
         assert expire_due_contracts() == 1

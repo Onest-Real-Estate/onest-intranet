@@ -626,36 +626,12 @@ def complete_signing(
     expected = contract_version(locked)
 
     appearance_digest = appearance_checksum(signature_png)
-    coc_bytes = build_certificate_of_completion(
-        facts={
-            "contractPublicId": str(locked.public_id),
-            "versionNumber": locked.version_number,
-            "partyDisplayName": _party_display_name(locked, intent.actor),
-            "signerEmail": intent.actor.email,
-            "signerUserId": intent.actor.pk,
-            "signedAt": now.isoformat(),
-            "consentAcceptedAt": intent.consent_accepted_at.isoformat(),
-            "disclosureVersion": intent.disclosure_version,
-            "signatureMethod": ContractSignature.Method.HUB_EMBEDDED,
-            "intentPublicId": str(intent.public_id),
-            "signaturePublicId": "(pending)",
-            "reviewChecksum": artifact.checksum,
-            "signedChecksum": signed_artifact.checksum,
-            "appearanceChecksum": appearance_digest,
-            "requestIpHash": intent.request_ip_hash,
-            "requestUaHash": intent.request_ua_hash,
-            "sealCertSubject": sealed.cert_subject,
-            "sealCertFingerprint": sealed.cert_fingerprint,
-        }
-    )
-    coc_artifact = _attach_certificate(locked, pdf_bytes=coc_bytes, signer=intent.actor)
-
+    # Allocate signature identity before CoC so the certificate is write-once.
     signature = ContractSignature(
         contract=locked,
         intent=intent,
         signer=intent.actor,
         artifact=signed_artifact,
-        certificate_of_completion=coc_artifact,
         signed_at=now,
         disclosure_version=intent.disclosure_version,
         signature_method=ContractSignature.Method.HUB_EMBEDDED,
@@ -665,10 +641,6 @@ def complete_signing(
         request_ip_hash=intent.request_ip_hash,
         request_ua_hash=intent.request_ua_hash,
     )
-    signature.full_clean()
-    signature.save()
-
-    # Refresh CoC with final signature id for evidence completeness.
     coc_bytes = build_certificate_of_completion(
         facts={
             "contractPublicId": str(locked.public_id),
@@ -691,12 +663,10 @@ def complete_signing(
             "sealCertFingerprint": sealed.cert_fingerprint,
         }
     )
-    coc_artifact.byte_size = len(coc_bytes)
-    coc_artifact.checksum = checksum_of(coc_bytes)
-    coc_artifact.file.save(
-        coc_artifact.display_name, ContentFile(coc_bytes), save=False
-    )
-    coc_artifact.save(update_fields=["file", "byte_size", "checksum"])
+    coc_artifact = _attach_certificate(locked, pdf_bytes=coc_bytes, signer=intent.actor)
+    signature.certificate_of_completion = coc_artifact
+    signature.full_clean()
+    signature.save()
 
     intent.status = ContractSigningIntent.Status.CONSUMED
     intent.consumed_at = now

@@ -326,29 +326,45 @@ function HistoryList({ rows }: { rows: MyContractHistoryRow[] }) {
 
   return (
     <ul className="grid gap-2">
-      {rows.map((row) => (
-        <li key={row.publicId}>
-          {row.isFocus ? (
-            <div className="border-border bg-muted/40 flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3">
-              <div className="grid min-w-0 gap-0.5">
-                <span className="text-sm font-medium">Version {row.versionNumber}</span>
-                <span className="text-muted-foreground text-xs">
-                  Effective {formatDate(row.effectiveOn)}
-                  {row.expiresOn ? ` · Expires ${formatDate(row.expiresOn)}` : ""}
-                </span>
+      {rows.map((row) => {
+        const kindLabel = row.changeKindLabel || "Agreement";
+        const relation =
+          row.governing === "current"
+            ? "Currently governing"
+            : row.amendsPublicId
+              ? "Amendment of an earlier version"
+              : row.supersedesPublicId
+                ? "Replacement of an earlier version"
+                : row.statusLabel;
+        const title = `Version ${row.versionNumber} · ${kindLabel}`;
+        if (row.isFocus) {
+          return (
+            <li key={row.publicId}>
+              <div className="border-border bg-muted/40 flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3">
+                <div className="grid min-w-0 gap-0.5">
+                  <span className="text-sm font-medium">{title}</span>
+                  <span className="text-muted-foreground text-xs">
+                    Effective {formatDate(row.effectiveOn)}
+                    {row.expiresOn ? ` · Expires ${formatDate(row.expiresOn)}` : ""}
+                    {` · ${relation}`}
+                  </span>
+                </div>
+                <Badge variant="secondary">Current view</Badge>
               </div>
-              <Badge variant="secondary">Current view</Badge>
-            </div>
-          ) : (
+            </li>
+          );
+        }
+        return (
+          <li key={row.publicId}>
             <Link
               href={row.href}
               className="border-border hover:bg-muted/30 focus-visible:ring-ring flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3 transition-colors focus-visible:ring-2 focus-visible:outline-none"
               preserveScroll
             >
               <div className="grid min-w-0 gap-0.5">
-                <span className="text-sm font-medium">Version {row.versionNumber}</span>
+                <span className="text-sm font-medium">{title}</span>
                 <span className="text-muted-foreground text-xs">
-                  Effective {formatDate(row.effectiveOn)} · {row.statusLabel}
+                  Effective {formatDate(row.effectiveOn)} · {relation}
                 </span>
               </div>
               <StatusBadge
@@ -358,9 +374,9 @@ function HistoryList({ rows }: { rows: MyContractHistoryRow[] }) {
                 }}
               />
             </Link>
-          )}
-        </li>
-      ))}
+          </li>
+        );
+      })}
     </ul>
   );
 }

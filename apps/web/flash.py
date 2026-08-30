@@ -3,18 +3,27 @@
 Set on a successful mutating request, then popped into shared Inertia props on
 the following render so the client can toast without relying on visit
 callbacks that may not run across a redirect.
+
+Levels match Django ``django.contrib.messages`` tags so product code can use
+the same vocabulary as ``messages.success`` / ``messages.warning`` / etc.
 """
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from django.http import HttpRequest
 
 SESSION_KEY = "inertia_flash"
 
+FlashLevel = Literal["debug", "info", "success", "warning", "error"]
 
-def set_flash(request: HttpRequest, *, level: str, message: str) -> None:
+FLASH_LEVELS: frozenset[str] = frozenset(
+    {"debug", "info", "success", "warning", "error"}
+)
+
+
+def set_flash(request: HttpRequest, *, level: FlashLevel | str, message: str) -> None:
     request.session[SESSION_KEY] = {"level": level, "message": message}
 
 

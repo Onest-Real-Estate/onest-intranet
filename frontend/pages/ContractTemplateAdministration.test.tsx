@@ -177,6 +177,54 @@ describe("ContractTemplateAdministration", () => {
     await user.keyboard("{Enter}");
     expect(getMock).toHaveBeenCalled();
   });
+
+  it("shows create-sheet field errors for a duplicate stable key", () => {
+    vi.mocked(usePage).mockReturnValue({
+      props: {
+        csrfToken: "token",
+        user: {
+          id: 1,
+          email: "admin@example.com",
+          permissions: ["contract.manage_contract_templates"],
+        },
+        templates: {
+          items: [],
+          pagination: {
+            page: 1,
+            pageSize: 20,
+            totalItems: 0,
+            totalPages: 1,
+            hasNext: false,
+            hasPrevious: false,
+          },
+          filters: { q: "", status: "", jurisdiction: "" },
+          sort: null,
+        },
+        capabilities: { canManage: true, canApprove: false },
+        createSheet: {
+          open: true,
+          draft: {
+            stable_key: "ica-standard",
+            name: "ICA Standard",
+            version_label: "1.0.0",
+          },
+        },
+        errors: {
+          fields: {
+            stable_key: ["A contract template with this stable key already exists."],
+          },
+          form: [],
+        },
+        states: [{ code: "VA", name: "Virginia" }],
+      },
+    } as never);
+    render(<ContractTemplateAdministration />);
+    expect(
+      screen.getAllByText("A contract template with this stable key already exists.")
+        .length,
+    ).toBeGreaterThanOrEqual(1);
+    expect(screen.getByLabelText(/stable key/i)).toHaveValue("ica-standard");
+  });
 });
 
 describe("ContractTemplateWorkspace", () => {

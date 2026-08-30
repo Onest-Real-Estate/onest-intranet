@@ -217,11 +217,6 @@ def seed_offices(office_model=None) -> SeedReport:
     from apps.user.models import Office as LiveOffice
 
     Office = office_model or LiveOffice
-    with transaction.atomic():
-        return _seed_offices(Office)
-
-
-def _seed_offices(Office) -> SeedReport:
     report = SeedReport()
 
     # String literals so this also runs against historical migration models
@@ -231,6 +226,26 @@ def _seed_offices(Office) -> SeedReport:
     regional_office = "regional_office"
     branch = "branch"
 
+    with transaction.atomic():
+        return _seed_offices_locked(
+            Office,
+            report,
+            head_office=head_office,
+            region=region,
+            regional_office=regional_office,
+            branch=branch,
+        )
+
+
+def _seed_offices_locked(
+    Office,
+    report: SeedReport,
+    *,
+    head_office: str,
+    region: str,
+    regional_office: str,
+    branch: str,
+) -> SeedReport:
     head = upsert_office(
         Office,
         report,

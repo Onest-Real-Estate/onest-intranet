@@ -19,8 +19,34 @@ transition service are documented below. Agent-facing **My Contract** and
 
 `AgentContract.public_id` (UUID) is the client-facing identity. The integer PK
 is internal. Family history uses shared `family_id` + monotonic
-`version_number`, plus optional `root_agreement` / `supersedes` / `amends`
-links so replacements never overwrite signed rows.
+`version_number`, plus `change_kind` (`original` / `amendment` / `addendum` /
+`replacement`) and optional `root_agreement` / `supersedes` / `amends` links
+so replacements and amendments never overwrite signed rows. Amendments carry a
+`change_summary` legal narrative; commercial fields are still prepopulated in
+full so calculations and PDFs stay self-contained per version.
+
+### Versioning and amendments (P1-045)
+
+Signed, active, and other issued statuses freeze legal/financial fields,
+snapshots, and family links on the model. Artifacts are write-once after
+create. To change terms, admins start **Create amendment** or **Create
+replacement** from an eligible signed/active in-scope contract:
+
+1. Service validates eligibility (no open pipeline sibling, no cycles, valid
+   base status) and locks the family for collision-safe `version_number`
+   allocation.
+2. A new **draft** is created in the same family, prepopulated from the base
+   — never bound to the signed row's mutable form.
+3. Workspace shows a structured before/after term comparison and effective-date
+   note before issue.
+4. Activating a replacement (or any new governing version) supersedes the prior
+   active row atomically without deleting it, its artifacts, or its audit
+   history.
+
+Governing terms for display are the focused version's own frozen
+`terms_snapshot`. When the row is `active`, it is the currently governing
+agreement; history labels mark base / amendment / replacement and
+supersession.
 
 ### Status codes
 

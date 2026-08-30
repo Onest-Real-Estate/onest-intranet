@@ -54,4 +54,56 @@ describe("StateMultiSelect", () => {
     expect(screen.queryByLabelText(/MD/i)).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/CA/i)).not.toBeInTheDocument();
   });
+
+  it("selects every state with Select all", async () => {
+    const user = userEvent.setup();
+    render(
+      <form>
+        <StateMultiSelect
+          name="jurisdiction_state_codes"
+          label="Jurisdiction states"
+          options={options}
+        />
+      </form>,
+    );
+
+    await user.click(screen.getByRole("combobox"));
+    await user.click(screen.getByRole("button", { name: /select all/i }));
+
+    const hidden = screen
+      .getAllByDisplayValue(/^(MD|VA|CA)$/)
+      .filter((node) => node.getAttribute("name") === "jurisdiction_state_codes");
+    expect(hidden.map((node) => (node as HTMLInputElement).value).sort()).toEqual([
+      "CA",
+      "MD",
+      "VA",
+    ]);
+    expect(screen.queryByRole("button", { name: /select all/i })).toBeNull();
+  });
+
+  it("Select shown only adds the filtered matches", async () => {
+    const user = userEvent.setup();
+    render(
+      <form>
+        <StateMultiSelect
+          name="jurisdiction_state_codes"
+          label="Jurisdiction states"
+          options={options}
+          defaultValue={["CA"]}
+        />
+      </form>,
+    );
+
+    await user.click(screen.getByRole("combobox"));
+    await user.type(screen.getByRole("textbox", { name: /search states/i }), "m");
+    await user.click(screen.getByRole("button", { name: /select shown/i }));
+
+    const hidden = screen
+      .getAllByDisplayValue(/^(MD|CA)$/)
+      .filter((node) => node.getAttribute("name") === "jurisdiction_state_codes");
+    expect(hidden.map((node) => (node as HTMLInputElement).value).sort()).toEqual([
+      "CA",
+      "MD",
+    ]);
+  });
 });

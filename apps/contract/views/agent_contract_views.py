@@ -28,6 +28,7 @@ from apps.contract.administration import (
     workspace_payload,
 )
 from apps.contract.artifact_delivery import stream_contract_artifact
+from apps.contract.change_kinds import ContractChangeKind
 from apps.contract.lifecycle import (
     ConfirmationRequired,
     StaleContractVersion,
@@ -37,6 +38,10 @@ from apps.contract.lifecycle import (
 from apps.contract.models import AgentContract, ContractTemplateVersion
 from apps.contract.services import scoped_contract_queryset, serialize_contract
 from apps.contract.statuses import contract_status_options
+from apps.contract.versioning import (
+    create_amendment_draft,
+    create_replacement_draft,
+)
 from apps.user.models import Office, User
 from apps.web.authorization import enforce_policy
 from apps.web.contracts import empty_validation_errors, list_response
@@ -304,12 +309,72 @@ def agent_contract_update(request: HttpRequest, public_id: uuid.UUID):
             internal_notes=request.POST.get("internal_notes")
             if "internal_notes" in request.POST
             else None,
+            change_summary=request.POST.get("change_summary")
+            if "change_summary" in request.POST
+            else None,
         )
     except (ValidationError, PermissionDenied, StaleContractVersion) as exc:
         return _render_workspace_error(request, contract, exc)
 
     set_flash(request, level="success", message="Draft saved")
     return redirect("agent_contract_workspace", public_id=contract.public_id)
+
+
+@enforce_policy("agent_contract_manage")
+@require_POST
+def agent_contract_create_amendment(request: HttpRequest, public_id: uuid.UUID):
+    actor = _actor(request)
+    base = _target(request, public_id)
+    kind = (request.POST.get("change_kind") or ContractChangeKind.AMENDMENT).strip()
+    if kind not in {
+        ContractChangeKind.AMENDMENT,
+        ContractChangeKind.ADDENDUM,
+    }:
+        kind = ContractChangeKind.AMENDMENT
+    try:
+        draft = create_amendment_draft(
+            actor,
+            base,
+            change_kind=kind,
+            change_summary=request.POST.get("change_summary") or "",
+            effective_on=_parse_date(
+                request.POST.get("effective_on"), allow_empty=True
+            ),
+        )
+    except (ValidationError, PermissionDenied) as exc:
+        return _render_workspace_error(request, base, exc)
+
+    set_flash(
+        request,
+        level="success",
+        message="Amendment draft created — edit terms on the new version only.",
+    )
+    return redirect("agent_contract_workspace", public_id=draft.public_id)
+
+
+@enforce_policy("agent_contract_manage")
+@require_POST
+def agent_contract_create_replacement(request: HttpRequest, public_id: uuid.UUID):
+    actor = _actor(request)
+    base = _target(request, public_id)
+    try:
+        draft = create_replacement_draft(
+            actor,
+            base,
+            change_summary=request.POST.get("change_summary") or "",
+            effective_on=_parse_date(
+                request.POST.get("effective_on"), allow_empty=True
+            ),
+        )
+    except (ValidationError, PermissionDenied) as exc:
+        return _render_workspace_error(request, base, exc)
+
+    set_flash(
+        request,
+        level="success",
+        message="Replacement draft created — the signed version was not edited.",
+    )
+    return redirect("agent_contract_workspace", public_id=draft.public_id)
 
 
 @enforce_policy("agent_contract_manage")

@@ -15,6 +15,7 @@ from django.urls import reverse
 from django.utils.translation import gettext as _
 
 from apps.contract.calculations import summarize_terms_for_display
+from apps.contract.change_kinds import change_kind_label
 from apps.contract.lifecycle import contract_version, transition
 from apps.contract.models import AgentContract
 from apps.contract.pdf_signing import signing_is_ready
@@ -28,11 +29,8 @@ from apps.contract.services import (
     recipient_contract_queryset,
 )
 from apps.contract.services.calculation_service import terms_input_from_contract
-from apps.contract.statuses import (
-    ContractStatus,
-    status_label,
-    status_tone,
-)
+from apps.contract.statuses import ContractStatus, status_label, status_tone
+from apps.contract.versioning import serialize_family_history_row
 from apps.user.models import User
 from apps.user.services.role_assignments import has_effective_permission
 
@@ -239,6 +237,9 @@ def serialize_recipient_contract(
         "publicId": str(contract.public_id),
         "familyId": str(contract.family_id),
         "versionNumber": contract.version_number,
+        "changeKind": contract.change_kind,
+        "changeKindLabel": change_kind_label(contract.change_kind),
+        "changeSummary": contract.change_summary or "",
         "status": contract.status,
         "statusLabel": str(status_label(contract.status)),
         "statusTone": status_tone(contract.status),
@@ -265,6 +266,7 @@ def serialize_recipient_contract(
         "isCurrentFocus": True,
         "amendsPublicId": _related_public_id(contract.amends),
         "supersedesPublicId": _related_public_id(contract.supersedes),
+        "isGoverning": contract.status == ContractStatus.ACTIVE,
     }
     if _can_view_commission(viewer, contract):
         payload["commission"] = _commission_block(contract)
@@ -329,19 +331,14 @@ def serialize_history_row(
     viewer: User, contract: AgentContract, *, focus_id: int
 ) -> dict[str, Any]:
     """One family/history entry the recipient may open."""
-    return {
-        "publicId": str(contract.public_id),
-        "versionNumber": contract.version_number,
-        "status": contract.status,
-        "statusLabel": str(status_label(contract.status)),
-        "statusTone": status_tone(contract.status),
-        "effectiveOn": contract.effective_on.isoformat(),
-        "expiresOn": (contract.expires_on.isoformat() if contract.expires_on else None),
-        "isFocus": contract.pk == focus_id,
-        "hasArtifact": bool(contract.generated_pdf_id or contract.signed_pdf_id),
-        "href": reverse("my_contract")
-        + (f"?v={contract.public_id}" if contract.pk != focus_id else ""),
-    }
+    href = reverse("my_contract") + (
+        f"?v={contract.public_id}" if contract.pk != focus_id else ""
+    )
+    row = serialize_family_history_row(contract, focus_id=focus_id, workspace_href=href)
+    # Recipient surface uses the same relationship labels; href stays
+    # on My Contract rather than the admin workspace.
+    row["href"] = href
+    return row
 
 
 def family_history(viewer: User, focus: AgentContract) -> list[dict[str, Any]]:

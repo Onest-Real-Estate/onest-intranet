@@ -282,6 +282,7 @@ def update_draft_contract(
     special_arrangements: str | None = None,
     addenda_references: list[str] | None = None,
     internal_notes: str | None = None,
+    change_summary: str | None = None,
 ) -> AgentContract:
     """Update a draft. Ellipsis means leave unchanged; ``None`` clears nullable."""
     _ensure_manage(actor)
@@ -388,6 +389,8 @@ def update_draft_contract(
             locked.addenda_references = list(addenda_references)
         if internal_notes is not None:
             locked.internal_notes = internal_notes
+        if change_summary is not None:
+            locked.change_summary = change_summary.strip()
 
         locked.party_snapshot = party_snapshot(recipient)
         locked.office_snapshot = office_snapshot(owning_office)
@@ -572,6 +575,14 @@ def issue_contract(
 
 
 def workspace_payload(actor: User, contract: AgentContract) -> dict[str, Any]:
+    from apps.contract.versioning import (
+        can_create_amendment,
+        can_create_replacement,
+        family_history_for_admin,
+        governing_terms_payload,
+        term_comparison_payload,
+    )
+
     caps = capabilities(actor)
     payload = serialize_contract(actor, contract)
     recipient = contract.recipient
@@ -589,7 +600,11 @@ def workspace_payload(actor: User, contract: AgentContract) -> dict[str, Any]:
     return {
         "contract": payload,
         "expectedVersion": contract_version(contract),
-        "capabilities": caps,
+        "capabilities": {
+            **caps,
+            "canCreateAmendment": can_create_amendment(actor, contract),
+            "canCreateReplacement": can_create_replacement(actor, contract),
+        },
         "allowedActions": allowed_actions(actor, contract),
         "generatedPdfUrl": generated_pdf_download_url(contract)
         if contract.generated_pdf_id
@@ -614,4 +629,7 @@ def workspace_payload(actor: User, contract: AgentContract) -> dict[str, Any]:
             {"value": value, "label": str(label), "tone": status_tone(value)}
             for value, label in ContractStatus.choices
         ],
+        "familyHistory": family_history_for_admin(actor, contract),
+        "termComparison": term_comparison_payload(actor, contract),
+        "governingTerms": governing_terms_payload(contract),
     }
