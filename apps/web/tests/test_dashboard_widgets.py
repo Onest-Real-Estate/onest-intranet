@@ -224,7 +224,6 @@ def test_modules_without_a_backing_source_report_unavailable_not_empty():
     for key in (
         "active_transactions",
         "training",
-        "my_day",
         "market",
         "quick_documents",
     ):
@@ -232,6 +231,23 @@ def test_modules_without_a_backing_source_report_unavailable_not_empty():
         assert payload["status"] == WidgetStatus.UNAVAILABLE, key
         # Not retryable: asking again will not build the module.
         assert payload["unavailable"]["retryable"] is False, key
+
+
+@pytest.mark.django_db
+def test_my_day_reports_a_genuine_empty_rather_than_an_unbuilt_module():
+    """My Day is backed now, so a clear day is `empty`, not `unavailable`.
+
+    The distinction is the point of the envelope: "nothing scheduled" and "this
+    module does not exist" are different sentences, and the placeholder used to
+    say the second one to everybody.
+    """
+    user = make_user("clear-day@example.com")
+    payload = widget_payload(WIDGET_BY_KEY["my_day"], build_context(user))
+
+    assert payload["status"] == WidgetStatus.EMPTY
+    assert payload["emptyState"]["title"] == "Nothing scheduled"
+    # And it still offers somewhere to go.
+    assert payload["emptyState"]["actionHref"]
 
 
 @pytest.mark.django_db
@@ -725,9 +741,15 @@ def test_widget_providers_are_bounded_in_queries():
         widget_payload(WIDGET_BY_KEY["performance"], context)
 
     # Providers awaiting their module must not touch the database at all.
-    for key in ("active_transactions", "market", "my_day"):
+    for key in ("active_transactions", "market"):
         with assert_application_queries(0):
             widget_payload(WIDGET_BY_KEY[key], context)
+
+    # My Day is one query per *available* source, never one per row. Today the
+    # only live source is operational tasks; each module that lights up adds
+    # exactly one, which is what keeps the widget's cost legible as it grows.
+    with assert_application_queries(1):
+        widget_payload(WIDGET_BY_KEY["my_day"], context)
 
     # Announcements is bounded by the audience predicate, not by the number of
     # announcements: the reader's live role codes, then one read whose audience

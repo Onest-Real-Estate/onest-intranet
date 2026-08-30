@@ -89,6 +89,7 @@ docs/permissions.md    Permission catalog, capability vs scope, frontend payload
 docs/dashboard-metrics.md  Metric registry: permissions, scope, calculations
 docs/dashboard-profiles.md  Per-role dashboard profiles, widget registry, resolution
 docs/dashboard-action-items.md  Action-item contract, sources, ordering, CTAs
+docs/dashboard-my-day.md  My Day agenda: provider contract, timezone/DST, buckets
 docs/quick-access.md   Administered dashboard launchers: audience, grants, ordering
 docs/quick-create.md   Global Quick Create menu: action registry, scope, safe returns
 docs/search.md     Global search: provider contract, isolation, caps, palette

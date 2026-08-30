@@ -61,6 +61,10 @@ where available so authorization is not recalculated inside a feed.
 | Active transactions | `transactions` | `pipeline` | 5 | None; owned records must reflect the last write |
 | Training | `training` | `pipeline` | — | None; per-user completion |
 | My day | `schedule` | `widgets` | 6 | None; stale calendar data is operationally risky |
+
+My Day aggregates every registered calendar source into one bucketed agenda —
+see [dashboard-my-day.md](dashboard-my-day.md) for the provider contract, the
+timezone and DST rules, and how a failing source is isolated.
 | Action items | `actionItems` | `widgets` | 5 | None; assigned work must reflect the last write |
 | Market | `market` | `widgets` | 4 | None until a real feed defines its freshness contract |
 | Quick documents | `documents` | `widgets` | 5 | None; visibility is role- and office-scoped |
