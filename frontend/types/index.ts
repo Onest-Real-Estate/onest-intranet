@@ -116,15 +116,71 @@ export interface DashboardTraining {
   resourceHint: string;
 }
 
-export interface DashboardScheduleEvent {
-  time: string;
+/** Where an agenda row came from. Mirrors `my_day.contract.EventSource`; a
+ *  chip label, never something to authorize from. */
+export type AgendaSource =
+  | "operational_task"
+  | "training"
+  | "consultation"
+  | "closing"
+  | "meeting"
+  | "room_booking"
+  | "inventory"
+  | "microsoft_calendar";
+
+/**
+ * One time-bound obligation.
+ *
+ * Every label is rendered server-side in the reader's timezone. `startAt` and
+ * `endAt` travel alongside for grouping and tests — never to be reformatted
+ * against the browser clock, which would let a laptop on the wrong timezone
+ * disagree with the buckets the server computed.
+ */
+export interface AgendaEvent {
+  id: string;
+  dedupeKey: string;
+  source: AgendaSource;
+  sourceLabel: string;
   title: string;
-  place: string;
+  startAt: string;
+  endAt: string | null;
+  allDay: boolean;
+  localDate: string;
+  /** "9:00 a.m. – 10:30 a.m.", or "All day" — never a synthesized midnight. */
+  timeLabel: string;
+  /** "Today", "Tomorrow", or a short date. */
+  dayLabel: string;
+  /** Server-decided. A row on another day must say so, or a later time on an
+   *  earlier day reads as a sorting bug. */
+  isToday: boolean;
+  location: string;
+  status: "confirmed" | "tentative";
+  /** Empty for a confirmed event: the default state needs no chip. */
+  statusLabel: string;
+  priority: "critical" | "high" | "normal" | "low";
+  overdue: boolean;
+  context: string;
+  ctaLabel: string;
+  ctaHref: string;
 }
 
+/**
+ * The agenda, already bucketed by the server.
+ *
+ * Three lists rather than one sorted array, because past-due work must never
+ * be filed among future appointments — the split is the contract, not a
+ * presentation choice the client could undo.
+ */
 export interface DashboardSchedule {
   dateLabel: string;
-  events: DashboardScheduleEvent[];
+  timezone: string;
+  overdue: AgendaEvent[];
+  today: AgendaEvent[];
+  upcoming: AgendaEvent[];
+  /** Uncapped, so a "+N more" count is honest about what was trimmed. */
+  total: number;
+  viewAllHref: string;
+  viewAllLabel: string;
 }
 
 export interface DashboardActionItem {

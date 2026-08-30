@@ -177,7 +177,13 @@ export function DashboardWidgetSlot({
           widget={envelope(definition, page.schedule)}
           skeleton={<MyDaySkeleton />}
           stale={stale}
-          render={(data) => <MyDay schedule={data} />}
+          render={(data) => (
+            <MyDay
+              schedule={data}
+              partialFailure={page.schedule?.meta.partialFailure === true}
+              truncated={page.schedule?.meta.truncated === true}
+            />
+          )}
         />
       );
     case "actionItems":
