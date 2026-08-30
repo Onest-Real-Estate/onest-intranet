@@ -2688,6 +2688,51 @@ export interface AgentContractCapabilities {
   canManage: boolean;
   canViewCommission: boolean;
   canViewNotes: boolean;
+  canCreateAmendment?: boolean;
+  canCreateReplacement?: boolean;
+}
+
+export interface AgentContractTermDiffRow {
+  key: string;
+  label: string;
+  before: string;
+  after: string;
+  changed: boolean;
+}
+
+export interface AgentContractTermComparison {
+  basePublicId: string;
+  baseVersionNumber: number;
+  baseStatus: string;
+  baseStatusLabel: string;
+  baseEffectiveOn: string;
+  baseExpiresOn: string | null;
+  draftEffectiveOn: string;
+  draftExpiresOn: string | null;
+  changeKind: string;
+  changeKindLabel: string;
+  changeSummary: string;
+  rows: AgentContractTermDiffRow[];
+  effectiveDateNote: string;
+}
+
+export interface AgentContractFamilyHistoryRow {
+  publicId: string;
+  versionNumber: number;
+  changeKind: string;
+  changeKindLabel: string;
+  role: string;
+  governing: string;
+  status: string;
+  statusLabel: string;
+  statusTone: string;
+  effectiveOn: string;
+  expiresOn: string | null;
+  isFocus: boolean;
+  amendsPublicId: string | null;
+  supersedesPublicId: string | null;
+  hasArtifact: boolean;
+  href: string;
 }
 
 export interface AgentContractListRow {
@@ -2773,6 +2818,10 @@ export interface AgentContractWorkspacePageProps extends PageProps {
     effectiveOn: string;
     expiresOn: string | null;
     templateVersionId: number | null;
+    changeKind?: string;
+    changeKindLabel?: string;
+    changeSummary?: string;
+    versionNumber?: number;
     commission?: Record<string, unknown>;
     internalNotes?: string;
   };
@@ -2786,6 +2835,9 @@ export interface AgentContractWorkspacePageProps extends PageProps {
   commissionBasisOptions: Array<{ value: string; label: string }>;
   commercialPreview: AgentContractCommercialPreview | null;
   statusOptions: Array<{ value: string; label: string; tone: string }>;
+  familyHistory?: AgentContractFamilyHistoryRow[];
+  termComparison?: AgentContractTermComparison | null;
+  governingTerms?: Record<string, unknown> | null;
   errors: ValidationErrors;
   agreementPreview: AgentContractAgreementPreview | null;
 }
@@ -2842,6 +2894,9 @@ export interface MyContractDetail {
   publicId: string;
   familyId: string;
   versionNumber: number;
+  changeKind?: string;
+  changeKindLabel?: string;
+  changeSummary?: string;
   status: string;
   statusLabel: string;
   statusTone: string;
@@ -2864,6 +2919,7 @@ export interface MyContractDetail {
   downloadUrl: string | null;
   artifactKind: string | null;
   isCurrentFocus: boolean;
+  isGoverning?: boolean;
   amendsPublicId: string | null;
   supersedesPublicId: string | null;
   commission?: MyContractCommission;
@@ -2876,6 +2932,10 @@ export interface MyContractDetail {
 export interface MyContractHistoryRow {
   publicId: string;
   versionNumber: number;
+  changeKind?: string;
+  changeKindLabel?: string;
+  role?: string;
+  governing?: string;
   status: string;
   statusLabel: string;
   statusTone: string;
@@ -2884,6 +2944,8 @@ export interface MyContractHistoryRow {
   isFocus: boolean;
   hasArtifact: boolean;
   href: string;
+  amendsPublicId?: string | null;
+  supersedesPublicId?: string | null;
 }
 
 export interface MyContractNextAction {

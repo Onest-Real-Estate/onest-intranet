@@ -204,7 +204,14 @@ def upsert_office(
 
 
 def seed_offices(office_model=None) -> SeedReport:
-    """Idempotent: safe to re-run. Returns a SeedReport."""
+    """Idempotent: safe to re-run. Returns a SeedReport.
+
+    Always runs inside a transaction so ``select_for_update`` locks in
+    ``upsert_office`` work under PostgreSQL (including
+    ``django_db(transaction=True)`` tests that do not wrap the fixture).
+    """
+    from django.db import transaction
+
     from apps.user.models import Office as LiveOffice
 
     Office = office_model or LiveOffice
@@ -217,6 +224,26 @@ def seed_offices(office_model=None) -> SeedReport:
     regional_office = "regional_office"
     branch = "branch"
 
+    with transaction.atomic():
+        return _seed_offices_locked(
+            Office,
+            report,
+            head_office=head_office,
+            region=region,
+            regional_office=regional_office,
+            branch=branch,
+        )
+
+
+def _seed_offices_locked(
+    Office,
+    report: SeedReport,
+    *,
+    head_office: str,
+    region: str,
+    regional_office: str,
+    branch: str,
+) -> SeedReport:
     head = upsert_office(
         Office,
         report,
