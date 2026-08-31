@@ -7,8 +7,8 @@ from typing import Any
 
 from apps.audit.service import AuditTarget, snapshot_model
 from apps.inventory.availability import DateTimeInterval
+from apps.inventory.capacity import peak_committed_quantity
 from apps.inventory.models import InventoryItem, InventoryReservation
-from apps.inventory.reservation_taxonomy import CAPACITY_CONSUMING_STATES
 
 AUDIT_FIELDS = [
     "reference",
@@ -20,6 +20,7 @@ AUDIT_FIELDS = [
     "item",
     "owner",
     "purpose",
+    "over_allocation_reason",
 ]
 
 
@@ -54,16 +55,5 @@ def overlapping_rows(item_id: int, interval: DateTimeInterval):
 
 
 def committed_quantity_for_item(item: InventoryItem, *, now=None) -> int:
-    from django.db.models import Sum
-    from django.utils import timezone
-
-    moment = now or timezone.now()
-    total = (
-        InventoryReservation.objects.filter(
-            item=item,
-            status__in=sorted(CAPACITY_CONSUMING_STATES),
-            ends_at__gt=moment,
-        ).aggregate(total=Sum("quantity"))["total"]
-        or 0
-    )
-    return int(total)
+    del now  # Kept for API compatibility with earlier callers.
+    return peak_committed_quantity(item)

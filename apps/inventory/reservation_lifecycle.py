@@ -27,6 +27,7 @@ from apps.audit.service import (
     system_actor,
 )
 from apps.inventory.availability import can_reserve_quantity
+from apps.inventory.capacity import AvailabilityConflict, lock_item, lock_reservation
 from apps.inventory.models import (
     InventoryItem,
     InventoryReservation,
@@ -51,7 +52,6 @@ from apps.inventory.reservation_taxonomy import (
     find_transition,
     transitions_from,
 )
-from apps.inventory.reservations import AvailabilityConflict
 from apps.inventory.taxonomy import ItemAvailabilityState, TrackingMode
 
 logger = logging.getLogger(__name__)
@@ -117,10 +117,8 @@ def _assert_fresh(reservation: InventoryReservation, expected_version: str) -> N
 def _lock_pair(
     reservation_id: int, item_id: int
 ) -> tuple[InventoryItem, InventoryReservation]:
-    locked_item = InventoryItem.objects.select_for_update(of=("self",)).get(pk=item_id)
-    locked = InventoryReservation.objects.select_for_update(of=("self",)).get(
-        pk=reservation_id
-    )
+    locked_item = lock_item(item_id)
+    locked = lock_reservation(reservation_id)
     return locked_item, locked
 
 
@@ -248,16 +246,7 @@ def _apply_capacity(
             reservations=tuple(excluding),
         ):
             raise AvailabilityConflict(
-                {
-                    "form": [
-                        str(
-                            _(
-                                "Not enough quantity is available to restore "
-                                "this checkout hold."
-                            )
-                        )
-                    ]
-                }
+                _("Not enough quantity is available to restore this checkout hold.")
             )
 
 

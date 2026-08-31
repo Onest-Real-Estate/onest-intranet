@@ -24,6 +24,12 @@ from apps.audit.service import (
 )
 from apps.inventory.administration import assert_item_version
 from apps.inventory.availability import DateTimeInterval, can_reserve_quantity
+from apps.inventory.capacity import (
+    AvailabilityConflict,
+    assert_quantity_supports_commitments,
+    lock_item,
+    peak_committed_quantity,
+)
 from apps.inventory.models import InventoryItem, InventoryTransfer
 from apps.inventory.queries import office_assignable_for_inventory
 from apps.inventory.taxonomy import (
@@ -163,7 +169,7 @@ def update_item(
     **fields,
 ) -> InventoryItem:
     _require(actor, InventoryPermission.MANAGE)
-    locked = InventoryItem.objects.select_for_update(of=("self",)).get(pk=item.pk)
+    locked = lock_item(item.pk)
     before = _snapshot(locked)
 
     mutable = {
@@ -181,6 +187,20 @@ def update_item(
     }
     if locked.tracking_mode == TrackingMode.POOLED and "total_quantity" in fields:
         mutable.add("total_quantity")
+        new_qty = int(fields["total_quantity"])
+        if new_qty < locked.total_quantity:
+            try:
+                assert_quantity_supports_commitments(locked, new_qty)
+            except AvailabilityConflict as exc:
+                peak = peak_committed_quantity(locked)
+                raise ValidationError(
+                    {
+                        "total_quantity": (
+                            f"Cannot reduce below {peak} units already committed "
+                            "to overlapping reservations."
+                        )
+                    }
+                ) from exc
 
     for key, value in fields.items():
         if key not in mutable:
@@ -233,23 +253,10 @@ PHOTO_EXTENSIONS = frozenset({".png", ".jpg", ".jpeg", ".gif", ".webp"})
 
 
 def committed_quantity(item: InventoryItem) -> int:
-    """Reserved quantity not yet returned for active capacity-consuming holds."""
+    """Peak overlapping quantity held by capacity-consuming reservations."""
     from apps.inventory.reservations import committed_quantity_for_item
 
     return committed_quantity_for_item(item)
-
-
-def _ensure_quantity_allows_reduction(item: InventoryItem, new_quantity: int) -> None:
-    committed = committed_quantity(item)
-    if new_quantity < committed:
-        raise ValidationError(
-            {
-                "total_quantity": (
-                    f"Cannot reduce below {committed} units already committed "
-                    "to reservations."
-                )
-            }
-        )
 
 
 @transaction.atomic
@@ -260,10 +267,8 @@ def update_item_with_version(
     expected_version: str,
     **fields,
 ) -> InventoryItem:
-    locked = InventoryItem.objects.select_for_update(of=("self",)).get(pk=item.pk)
+    locked = lock_item(item.pk)
     assert_item_version(locked, expected_version)
-    if "total_quantity" in fields:
-        _ensure_quantity_allows_reduction(locked, int(fields["total_quantity"]))
     return update_item(actor=actor, item=locked, **fields)
 
 

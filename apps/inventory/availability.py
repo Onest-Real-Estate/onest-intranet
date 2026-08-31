@@ -5,8 +5,8 @@ authoritative on-hand count. Available quantity for a requested window is
 always derived here — never stored as a global counter that drifts between
 reservations.
 
-Reservation rows ship in a later issue; this module defines the contract those
-rows will plug into.
+Write paths must not trust this module alone: they lock the item row and
+recompute through :mod:`apps.inventory.capacity` inside the same transaction.
 """
 
 from __future__ import annotations
