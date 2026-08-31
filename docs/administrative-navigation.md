@@ -38,8 +38,8 @@ permission succeeds.
 | 150 | Governance & support | Offices | `admin_offices` | `web.manage_offices` | Office tree scope |
 | 160 | Governance & support | IT Support | `admin_it_support` | `web.view_it_support` | Support request scope |
 
-**Users, New Agent List, Quick Access, Assign User Roles, Offices, Office
-Resources, Announcements, and Contract Templates are live.** Their
+**Users, New Agent List, Quick Access, Assign User Roles, Agent Contracts,
+Offices, Office Resources, Announcements, and Contract Templates are live.** Their
 feature keys in `OPERATIONS_FEATURES` are `True` and their registry entries
 point at real views instead of the generated placeholder. The Users destination
 is the people directory ([user-directory.md](user-directory.md)); opening a row

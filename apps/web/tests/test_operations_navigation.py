@@ -123,6 +123,7 @@ def test_registry_has_exact_destinations_order_routes_and_permissions():
                 "admin_new_agents",
                 "admin_quick_access",
                 "admin_assign_roles",
+                "admin_agent_contracts",
                 "admin_office_resources",
                 "admin_offices",
                 "admin_announcements",

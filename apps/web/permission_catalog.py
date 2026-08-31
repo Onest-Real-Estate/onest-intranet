@@ -302,6 +302,30 @@ PERMISSION_DEFINITIONS: tuple[PermissionDefinition, ...] = (
         description="View reservations within effective scope.",
         default_roles=(*_MANAGERS, BRANCH_ADMIN, REGIONAL_ADMIN),
     ),
+    PermissionDefinition(
+        codename="inventory.manage_inventory",
+        name="Can manage scoped inventory items",
+        domain="inventory",
+        action="manage",
+        description=(
+            "Create, update, retire, and transfer inventory within effective "
+            "scope. Retirement preserves history and blocks new reservations."
+        ),
+        default_roles=(*_MANAGERS, REGIONAL_TRANSACTION_COORDINATOR),
+        sensitive=True,
+    ),
+    PermissionDefinition(
+        codename="inventory.view_inventory_sensitive",
+        name="Can view inventory serial numbers, valuation, and internal notes",
+        domain="inventory",
+        action="view",
+        description=(
+            "Read asset identifiers, replacement value, and staff-only notes "
+            "on inventory in scope."
+        ),
+        default_roles=(*_MANAGERS, REGIONAL_TRANSACTION_COORDINATOR),
+        sensitive=True,
+    ),
     # --- Content ---
     PermissionDefinition(
         codename="web.manage_announcements",

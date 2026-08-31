@@ -272,6 +272,7 @@ OPERATIONS_FEATURES["admin-announcements"] = True
 OPERATIONS_FEATURES["admin-contract-templates"] = True
 OPERATIONS_FEATURES["admin-operational-tasks"] = True
 OPERATIONS_FEATURES["admin-feedback"] = True
+OPERATIONS_FEATURES["admin-agent-contracts"] = True
 
 _OPS_SURFACE_PERMISSIONS = frozenset(
     destination.permission for destination in OPERATIONS_DESTINATIONS
