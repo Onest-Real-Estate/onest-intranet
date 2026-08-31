@@ -22,6 +22,12 @@ from django.db.models import Q
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
+from apps.inventory.reservation_taxonomy import (
+    CAPACITY_CONSUMING_STATES,
+    STATUS_CHOICES,
+    STATUS_LABELS,
+    ReservationStatus,
+)
 from apps.inventory.taxonomy import (
     CATEGORY_CHOICES,
     CONDITION_CHOICES,
@@ -37,6 +43,7 @@ from apps.user.models import Office
 from apps.user.storage import private_storage
 
 _TERMINAL: list[str] = sorted(TERMINAL_STATES)
+_CAPACITY: list[str] = sorted(CAPACITY_CONSUMING_STATES)
 
 
 def inventory_photo_upload_to(instance: InventoryItem, filename: str) -> str:
@@ -158,6 +165,14 @@ class InventoryItem(models.Model):
             "authorized download view."
         ),
     )
+    requires_approval = models.BooleanField(
+        _("requires office approval"),
+        default=False,
+        help_text=_(
+            "When true, new reservations start as requested and wait for "
+            "office approval. When false, available reservations auto-confirm."
+        ),
+    )
     replacement_value = models.DecimalField(
         _("replacement value"),
         max_digits=12,
@@ -205,6 +220,18 @@ class InventoryItem(models.Model):
             (
                 "view_inventory_sensitive",
                 _("Can view inventory serial numbers, valuation, and internal notes"),
+            ),
+            (
+                "reserve_on_behalf",
+                _("Can create inventory reservations for other users"),
+            ),
+            (
+                "approve_reservations",
+                _("Can approve or deny inventory reservations"),
+            ),
+            (
+                "override_reservations",
+                _("Can override inventory reservation policy with a reason"),
             ),
         )
         constraints = [
@@ -419,3 +446,159 @@ class InventoryTransfer(models.Model):
         from_id = getattr(self, "from_office_id", None)
         to_id = getattr(self, "to_office_id", None)
         return f"{item_id}: {from_id} → {to_id}"
+
+
+class ReservationQuerySet(models.QuerySet["InventoryReservation"]):
+    def capacity_consuming(self) -> ReservationQuerySet:
+        return self.filter(status__in=_CAPACITY)
+
+    def for_owner(self, user) -> ReservationQuerySet:
+        if getattr(user, "is_anonymous", False):
+            return self.none()
+        return self.filter(owner=user)
+
+    def overlapping(self, *, item_id: int, starts_at, ends_at) -> ReservationQuerySet:
+        """Half-open overlap:
+        ``starts_at < other.ends_at AND ends_at > other.starts_at``.
+        """
+        return self.capacity_consuming().filter(
+            item_id=item_id,
+            starts_at__lt=ends_at,
+            ends_at__gt=starts_at,
+        )
+
+
+class InventoryReservation(models.Model):
+    """One hold of office inventory for a pickup/return interval.
+
+    Capacity is never stored as a counter. Overlapping quantity is derived from
+    rows in :data:`~apps.inventory.reservation_taxonomy.CAPACITY_CONSUMING_STATES`
+    via :mod:`apps.inventory.availability`.
+    """
+
+    public_id = models.UUIDField(
+        _("public id"), default=uuid.uuid4, editable=False, unique=True
+    )
+    reference = models.CharField(_("reference"), max_length=24, unique=True, blank=True)
+    item = models.ForeignKey(
+        InventoryItem,
+        on_delete=models.PROTECT,
+        related_name="reservations",
+        verbose_name=_("item"),
+    )
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="inventory_reservations",
+        verbose_name=_("owner"),
+        help_text=_("The agent the reservation belongs to."),
+    )
+    #: Owning office snapshotted at create so transfers do not rewrite history.
+    office = models.ForeignKey(
+        Office,
+        on_delete=models.PROTECT,
+        related_name="inventory_reservations",
+        verbose_name=_("office at reservation"),
+    )
+    office_name = models.CharField(_("office name snapshot"), max_length=200)
+    item_name = models.CharField(_("item name snapshot"), max_length=200)
+    starts_at = models.DateTimeField(_("pickup starts at"))
+    ends_at = models.DateTimeField(_("return ends at"))
+    quantity = models.PositiveIntegerField(_("quantity"), default=1)
+    purpose = models.CharField(_("business purpose"), max_length=240, blank=True)
+    status = models.CharField(
+        _("status"),
+        max_length=32,
+        choices=STATUS_CHOICES,
+        default=ReservationStatus.CONFIRMED,
+    )
+    instructions_snapshot = models.TextField(
+        _("pickup/return instructions snapshot"), blank=True
+    )
+    storage_location_snapshot = models.CharField(
+        _("storage location snapshot"), max_length=200, blank=True
+    )
+    #: Client idempotency key. Unique so double-submit returns the first row.
+    submission_key = models.CharField(
+        _("submission key"), max_length=64, unique=True, editable=False
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="inventory_reservations_created",
+        verbose_name=_("created by"),
+    )
+    cancelled_at = models.DateTimeField(_("cancelled at"), null=True, blank=True)
+    cancelled_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="inventory_reservations_cancelled",
+        verbose_name=_("cancelled by"),
+    )
+    cancel_reason = models.CharField(_("cancel reason"), max_length=240, blank=True)
+    created_at = models.DateTimeField(_("created at"), auto_now_add=True)
+    updated_at = models.DateTimeField(_("updated at"), auto_now=True)
+
+    if TYPE_CHECKING:
+        item_id: int
+        owner_id: int
+        office_id: int
+        created_by_id: int | None
+        cancelled_by_id: int | None
+
+    objects = ReservationQuerySet.as_manager()
+
+    class Meta:
+        ordering = ["-starts_at", "-pk"]
+        verbose_name = _("inventory reservation")
+        verbose_name_plural = _("inventory reservations")
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(quantity__gte=1),
+                name="inventory_reservation_quantity_positive",
+            ),
+            models.CheckConstraint(
+                condition=Q(ends_at__gt=models.F("starts_at")),
+                name="inventory_reservation_ends_after_starts",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    Q(status=ReservationStatus.CANCELLED, cancelled_at__isnull=False)
+                    | (
+                        ~Q(status=ReservationStatus.CANCELLED)
+                        & Q(cancelled_at__isnull=True)
+                    )
+                ),
+                name="inventory_reservation_cancelled_at_matches",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["item", "status", "starts_at", "ends_at"],
+                name="inv_rsv_item_status_range",
+            ),
+            models.Index(
+                fields=["owner", "-starts_at"],
+                name="inv_rsv_owner_starts",
+            ),
+            models.Index(
+                fields=["office", "status"],
+                name="inv_rsv_office_status",
+            ),
+            models.Index(fields=["status", "ends_at"], name="inv_rsv_status_ends"),
+        ]
+
+    def __str__(self) -> str:
+        return self.reference or str(self.public_id)
+
+    @property
+    def status_label(self) -> str:
+        return str(STATUS_LABELS.get(self.status, self.status))
+
+    @property
+    def consumes_capacity(self) -> bool:
+        return self.status in CAPACITY_CONSUMING_STATES

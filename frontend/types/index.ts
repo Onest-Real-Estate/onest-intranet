@@ -3314,6 +3314,118 @@ export interface OfficeInventoryItemPageProps extends PageProps {
   serviceError: string | null;
 }
 
+export interface InventoryReservationTerms {
+  requiresApproval: boolean;
+  autoConfirm: boolean;
+  maxHorizonDays: number;
+  maxDurationDays: number;
+  cancelCutoffHours: number;
+  approvalLabel: string;
+  cancelPolicyLabel: string;
+}
+
+export interface InventoryReservationSummary {
+  item: {
+    publicId: string;
+    name: string;
+    trackingMode: string;
+    requiresApproval: boolean;
+    totalQuantity: number;
+    storageLocation: string;
+    notes: string;
+  };
+  office: { id: number; name: string };
+  pickup: string;
+  return: string;
+  startsAt: string;
+  endsAt: string;
+  quantity: number;
+  purpose: string;
+  availableQuantity: number;
+  isAvailable: boolean;
+  status: string;
+  statusLabel: string;
+  terms: InventoryReservationTerms;
+  instructions: { storageLocation: string; notes: string };
+}
+
+export interface InventoryReservationNewPageProps extends PageProps {
+  item: OfficeInventoryItemRow | null;
+  draft: {
+    item: string;
+    pickup: string;
+    return: string;
+    quantity: string;
+    purpose: string;
+  };
+  review: boolean;
+  summary: InventoryReservationSummary | null;
+  office: { id: number; name: string } | null;
+  links: {
+    inventoryHref: string;
+    myReservationsHref: string;
+    dashboardHref: string;
+  };
+  errors: ValidationErrors;
+}
+
+export interface InventoryReservationDetailPayload {
+  publicId: string;
+  reference: string;
+  itemName: string;
+  itemPublicId: string;
+  office: { id: number; name: string };
+  quantity: number;
+  purpose: string;
+  status: string;
+  statusLabel: string;
+  startsAt: string;
+  endsAt: string;
+  pickupLabel: string;
+  returnLabel: string;
+  instructions: { storageLocation: string; notes: string };
+  terms: InventoryReservationTerms;
+  canCancel: boolean;
+  cancelCutoffAt: string | null;
+  cancelledAt: string | null;
+  createdAt: string;
+  itemHref: string;
+  myReservationsHref: string;
+  dashboardHref: string;
+}
+
+export interface InventoryReservationDetailPageProps extends PageProps {
+  reservation: InventoryReservationDetailPayload;
+  errors: ValidationErrors;
+  justCreated: boolean;
+}
+
+export interface InventoryReservationListRow {
+  publicId: string;
+  reference: string;
+  itemName: string;
+  itemPublicId: string;
+  officeName: string;
+  quantity: number;
+  purpose: string;
+  status: string;
+  statusLabel: string;
+  startsAt: string;
+  endsAt: string;
+  pickupLabel: string;
+  returnLabel: string;
+  detailHref: string;
+}
+
+export interface InventoryReservationsPageProps extends PageProps {
+  reservations: ListResponse<InventoryReservationListRow, Record<string, string>>;
+  links: {
+    inventoryHref: string;
+    dashboardHref: string;
+  };
+  errors: ValidationErrors;
+}
+
 export interface ReportExportJobPayload {
   id: number;
   reportKey: string;

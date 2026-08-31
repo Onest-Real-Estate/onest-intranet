@@ -50,20 +50,32 @@ def _unbuilt(key: str) -> EventSourceDefinition:
     return EventSourceDefinition(key=key, collector=None, available=False)
 
 
+def _collect_inventory_events(context: EventSourceContext) -> list[AgendaEvent]:
+    # Imported lazily so loading the My Day registry does not pull the inventory
+    # app graph during unrelated startup paths.
+    from apps.inventory.agenda import collect_inventory_events
+
+    return collect_inventory_events(context)
+
+
 EVENT_SOURCE_DEFINITIONS: tuple[EventSourceDefinition, ...] = (
     EventSourceDefinition(
         key=EventSource.TASK, collector=collect_task_events, available=True
     ),
     # Registered, deliberately dark. Each becomes available in the change that
     # ships its module — training sessions and required-training deadlines;
-    # client consultations, closings, and internal meetings; room bookings and
-    # inventory pickup/return windows (P1-050/P1-052, P1-056/P1-059).
+    # client consultations, closings, and internal meetings; room bookings
+    # (P1-056/P1-059). Inventory pickup/return windows are live below.
     _unbuilt(EventSource.TRAINING),
     _unbuilt(EventSource.CONSULTATION),
     _unbuilt(EventSource.CLOSING),
     _unbuilt(EventSource.MEETING),
     _unbuilt(EventSource.ROOM_BOOKING),
-    _unbuilt(EventSource.INVENTORY),
+    EventSourceDefinition(
+        key=EventSource.INVENTORY,
+        collector=_collect_inventory_events,
+        available=True,
+    ),
     # Microsoft calendar stays dark until the integration exists. Listing it
     # here is not a claim that anything synchronizes: an empty agenda must
     # never be read as "Outlook says you are free".
@@ -111,15 +123,8 @@ def collect_events(context: EventSourceContext) -> tuple[list[AgendaEvent], bool
 
 
 def _calendar_destination() -> tuple[str, str]:
-    """Where "View full calendar" goes at this phase.
-
-    The unified reservation/calendar page does not exist yet, so this resolves
-    to the placeholder that names it honestly. When that page ships this is the
-    single line that changes.
-    """
-    return "View full calendar", reverse(
-        "coming_soon", kwargs={"section": "my-reservations"}
-    )
+    """Where "View full calendar" / My Reservations goes from My Day."""
+    return "View my reservations", reverse("inventory_reservations_mine")
 
 
 def build_day(

@@ -290,14 +290,14 @@ export const HUB_NAV_REGISTRY: HubNavItem[] = [
   {
     key: "my-reservations",
     label: "My reservations",
-    route: route("coming_soon", routes.coming_soon("my-reservations")),
+    route: route("inventory_reservations_mine", routes.inventory_reservations_mine()),
     icon: CalendarDays,
     group: "general",
     order: 50,
     access: "authenticated",
     permissions: {},
     feature: "my-reservations",
-    activeMatch: active(routes.coming_soon("my-reservations")),
+    activeMatch: active(routes.inventory_reservations_mine()),
   },
   {
     key: "training-learning",

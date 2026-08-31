@@ -141,13 +141,11 @@ def parse_availability_interval(
         return None, errors
 
 
-def reservation_windows_for_items(_item_ids: list[int]) -> tuple:
-    """Committed reservation windows for availability math.
+def reservation_windows_for_items(item_ids: list[int]) -> tuple:
+    """Committed reservation windows for availability math."""
+    from apps.inventory.reservations import load_capacity_windows
 
-    Returns an empty tuple until the reservation model (#62) lands. Callers
-    always go through this helper so interval math stays one plug-in point.
-    """
-    return ()
+    return load_capacity_windows(item_ids)
 
 
 def _apply_agent_catalog_filters(
@@ -219,17 +217,17 @@ def _reserve_href(
     return_date: str,
     quantity: int,
 ) -> str:
-    """Carry item/date context into the reservation workflow placeholder.
+    """Carry item/date context into the reservation create form.
 
-    The reservation create surface (#62) revalidates every value; this href is
-    navigation context only.
+    The create endpoint revalidates every value; this href is navigation
+    context only.
     """
     params = {"item": str(item.public_id), "quantity": str(quantity)}
     if pickup:
         params["pickup"] = pickup
     if return_date:
         params["return"] = return_date
-    base = reverse("coming_soon", args=["my-reservations"])
+    base = reverse("inventory_reservation_new")
     return f"{base}?{urlencode(params)}"
 
 

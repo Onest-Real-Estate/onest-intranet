@@ -283,14 +283,39 @@ registry.register(
 )
 
 # ---------------------------------------------------------------------------
-# reservation domain  (publisher: apps.reservation — future)
+# reservation domain  (publisher: apps.inventory.reservations)
 # ---------------------------------------------------------------------------
 
 registry.register(
     name="reservation.created",
     version=1,
     required_payload_keys={"reservation_id", "property_id", "agent_id"},
-    description="Emitted when a property reservation is recorded.",
+    description=(
+        "Legacy CRM/property reservation stub. Prefer "
+        "inventory.reservation.created for office inventory."
+    ),
+)
+
+registry.register(
+    name="inventory.reservation.created",
+    version=1,
+    required_payload_keys={
+        "reservation_public_id",
+        "item_public_id",
+        "status",
+        "quantity",
+        "starts_at",
+        "ends_at",
+        "owner_id",
+    },
+    description="Emitted after an inventory reservation is committed.",
+)
+
+registry.register(
+    name="inventory.reservation.cancelled",
+    version=1,
+    required_payload_keys={"reservation_public_id", "reason"},
+    description="Emitted after an inventory reservation is cancelled.",
 )
 
 # ---------------------------------------------------------------------------

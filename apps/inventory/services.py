@@ -108,6 +108,7 @@ def create_item(
     internal_notes: str = "",
     replacement_value: Decimal | None = None,
     replacement_currency: str = "USD",
+    requires_approval: bool = False,
 ) -> InventoryItem:
     _require(actor, InventoryPermission.MANAGE)
     _validate_owner_office(owner_office)
@@ -135,6 +136,7 @@ def create_item(
         internal_notes=internal_notes.strip(),
         replacement_value=replacement_value,
         replacement_currency=replacement_currency,
+        requires_approval=bool(requires_approval),
         activated_at=now
         if availability_state != ItemAvailabilityState.RETIRED
         else None,
@@ -175,6 +177,7 @@ def update_item(
         "replacement_value",
         "replacement_currency",
         "photo_is_public",
+        "requires_approval",
     }
     if locked.tracking_mode == TrackingMode.POOLED and "total_quantity" in fields:
         mutable.add("total_quantity")
@@ -229,9 +232,11 @@ MAX_PHOTO_BYTES = 5 * 1024 * 1024
 PHOTO_EXTENSIONS = frozenset({".png", ".jpg", ".jpeg", ".gif", ".webp"})
 
 
-def committed_quantity(_item: InventoryItem) -> int:
-    """Reserved quantity not yet returned. Zero until reservations ship (#62)."""
-    return 0
+def committed_quantity(item: InventoryItem) -> int:
+    """Reserved quantity not yet returned for active capacity-consuming holds."""
+    from apps.inventory.reservations import committed_quantity_for_item
+
+    return committed_quantity_for_item(item)
 
 
 def _ensure_quantity_allows_reduction(item: InventoryItem, new_quantity: int) -> None:

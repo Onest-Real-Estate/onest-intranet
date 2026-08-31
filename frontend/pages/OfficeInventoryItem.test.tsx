@@ -50,7 +50,7 @@ const baseProps = {
     availability: null,
     myReservation: null,
     reserveHref:
-      "/hub/my-reservations?item=11111111-1111-1111-1111-111111111111&quantity=1",
+      "/hub/inventory-reservations/new?item=11111111-1111-1111-1111-111111111111&quantity=1",
   },
   office: { id: 1, name: "Fairfax VA" },
   filters: {
