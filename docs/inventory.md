@@ -58,15 +58,27 @@ browser availability is never trusted at write time.
 | --- | --- |
 | `inventory_reservation_new` | Draft + `?review=1` authoritative summary |
 | `inventory_reservation_create` | Idempotent POST → redirect to detail |
-| `inventory_reservation_detail` | Confirmation, instructions, cancel |
+| `inventory_reservation_detail` | Confirmation, instructions, cancel, timeline |
 | `inventory_reservations_mine` | Self-only list (interim My Reservations) |
 
-Conflicting availability responses never name other reservation owners.
+**Office lifecycle** (`apps.inventory.reservation_lifecycle`)
 
-Admin on-behalf / approve / override permissions exist
-(`inventory.reserve_on_behalf`, `approve_reservations`, `override_reservations`)
-and are enforced in the service layer; office lifecycle transitions beyond
-agent cancel are owned by the lifecycle issue (#64).
+Normal path: `requested → confirmed → ready_for_pickup → checked_out → returned → completed`.
+
+- `confirmed` is the single post-approval machine state (no separate `approved` code).
+- Exception terminals: `cancelled`, `denied`, `overdue`, `lost`, `damaged`.
+- Every status change goes through `transition()` with row locks, `expected_version` /
+  `expected_status` stale guards, immutable `ReservationTransitionEvent` rows, and audit.
+- Capacity releases on `denied`, `cancelled`, `returned`, `lost`, and `damaged` (when the
+  prior state was capacity-consuming). `revert_checkout` re-acquires under the item lock.
+- `sync_overdue_reservations()` marks past-deadline `checked_out` rows as `overdue`.
+- Override transitions require `inventory.override_reservations` and a non-empty reason.
+
+| Route | Purpose |
+| --- | --- |
+| `admin_reservations` | Scoped office reservation queue |
+| `admin_reservation_detail` | Workspace + timeline + office actions |
+| `admin_reservation_transition` | POST lifecycle action |
 
 ## Availability
 
@@ -126,5 +138,5 @@ plug into availability through `reservation_windows_for_items`.
 - #61 Agent Office Inventory browser
 - #62 Inventory reservation workflow (this surface)
 - #63 Atomic double-booking hardening (PostgreSQL concurrency suites)
-- #64 Full reservation lifecycle transitions
+- #64 Full reservation lifecycle transitions (implemented)
 - #71 Unified My Reservations (rooms + inventory)

@@ -7,70 +7,64 @@ write time. Side effects (audit) run after commit.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from datetime import date
 from typing import Any
 from uuid import UUID
 
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import IntegrityError, transaction
-from django.db.models import Sum
-from django.utils import timezone
 from django.utils.dateparse import parse_date
 from django.utils.translation import gettext_lazy as _
 
-from apps.audit.service import (
-    AuditTarget,
-    actor_from_user,
-    log_on_commit,
-    snapshot_model,
-)
+from apps.audit.service import actor_from_user, log_on_commit
 from apps.inventory.availability import (
     DateTimeInterval,
     available_quantity_for_range,
     can_reserve_quantity,
 )
 from apps.inventory.browser import parse_availability_interval
-from apps.inventory.models import InventoryItem, InventoryReservation
+from apps.inventory.models import (
+    InventoryItem,
+    InventoryReservation,
+    ReservationTransitionEvent,
+)
 from apps.inventory.policy import (
     agent_may_cancel,
-    cancel_cutoff_at,
     initial_status,
     terms_summary,
     validate_horizon_and_duration,
     validate_office_open_days,
 )
 from apps.inventory.queries import item_for_agent
+from apps.inventory.reservation_common import (
+    AUDIT_FIELDS,
+    ActorContext,
+    audit_target,
+    committed_quantity_for_item,
+    overlapping_rows,
+)
 from apps.inventory.reservation_taxonomy import (
     CAPACITY_CONSUMING_STATES,
+    ReservationAction,
     ReservationPermission,
-    ReservationStatus,
 )
 from apps.inventory.taxonomy import TrackingMode
 from apps.user.models import User
 
-AUDIT_FIELDS = [
-    "reference",
-    "status",
-    "quantity",
-    "starts_at",
-    "ends_at",
-    "office",
-    "item",
-    "owner",
-    "purpose",
+# Re-export for callers that imported from this module.
+__all__ = [
+    "AUDIT_FIELDS",
+    "ActorContext",
+    "AvailabilityConflict",
+    "CancelNotAllowed",
+    "build_preview",
+    "cancel_reservation",
+    "committed_quantity_for_item",
+    "create_reservation",
+    "load_capacity_windows",
+    "next_reference",
+    "overlapping_rows",
 ]
-
-
-@dataclass(frozen=True)
-class ActorContext:
-    user: Any
-    permissions: frozenset[str]
-
-    def holds(self, *codenames: str) -> bool:
-        if getattr(self.user, "is_superuser", False):
-            return True
-        return any(code in self.permissions for code in codenames)
 
 
 class AvailabilityConflict(ValidationError):
@@ -85,15 +79,6 @@ def next_reference(pk: int) -> str:
     return f"INV-R-{pk:06d}"
 
 
-def _audit_target(reservation: InventoryReservation) -> AuditTarget:
-    return AuditTarget(
-        target_type=reservation._meta.label_lower,
-        target_id=str(reservation.pk),
-        target_label=reservation.reference or str(reservation.public_id),
-        target_snapshot=snapshot_model(reservation, fields=AUDIT_FIELDS),
-    )
-
-
 def load_capacity_windows(
     item_ids: list[int],
 ) -> tuple[InventoryReservation, ...]:
@@ -105,20 +90,6 @@ def load_capacity_windows(
             status__in=sorted(CAPACITY_CONSUMING_STATES),
         ).only("pk", "item_id", "quantity", "starts_at", "ends_at")
     )
-
-
-def committed_quantity_for_item(item: InventoryItem, *, now=None) -> int:
-    """Units held by capacity-consuming reservations that have not ended."""
-    moment = now or timezone.now()
-    total = (
-        InventoryReservation.objects.filter(
-            item=item,
-            status__in=sorted(CAPACITY_CONSUMING_STATES),
-            ends_at__gt=moment,
-        ).aggregate(total=Sum("quantity"))["total"]
-        or 0
-    )
-    return int(total)
 
 
 def parse_reservation_dates(
@@ -147,7 +118,6 @@ def _resolve_agent_item(actor: User, item_public_id: UUID | str) -> InventoryIte
         ) from exc
     item = item_for_agent(actor, public_id=public_id)
     if item is None:
-        # Same as a missing catalog row — do not disclose foreign-office existence.
         raise ValidationError(
             {"item": [str(_("That item is not available to reserve."))]}
         )
@@ -257,16 +227,6 @@ def build_preview(
     }
 
 
-def _overlapping_rows(item_id: int, interval: DateTimeInterval):
-    return list(
-        InventoryReservation.objects.overlapping(
-            item_id=item_id,
-            starts_at=interval.start,
-            ends_at=interval.end,
-        ).only("pk", "item_id", "quantity", "starts_at", "ends_at")
-    )
-
-
 @transaction.atomic
 def create_reservation(
     *,
@@ -279,11 +239,8 @@ def create_reservation(
     submission_key: str,
     owner: User | None = None,
 ) -> tuple[InventoryReservation, bool]:
-    """Create one reservation or return the existing row for ``submission_key``.
+    from apps.inventory.reservation_lifecycle import allow_status_write
 
-    Returns ``(reservation, created)``. Concurrent capacity races raise
-    :class:`AvailabilityConflict` without naming other reservation owners.
-    """
     key = (submission_key or "").strip()
     if not key or len(key) > 64:
         raise ValidationError(
@@ -302,9 +259,6 @@ def create_reservation(
             "You do not have permission to reserve inventory for another user."
         )
 
-    # Agents always reserve within their own primary-office catalog. On-behalf
-    # still resolves the item through the subject's office in a later issue;
-    # today the catalog gate uses the actor when self-serving.
     catalog_user = subject if subject.pk == actor.user.pk else actor.user
     item = _resolve_agent_item(catalog_user, item_public_id)
 
@@ -330,15 +284,13 @@ def create_reservation(
     if open_errors:
         raise ValidationError({"pickup": open_errors})
 
-    # Lock the capacity row. Do not select_related owner_office — nullable
-    # joins break FOR UPDATE on PostgreSQL.
     locked_item = InventoryItem.objects.select_for_update(of=("self",)).get(pk=item.pk)
     if not locked_item.is_reservable:
         raise AvailabilityConflict(
             {"form": [str(_("That item is not available to reserve right now."))]}
         )
 
-    overlapping = _overlapping_rows(locked_item.pk, interval)
+    overlapping = overlapping_rows(locked_item.pk, interval)
     if not can_reserve_quantity(
         locked_item, interval, quantity, reservations=tuple(overlapping)
     ):
@@ -377,22 +329,31 @@ def create_reservation(
         created_by=actor.user,
     )
     try:
-        with transaction.atomic():
+        with allow_status_write(), transaction.atomic():
             reservation.save()
             if not reservation.reference:
                 reservation.reference = next_reference(reservation.pk)
                 reservation.save(update_fields=["reference", "updated_at"])
     except IntegrityError:
-        # Lost the idempotency race — return the winner's row.
         existing = InventoryReservation.objects.filter(submission_key=key).first()
         if existing is not None:
             return existing, False
         raise
 
+    ReservationTransitionEvent.objects.create(
+        reservation=reservation,
+        action="create",
+        from_status="",
+        to_status=reservation.status,
+        actor=actor.user,
+        metadata={"submission_key": key},
+        idempotency_key=f"create:{key}",
+    )
+
     log_on_commit(
         "inventory.reservation.created",
         actor=actor_from_user(actor.user),
-        target=_audit_target(reservation),
+        target=audit_target(reservation),
         metadata={
             "reservation_public_id": str(reservation.public_id),
             "item_public_id": str(locked_item.public_id),
@@ -413,55 +374,33 @@ def cancel_reservation(
     actor: ActorContext,
     reservation: InventoryReservation,
     reason: str = "",
+    expected_version: str = "",
+    expected_status: str | None = None,
 ) -> InventoryReservation:
-    # Lock the capacity row first (same order as create) to avoid deadlocks.
-    InventoryItem.objects.select_for_update(of=("self",)).get(pk=reservation.item_id)
-    locked = InventoryReservation.objects.select_for_update(of=("self",)).get(
-        pk=reservation.pk
-    )
-    if locked.owner_id != actor.user.pk and not actor.holds(
-        ReservationPermission.OVERRIDE
-    ):
-        raise PermissionDenied("You do not have permission to cancel this reservation.")
+    from apps.inventory.reservation_lifecycle import transition as lifecycle_transition
 
-    if locked.status == ReservationStatus.CANCELLED:
-        return locked
-
-    if locked.owner_id == actor.user.pk and not agent_may_cancel(
-        status=locked.status, starts_at=locked.starts_at
-    ):
-        cutoff = cancel_cutoff_at(locked.starts_at)
-        raise CancelNotAllowed(
-            {
-                "form": [
-                    str(
-                        _(
-                            "This reservation can no longer be cancelled online "
-                            "(cutoff %(cutoff)s). Contact your office for changes."
-                        )
-                        % {"cutoff": timezone.localtime(cutoff).isoformat()}
-                    )
-                ]
-            }
+    override = actor.holds(ReservationPermission.OVERRIDE) and (
+        reservation.owner_id != actor.user.pk
+        or not agent_may_cancel(
+            status=reservation.status, starts_at=reservation.starts_at
         )
-
-    before = snapshot_model(locked, fields=AUDIT_FIELDS)
-    locked.status = ReservationStatus.CANCELLED
-    locked.cancelled_at = timezone.now()
-    locked.cancelled_by = actor.user
-    locked.cancel_reason = (reason or "").strip()[:240]
-    locked.full_clean()
-    locked.save()
-
-    log_on_commit(
-        "inventory.reservation.cancelled",
-        actor=actor_from_user(actor.user),
-        target=_audit_target(locked),
-        metadata={
-            "before": before,
-            "after": snapshot_model(locked, fields=AUDIT_FIELDS),
-            "reservation_public_id": str(locked.public_id),
-            "reason": locked.cancel_reason,
-        },
     )
-    return locked
+    try:
+        return lifecycle_transition(
+            actor=actor,
+            reservation=reservation,
+            action=ReservationAction.CANCEL.value,
+            expected_version=expected_version,
+            expected_status=expected_status,
+            reason=reason,
+            override=override,
+            idempotency_key=(
+                f"cancel:{reservation.pk}:"
+                f"{expected_version or reservation.updated_at.isoformat()}"
+            ),
+        )
+    except ValidationError as exc:
+        message_dict = getattr(exc, "message_dict", None)
+        if message_dict and message_dict.get("form"):
+            raise CancelNotAllowed(message_dict) from exc
+        raise

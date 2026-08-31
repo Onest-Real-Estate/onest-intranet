@@ -540,6 +540,92 @@ class InventoryReservation(models.Model):
         verbose_name=_("cancelled by"),
     )
     cancel_reason = models.CharField(_("cancel reason"), max_length=240, blank=True)
+    approved_at = models.DateTimeField(_("approved at"), null=True, blank=True)
+    approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="inventory_reservations_approved",
+        verbose_name=_("approved by"),
+    )
+    denied_at = models.DateTimeField(_("denied at"), null=True, blank=True)
+    denied_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="inventory_reservations_denied",
+        verbose_name=_("denied by"),
+    )
+    deny_reason = models.CharField(_("deny reason"), max_length=240, blank=True)
+    ready_at = models.DateTimeField(_("ready at"), null=True, blank=True)
+    ready_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="inventory_reservations_ready",
+        verbose_name=_("marked ready by"),
+    )
+    checked_out_at = models.DateTimeField(_("checked out at"), null=True, blank=True)
+    checked_out_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="inventory_reservations_checked_out",
+        verbose_name=_("checked out by"),
+    )
+    checkout_quantity = models.PositiveIntegerField(
+        _("checkout quantity"), null=True, blank=True
+    )
+    checkout_notes = models.CharField(_("checkout notes"), max_length=240, blank=True)
+    returned_at = models.DateTimeField(_("returned at"), null=True, blank=True)
+    returned_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="inventory_reservations_returned",
+        verbose_name=_("return accepted by"),
+    )
+    return_quantity = models.PositiveIntegerField(
+        _("return quantity"), null=True, blank=True
+    )
+    return_condition_notes = models.CharField(
+        _("return condition notes"), max_length=240, blank=True
+    )
+    completed_at = models.DateTimeField(_("completed at"), null=True, blank=True)
+    completed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="inventory_reservations_completed",
+        verbose_name=_("completed by"),
+    )
+    overdue_at = models.DateTimeField(_("overdue at"), null=True, blank=True)
+    lost_at = models.DateTimeField(_("lost at"), null=True, blank=True)
+    lost_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="inventory_reservations_lost",
+        verbose_name=_("marked lost by"),
+    )
+    lost_reason = models.CharField(_("lost reason"), max_length=240, blank=True)
+    damaged_at = models.DateTimeField(_("damaged at"), null=True, blank=True)
+    damaged_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="inventory_reservations_damaged",
+        verbose_name=_("marked damaged by"),
+    )
+    damaged_reason = models.CharField(_("damaged reason"), max_length=240, blank=True)
     created_at = models.DateTimeField(_("created at"), auto_now_add=True)
     updated_at = models.DateTimeField(_("updated at"), auto_now=True)
 
@@ -549,6 +635,14 @@ class InventoryReservation(models.Model):
         office_id: int
         created_by_id: int | None
         cancelled_by_id: int | None
+        approved_by_id: int | None
+        denied_by_id: int | None
+        ready_by_id: int | None
+        checked_out_by_id: int | None
+        returned_by_id: int | None
+        completed_by_id: int | None
+        lost_by_id: int | None
+        damaged_by_id: int | None
 
     objects = ReservationQuerySet.as_manager()
 
@@ -602,3 +696,76 @@ class InventoryReservation(models.Model):
     @property
     def consumes_capacity(self) -> bool:
         return self.status in CAPACITY_CONSUMING_STATES
+
+    def save(self, *args, **kwargs):
+        """Refuse unguarded status mutations outside the lifecycle service."""
+        if self.pk:
+            from apps.inventory.reservation_lifecycle import status_write_allowed
+
+            previous = (
+                type(self)
+                .objects.filter(pk=self.pk)
+                .values_list("status", flat=True)
+                .first()
+            )
+            if (
+                previous is not None
+                and previous != self.status
+                and not status_write_allowed()
+            ):
+                raise ValidationError(
+                    {
+                        "status": _(
+                            "Reservation status may only change through the "
+                            "lifecycle transition service."
+                        )
+                    }
+                )
+        super().save(*args, **kwargs)
+
+
+class ReservationTransitionEvent(models.Model):
+    """Immutable reservation lifecycle history — never deleted to fix mistakes."""
+
+    reservation = models.ForeignKey(
+        InventoryReservation,
+        on_delete=models.CASCADE,
+        related_name="transition_events",
+        verbose_name=_("reservation"),
+    )
+    action = models.CharField(_("action"), max_length=32)
+    from_status = models.CharField(_("from status"), max_length=32)
+    to_status = models.CharField(_("to status"), max_length=32)
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="inventory_reservation_transitions",
+        verbose_name=_("actor"),
+    )
+    reason = models.CharField(_("reason"), max_length=240, blank=True)
+    notes = models.CharField(_("notes"), max_length=240, blank=True)
+    metadata = models.JSONField(_("metadata"), default=dict, blank=True)
+    idempotency_key = models.CharField(
+        _("idempotency key"), max_length=64, blank=True, db_index=True
+    )
+    occurred_at = models.DateTimeField(_("occurred at"), auto_now_add=True)
+
+    if TYPE_CHECKING:
+        reservation_id: int
+        actor_id: int | None
+
+    class Meta:
+        ordering = ["occurred_at", "pk"]
+        verbose_name = _("reservation transition event")
+        verbose_name_plural = _("reservation transition events")
+        indexes = [
+            models.Index(
+                fields=["reservation", "occurred_at"],
+                name="inv_rsv_evt_res_occ",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.action}: {self.from_status} → {self.to_status}"

@@ -11,6 +11,7 @@ import {
   StatusBadge,
   SurfaceCard,
   SurfaceCardContent,
+  Timeline,
 } from "@/components/design-system";
 import { HubLayout } from "@/components/HubLayout";
 import { Button } from "@/components/ui/button";
@@ -74,6 +75,25 @@ export default function InventoryReservationDetail() {
           ))}
         </ul>
       ) : null}
+
+      <SurfaceCard>
+        <PanelHeader title="Lifecycle timeline" headingLevel="h2" divided />
+        <SurfaceCardContent>
+          {reservation.timeline.length ? (
+            <Timeline
+              items={reservation.timeline.map((entry) => ({
+                id: entry.id,
+                title: entry.actionLabel,
+                description: [entry.reason, entry.notes].filter(Boolean).join(" · "),
+                meta: new Date(entry.occurredAt).toLocaleString(),
+                current: entry.id === reservation.timeline.at(-1)?.id,
+              }))}
+            />
+          ) : (
+            <p className="text-muted-foreground text-sm">No activity recorded yet.</p>
+          )}
+        </SurfaceCardContent>
+      </SurfaceCard>
 
       <div className="grid gap-6 lg:grid-cols-2">
         <SurfaceCard>
@@ -170,6 +190,16 @@ export default function InventoryReservationDetail() {
             >
               {({ processing }) => (
                 <>
+                  <input
+                    type="hidden"
+                    name="expectedVersion"
+                    value={reservation.expectedVersion}
+                  />
+                  <input
+                    type="hidden"
+                    name="expectedStatus"
+                    value={reservation.status}
+                  />
                   <FormField>
                     <FormLabel htmlFor="cancel-reason">Reason (optional)</FormLabel>
                     <Input id="cancel-reason" name="reason" maxLength={240} />

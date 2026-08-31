@@ -11,8 +11,14 @@ from django.utils import timezone
 
 from apps.inventory.browser import can_view_sensitive, serialize_agent_item
 from apps.inventory.models import InventoryReservation
-from apps.inventory.policy import agent_may_cancel, cancel_cutoff_at, terms_summary
+from apps.inventory.policy import cancel_cutoff_at, terms_summary
 from apps.inventory.queries import item_for_agent
+from apps.inventory.reservation_common import ActorContext
+from apps.inventory.reservation_lifecycle import (
+    reservation_version,
+    serialize_available_actions,
+    serialize_timeline,
+)
 from apps.inventory.reservation_taxonomy import ReservationStatus
 from apps.inventory.reservations import build_preview
 from apps.user.models import User
@@ -25,8 +31,10 @@ def _return_calendar_day(reservation: InventoryReservation) -> str:
     return (local_end - timedelta(microseconds=1)).date().isoformat()
 
 
-def reservation_row(reservation: InventoryReservation) -> dict[str, Any]:
-    return {
+def reservation_row(
+    reservation: InventoryReservation, *, admin: bool = False
+) -> dict[str, Any]:
+    payload = {
         "publicId": str(reservation.public_id),
         "reference": reservation.reference,
         "itemName": reservation.item_name,
@@ -41,20 +49,36 @@ def reservation_row(reservation: InventoryReservation) -> dict[str, Any]:
         "pickupLabel": timezone.localtime(reservation.starts_at).date().isoformat(),
         "returnLabel": _return_calendar_day(reservation),
         "detailHref": reverse(
-            "inventory_reservation_detail", args=[str(reservation.public_id)]
+            "admin_reservation_detail" if admin else "inventory_reservation_detail",
+            args=[str(reservation.public_id)],
         ),
     }
+    if admin:
+        owner = reservation.owner
+        payload["owner"] = {
+            "id": owner.pk,
+            "name": owner.get_full_name() or owner.email,
+            "email": owner.email,
+        }
+    return payload
 
 
 def serialize_reservation_detail(
-    reservation: InventoryReservation, *, viewer: User
+    reservation: InventoryReservation,
+    *,
+    viewer: User,
+    actor: ActorContext | None = None,
+    admin: bool = False,
 ) -> dict[str, Any]:
-    can_cancel = False
+    actor_ctx = actor or ActorContext(
+        user=viewer, permissions=frozenset(viewer.get_all_permissions())
+    )
+    can_cancel = any(
+        action["action"] == "cancel"
+        for action in serialize_available_actions(reservation, actor_ctx)
+    )
     cancel_cutoff = None
     if reservation.owner_id == viewer.pk:
-        can_cancel = agent_may_cancel(
-            status=reservation.status, starts_at=reservation.starts_at
-        )
         cancel_cutoff = cancel_cutoff_at(reservation.starts_at).isoformat()
 
     return {
@@ -66,10 +90,18 @@ def serialize_reservation_detail(
             "id": reservation.office_id,
             "name": reservation.office_name,
         },
+        "owner": {
+            "id": reservation.owner_id,
+            "name": reservation.owner.get_full_name() or reservation.owner.email,
+            "email": reservation.owner.email,
+        }
+        if admin
+        else None,
         "quantity": reservation.quantity,
         "purpose": reservation.purpose,
         "status": reservation.status,
         "statusLabel": reservation.status_label,
+        "expectedVersion": reservation_version(reservation),
         "startsAt": reservation.starts_at.isoformat(),
         "endsAt": reservation.ends_at.isoformat(),
         "pickupLabel": timezone.localtime(reservation.starts_at).date().isoformat(),
@@ -89,12 +121,29 @@ def serialize_reservation_detail(
         "cancelledAt": (
             reservation.cancelled_at.isoformat() if reservation.cancelled_at else None
         ),
+        "checkedOutAt": (
+            reservation.checked_out_at.isoformat()
+            if reservation.checked_out_at
+            else None
+        ),
+        "returnedAt": (
+            reservation.returned_at.isoformat() if reservation.returned_at else None
+        ),
+        "completedAt": (
+            reservation.completed_at.isoformat() if reservation.completed_at else None
+        ),
+        "checkoutQuantity": reservation.checkout_quantity,
+        "returnQuantity": reservation.return_quantity,
+        "returnConditionNotes": reservation.return_condition_notes,
         "createdAt": reservation.created_at.isoformat(),
+        "timeline": serialize_timeline(reservation),
+        "actions": serialize_available_actions(reservation, actor_ctx),
         "itemHref": reverse(
             "office_inventory_item", args=[str(reservation.item.public_id)]
         ),
         "myReservationsHref": reverse("inventory_reservations_mine"),
         "dashboardHref": reverse("dashboard"),
+        "adminHref": reverse("admin_reservations") if admin else None,
     }
 
 
