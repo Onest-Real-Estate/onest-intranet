@@ -3128,6 +3128,117 @@ export interface ReportDetailPageProps extends PageProps {
   report: ReportDetailPayload;
 }
 
+export interface InventoryListFilters {
+  q: string;
+  category: string;
+  tracking_mode: string;
+  condition: string;
+  state: string;
+  owner: string;
+  include_retired: string;
+  [key: string]: string;
+}
+
+export interface AdminInventoryRow {
+  publicId: string;
+  name: string;
+  category: string;
+  categoryLabel: string;
+  trackingMode: string;
+  trackingModeLabel: string;
+  totalQuantity: number;
+  availabilityState: string;
+  availabilityStateLabel: string;
+  ownerOffice: { id: number; stableKey: string; name: string };
+  version: string;
+  detailHref: string;
+}
+
+export interface InventoryItemDetail {
+  publicId: string;
+  name: string;
+  category: string;
+  categoryLabel: string;
+  trackingMode: string;
+  trackingModeLabel: string;
+  totalQuantity: number;
+  effectiveQuantity: number;
+  condition: string;
+  conditionLabel: string;
+  availabilityState: string;
+  availabilityStateLabel: string;
+  isReservable: boolean;
+  storageLocation: string;
+  notes: string;
+  photoIsPublic: boolean;
+  hasPhoto: boolean;
+  ownerOffice: { id: number; stableKey: string; name: string };
+  createdAt: string;
+  updatedAt: string;
+  retiredAt?: string | null;
+  activatedAt?: string | null;
+  assetId?: string;
+  serialNumber?: string;
+  internalNotes?: string;
+  replacementValue?: string;
+  replacementCurrency?: string;
+}
+
+export interface InventoryAdministrationPageProps extends PageProps {
+  items: ListResponse<AdminInventoryRow, InventoryListFilters>;
+  writableOffices: { id: number; label: string; kind: string }[];
+  createSheet: { open: boolean; draft: Record<string, string> } | null;
+  filterOptions: {
+    categories: FilterOption[];
+    trackingModes: FilterOption[];
+    conditions: FilterOption[];
+    states: FilterOption[];
+    owners: FilterOption[];
+  };
+  capabilities: { canManage: boolean; canViewSensitive: boolean };
+  scope: { level: string; label: string };
+  validation: ValidationErrors;
+}
+
+export interface InventoryReservationRow {
+  publicId: string;
+  summary: string;
+  startsAt: string;
+  endsAt: string;
+}
+
+export interface InventoryItemWorkspacePageProps extends PageProps {
+  item: InventoryItemDetail | null;
+  version: string;
+  writableOffices: { id: number; label: string; kind: string }[];
+  capabilities: { canManage: boolean; canViewSensitive: boolean };
+  filterOptions: {
+    categories: FilterOption[];
+    trackingModes: FilterOption[];
+    conditions: FilterOption[];
+  };
+  transfers: {
+    publicId: string;
+    fromOffice: string;
+    toOffice: string;
+    performedAt: string;
+    reason: string;
+  }[];
+  reservations: InventoryReservationRow[];
+  committedQuantity: number;
+  availabilityPreview: {
+    start: string;
+    end: string;
+    availableQuantity: number;
+    totalQuantity: number;
+    physicalState: string;
+    physicalStateLabel: string;
+    isReservableCatalogState: boolean;
+  } | null;
+  scope: { level: string; label: string };
+  validation: ValidationErrors;
+}
+
 export interface ReportExportJobPayload {
   id: number;
   reportKey: string;

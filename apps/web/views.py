@@ -8,6 +8,7 @@ from apps.announcements.administration_views import (
 from apps.contract.views.administration_views import contract_template_index
 from apps.contract.views.agent_contract_views import agent_contract_index
 from apps.feedback.views import feedback_inbox
+from apps.inventory.views.administration_views import inventory_admin_index
 from apps.operational_tasks.views import tasks_index
 from apps.user.services.role_assignments import get_effective_access
 from apps.user.views.directory_views import user_directory
@@ -122,6 +123,7 @@ OPERATIONS_VIEWS["admin_office_resources"] = office_resources_admin_index
 # `apps.web` is included before those apps, so a duplicate path would resolve
 # to the placeholder however the module was actually built.
 OPERATIONS_VIEWS["admin_feedback"] = feedback_inbox
+OPERATIONS_VIEWS["admin_inventory"] = inventory_admin_index
 OPERATIONS_VIEWS["operational_tasks"] = tasks_index
 
 

@@ -39,6 +39,23 @@ office server-side.
 
 Photos use protected storage unless `photo_is_public` is explicitly set.
 
+## Administration UI
+
+Route: `admin_inventory` (`/operations/inventory/`).
+
+| Surface | Permission | Notes |
+| --- | --- | --- |
+| List / filters / detail | `web.view_inventory` | Scoped to the actor's effective office tree |
+| Create / edit / lifecycle | `inventory.manage_inventory` | Optimistic concurrency via `expected_version` |
+| Sensitive fields | `inventory.view_inventory_sensitive` | Asset id, serial, replacement value, internal notes |
+
+The list supports search, category, tracking mode, condition, availability state,
+and owning-office filters with pagination. The item workspace separates physical
+state from interval-based booking availability, shows transfer history, and
+records lifecycle transitions (unavailable, damaged, lost, restore, retire) in the
+audit trail. Reservation panels and committed-quantity guards wire in when the
+reservation workflow issues land (#62+).
+
 ## Query services
 
 `apps.inventory.queries` is the single visibility gate:
@@ -49,6 +66,6 @@ Photos use protected storage unless `photo_is_public` is explicitly set.
 
 ## Related issues
 
-- #60 Admin inventory management UI
+- #60 Admin inventory management UI (this surface)
 - #61 Agent Office Inventory browser
 - #66+ Room and inventory reservations

@@ -39,7 +39,7 @@ permission succeeds.
 | 160 | Governance & support | IT Support | `admin_it_support` | `web.view_it_support` | Support request scope |
 
 **Users, New Agent List, Quick Access, Assign User Roles, Agent Contracts,
-Offices, Office Resources, Announcements, and Contract Templates are live.** Their
+Offices, Office Resources, Inventory, Announcements, and Contract Templates are live.** Their
 feature keys in `OPERATIONS_FEATURES` are `True` and their registry entries
 point at real views instead of the generated placeholder. The Users destination
 is the people directory ([user-directory.md](user-directory.md)); opening a row
@@ -52,6 +52,10 @@ Offices ([office-administration.md](office-administration.md)) is the scoped
 office/regional administration surface for `web.manage_offices`.
 Contract Templates ([agent-contracts.md](agent-contracts.md)) is the scoped
 template authoring surface for `contract.manage_contract_templates`.
+Inventory ([inventory.md](inventory.md)) is the scoped operational workspace
+for `web.view_inventory`; create, lifecycle, transfer, and sensitive-field
+mutations additionally require `inventory.manage_inventory` and related
+inventory permissions.
 
 The remaining modules are intentionally unavailable until their domain backend ships. Their
 explicit false feature keys show the protected destinations as “Soon” only to roles

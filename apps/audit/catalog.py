@@ -395,6 +395,13 @@ registry.register(
 )
 
 registry.register(
+    name="inventory.item.state_changed",
+    version=1,
+    required_payload_keys={"target_type", "target_id"},
+    description="An inventory item's availability state changed.",
+)
+
+registry.register(
     name="inventory.item.retired",
     version=1,
     required_payload_keys={"target_type", "target_id"},

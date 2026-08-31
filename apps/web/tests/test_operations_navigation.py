@@ -130,6 +130,7 @@ def test_registry_has_exact_destinations_order_routes_and_permissions():
                 "admin_contract_templates",
                 "operational_tasks",
                 "admin_feedback",
+                "admin_inventory",
             }
         )
 
@@ -252,6 +253,11 @@ def test_brokerage_admin_can_reach_every_registered_destination(client):
             continue
         if destination.route_name == "admin_office_resources":
             assert "resources" in props
+            assert "filterOptions" in props
+            assert "capabilities" in props
+            continue
+        if destination.route_name == "admin_inventory":
+            assert "items" in props
             assert "filterOptions" in props
             assert "capabilities" in props
             continue
