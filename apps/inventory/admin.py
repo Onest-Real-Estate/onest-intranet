@@ -1,6 +1,11 @@
 from django.contrib import admin
 
-from apps.inventory.models import InventoryItem, InventoryReservation, InventoryTransfer
+from apps.inventory.models import (
+    InventoryItem,
+    InventoryReservation,
+    InventoryTransfer,
+    ReservationTransitionEvent,
+)
 
 
 @admin.register(InventoryItem)
@@ -46,6 +51,24 @@ class InventoryReservationAdmin(admin.ModelAdmin):
         "public_id",
         "reference",
         "submission_key",
+        "status",
         "created_at",
         "updated_at",
+    )
+
+
+@admin.register(ReservationTransitionEvent)
+class ReservationTransitionEventAdmin(admin.ModelAdmin):
+    list_display = ("reservation", "action", "from_status", "to_status", "occurred_at")
+    readonly_fields = (
+        "reservation",
+        "action",
+        "from_status",
+        "to_status",
+        "actor",
+        "reason",
+        "notes",
+        "metadata",
+        "idempotency_key",
+        "occurred_at",
     )

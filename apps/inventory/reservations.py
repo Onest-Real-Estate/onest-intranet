@@ -9,7 +9,6 @@ after commit via ``log_on_commit``.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from datetime import date
 from typing import Any
 from uuid import UUID
@@ -21,7 +20,6 @@ from django.utils.dateparse import parse_date
 from django.utils.translation import gettext_lazy as _
 
 from apps.audit.service import (
-    AuditTarget,
     actor_from_user,
     log_on_commit,
     snapshot_model,
@@ -41,47 +39,32 @@ from apps.inventory.capacity import (
     lock_reservation,
     peak_committed_quantity,
 )
-from apps.inventory.models import InventoryItem, InventoryReservation
+from apps.inventory.models import (
+    InventoryItem,
+    InventoryReservation,
+    ReservationTransitionEvent,
+)
 from apps.inventory.policy import (
     agent_may_cancel,
-    cancel_cutoff_at,
     initial_status,
     terms_summary,
     validate_horizon_and_duration,
     validate_office_open_days,
 )
 from apps.inventory.queries import item_for_agent
+from apps.inventory.reservation_common import (
+    AUDIT_FIELDS,
+    ActorContext,
+    audit_target,
+)
 from apps.inventory.reservation_taxonomy import (
     CAPACITY_CONSUMING_STATES,
+    ReservationAction,
     ReservationPermission,
     ReservationStatus,
 )
 from apps.inventory.taxonomy import TrackingMode
 from apps.user.models import User
-
-AUDIT_FIELDS = [
-    "reference",
-    "status",
-    "quantity",
-    "starts_at",
-    "ends_at",
-    "office",
-    "item",
-    "owner",
-    "purpose",
-    "over_allocation_reason",
-]
-
-
-@dataclass(frozen=True)
-class ActorContext:
-    user: Any
-    permissions: frozenset[str]
-
-    def holds(self, *codenames: str) -> bool:
-        if getattr(self.user, "is_superuser", False):
-            return True
-        return any(code in self.permissions for code in codenames)
 
 
 class CancelNotAllowed(ValidationError):
@@ -90,15 +73,6 @@ class CancelNotAllowed(ValidationError):
 
 def next_reference(pk: int) -> str:
     return f"INV-R-{pk:06d}"
-
-
-def _audit_target(reservation: InventoryReservation) -> AuditTarget:
-    return AuditTarget(
-        target_type=reservation._meta.label_lower,
-        target_id=str(reservation.pk),
-        target_label=reservation.reference or str(reservation.public_id),
-        target_snapshot=snapshot_model(reservation, fields=AUDIT_FIELDS),
-    )
 
 
 def load_capacity_windows(
@@ -452,7 +426,9 @@ def create_reservation(
         _record_over_allocation(reservation, actor=actor, reason=override_reason)
 
     try:
-        with transaction.atomic():
+        from apps.inventory.reservation_lifecycle import allow_status_write
+
+        with allow_status_write(), transaction.atomic():
             reservation.save()
             if not reservation.reference:
                 reservation.reference = next_reference(reservation.pk)
@@ -464,10 +440,20 @@ def create_reservation(
             return existing, False
         raise
 
+    ReservationTransitionEvent.objects.create(
+        reservation=reservation,
+        action="create",
+        from_status="",
+        to_status=reservation.status,
+        actor=actor.user,
+        metadata={"submission_key": key},
+        idempotency_key=f"create:{key}",
+    )
+
     log_on_commit(
         "inventory.reservation.created",
         actor=actor_from_user(actor.user),
-        target=_audit_target(reservation),
+        target=audit_target(reservation),
         metadata={
             "reservation_public_id": str(reservation.public_id),
             "item_public_id": str(locked_item.public_id),
@@ -491,64 +477,42 @@ def cancel_reservation(
     reservation: InventoryReservation,
     reason: str = "",
     bypass_policy: bool = False,
+    expected_version: str = "",
+    expected_status: str | None = None,
 ) -> InventoryReservation:
-    ensure_atomic()
+    from apps.inventory.reservation_lifecycle import transition as lifecycle_transition
+
     if bypass_policy:
         _require_override(actor)
 
-    # Lock the capacity row first (same order as create) to avoid deadlocks.
-    lock_item(reservation.item_id)
-    locked = lock_reservation(reservation.pk)
-
-    if locked.owner_id != actor.user.pk and not actor.holds(
-        ReservationPermission.OVERRIDE
-    ):
-        raise PermissionDenied("You do not have permission to cancel this reservation.")
-
-    if locked.status == ReservationStatus.CANCELLED:
-        return locked
-
-    if (
-        locked.owner_id == actor.user.pk
-        and not bypass_policy
-        and not agent_may_cancel(status=locked.status, starts_at=locked.starts_at)
-    ):
-        cutoff = cancel_cutoff_at(locked.starts_at)
-        raise CancelNotAllowed(
-            {
-                "form": [
-                    str(
-                        _(
-                            "This reservation can no longer be cancelled online "
-                            "(cutoff %(cutoff)s). Contact your office for changes."
-                        )
-                        % {"cutoff": timezone.localtime(cutoff).isoformat()}
-                    )
-                ]
-            }
+    override = bypass_policy or (
+        actor.holds(ReservationPermission.OVERRIDE)
+        and (
+            reservation.owner_id != actor.user.pk
+            or not agent_may_cancel(
+                status=reservation.status, starts_at=reservation.starts_at
+            )
         )
-
-    before = snapshot_model(locked, fields=AUDIT_FIELDS)
-    locked.status = ReservationStatus.CANCELLED
-    locked.cancelled_at = timezone.now()
-    locked.cancelled_by = actor.user
-    locked.cancel_reason = (reason or "").strip()[:240]
-    locked.full_clean()
-    locked.save()
-
-    log_on_commit(
-        "inventory.reservation.cancelled",
-        actor=actor_from_user(actor.user),
-        target=_audit_target(locked),
-        metadata={
-            "before": before,
-            "after": snapshot_model(locked, fields=AUDIT_FIELDS),
-            "reservation_public_id": str(locked.public_id),
-            "reason": locked.cancel_reason,
-            "bypass_policy": bypass_policy,
-        },
     )
-    return locked
+    try:
+        return lifecycle_transition(
+            actor=actor,
+            reservation=reservation,
+            action=ReservationAction.CANCEL.value,
+            expected_version=expected_version,
+            expected_status=expected_status or reservation.status,
+            reason=reason,
+            override=override,
+            idempotency_key=(
+                f"cancel:{reservation.pk}:"
+                f"{expected_version or reservation.updated_at.isoformat()}"
+            ),
+        )
+    except ValidationError as exc:
+        message_dict = getattr(exc, "message_dict", None)
+        if message_dict and message_dict.get("form"):
+            raise CancelNotAllowed(message_dict) from exc
+        raise
 
 
 @transaction.atomic
@@ -576,13 +540,16 @@ def approve_reservation(
         require_reservable=False,
     )
     before = snapshot_model(locked, fields=AUDIT_FIELDS)
-    locked.status = ReservationStatus.CONFIRMED
-    locked.full_clean()
-    locked.save()
+    from apps.inventory.reservation_lifecycle import allow_status_write
+
+    with allow_status_write():
+        locked.status = ReservationStatus.CONFIRMED
+        locked.full_clean()
+        locked.save()
     log_on_commit(
         "inventory.reservation.approved",
         actor=actor_from_user(actor.user),
-        target=_audit_target(locked),
+        target=audit_target(locked),
         metadata={
             "before": before,
             "after": snapshot_model(locked, fields=AUDIT_FIELDS),
@@ -609,14 +576,17 @@ def deny_reservation(
             {"form": [str(_("Only requested reservations can be denied."))]}
         )
     before = snapshot_model(locked, fields=AUDIT_FIELDS)
-    locked.status = ReservationStatus.DENIED
-    locked.cancel_reason = (reason or "").strip()[:240]
-    locked.full_clean()
-    locked.save()
+    from apps.inventory.reservation_lifecycle import allow_status_write
+
+    with allow_status_write():
+        locked.status = ReservationStatus.DENIED
+        locked.cancel_reason = (reason or "").strip()[:240]
+        locked.full_clean()
+        locked.save()
     log_on_commit(
         "inventory.reservation.denied",
         actor=actor_from_user(actor.user),
-        target=_audit_target(locked),
+        target=audit_target(locked),
         metadata={
             "before": before,
             "after": snapshot_model(locked, fields=AUDIT_FIELDS),
@@ -652,15 +622,18 @@ def mark_returned(
             {"form": [str(_("This reservation cannot be marked returned."))]}
         )
     before = snapshot_model(locked, fields=AUDIT_FIELDS)
-    locked.status = (
-        ReservationStatus.COMPLETED if completed else ReservationStatus.RETURNED
-    )
-    locked.full_clean()
-    locked.save()
+    from apps.inventory.reservation_lifecycle import allow_status_write
+
+    with allow_status_write():
+        locked.status = (
+            ReservationStatus.COMPLETED if completed else ReservationStatus.RETURNED
+        )
+        locked.full_clean()
+        locked.save()
     log_on_commit(
         "inventory.reservation.returned",
         actor=actor_from_user(actor.user),
-        target=_audit_target(locked),
+        target=audit_target(locked),
         metadata={
             "before": before,
             "after": snapshot_model(locked, fields=AUDIT_FIELDS),
@@ -746,7 +719,7 @@ def reschedule_reservation(
     log_on_commit(
         "inventory.reservation.rescheduled",
         actor=actor_from_user(actor.user),
-        target=_audit_target(locked),
+        target=audit_target(locked),
         metadata={
             "before": before,
             "after": snapshot_model(locked, fields=AUDIT_FIELDS),
@@ -827,7 +800,7 @@ def change_reservation_quantity(
     log_on_commit(
         "inventory.reservation.quantity_changed",
         actor=actor_from_user(actor.user),
-        target=_audit_target(locked),
+        target=audit_target(locked),
         metadata={
             "before": before,
             "after": snapshot_model(locked, fields=AUDIT_FIELDS),

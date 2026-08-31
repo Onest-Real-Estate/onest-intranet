@@ -511,6 +511,30 @@ ROUTE_POLICIES: dict[str, AuthorizationPolicy] = {
         route_names=("inventory_reservation_cancel",),
         scope_rule="self_only",
     ),
+    "admin_reservation_detail": AuthorizationPolicy(
+        key="admin_reservation_detail",
+        access="permission_protected",
+        description="Render one scoped inventory reservation workspace.",
+        methods=("GET",),
+        route_names=("admin_reservation_detail",),
+        all_permissions=("web.view_reservations",),
+        scope_rule="reservation_office_scope",
+    ),
+    "admin_reservation_transition": AuthorizationPolicy(
+        key="admin_reservation_transition",
+        access="permission_protected",
+        description=(
+            "Lifecycle transitions (approve, checkout, return, exceptions) "
+            "for one scoped inventory reservation."
+        ),
+        methods=("POST",),
+        route_names=("admin_reservation_transition",),
+        any_permissions=(
+            "inventory.approve_reservations",
+            "inventory.override_reservations",
+        ),
+        scope_rule="reservation_office_scope",
+    ),
     "feedback_submit": AuthorizationPolicy(
         key="feedback_submit",
         access="authenticated",

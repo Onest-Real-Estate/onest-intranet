@@ -3369,16 +3369,40 @@ export interface InventoryReservationNewPageProps extends PageProps {
   errors: ValidationErrors;
 }
 
+export interface InventoryReservationTimelineEntry {
+  id: string;
+  action: string;
+  actionLabel: string;
+  fromStatus: string;
+  toStatus: string;
+  reason: string;
+  notes: string;
+  occurredAt: string;
+  actor: { id: number; name: string } | null;
+  metadata: Record<string, unknown>;
+}
+
+export interface InventoryReservationAction {
+  action: string;
+  label: string;
+  targetStatus: string;
+  requiresReason: boolean;
+  requiresNote: boolean;
+  overrideOnly: boolean;
+}
+
 export interface InventoryReservationDetailPayload {
   publicId: string;
   reference: string;
   itemName: string;
   itemPublicId: string;
   office: { id: number; name: string };
+  owner?: { id: number; name: string; email: string } | null;
   quantity: number;
   purpose: string;
   status: string;
   statusLabel: string;
+  expectedVersion: string;
   startsAt: string;
   endsAt: string;
   pickupLabel: string;
@@ -3388,10 +3412,19 @@ export interface InventoryReservationDetailPayload {
   canCancel: boolean;
   cancelCutoffAt: string | null;
   cancelledAt: string | null;
+  checkedOutAt: string | null;
+  returnedAt: string | null;
+  completedAt: string | null;
+  checkoutQuantity: number | null;
+  returnQuantity: number | null;
+  returnConditionNotes: string;
   createdAt: string;
+  timeline: InventoryReservationTimelineEntry[];
+  actions: InventoryReservationAction[];
   itemHref: string;
   myReservationsHref: string;
   dashboardHref: string;
+  adminHref?: string | null;
 }
 
 export interface InventoryReservationDetailPageProps extends PageProps {
@@ -3415,6 +3448,25 @@ export interface InventoryReservationListRow {
   pickupLabel: string;
   returnLabel: string;
   detailHref: string;
+  owner?: { id: number; name: string; email: string };
+}
+
+export interface AdminReservationsPageProps extends PageProps {
+  reservations: ListResponse<
+    InventoryReservationListRow,
+    { q: string; status: string }
+  >;
+  filterOptions: { statuses: FilterOption[] };
+  can: { approve: boolean; override: boolean };
+  scope: { level: string; label: string };
+  errors: ValidationErrors;
+}
+
+export interface AdminReservationDetailPageProps extends PageProps {
+  reservation: InventoryReservationDetailPayload;
+  can: { approve: boolean; override: boolean };
+  scope: { level: string; label: string };
+  errors: ValidationErrors;
 }
 
 export interface InventoryReservationsPageProps extends PageProps {

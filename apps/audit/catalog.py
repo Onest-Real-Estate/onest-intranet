@@ -318,6 +318,74 @@ registry.register(
     description="Emitted after an inventory reservation is cancelled.",
 )
 
+registry.register(
+    name="inventory.reservation.approved",
+    version=1,
+    required_payload_keys={
+        "reservation_public_id",
+        "action",
+        "from_status",
+        "to_status",
+    },
+    description="Emitted after a requested reservation is approved.",
+)
+
+registry.register(
+    name="inventory.reservation.denied",
+    version=1,
+    required_payload_keys={"reservation_public_id", "reason"},
+    description="Emitted after a requested reservation is denied.",
+)
+
+registry.register(
+    name="inventory.reservation.ready",
+    version=1,
+    required_payload_keys={"reservation_public_id"},
+    description="Emitted when office marks a reservation ready for pickup.",
+)
+
+registry.register(
+    name="inventory.reservation.checked_out",
+    version=1,
+    required_payload_keys={"reservation_public_id"},
+    description="Emitted when office checks out a reservation.",
+)
+
+registry.register(
+    name="inventory.reservation.returned",
+    version=1,
+    required_payload_keys={"reservation_public_id"},
+    description="Emitted when office accepts a return.",
+)
+
+registry.register(
+    name="inventory.reservation.completed",
+    version=1,
+    required_payload_keys={"reservation_public_id"},
+    description="Emitted when office completes a returned reservation.",
+)
+
+registry.register(
+    name="inventory.reservation.overdue",
+    version=1,
+    required_payload_keys={"reservation_public_id"},
+    description="Emitted when a checked-out reservation passes its return deadline.",
+)
+
+registry.register(
+    name="inventory.reservation.lost",
+    version=1,
+    required_payload_keys={"reservation_public_id", "reason"},
+    description="Emitted when office marks a reservation lost.",
+)
+
+registry.register(
+    name="inventory.reservation.damaged",
+    version=1,
+    required_payload_keys={"reservation_public_id", "reason"},
+    description="Emitted when office marks a reservation damaged.",
+)
+
 # ---------------------------------------------------------------------------
 # announcement domain  (publisher: apps.announcements)
 # ---------------------------------------------------------------------------

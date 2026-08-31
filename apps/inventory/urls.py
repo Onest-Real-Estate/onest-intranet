@@ -16,6 +16,11 @@ from apps.inventory.views.browser_views import (
     office_inventory_item,
     office_inventory_photo,
 )
+from apps.inventory.views.reservation_admin_views import (
+    admin_reservation_detail,
+    admin_reservation_transition,
+    admin_reservations_index,
+)
 from apps.inventory.views.reservation_views import (
     inventory_reservation_cancel,
     inventory_reservation_create,
@@ -60,6 +65,21 @@ urlpatterns = [
         "hub/inventory-reservations/<uuid:public_id>/cancel",
         inventory_reservation_cancel,
         name="inventory_reservation_cancel",
+    ),
+    path(
+        "operations/reservations",
+        admin_reservations_index,
+        name="admin_reservations",
+    ),
+    path(
+        "operations/reservations/<uuid:public_id>",
+        admin_reservation_detail,
+        name="admin_reservation_detail",
+    ),
+    path(
+        "operations/reservations/<uuid:public_id>/transition",
+        admin_reservation_transition,
+        name="admin_reservation_transition",
     ),
     path(
         "operations/inventory",

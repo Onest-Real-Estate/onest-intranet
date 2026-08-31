@@ -14,13 +14,13 @@ from inertia import inertia, render
 
 from apps.inventory import reservations as reservation_services
 from apps.inventory.models import InventoryReservation
+from apps.inventory.reservation_common import ActorContext
 from apps.inventory.reservation_payloads import (
     build_mine_page,
     build_new_reservation_page,
     serialize_reservation_detail,
 )
 from apps.inventory.reservations import (
-    ActorContext,
     AvailabilityConflict,
     CancelNotAllowed,
 )
@@ -60,7 +60,8 @@ def _load_own(request: HttpRequest, public_id: str) -> InventoryReservation:
         raise Http404 from exc
     reservation = (
         InventoryReservation.objects.for_owner(request.user)
-        .select_related("item", "office")
+        .select_related("item", "office", "owner")
+        .prefetch_related("transition_events__actor")
         .filter(public_id=uid)
         .first()
     )
@@ -149,10 +150,15 @@ def inventory_reservation_create(request: HttpRequest):
 @require_GET
 @inertia(DETAIL_PAGE)
 def inventory_reservation_detail(request: HttpRequest, public_id: str):
+    from apps.inventory.reservation_lifecycle import sync_overdue_reservations
+
     reservation = _load_own(request, public_id)
+    sync_overdue_reservations()
+    reservation.refresh_from_db()
+    actor = _actor(request)
     return {
         "reservation": serialize_reservation_detail(
-            reservation, viewer=cast(User, request.user)
+            reservation, viewer=cast(User, request.user), actor=actor
         ),
         "errors": empty_validation_errors(),
         "justCreated": (request.GET.get("created") or "") == "1",
@@ -168,6 +174,12 @@ def inventory_reservation_cancel(request: HttpRequest, public_id: str):
             actor=_actor(request),
             reservation=reservation,
             reason=request.POST.get("reason") or "",
+            expected_version=(
+                request.POST.get("expectedVersion")
+                or request.POST.get("expected_version")
+                or ""
+            ),
+            expected_status=reservation.status,
         )
     except CancelNotAllowed as exc:
         props = {
