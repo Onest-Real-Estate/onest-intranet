@@ -182,6 +182,20 @@ WIDGET_DEFINITIONS: tuple[WidgetDefinition, ...] = (
         feed_limit=5,
     ),
     WidgetDefinition(
+        key="overdue_inventory",
+        prop="overdueInventory",
+        group="widgets",
+        contract_version=1,
+        provider=providers.overdue_inventory,
+        user_specific=True,
+        cache=CachePolicy(
+            rationale=(
+                "Overdue returns are scope-derived and must reflect the last write."
+            )
+        ),
+        feed_limit=5,
+    ),
+    WidgetDefinition(
         key="market",
         prop="market",
         group="widgets",

@@ -6,3 +6,6 @@ class InventoryConfig(AppConfig):
     name = "apps.inventory"
     label = "inventory"
     verbose_name = "Office inventory"
+
+    def ready(self) -> None:
+        from apps.inventory import notifications  # noqa: F401

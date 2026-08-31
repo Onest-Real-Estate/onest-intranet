@@ -507,7 +507,33 @@ def transition(
             "override": override,
         },
     )
+    _queue_suppress_stale_reminders(locked.pk, from_status=from_status)
     return locked
+
+
+def _queue_suppress_stale_reminders(reservation_pk: int, *, from_status: str) -> None:
+    if from_status not in {
+        ReservationStatus.CHECKED_OUT,
+        ReservationStatus.OVERDUE,
+        ReservationStatus.LOST,
+        ReservationStatus.DAMAGED,
+    }:
+        return
+
+    def _run() -> None:
+        from apps.inventory.notification_schedule import suppress_stale_reminders
+
+        refreshed = InventoryReservation.objects.filter(pk=reservation_pk).first()
+        if refreshed is None:
+            return
+        try:
+            suppress_stale_reminders(refreshed)
+        except Exception:  # noqa: BLE001
+            logger.exception(
+                "suppress stale inventory reminders failed id=%s", reservation_pk
+            )
+
+    transaction.on_commit(_run)
 
 
 def sync_overdue_reservations(*, now=None) -> int:
