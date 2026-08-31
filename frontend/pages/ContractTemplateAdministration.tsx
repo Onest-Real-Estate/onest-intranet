@@ -29,6 +29,26 @@ const ACCESS = {
   any: ["contract.manage_contract_templates", "contract.approve_contract_templates"],
 };
 
+function formatJurisdictionLabel(codes: string[]): string {
+  if (codes.length === 0) return "All jurisdictions";
+  if (codes.length <= 4) return codes.join(", ");
+  return `${codes.length} states (${codes.slice(0, 3).join(", ")}…)`;
+}
+
+function templateSubtitle(row: {
+  stableKey: string;
+  jurisdictionStateCodes: string[];
+}): { text: string; title: string } {
+  const jurisdictions =
+    row.jurisdictionStateCodes.length === 0
+      ? "All jurisdictions"
+      : row.jurisdictionStateCodes.join(", ");
+  return {
+    text: `${row.stableKey} · ${formatJurisdictionLabel(row.jurisdictionStateCodes)}`,
+    title: `${row.stableKey} · ${jurisdictions}`,
+  };
+}
+
 export default function ContractTemplateAdministration() {
   const { templates, capabilities, createSheet, errors, states } =
     usePage<ContractTemplateAdministrationPageProps>().props;
@@ -202,15 +222,21 @@ export default function ContractTemplateAdministration() {
                   id: "name",
                   header: "Template",
                   icon: FileText,
-                  cell: (row) => (
-                    <div className="grid gap-0.5">
-                      <span className="font-semibold">{row.name}</span>
-                      <span className="text-muted-foreground text-xs">
-                        {row.stableKey} ·{" "}
-                        {row.jurisdictionStateCodes.join(", ") || "No states"}
+                  className: "max-w-0 whitespace-normal",
+                  cell: (row) => {
+                    const subtitle = templateSubtitle(row);
+                    return (
+                      <span className="grid min-w-0 gap-0.5">
+                        <span className="truncate font-semibold">{row.name}</span>
+                        <span
+                          className="text-muted-foreground truncate text-xs"
+                          title={subtitle.title}
+                        >
+                          {subtitle.text}
+                        </span>
                       </span>
-                    </div>
-                  ),
+                    );
+                  },
                 },
                 {
                   id: "scope",

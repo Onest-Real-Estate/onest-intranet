@@ -20,6 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { loadProtectedPdfBytes } from "@/lib/protected-pdf";
 import { cn } from "@/lib/utils";
 
 GlobalWorkerOptions.workerSrc = pdfWorker;
@@ -110,9 +111,12 @@ export function ContractTemplateFieldPlacer({
   saving = false,
 }: ContractTemplateFieldPlacerProps) {
   const labelId = useId();
+  const viewerRef = useRef<HTMLDivElement | null>(null);
+  const [viewerWidth, setViewerWidth] = useState(900);
   const [doc, setDoc] = useState<PDFDocumentProxy | null>(null);
   const [pageSizes, setPageSizes] = useState<PageSize[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [placeRole, setPlaceRole] = useState<TemplateFieldRole>("Prefill");
   const [armedType, setArmedType] = useState<TemplateFieldType | null>(null);
@@ -125,14 +129,28 @@ export function ContractTemplateFieldPlacer({
   } | null>(null);
 
   useEffect(() => {
+    const node = viewerRef.current;
+    if (!node) return;
+    const update = () => setViewerWidth(node.clientWidth || 900);
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
     let cancelled = false;
+    let loadedDoc: PDFDocumentProxy | null = null;
     setLoadError(null);
     setDoc(null);
     setPageSizes([]);
+    setLoading(true);
 
-    const task = getDocument(pdfUrl);
-    void task.promise
-      .then(async (pdf) => {
+    void (async () => {
+      try {
+        const bytes = await loadProtectedPdfBytes(pdfUrl);
+        if (cancelled) return;
+        const pdf = await getDocument({ data: bytes }).promise;
         if (cancelled) {
           await pdf.destroy();
           return;
@@ -147,18 +165,27 @@ export function ContractTemplateFieldPlacer({
           await pdf.destroy();
           return;
         }
+        loadedDoc = pdf;
         setPageSizes(sizes);
         setDoc(pdf);
-      })
-      .catch(() => {
+      } catch (error) {
         if (!cancelled) {
-          setLoadError("Could not load the template PDF.");
+          setLoadError(
+            error instanceof Error ? error.message : "Could not load the template PDF.",
+          );
         }
-      });
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    })();
 
     return () => {
       cancelled = true;
-      void task.destroy();
+      if (loadedDoc) {
+        void loadedDoc.destroy();
+      }
     };
   }, [pdfUrl]);
 
@@ -271,11 +298,11 @@ export function ContractTemplateFieldPlacer({
   return (
     <div
       className={cn(
-        "border-border bg-muted/20 grid gap-0 overflow-hidden rounded-lg border lg:grid-cols-[14rem_minmax(0,1fr)_16rem]",
+        "border-border bg-muted/20 grid min-h-[28rem] gap-0 overflow-hidden rounded-lg border lg:max-h-[52rem] lg:min-h-[36rem] lg:h-[min(72vh,52rem)] lg:grid-cols-[14rem_minmax(0,1fr)_16rem] lg:grid-rows-1",
         className,
       )}
     >
-      <aside className="border-border grid gap-4 border-b p-4 lg:border-r lg:border-b-0">
+      <aside className="border-border grid max-h-[50vh] gap-4 overflow-y-auto border-b p-4 lg:max-h-none lg:min-h-0 lg:border-r lg:border-b-0">
         <div className="grid gap-2">
           <p className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
             Signer role
@@ -295,8 +322,22 @@ export function ContractTemplateFieldPlacer({
             ))}
           </div>
           <p className="text-muted-foreground text-xs">
-            Prefill = hub-filled commercial fields. Agent = signature ceremony.
+            Prefill = commercial text the Hub fills when generating a contract. Agent =
+            signature, date, and initials at signing.
           </p>
+        </div>
+
+        <div className="border-border bg-background/80 grid gap-2 rounded-md border p-3">
+          <p className="text-foreground text-xs font-semibold">Prefill workflow</p>
+          <ol className="text-muted-foreground list-decimal space-y-1 pl-4 text-xs leading-5">
+            <li>Select Prefill, place Text fields on the PDF.</li>
+            <li>Save fields.</li>
+            <li>
+              In Draft workspace, map each Prefill name to a hub source, then Save
+              draft.
+            </li>
+            <li>Generate preview to see sample filled values.</li>
+          </ol>
         </div>
 
         <div className="grid gap-2">
@@ -351,13 +392,20 @@ export function ContractTemplateFieldPlacer({
         ) : null}
       </aside>
 
-      <div className="bg-background min-h-[28rem] overflow-auto p-4">
+      <div
+        ref={viewerRef}
+        className="bg-background min-h-0 overflow-x-auto overflow-y-auto p-4 lg:max-h-none"
+      >
         {loadError ? (
           <p className="text-destructive text-sm">{loadError}</p>
-        ) : !doc ? (
+        ) : loading || !doc ? (
           <p className="text-muted-foreground text-sm">Loading PDF…</p>
         ) : (
-          <div className="mx-auto grid max-w-3xl gap-6">
+          <div className="mx-auto grid w-full max-w-4xl gap-8 pb-4">
+            <p className="text-muted-foreground sticky top-0 z-10 bg-background/95 py-1 text-xs backdrop-blur-sm">
+              {doc.numPages} page{doc.numPages === 1 ? "" : "s"} — scroll inside this
+              panel to review the full document.
+            </p>
             {armedType ? (
               <p className="bg-primary/10 text-primary rounded-md px-3 py-2 text-sm">
                 Click the document to place a {armedType} field for {placeRole}.
@@ -372,6 +420,7 @@ export function ContractTemplateFieldPlacer({
                   pageNumber={page}
                   pageWidth={size.width}
                   pageHeight={size.height}
+                  viewerWidth={viewerWidth}
                   fields={value.filter((item) => item.page === page)}
                   selectedId={selectedId}
                   armedType={armedType}
@@ -389,7 +438,7 @@ export function ContractTemplateFieldPlacer({
         )}
       </div>
 
-      <aside className="border-border grid content-start gap-4 border-t p-4 lg:border-t-0 lg:border-l">
+      <aside className="border-border grid max-h-[50vh] content-start gap-4 overflow-y-auto border-t p-4 lg:max-h-none lg:min-h-0 lg:border-t-0 lg:border-l">
         <p className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
           Field settings
         </p>
@@ -433,6 +482,14 @@ export function ContractTemplateFieldPlacer({
             <p className="text-muted-foreground text-xs">
               Page {selected.page} · {Math.round(selected.w)}×{Math.round(selected.h)}
             </p>
+            {selected.role === "Prefill" ? (
+              <p className="text-muted-foreground text-xs leading-5">
+                Map <strong className="text-foreground">{selected.name}</strong> in
+                Draft workspace → Merge field mapping (for example{" "}
+                <code className="text-foreground">party.legalFirstName</code>), then
+                Save draft. Preview uses sample hub data.
+              </p>
+            ) : null}
             {!readOnly ? (
               <Button
                 type="button"
@@ -488,6 +545,7 @@ type PdfPageCanvasProps = {
   pageNumber: number;
   pageWidth: number;
   pageHeight: number;
+  viewerWidth: number;
   fields: TemplateFieldLayoutItem[];
   selectedId: string | null;
   armedType: TemplateFieldType | null;
@@ -514,6 +572,7 @@ function PdfPageCanvas({
   pageNumber,
   pageWidth,
   pageHeight,
+  viewerWidth,
   fields,
   selectedId,
   armedType,
@@ -526,28 +585,38 @@ function PdfPageCanvas({
   onFieldPointerUp,
 }: PdfPageCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const displayWidth = Math.min(760, pageWidth);
+  const [renderError, setRenderError] = useState<string | null>(null);
+  const displayWidth = Math.min(Math.max(viewerWidth - 32, 320), pageWidth);
   const scale = displayWidth / pageWidth;
   const displayHeight = pageHeight * scale;
 
   useEffect(() => {
     let cancelled = false;
+    setRenderError(null);
     void (async () => {
-      const page = await doc.getPage(pageNumber);
-      if (cancelled) return;
-      const viewport = page.getViewport({ scale });
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      const context = canvas.getContext("2d");
-      if (!context) return;
-      canvas.width = viewport.width;
-      canvas.height = viewport.height;
-      await page.render({ canvasContext: context, viewport }).promise;
+      try {
+        const page = await doc.getPage(pageNumber);
+        if (cancelled) return;
+        const viewport = page.getViewport({ scale });
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const context = canvas.getContext("2d");
+        if (!context) return;
+        canvas.width = Math.floor(viewport.width);
+        canvas.height = Math.floor(viewport.height);
+        canvas.style.width = `${displayWidth}px`;
+        canvas.style.height = `${displayHeight}px`;
+        await page.render({ canvasContext: context, viewport }).promise;
+      } catch {
+        if (!cancelled) {
+          setRenderError("Could not render this page.");
+        }
+      }
     })();
     return () => {
       cancelled = true;
     };
-  }, [doc, pageNumber, scale]);
+  }, [doc, pageNumber, scale, displayWidth, displayHeight]);
 
   function eventToPdfPoint(
     event: { clientX: number; clientY: number },
@@ -572,12 +641,13 @@ function PdfPageCanvas({
   return (
     <div className="grid gap-2">
       <p className="text-muted-foreground text-xs font-medium">Page {pageNumber}</p>
+      {renderError ? <p className="text-destructive text-sm">{renderError}</p> : null}
       <div
         data-page={pageNumber}
         role="application"
         aria-label={`PDF page ${pageNumber} drop target`}
         className={cn(
-          "relative overflow-hidden rounded-md border bg-card shadow-sm",
+          "relative mx-auto overflow-hidden rounded-md border bg-card shadow-sm",
           armedType ? "ring-primary/40 cursor-crosshair ring-2" : null,
         )}
         style={{ width: displayWidth, height: displayHeight }}
@@ -590,7 +660,7 @@ function PdfPageCanvas({
         }}
         onDrop={onDrop}
       >
-        <canvas ref={canvasRef} className="block h-full w-full" />
+        <canvas ref={canvasRef} className="block" aria-hidden />
         {armedType && !readOnly ? (
           <button
             type="button"

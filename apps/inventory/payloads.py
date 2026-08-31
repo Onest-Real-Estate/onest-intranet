@@ -43,6 +43,7 @@ def serialize_item(
         "photoIsPublic": item.photo_is_public,
         "hasPhoto": bool(item.photo),
         "ownerOffice": {
+            "id": item.owner_office.pk,
             "stableKey": item.owner_office.stable_key,
             "name": item.owner_office.name,
         },
