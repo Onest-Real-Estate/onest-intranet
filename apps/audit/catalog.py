@@ -375,3 +375,41 @@ registry.register(
         "again until it is deliberately republished."
     ),
 )
+
+# ---------------------------------------------------------------------------
+# inventory domain  (publisher: apps.inventory.services)
+# ---------------------------------------------------------------------------
+
+registry.register(
+    name="inventory.item.created",
+    version=1,
+    required_payload_keys={"target_type", "target_id"},
+    description="A new inventory item was created in scope.",
+)
+
+registry.register(
+    name="inventory.item.updated",
+    version=1,
+    required_payload_keys={"target_type", "target_id"},
+    description="An inventory item's catalog fields changed.",
+)
+
+registry.register(
+    name="inventory.item.retired",
+    version=1,
+    required_payload_keys={"target_type", "target_id"},
+    description=(
+        "An inventory item was retired. History is preserved and new "
+        "reservations are blocked."
+    ),
+)
+
+registry.register(
+    name="inventory.item.transferred",
+    version=1,
+    required_payload_keys={"target_type", "target_id"},
+    description=(
+        "An inventory item moved between offices. Reservation history keyed "
+        "by the item's public id is preserved."
+    ),
+)
