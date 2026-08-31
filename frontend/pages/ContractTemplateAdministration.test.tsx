@@ -417,7 +417,7 @@ describe("ContractTemplateWorkspace", () => {
     } as never);
     render(<ContractTemplateWorkspace />);
     expect(screen.getByTestId("hub-field-placer")).toHaveTextContent("AgentSignature");
-    expect(screen.getByText(/merge field mapping/i)).toBeInTheDocument();
+    expect(screen.getByText(/prefill mapping/i)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /save fields/i }));
     expect(postMock).toHaveBeenCalledWith(
       "/operations/contract-templates/templates/9/field-layout",
