@@ -11,8 +11,24 @@ from apps.inventory.views.administration_views import (
     inventory_item_transition,
     inventory_item_update,
 )
+from apps.inventory.views.browser_views import (
+    office_inventory,
+    office_inventory_item,
+    office_inventory_photo,
+)
 
 urlpatterns = [
+    path("office-inventory", office_inventory, name="office_inventory"),
+    path(
+        "office-inventory/<uuid:public_id>",
+        office_inventory_item,
+        name="office_inventory_item",
+    ),
+    path(
+        "office-inventory/<uuid:public_id>/photo",
+        office_inventory_photo,
+        name="office_inventory_photo",
+    ),
     path(
         "operations/inventory",
         inventory_admin_index,

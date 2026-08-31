@@ -39,6 +39,31 @@ office server-side.
 
 Photos use protected storage unless `photo_is_public` is explicitly set.
 
+## Agent browser
+
+Route: `office_inventory` (`/office-inventory/`).
+
+Authenticated agents browse **active reservable** items for their primary
+office only. Office scope is derived server-side from `user.office`; a
+client-supplied office id is ignored. Managers with `web.view_inventory` still
+see only their primary office on this surface — administrative catalogs stay
+on `/operations/inventory/`.
+
+| Surface | Access | Notes |
+| --- | --- | --- |
+| List / filters | Authenticated | Category, condition, name search, pickup/return dates, quantity |
+| Item detail | Authenticated | Same field projection and office gate as the list |
+| Photo | Authenticated | Only when `photo_is_public`; protected storage, no public URL |
+
+Date-range availability uses `apps.inventory.availability` against committed
+reservation windows (empty until #62). Unavailable results explain capacity
+without naming other agents. The Reserve CTA carries item/date query context
+into the reservation workflow placeholder; the create endpoint revalidates.
+
+Agent payloads never include replacement value, internal notes, serial numbers,
+or other agents' reservation identities. Asset id appears only with
+`inventory.view_inventory_sensitive`.
+
 ## Administration UI
 
 Route: `admin_inventory` (`/operations/inventory/`).
@@ -64,8 +89,11 @@ reservation workflow issues land (#62+).
 - `agent_inventory(user)` — active reservable items for the reader's office
 - `apply_filters(…)` — category, state, tracking mode, search (indexed fields)
 
+`apps.inventory.browser` builds the agent Inertia payloads (list, detail,
+availability, empty states) on top of `agent_inventory`.
+
 ## Related issues
 
-- #60 Admin inventory management UI (this surface)
-- #61 Agent Office Inventory browser
-- #66+ Room and inventory reservations
+- #60 Admin inventory management UI
+- #61 Agent Office Inventory browser (this surface)
+- #62+ Inventory reservation workflow

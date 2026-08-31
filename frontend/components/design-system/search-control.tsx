@@ -53,7 +53,8 @@ export function SearchControl({
   }
 
   return (
-    <search className={cn("block", className)}>
+    // biome-ignore lint/a11y/useSemanticElements: jsdom does not recognise <search> yet
+    <div role="search" className={cn("block", className)}>
       <form
         className="grid gap-1.5"
         onSubmit={(event) => {
@@ -110,6 +111,6 @@ export function SearchControl({
           </p>
         ) : null}
       </form>
-    </search>
+    </div>
   );
 }
