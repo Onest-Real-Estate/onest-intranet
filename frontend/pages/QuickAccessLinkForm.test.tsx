@@ -128,7 +128,7 @@ beforeEach(() => {
 describe("QuickAccessLinkForm", () => {
   it("confirms before publishing a brand new link", async () => {
     // delay: null — character-by-character typing under full-suite load
-    // otherwise trips the default 5s timeout.
+    // otherwise trips the global testTimeout.
     const user = userEvent.setup({ delay: null });
     render(<QuickAccessLinkForm />);
     await user.type(screen.getByLabelText(/^name/i), "New CRM");
@@ -150,10 +150,11 @@ describe("QuickAccessLinkForm", () => {
       }),
       expect.anything(),
     );
-  }, 15_000);
+  });
 
   it("confirms a destination change on an existing link", async () => {
-    const user = userEvent.setup();
+    // delay: null — same full-suite contention as the create path above.
+    const user = userEvent.setup({ delay: null });
     setPage({ link: existing });
     render(<QuickAccessLinkForm />);
     const destination = destinationField();

@@ -377,7 +377,7 @@ export const HUB_NAV_REGISTRY: HubNavItem[] = [
   {
     key: "office-inventory",
     label: "Office inventory",
-    route: route("coming_soon", routes.coming_soon("office-inventory")),
+    route: route("office_inventory", routes.office_inventory()),
     icon: Building2,
     group: "my-office",
     order: 30,
@@ -385,7 +385,7 @@ export const HUB_NAV_REGISTRY: HubNavItem[] = [
     permissions: {},
     feature: "office-inventory",
     requiresOffice: true,
-    activeMatch: active(routes.coming_soon("office-inventory")),
+    activeMatch: active(routes.office_inventory()),
   },
   {
     key: "agent-directory",

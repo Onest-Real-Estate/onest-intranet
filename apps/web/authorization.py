@@ -425,6 +425,40 @@ ROUTE_POLICIES: dict[str, AuthorizationPolicy] = {
         route_names=("office_resources",),
         scope_rule="self_only",
     ),
+    "office_inventory": AuthorizationPolicy(
+        key="office_inventory",
+        access="authenticated",
+        description=(
+            "Agent Office Inventory browser for the signed-in user's primary "
+            "office. Returns only active reservable records; never accepts an "
+            "office id from the client."
+        ),
+        methods=("GET",),
+        route_names=("office_inventory",),
+        scope_rule="self_only",
+    ),
+    "office_inventory_item": AuthorizationPolicy(
+        key="office_inventory_item",
+        access="authenticated",
+        description=(
+            "One reservable inventory item resolved through the reader's "
+            "office-scoped queryset so a foreign office id is a 404."
+        ),
+        methods=("GET",),
+        route_names=("office_inventory_item",),
+        scope_rule="self_only",
+    ),
+    "office_inventory_photo": AuthorizationPolicy(
+        key="office_inventory_photo",
+        access="authenticated",
+        description=(
+            "Stream an agent-visible inventory photo after re-checking the "
+            "reader's office catalog and photo_is_public."
+        ),
+        methods=("GET",),
+        route_names=("office_inventory_photo",),
+        scope_rule="self_only",
+    ),
     "feedback_submit": AuthorizationPolicy(
         key="feedback_submit",
         access="authenticated",

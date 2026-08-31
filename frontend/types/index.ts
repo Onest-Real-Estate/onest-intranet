@@ -3239,6 +3239,81 @@ export interface InventoryItemWorkspacePageProps extends PageProps {
   validation: ValidationErrors;
 }
 
+export interface OfficeInventoryFilters {
+  q: string;
+  category: string;
+  condition: string;
+  pickup: string;
+  return: string;
+  quantity: string;
+  view: string;
+  available_only: string;
+  [key: string]: string;
+}
+
+export interface OfficeInventoryAvailability {
+  start: string;
+  end: string;
+  requestedQuantity: number;
+  availableQuantity: number;
+  totalQuantity: number;
+  isAvailable: boolean;
+  reason: string;
+  reasonLabel: string;
+}
+
+export interface OfficeInventoryItemRow {
+  publicId: string;
+  name: string;
+  category: string;
+  categoryLabel: string;
+  trackingMode: string;
+  trackingModeLabel: string;
+  totalQuantity: number;
+  condition: string;
+  conditionLabel: string;
+  ownerOffice: { id: number; name: string };
+  hasPhoto: boolean;
+  photoHref: string | null;
+  detailHref: string;
+  storageLocation?: string;
+  notes?: string;
+  assetId?: string;
+  availability: OfficeInventoryAvailability | null;
+  myReservation: { status: string; statusLabel: string; returnDue: string } | null;
+  reserveHref: string;
+}
+
+export interface OfficeInventoryPageProps extends PageProps {
+  items: ListResponse<OfficeInventoryItemRow, OfficeInventoryFilters>;
+  office: { id: number; name: string } | null;
+  filterOptions: {
+    categories: FilterOption[];
+    conditions: FilterOption[];
+  };
+  capabilities: { canViewSensitive: boolean };
+  dateErrors: string[];
+  serviceError: string | null;
+  empty: {
+    kind: "no-office" | "no-items" | "no-results" | "unavailable-range";
+    title: string;
+    description: string;
+  } | null;
+}
+
+export interface OfficeInventoryItemPageProps extends PageProps {
+  item: OfficeInventoryItemRow;
+  office: { id: number; name: string } | null;
+  filters: OfficeInventoryFilters;
+  filterOptions: {
+    categories: FilterOption[];
+    conditions: FilterOption[];
+  };
+  capabilities: { canViewSensitive: boolean };
+  dateErrors: string[];
+  serviceError: string | null;
+}
+
 export interface ReportExportJobPayload {
   id: number;
   reportKey: string;
