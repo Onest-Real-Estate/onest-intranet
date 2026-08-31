@@ -87,7 +87,7 @@ def inventory_scope(actor: User) -> InventoryScope:
     access = get_effective_access(actor)
     assignable = Q(is_active=True, is_assignable=True)
     ids: set[int] = set()
-    if access.company_wide:
+    if getattr(actor, "is_superuser", False) or access.company_wide:
         ids.update(Office.objects.filter(assignable).values_list("pk", flat=True))
         return InventoryScope(office_ids=frozenset(ids))
 

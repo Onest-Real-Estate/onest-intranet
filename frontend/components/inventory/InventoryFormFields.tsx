@@ -61,13 +61,24 @@ export function InventoryFormFields({
           name="owner_office"
           defaultValue={String(defaults.ownerId ?? writableOffices[0]?.id ?? "")}
           required
+          disabled={writableOffices.length === 0}
         >
-          {writableOffices.map((office) => (
-            <option key={office.id} value={office.id}>
-              {office.label}
-            </option>
-          ))}
+          {writableOffices.length === 0 ? (
+            <option value="">No offices in your administrative scope</option>
+          ) : (
+            writableOffices.map((office) => (
+              <option key={office.id} value={office.id}>
+                {office.label}
+              </option>
+            ))
+          )}
         </NativeSelect>
+        {writableOffices.length === 0 ? (
+          <p className="text-muted-foreground text-xs">
+            You can manage inventory, but no assignable office is in your effective
+            scope. Ask an administrator to confirm your role assignment.
+          </p>
+        ) : null}
       </FormField>
 
       <div className="grid gap-4 sm:grid-cols-2">

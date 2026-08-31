@@ -140,3 +140,15 @@ def test_filters_apply_category_and_search(seeded):
         )
     )
     assert names == {"Blue signage kit"}
+
+
+def test_superuser_writable_scope_includes_assignable_offices(seeded):
+    from apps.inventory.administration import inventory_scope, writable_offices
+
+    superuser = person("super@example.com", "fairfax-va")
+    superuser.is_superuser = True
+    superuser.save(update_fields=["is_superuser"])
+    scope = inventory_scope(superuser)
+    assert scope.office_ids
+    assert office("fairfax-va").pk in scope.office_ids
+    assert writable_offices(superuser).filter(pk=office("fairfax-va").pk).exists()

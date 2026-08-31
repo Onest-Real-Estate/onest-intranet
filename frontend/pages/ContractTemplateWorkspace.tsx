@@ -97,6 +97,24 @@ export default function ContractTemplateWorkspace() {
     [mergeRows],
   );
 
+  const prefillFieldsInLayout = useMemo(
+    () => [
+      ...new Set(
+        fieldLayout
+          .filter((field) => field.role === "Prefill")
+          .map((field) => field.name.trim())
+          .filter(Boolean),
+      ),
+    ],
+    [fieldLayout],
+  );
+
+  const prefillAwaitingSave = prefillFieldsInLayout.filter(
+    (name) => !versionDetail.placeholderKeys.includes(name),
+  );
+
+  const prefillNeedsSource = mergeRows.filter((row) => !row.source);
+
   const sourceOptions = versionDetail.mergeSourceOptions ?? [];
   const canEdit = Boolean(capabilities.canManage && versionDetail.status === "draft");
 
@@ -222,6 +240,16 @@ export default function ContractTemplateWorkspace() {
                 Preview checksum:{" "}
                 {versionDetail.previewChecksum || "No preview generated"}
               </span>
+              {versionDetail.sourcePdfUrl ? (
+                <a
+                  href={versionDetail.sourcePdfUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="underline"
+                >
+                  Open source PDF
+                </a>
+              ) : null}
               {versionDetail.previewUrl ? (
                 <a
                   href={versionDetail.previewUrl}
@@ -282,14 +310,37 @@ export default function ContractTemplateWorkspace() {
                 </div>
 
                 <div className="grid gap-3">
-                  <Label>Merge field mapping</Label>
+                  <div className="grid gap-1">
+                    <Label>Prefill mapping</Label>
+                    <p className="text-muted-foreground text-sm leading-6">
+                      Prefill fields are text boxes you place on the PDF. At contract
+                      generation time the Hub writes agent, office, and terms data into
+                      those boxes using the hub source you choose here.
+                    </p>
+                  </div>
+                  {prefillAwaitingSave.length > 0 ? (
+                    <Callout tone="info" title="Save fields first">
+                      These Prefill fields are on the PDF but not saved yet:{" "}
+                      {prefillAwaitingSave.join(", ")}. Click{" "}
+                      <strong>Save fields</strong> in the placer, then map each name
+                      below.
+                    </Callout>
+                  ) : null}
                   {mergeRows.length === 0 ? (
                     <p className="text-muted-foreground text-sm">
-                      No Prefill fields yet. Place Prefill fields in the Hub placer,
-                      save the layout, then map each field to a hub source.
+                      No Prefill fields yet. In the field placer, choose the Prefill
+                      role, add Text fields on the contract, click Save fields, then map
+                      each field name here.
                     </p>
                   ) : (
                     <div className="grid gap-3">
+                      {prefillNeedsSource.length > 0 ? (
+                        <Callout tone="warning" title="Map every Prefill field">
+                          Select a hub source for:{" "}
+                          {prefillNeedsSource.map((row) => row.key).join(", ")}. Publish
+                          requires all Prefill fields to be mapped.
+                        </Callout>
+                      ) : null}
                       {mergeRows.map((row) => (
                         <div
                           key={row.key}
@@ -305,8 +356,8 @@ export default function ContractTemplateWorkspace() {
                             value={row.source || undefined}
                             onValueChange={(value) => updateRowSource(row.key, value)}
                           >
-                            <SelectTrigger aria-label={`Source for ${row.key}`}>
-                              <SelectValue placeholder="Select hub source" />
+                            <SelectTrigger aria-label={`Hub source for ${row.key}`}>
+                              <SelectValue placeholder="Choose hub data source" />
                             </SelectTrigger>
                             <SelectContent>
                               {sourceOptions.map((option) => (
@@ -379,6 +430,6 @@ ContractTemplateWorkspace.layout = () =>
           { label: "Contract Templates", href: routes.admin_contract_templates() },
         ],
       },
-      variant: "standard",
+      variant: "wide",
     },
   ] as const;

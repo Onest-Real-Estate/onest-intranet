@@ -117,6 +117,58 @@ describe("ContractTemplateAdministration", () => {
     );
   });
 
+  it("summarizes long jurisdiction lists instead of overflowing the table", () => {
+    vi.mocked(usePage).mockReturnValue({
+      props: {
+        csrfToken: "token",
+        user: {
+          id: 1,
+          email: "admin@example.com",
+          permissions: ["contract.manage_contract_templates"],
+        },
+        states: [{ code: "VA", name: "Virginia" }],
+        templates: {
+          items: [
+            {
+              publicId: "pub-wide",
+              stableKey: "agent-contract",
+              name: "Agent Contract",
+              description: "",
+              status: "active",
+              jurisdictionStateCodes: ["AK", "AL", "AR", "AZ", "CA", "CO", "VA", "PA"],
+              companyWide: true,
+              effectiveFrom: "",
+              effectiveUntil: "",
+              activeVersionPk: 4,
+              activeVersionId: "ver-wide",
+              workspaceVersionPk: 4,
+            },
+          ],
+          pagination: {
+            page: 1,
+            pageSize: 20,
+            totalItems: 1,
+            totalPages: 1,
+            hasNext: false,
+            hasPrevious: false,
+          },
+          filters: { q: "", status: "", jurisdiction: "" },
+          sort: null,
+        },
+        capabilities: { canManage: true, canApprove: false },
+        createSheet: null,
+        errors: { fields: {}, form: [] },
+      },
+    } as never);
+    render(<ContractTemplateAdministration />);
+    expect(
+      screen.getByText("agent-contract · 8 states (AK, AL, AR…)", { exact: false }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/AK, AL, AR, AZ, CA, CO, VA, PA/),
+    ).not.toBeInTheDocument();
+  });
+
   it("links draft families into their draft workspace", () => {
     vi.mocked(usePage).mockReturnValue({
       props: {
