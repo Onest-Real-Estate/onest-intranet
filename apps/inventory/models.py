@@ -540,6 +540,22 @@ class InventoryReservation(models.Model):
         verbose_name=_("cancelled by"),
     )
     cancel_reason = models.CharField(_("cancel reason"), max_length=240, blank=True)
+    #: Explicit approved over-allocation. Policy override alone never exceeds
+    #: physical ``total_quantity``; this record is required to go above it.
+    over_allocation_approved_at = models.DateTimeField(
+        _("over-allocation approved at"), null=True, blank=True
+    )
+    over_allocation_approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="inventory_over_allocations_approved",
+        verbose_name=_("over-allocation approved by"),
+    )
+    over_allocation_reason = models.CharField(
+        _("over-allocation reason"), max_length=500, blank=True
+    )
     created_at = models.DateTimeField(_("created at"), auto_now_add=True)
     updated_at = models.DateTimeField(_("updated at"), auto_now=True)
 
@@ -549,6 +565,7 @@ class InventoryReservation(models.Model):
         office_id: int
         created_by_id: int | None
         cancelled_by_id: int | None
+        over_allocation_approved_by_id: int | None
 
     objects = ReservationQuerySet.as_manager()
 
@@ -575,11 +592,29 @@ class InventoryReservation(models.Model):
                 ),
                 name="inventory_reservation_cancelled_at_matches",
             ),
+            models.CheckConstraint(
+                condition=(
+                    Q(
+                        over_allocation_approved_at__isnull=False,
+                    )
+                    & ~Q(over_allocation_reason="")
+                    | Q(
+                        over_allocation_approved_at__isnull=True,
+                        over_allocation_reason="",
+                    )
+                ),
+                name="inventory_reservation_over_allocation_recorded",
+            ),
         ]
         indexes = [
             models.Index(
                 fields=["item", "status", "starts_at", "ends_at"],
                 name="inv_rsv_item_status_range",
+            ),
+            models.Index(
+                fields=["item", "starts_at", "ends_at"],
+                name="inv_rsv_capacity_overlap",
+                condition=Q(status__in=_CAPACITY),
             ),
             models.Index(
                 fields=["owner", "-starts_at"],

@@ -24,7 +24,8 @@ keyed by `public_id` survives the move.
 
 `InventoryReservation` holds one pickup/return interval for an agent. Capacity
 is **not** a stored counter — overlapping quantity comes from rows in
-capacity-consuming statuses via `apps.inventory.availability`.
+capacity-consuming statuses via `apps.inventory.availability` /
+`apps.inventory.capacity`.
 
 | Field | Notes |
 | --- | --- |
@@ -36,13 +37,61 @@ capacity-consuming statuses via `apps.inventory.availability`.
 | `status` | See `apps.inventory.reservation_taxonomy` |
 | `instructions_snapshot` | Item notes + storage copied at create |
 | `submission_key` | Unique idempotency key for create |
+| `over_allocation_*` | Explicit approved excess above physical capacity |
 
-**Capacity-consuming statuses:** `requested`, `confirmed`, `ready_for_pickup`,
-`checked_out`, `overdue`.
+### Capacity state table
 
-**Create path:** lock the inventory item (`select_for_update(of=("self",))`),
-recompute overlapping quantity, validate policy, insert one row. Preflight
-browser availability is never trusted at write time.
+| Status | Consumes capacity? |
+| --- | --- |
+| `requested` | Yes |
+| `confirmed` | Yes |
+| `ready_for_pickup` | Yes |
+| `checked_out` | Yes |
+| `overdue` | Yes |
+| `returned` | No |
+| `completed` | No |
+| `cancelled` | No |
+| `denied` | No |
+| `lost` | No |
+| `damaged` | No |
+
+Interval endpoints are **half-open** `[starts_at, ends_at)`. Adjacent bookings
+that meet at an endpoint do not overlap.
+
+### Locking and isolation
+
+All capacity-affecting writes run in one short `transaction.atomic()` and follow
+`apps.inventory.capacity`:
+
+1. Lock `InventoryItem` with `select_for_update(of=("self",))` in ascending pk
+   order.
+2. Lock `InventoryReservation` rows the same way (ascending pk) after item
+   locks.
+3. Recalculate overlapping committed quantity; validate remaining capacity;
+   create or transition the reservation.
+4. Emit audit/domain events with `log_on_commit` — never while holding locks.
+5. Never combine `select_for_update` with `select_related("owner_office")`.
+
+The same path covers create, approve/deny, reschedule, quantity change,
+cancel/release, return, item quantity reduction, and administrative override.
+Preflight browser availability, frontend disabling, cache, and Celery are never
+correctness boundaries.
+
+Conflicts raise `AvailabilityConflict` (HTTP **409** on the create surface)
+with an actionable message that never names other reservation owners.
+
+### Admin override
+
+`inventory.override_reservations` may bypass horizon / office-hours / cancel
+cutoff policy (`bypass_policy=True`). It must **not** exceed
+`total_quantity` unless `allow_over_allocation=True` with a non-empty reason,
+which records `over_allocation_approved_at/by/reason` on the reservation.
+Over-allocated rows still consume capacity for everyone else.
+
+### Create path
+
+Lock the inventory item, recompute overlapping quantity, validate policy,
+insert one row. Idempotent `submission_key` retries return the first row.
 
 **Policy** (`apps.inventory.policy`):
 
@@ -65,14 +114,20 @@ Conflicting availability responses never name other reservation owners.
 
 Admin on-behalf / approve / override permissions exist
 (`inventory.reserve_on_behalf`, `approve_reservations`, `override_reservations`)
-and are enforced in the service layer; office lifecycle transitions beyond
-agent cancel are owned by the lifecycle issue (#64).
+and are enforced in the service layer; office lifecycle UI beyond agent cancel
+is owned by the lifecycle issue (#64). Service helpers for approve, deny,
+reschedule, quantity change, and return already share the capacity lock path.
 
 ## Availability
 
 Available quantity for a requested interval is computed in
 `apps.inventory.availability` against committed reservation windows from
-`reservation_windows_for_items`.
+`reservation_windows_for_items`. Item quantity reduction uses **peak**
+overlapping demand (`peak_committed_quantity`), not a sum of non-overlapping
+future holds.
+
+Partial index `inv_rsv_capacity_overlap` covers
+`(item, starts_at, ends_at)` for capacity-consuming statuses.
 
 ## Permissions
 
@@ -124,7 +179,7 @@ plug into availability through `reservation_windows_for_items`.
 
 - #60 Admin inventory management UI
 - #61 Agent Office Inventory browser
-- #62 Inventory reservation workflow (this surface)
-- #63 Atomic double-booking hardening (PostgreSQL concurrency suites)
+- #62 Inventory reservation workflow
+- #63 Atomic double-booking hardening (this surface)
 - #64 Full reservation lifecycle transitions
 - #71 Unified My Reservations (rooms + inventory)

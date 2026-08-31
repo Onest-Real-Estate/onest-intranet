@@ -433,8 +433,15 @@ def test_photo_upload_accepts_png(client, seeded, django_capture_on_commit_callb
 
 
 @pytest.mark.django_db
-@patch("apps.inventory.services.committed_quantity", return_value=2)
-def test_quantity_reduction_blocked_below_committed(mock_committed, client, seeded):
+def test_quantity_reduction_blocked_below_committed(client, seeded):
+    from datetime import timedelta
+    from uuid import uuid4
+
+    from django.utils import timezone
+
+    from apps.inventory.reservations import ActorContext, create_reservation
+    from apps.user.tests.test_profile import completed_user
+
     item = InventoryItem.objects.create(
         owner_office=office("fairfax-va"),
         name="Chairs",
@@ -442,6 +449,23 @@ def test_quantity_reduction_blocked_below_committed(mock_committed, client, seed
         tracking_mode=TrackingMode.POOLED,
         total_quantity=5,
         condition=ItemCondition.GOOD,
+    )
+    agent = completed_user(email="agent@example.com", office=office("fairfax-va"))
+    today = timezone.localdate()
+    pickup = today + timedelta(days=4)
+    while pickup.weekday() >= 5:
+        pickup += timedelta(days=1)
+    return_day = pickup + timedelta(days=1)
+    while return_day.weekday() >= 5:
+        return_day += timedelta(days=1)
+    create_reservation(
+        actor=ActorContext(user=agent, permissions=frozenset()),
+        item_public_id=str(item.public_id),
+        pickup=pickup.isoformat(),
+        return_date=return_day.isoformat(),
+        quantity=2,
+        purpose="",
+        submission_key=str(uuid4()),
     )
     client.force_login(manager())
     detail = client.get(
@@ -465,7 +489,6 @@ def test_quantity_reduction_blocked_below_committed(mock_committed, client, seed
     assert response.status_code == 422
     item.refresh_from_db()
     assert item.total_quantity == 5
-    mock_committed.assert_called()
 
 
 @pytest.mark.django_db
