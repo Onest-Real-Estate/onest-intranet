@@ -256,6 +256,7 @@ def inventory_item_create(request: HttpRequest):
         if sensitive
         else None,
         replacement_currency=form.cleaned_data.get("replacement_currency", "USD"),
+        requires_approval=form.cleaned_data.get("requires_approval", False),
     )
     return redirect(reverse("admin_inventory_item", args=[item.public_id]))
 
@@ -289,6 +290,7 @@ def inventory_item_update(request: HttpRequest, public_id: str):
         "storage_location": form.cleaned_data.get("storage_location", ""),
         "notes": form.cleaned_data.get("notes", ""),
         "photo_is_public": form.cleaned_data.get("photo_is_public", False),
+        "requires_approval": form.cleaned_data.get("requires_approval", False),
     }
     if sensitive:
         fields["internal_notes"] = form.cleaned_data.get("internal_notes", "")

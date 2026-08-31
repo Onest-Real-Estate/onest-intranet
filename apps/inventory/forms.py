@@ -42,6 +42,7 @@ class InventoryItemCreateForm(forms.Form):
         max_digits=12, decimal_places=2, required=False
     )
     replacement_currency = forms.CharField(max_length=3, required=False, initial="USD")
+    requires_approval = forms.BooleanField(required=False)
 
     def __init__(self, *args, owner_queryset: QuerySet[Office] | None = None, **kwargs):
         super().__init__(*args, **kwargs)
@@ -85,6 +86,7 @@ class InventoryItemUpdateForm(forms.Form):
     total_quantity = forms.IntegerField(min_value=1, required=False)
     expected_version = forms.CharField()
     photo_is_public = forms.BooleanField(required=False)
+    requires_approval = forms.BooleanField(required=False)
 
     def clean_replacement_value(self):
         raw = (self.cleaned_data.get("replacement_value") or "").strip()

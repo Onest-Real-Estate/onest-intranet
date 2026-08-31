@@ -58,7 +58,7 @@ const baseItem = {
   },
   myReservation: null,
   reserveHref:
-    "/hub/my-reservations?item=11111111-1111-1111-1111-111111111111&quantity=1",
+    "/hub/inventory-reservations/new?item=11111111-1111-1111-1111-111111111111&quantity=1",
 };
 
 const baseProps = {
@@ -115,7 +115,7 @@ describe("OfficeInventory", () => {
     expect(screen.getByText(/pickup: front closet/i)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /^reserve$/i })).toHaveAttribute(
       "href",
-      expect.stringContaining("/hub/my-reservations"),
+      expect.stringContaining("/hub/inventory-reservations/new"),
     );
   });
 

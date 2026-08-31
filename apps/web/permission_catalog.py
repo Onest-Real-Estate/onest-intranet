@@ -326,6 +326,40 @@ PERMISSION_DEFINITIONS: tuple[PermissionDefinition, ...] = (
         default_roles=(*_MANAGERS, REGIONAL_TRANSACTION_COORDINATOR),
         sensitive=True,
     ),
+    PermissionDefinition(
+        codename="inventory.reserve_on_behalf",
+        name="Can create inventory reservations for other users",
+        domain="inventory",
+        action="manage",
+        description=(
+            "Create inventory reservations on behalf of another agent. "
+            "Actor, subject, and reason must be recorded."
+        ),
+        default_roles=(*_MANAGERS,),
+        sensitive=True,
+    ),
+    PermissionDefinition(
+        codename="inventory.approve_reservations",
+        name="Can approve or deny inventory reservations",
+        domain="inventory",
+        action="manage",
+        description=(
+            "Approve or deny inventory reservations that require office review."
+        ),
+        default_roles=(*_MANAGERS, BRANCH_ADMIN, REGIONAL_ADMIN),
+    ),
+    PermissionDefinition(
+        codename="inventory.override_reservations",
+        name="Can override inventory reservation policy",
+        domain="inventory",
+        action="manage",
+        description=(
+            "Override cancel cutoffs or related reservation policy with a "
+            "mandatory reason. Never bypasses physical capacity."
+        ),
+        default_roles=(*_MANAGERS,),
+        sensitive=True,
+    ),
     # --- Content ---
     PermissionDefinition(
         codename="web.manage_announcements",

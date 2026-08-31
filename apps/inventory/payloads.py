@@ -41,6 +41,7 @@ def serialize_item(
         "storageLocation": item.storage_location,
         "notes": item.notes,
         "photoIsPublic": item.photo_is_public,
+        "requiresApproval": item.requires_approval,
         "hasPhoto": bool(item.photo),
         "ownerOffice": {
             "id": item.owner_office.pk,

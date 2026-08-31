@@ -45,8 +45,8 @@ function schedule(overrides: Partial<DashboardSchedule> = {}): DashboardSchedule
     today: [event()],
     upcoming: [],
     total: 1,
-    viewAllHref: "/hub/my-reservations",
-    viewAllLabel: "View full calendar",
+    viewAllHref: "/hub/inventory-reservations",
+    viewAllLabel: "View my reservations",
     ...overrides,
   };
   return base;
@@ -173,8 +173,8 @@ describe("MyDay", () => {
 
   it("points the footer at the calendar destination the server chose", () => {
     render(<MyDay schedule={schedule()} />);
-    const link = screen.getByRole("link", { name: /View full calendar/ });
-    expect(link).toHaveAttribute("href", "/hub/my-reservations");
+    const link = screen.getByRole("link", { name: /View my reservations/ });
+    expect(link).toHaveAttribute("href", "/hub/inventory-reservations");
   });
 
   it("truncates long titles rather than breaking the column layout", () => {

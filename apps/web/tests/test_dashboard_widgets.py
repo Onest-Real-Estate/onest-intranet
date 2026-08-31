@@ -745,10 +745,11 @@ def test_widget_providers_are_bounded_in_queries():
         with assert_application_queries(0):
             widget_payload(WIDGET_BY_KEY[key], context)
 
-    # My Day is one query per *available* source, never one per row. Today the
-    # only live source is operational tasks; each module that lights up adds
-    # exactly one, which is what keeps the widget's cost legible as it grows.
-    with assert_application_queries(1):
+    # My Day is one query per *available* source, never one per row. Live
+    # sources today: operational tasks + inventory reservations. Each module
+    # that lights up adds exactly one, which is what keeps the widget's cost
+    # legible as it grows.
+    with assert_application_queries(2):
         widget_payload(WIDGET_BY_KEY["my_day"], context)
 
     # Announcements is bounded by the audience predicate, not by the number of

@@ -16,6 +16,13 @@ from apps.inventory.views.browser_views import (
     office_inventory_item,
     office_inventory_photo,
 )
+from apps.inventory.views.reservation_views import (
+    inventory_reservation_cancel,
+    inventory_reservation_create,
+    inventory_reservation_detail,
+    inventory_reservation_new,
+    inventory_reservations_mine,
+)
 
 urlpatterns = [
     path("office-inventory", office_inventory, name="office_inventory"),
@@ -28,6 +35,31 @@ urlpatterns = [
         "office-inventory/<uuid:public_id>/photo",
         office_inventory_photo,
         name="office_inventory_photo",
+    ),
+    path(
+        "hub/inventory-reservations",
+        inventory_reservations_mine,
+        name="inventory_reservations_mine",
+    ),
+    path(
+        "hub/inventory-reservations/new",
+        inventory_reservation_new,
+        name="inventory_reservation_new",
+    ),
+    path(
+        "hub/inventory-reservations/create",
+        inventory_reservation_create,
+        name="inventory_reservation_create",
+    ),
+    path(
+        "hub/inventory-reservations/<uuid:public_id>",
+        inventory_reservation_detail,
+        name="inventory_reservation_detail",
+    ),
+    path(
+        "hub/inventory-reservations/<uuid:public_id>/cancel",
+        inventory_reservation_cancel,
+        name="inventory_reservation_cancel",
     ),
     path(
         "operations/inventory",

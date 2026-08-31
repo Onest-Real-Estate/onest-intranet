@@ -459,6 +459,58 @@ ROUTE_POLICIES: dict[str, AuthorizationPolicy] = {
         route_names=("office_inventory_photo",),
         scope_rule="self_only",
     ),
+    "inventory_reservations_mine": AuthorizationPolicy(
+        key="inventory_reservations_mine",
+        access="authenticated",
+        description=(
+            "Self-service list of the signed-in user's inventory reservations. "
+            "Never accepts a user selector."
+        ),
+        methods=("GET",),
+        route_names=("inventory_reservations_mine",),
+        scope_rule="self_only",
+    ),
+    "inventory_reservation_new": AuthorizationPolicy(
+        key="inventory_reservation_new",
+        access="authenticated",
+        description=(
+            "Agent reservation form and authoritative availability/terms "
+            "summary for the reader's office inventory."
+        ),
+        methods=("GET",),
+        route_names=("inventory_reservation_new",),
+        scope_rule="self_only",
+    ),
+    "inventory_reservation_create": AuthorizationPolicy(
+        key="inventory_reservation_create",
+        access="authenticated",
+        description=(
+            "Create an inventory reservation for the signed-in user after "
+            "revalidating availability under the item lock."
+        ),
+        methods=("POST",),
+        route_names=("inventory_reservation_create",),
+        scope_rule="self_only",
+    ),
+    "inventory_reservation_detail": AuthorizationPolicy(
+        key="inventory_reservation_detail",
+        access="authenticated",
+        description=(
+            "Confirmation and detail for one of the signed-in user's "
+            "inventory reservations."
+        ),
+        methods=("GET",),
+        route_names=("inventory_reservation_detail",),
+        scope_rule="self_only",
+    ),
+    "inventory_reservation_cancel": AuthorizationPolicy(
+        key="inventory_reservation_cancel",
+        access="authenticated",
+        description=("Cancel an owned inventory reservation before the policy cutoff."),
+        methods=("POST",),
+        route_names=("inventory_reservation_cancel",),
+        scope_rule="self_only",
+    ),
     "feedback_submit": AuthorizationPolicy(
         key="feedback_submit",
         access="authenticated",

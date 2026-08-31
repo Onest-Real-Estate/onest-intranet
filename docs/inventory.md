@@ -12,6 +12,7 @@ inventory within their effective office/region scope.
 | `owner_office` | Owning assignable office; scope is read from it |
 | `tracking_mode` | `serialized` (qty 1 + asset id) or `pooled` (total quantity) |
 | `availability_state` | `active`, `available`, `temporarily_unavailable`, `damaged`, `lost`, `retired` |
+| `requires_approval` | When true, new reservations start as `requested`; otherwise auto-confirm |
 | `total_quantity` | Authoritative on-hand count for pooled stock |
 | `retired_at` | Set when state is `retired`; history is preserved |
 
@@ -19,11 +20,59 @@ Items are retired, never deleted. Office transfers are audited
 (`InventoryTransfer`) and update `owner_office` in place so reservation history
 keyed by `public_id` survives the move.
 
+## Reservations
+
+`InventoryReservation` holds one pickup/return interval for an agent. Capacity
+is **not** a stored counter — overlapping quantity comes from rows in
+capacity-consuming statuses via `apps.inventory.availability`.
+
+| Field | Notes |
+| --- | --- |
+| `public_id` / `reference` | Stable UUID + human `INV-R-######` |
+| `owner` | Agent the hold belongs to (self-serve only today) |
+| `office` / `office_name` | Owning office snapshotted at create |
+| `starts_at` / `ends_at` | Half-open `[start, end)` local midnight bounds |
+| `quantity` / `purpose` | Positive quantity; optional business purpose |
+| `status` | See `apps.inventory.reservation_taxonomy` |
+| `instructions_snapshot` | Item notes + storage copied at create |
+| `submission_key` | Unique idempotency key for create |
+
+**Capacity-consuming statuses:** `requested`, `confirmed`, `ready_for_pickup`,
+`checked_out`, `overdue`.
+
+**Create path:** lock the inventory item (`select_for_update(of=("self",))`),
+recompute overlapping quantity, validate policy, insert one row. Preflight
+browser availability is never trusted at write time.
+
+**Policy** (`apps.inventory.policy`):
+
+- Pickup within 90 days; inclusive duration ≤ 14 days
+- When `Office.office_hours` is configured, pickup and return days must be open
+- Agent cancel allowed from `requested` / `confirmed` / `ready_for_pickup`
+  until 24 hours before `starts_at`
+- `requires_approval` → initial `requested`; else `confirmed`
+
+**Agent workflow**
+
+| Route | Purpose |
+| --- | --- |
+| `inventory_reservation_new` | Draft + `?review=1` authoritative summary |
+| `inventory_reservation_create` | Idempotent POST → redirect to detail |
+| `inventory_reservation_detail` | Confirmation, instructions, cancel |
+| `inventory_reservations_mine` | Self-only list (interim My Reservations) |
+
+Conflicting availability responses never name other reservation owners.
+
+Admin on-behalf / approve / override permissions exist
+(`inventory.reserve_on_behalf`, `approve_reservations`, `override_reservations`)
+and are enforced in the service layer; office lifecycle transitions beyond
+agent cancel are owned by the lifecycle issue (#64).
+
 ## Availability
 
 Available quantity for a requested interval is computed in
-`apps.inventory.availability` — it is **not** stored as a drifting global
-counter. Reservation rows plug into that service in a later issue.
+`apps.inventory.availability` against committed reservation windows from
+`reservation_windows_for_items`.
 
 ## Permissions
 
@@ -32,10 +81,13 @@ counter. Reservation rows plug into that service in a later issue.
 | `web.view_inventory` | Manager catalog within effective scope |
 | `inventory.manage_inventory` | Create, update, retire, transfer |
 | `inventory.view_inventory_sensitive` | Asset id, serial, replacement value, internal notes |
+| `web.view_reservations` | Admin reservation lists |
+| `inventory.reserve_on_behalf` | Create for another user (not self-serve) |
+| `inventory.approve_reservations` | Approve/deny requested holds |
+| `inventory.override_reservations` | Policy override with reason |
 
-Agents browse reservable items for their assigned office without
-`web.view_inventory`; the queryset is resolved from the reader's primary
-office server-side.
+Agents browse and reserve for themselves without `web.view_inventory`; the
+queryset is resolved from the reader's primary office server-side.
 
 Photos use protected storage unless `photo_is_public` is explicitly set.
 
@@ -44,25 +96,8 @@ Photos use protected storage unless `photo_is_public` is explicitly set.
 Route: `office_inventory` (`/office-inventory/`).
 
 Authenticated agents browse **active reservable** items for their primary
-office only. Office scope is derived server-side from `user.office`; a
-client-supplied office id is ignored. Managers with `web.view_inventory` still
-see only their primary office on this surface — administrative catalogs stay
-on `/operations/inventory/`.
-
-| Surface | Access | Notes |
-| --- | --- | --- |
-| List / filters | Authenticated | Category, condition, name search, pickup/return dates, quantity |
-| Item detail | Authenticated | Same field projection and office gate as the list |
-| Photo | Authenticated | Only when `photo_is_public`; protected storage, no public URL |
-
-Date-range availability uses `apps.inventory.availability` against committed
-reservation windows (empty until #62). Unavailable results explain capacity
-without naming other agents. The Reserve CTA carries item/date query context
-into the reservation workflow placeholder; the create endpoint revalidates.
-
-Agent payloads never include replacement value, internal notes, serial numbers,
-or other agents' reservation identities. Asset id appears only with
-`inventory.view_inventory_sensitive`.
+office only. The Reserve CTA opens `inventory_reservation_new` with item/date
+query context; the create endpoint revalidates.
 
 ## Administration UI
 
@@ -74,13 +109,6 @@ Route: `admin_inventory` (`/operations/inventory/`).
 | Create / edit / lifecycle | `inventory.manage_inventory` | Optimistic concurrency via `expected_version` |
 | Sensitive fields | `inventory.view_inventory_sensitive` | Asset id, serial, replacement value, internal notes |
 
-The list supports search, category, tracking mode, condition, availability state,
-and owning-office filters with pagination. The item workspace separates physical
-state from interval-based booking availability, shows transfer history, and
-records lifecycle transitions (unavailable, damaged, lost, restore, retire) in the
-audit trail. Reservation panels and committed-quantity guards wire in when the
-reservation workflow issues land (#62+).
-
 ## Query services
 
 `apps.inventory.queries` is the single visibility gate:
@@ -89,11 +117,14 @@ reservation workflow issues land (#62+).
 - `agent_inventory(user)` — active reservable items for the reader's office
 - `apply_filters(…)` — category, state, tracking mode, search (indexed fields)
 
-`apps.inventory.browser` builds the agent Inertia payloads (list, detail,
-availability, empty states) on top of `agent_inventory`.
+`apps.inventory.browser` builds the agent Inertia payloads; reservation windows
+plug into availability through `reservation_windows_for_items`.
 
 ## Related issues
 
 - #60 Admin inventory management UI
-- #61 Agent Office Inventory browser (this surface)
-- #62+ Inventory reservation workflow
+- #61 Agent Office Inventory browser
+- #62 Inventory reservation workflow (this surface)
+- #63 Atomic double-booking hardening (PostgreSQL concurrency suites)
+- #64 Full reservation lifecycle transitions
+- #71 Unified My Reservations (rooms + inventory)
