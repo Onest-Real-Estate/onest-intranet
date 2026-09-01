@@ -202,7 +202,7 @@ def training(context: DashboardContext) -> ProviderResult:
     return unavailable(
         "Training progress is not tracked in the hub yet.",
         action_label="Go to training",
-        action_href=_section_href("training-learning"),
+        action_href=reverse("training_learning"),
     )
 
 

@@ -61,6 +61,7 @@ def test_only_the_live_destinations_are_enabled():
             "office-resources": True,
             "office-inventory": True,
             "my-contract": True,
+            "training-learning": True,
             "reports": True,
             "admin-operational-tasks": True,
             "admin-feedback": True,
@@ -79,6 +80,7 @@ def test_only_the_live_destinations_are_enabled():
     assert HUB_FEATURES["office-resources"] is True
     assert HUB_FEATURES["office-inventory"] is True
     assert HUB_FEATURES["my-contract"] is True
+    assert HUB_FEATURES["training-learning"] is True
     assert HUB_FEATURES["reports"] is True
 
 
@@ -102,6 +104,7 @@ def test_unauthorized_administrative_feature_keys_are_not_shared(client):
         "office-resources": True,
         "office-inventory": True,
         "my-contract": True,
+        "training-learning": True,
     }
     assert not any(key.startswith("admin-") for key in props["features"])
 
@@ -198,6 +201,7 @@ def test_shared_props_carry_feature_state_and_office(client):
         "office-resources": True,
         "office-inventory": True,
         "my-contract": True,
+        "training-learning": True,
     }
     assert props["primaryOffice"] == {
         "id": office.id,

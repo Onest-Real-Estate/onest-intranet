@@ -13,6 +13,7 @@ urlpatterns: list[URLPattern | URLResolver] = [
     path("", include("apps.operational_tasks.urls")),
     path("", include("apps.feedback.urls")),
     path("", include("apps.inventory.urls")),
+    path("", include("apps.training.urls")),
     path("", include("apps.audit.urls")),
 ]
 

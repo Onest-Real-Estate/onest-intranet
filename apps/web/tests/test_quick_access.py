@@ -158,7 +158,7 @@ def test_an_internal_link_renders_a_reversed_path():
         destination_type="internal_route",
         destination_value="hub:training-learning",
     )
-    assert link.href() == reverse("coming_soon", args=["training-learning"])
+    assert link.href() == reverse("training_learning")
     assert link.is_external is False
 
 

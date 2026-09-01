@@ -5,154 +5,357 @@ from django.conf import settings
 from django.db import migrations, models
 
 
-class Migration(migrations.Migration):
+def _reservation_add_field_operations():
+    return [
+        migrations.AddField(
+            model_name="inventoryreservation",
+            name="approved_at",
+            field=models.DateTimeField(
+                blank=True, null=True, verbose_name="approved at"
+            ),
+        ),
+        migrations.AddField(
+            model_name="inventoryreservation",
+            name="approved_by",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="inventory_reservations_approved",
+                to=settings.AUTH_USER_MODEL,
+                verbose_name="approved by",
+            ),
+        ),
+        migrations.AddField(
+            model_name="inventoryreservation",
+            name="checked_out_at",
+            field=models.DateTimeField(
+                blank=True, null=True, verbose_name="checked out at"
+            ),
+        ),
+        migrations.AddField(
+            model_name="inventoryreservation",
+            name="checked_out_by",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="inventory_reservations_checked_out",
+                to=settings.AUTH_USER_MODEL,
+                verbose_name="checked out by",
+            ),
+        ),
+        migrations.AddField(
+            model_name="inventoryreservation",
+            name="checkout_notes",
+            field=models.CharField(
+                blank=True, max_length=240, verbose_name="checkout notes"
+            ),
+        ),
+        migrations.AddField(
+            model_name="inventoryreservation",
+            name="checkout_quantity",
+            field=models.PositiveIntegerField(
+                blank=True, null=True, verbose_name="checkout quantity"
+            ),
+        ),
+        migrations.AddField(
+            model_name="inventoryreservation",
+            name="completed_at",
+            field=models.DateTimeField(
+                blank=True, null=True, verbose_name="completed at"
+            ),
+        ),
+        migrations.AddField(
+            model_name="inventoryreservation",
+            name="completed_by",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="inventory_reservations_completed",
+                to=settings.AUTH_USER_MODEL,
+                verbose_name="completed by",
+            ),
+        ),
+        migrations.AddField(
+            model_name="inventoryreservation",
+            name="damaged_at",
+            field=models.DateTimeField(
+                blank=True, null=True, verbose_name="damaged at"
+            ),
+        ),
+        migrations.AddField(
+            model_name="inventoryreservation",
+            name="damaged_by",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="inventory_reservations_damaged",
+                to=settings.AUTH_USER_MODEL,
+                verbose_name="marked damaged by",
+            ),
+        ),
+        migrations.AddField(
+            model_name="inventoryreservation",
+            name="damaged_reason",
+            field=models.CharField(
+                blank=True, max_length=240, verbose_name="damaged reason"
+            ),
+        ),
+        migrations.AddField(
+            model_name="inventoryreservation",
+            name="denied_at",
+            field=models.DateTimeField(blank=True, null=True, verbose_name="denied at"),
+        ),
+        migrations.AddField(
+            model_name="inventoryreservation",
+            name="denied_by",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="inventory_reservations_denied",
+                to=settings.AUTH_USER_MODEL,
+                verbose_name="denied by",
+            ),
+        ),
+        migrations.AddField(
+            model_name="inventoryreservation",
+            name="deny_reason",
+            field=models.CharField(
+                blank=True, max_length=240, verbose_name="deny reason"
+            ),
+        ),
+        migrations.AddField(
+            model_name="inventoryreservation",
+            name="lost_at",
+            field=models.DateTimeField(blank=True, null=True, verbose_name="lost at"),
+        ),
+        migrations.AddField(
+            model_name="inventoryreservation",
+            name="lost_by",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="inventory_reservations_lost",
+                to=settings.AUTH_USER_MODEL,
+                verbose_name="marked lost by",
+            ),
+        ),
+        migrations.AddField(
+            model_name="inventoryreservation",
+            name="lost_reason",
+            field=models.CharField(
+                blank=True, max_length=240, verbose_name="lost reason"
+            ),
+        ),
+        migrations.AddField(
+            model_name="inventoryreservation",
+            name="overdue_at",
+            field=models.DateTimeField(
+                blank=True, null=True, verbose_name="overdue at"
+            ),
+        ),
+        migrations.AddField(
+            model_name="inventoryreservation",
+            name="ready_at",
+            field=models.DateTimeField(blank=True, null=True, verbose_name="ready at"),
+        ),
+        migrations.AddField(
+            model_name="inventoryreservation",
+            name="ready_by",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="inventory_reservations_ready",
+                to=settings.AUTH_USER_MODEL,
+                verbose_name="marked ready by",
+            ),
+        ),
+        migrations.AddField(
+            model_name="inventoryreservation",
+            name="return_condition_notes",
+            field=models.CharField(
+                blank=True, max_length=240, verbose_name="return condition notes"
+            ),
+        ),
+        migrations.AddField(
+            model_name="inventoryreservation",
+            name="return_quantity",
+            field=models.PositiveIntegerField(
+                blank=True, null=True, verbose_name="return quantity"
+            ),
+        ),
+        migrations.AddField(
+            model_name="inventoryreservation",
+            name="returned_at",
+            field=models.DateTimeField(
+                blank=True, null=True, verbose_name="returned at"
+            ),
+        ),
+        migrations.AddField(
+            model_name="inventoryreservation",
+            name="returned_by",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="inventory_reservations_returned",
+                to=settings.AUTH_USER_MODEL,
+                verbose_name="return accepted by",
+            ),
+        ),
+    ]
 
+
+def _transition_event_operation():
+    return migrations.CreateModel(
+        name="ReservationTransitionEvent",
+        fields=[
+            (
+                "id",
+                models.BigAutoField(
+                    auto_created=True,
+                    primary_key=True,
+                    serialize=False,
+                    verbose_name="ID",
+                ),
+            ),
+            ("action", models.CharField(max_length=32, verbose_name="action")),
+            (
+                "from_status",
+                models.CharField(max_length=32, verbose_name="from status"),
+            ),
+            ("to_status", models.CharField(max_length=32, verbose_name="to status")),
+            (
+                "reason",
+                models.CharField(blank=True, max_length=240, verbose_name="reason"),
+            ),
+            (
+                "notes",
+                models.CharField(blank=True, max_length=240, verbose_name="notes"),
+            ),
+            (
+                "metadata",
+                models.JSONField(blank=True, default=dict, verbose_name="metadata"),
+            ),
+            (
+                "idempotency_key",
+                models.CharField(
+                    blank=True,
+                    db_index=True,
+                    max_length=64,
+                    verbose_name="idempotency key",
+                ),
+            ),
+            (
+                "occurred_at",
+                models.DateTimeField(auto_now_add=True, verbose_name="occurred at"),
+            ),
+            (
+                "actor",
+                models.ForeignKey(
+                    blank=True,
+                    null=True,
+                    on_delete=django.db.models.deletion.SET_NULL,
+                    related_name="inventory_reservation_transitions",
+                    to=settings.AUTH_USER_MODEL,
+                    verbose_name="actor",
+                ),
+            ),
+            (
+                "reservation",
+                models.ForeignKey(
+                    on_delete=django.db.models.deletion.CASCADE,
+                    related_name="transition_events",
+                    to="inventory.inventoryreservation",
+                    verbose_name="reservation",
+                ),
+            ),
+        ],
+        options={
+            "verbose_name": "reservation transition event",
+            "verbose_name_plural": "reservation transition events",
+            "ordering": ["occurred_at", "pk"],
+            "indexes": [
+                models.Index(
+                    fields=["reservation", "occurred_at"],
+                    name="inv_rsv_evt_res_occ",
+                )
+            ],
+        },
+    )
+
+
+def _column_names(schema_editor, table_name: str) -> set[str]:
+    with schema_editor.connection.cursor() as cursor:
+        description = schema_editor.connection.introspection.get_table_description(
+            cursor, table_name
+        )
+    return {row.name for row in description}
+
+
+def _table_exists(schema_editor, table_name: str) -> bool:
+    return table_name in schema_editor.connection.introspection.table_names()
+
+
+def apply_reservation_lifecycle(from_state, schema_editor, _to_state):
+    """Apply lifecycle columns idempotently for drifted dev databases."""
+    reservation = from_state.apps.get_model("inventory", "InventoryReservation")
+    existing = _column_names(schema_editor, reservation._meta.db_table)
+
+    state = from_state.clone()
+    for operation in _reservation_add_field_operations():
+        field = operation.field.clone()
+        field.set_attributes_from_name(operation.name)
+        if field.column in existing:
+            operation.state_forwards("inventory", state)
+            continue
+        previous = state.clone()
+        operation.state_forwards("inventory", state)
+        operation.database_forwards("inventory", schema_editor, previous, state)
+
+    transition_operation = _transition_event_operation()
+    previous = state.clone()
+    transition_operation.state_forwards("inventory", state)
+    transition = state.apps.get_model("inventory", "ReservationTransitionEvent")
+    if not _table_exists(schema_editor, transition._meta.db_table):
+        transition_operation.database_forwards(
+            "inventory", schema_editor, previous, state
+        )
+
+
+class RunPythonWithStates(migrations.RunPython):
+    """RunPython that receives both migration states for SeparateDatabaseAndState."""
+
+    def __init__(self, code):
+        self._state_code = code
+        super().__init__(migrations.RunPython.noop, migrations.RunPython.noop)
+
+    def database_forwards(self, app_label, schema_editor, from_state, to_state):
+        self._state_code(from_state, schema_editor, to_state)
+
+
+class Migration(migrations.Migration):
     dependencies = [
         ("inventory", "0004_capacity_hardening"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
+    state_operations = [
+        *_reservation_add_field_operations(),
+        _transition_event_operation(),
+    ]
+
     operations = [
-        migrations.AddField(
-            model_name='inventoryreservation',
-            name='approved_at',
-            field=models.DateTimeField(blank=True, null=True, verbose_name='approved at'),
-        ),
-        migrations.AddField(
-            model_name='inventoryreservation',
-            name='approved_by',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='inventory_reservations_approved', to=settings.AUTH_USER_MODEL, verbose_name='approved by'),
-        ),
-        migrations.AddField(
-            model_name='inventoryreservation',
-            name='checked_out_at',
-            field=models.DateTimeField(blank=True, null=True, verbose_name='checked out at'),
-        ),
-        migrations.AddField(
-            model_name='inventoryreservation',
-            name='checked_out_by',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='inventory_reservations_checked_out', to=settings.AUTH_USER_MODEL, verbose_name='checked out by'),
-        ),
-        migrations.AddField(
-            model_name='inventoryreservation',
-            name='checkout_notes',
-            field=models.CharField(blank=True, max_length=240, verbose_name='checkout notes'),
-        ),
-        migrations.AddField(
-            model_name='inventoryreservation',
-            name='checkout_quantity',
-            field=models.PositiveIntegerField(blank=True, null=True, verbose_name='checkout quantity'),
-        ),
-        migrations.AddField(
-            model_name='inventoryreservation',
-            name='completed_at',
-            field=models.DateTimeField(blank=True, null=True, verbose_name='completed at'),
-        ),
-        migrations.AddField(
-            model_name='inventoryreservation',
-            name='completed_by',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='inventory_reservations_completed', to=settings.AUTH_USER_MODEL, verbose_name='completed by'),
-        ),
-        migrations.AddField(
-            model_name='inventoryreservation',
-            name='damaged_at',
-            field=models.DateTimeField(blank=True, null=True, verbose_name='damaged at'),
-        ),
-        migrations.AddField(
-            model_name='inventoryreservation',
-            name='damaged_by',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='inventory_reservations_damaged', to=settings.AUTH_USER_MODEL, verbose_name='marked damaged by'),
-        ),
-        migrations.AddField(
-            model_name='inventoryreservation',
-            name='damaged_reason',
-            field=models.CharField(blank=True, max_length=240, verbose_name='damaged reason'),
-        ),
-        migrations.AddField(
-            model_name='inventoryreservation',
-            name='denied_at',
-            field=models.DateTimeField(blank=True, null=True, verbose_name='denied at'),
-        ),
-        migrations.AddField(
-            model_name='inventoryreservation',
-            name='denied_by',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='inventory_reservations_denied', to=settings.AUTH_USER_MODEL, verbose_name='denied by'),
-        ),
-        migrations.AddField(
-            model_name='inventoryreservation',
-            name='deny_reason',
-            field=models.CharField(blank=True, max_length=240, verbose_name='deny reason'),
-        ),
-        migrations.AddField(
-            model_name='inventoryreservation',
-            name='lost_at',
-            field=models.DateTimeField(blank=True, null=True, verbose_name='lost at'),
-        ),
-        migrations.AddField(
-            model_name='inventoryreservation',
-            name='lost_by',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='inventory_reservations_lost', to=settings.AUTH_USER_MODEL, verbose_name='marked lost by'),
-        ),
-        migrations.AddField(
-            model_name='inventoryreservation',
-            name='lost_reason',
-            field=models.CharField(blank=True, max_length=240, verbose_name='lost reason'),
-        ),
-        migrations.AddField(
-            model_name='inventoryreservation',
-            name='overdue_at',
-            field=models.DateTimeField(blank=True, null=True, verbose_name='overdue at'),
-        ),
-        migrations.AddField(
-            model_name='inventoryreservation',
-            name='ready_at',
-            field=models.DateTimeField(blank=True, null=True, verbose_name='ready at'),
-        ),
-        migrations.AddField(
-            model_name='inventoryreservation',
-            name='ready_by',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='inventory_reservations_ready', to=settings.AUTH_USER_MODEL, verbose_name='marked ready by'),
-        ),
-        migrations.AddField(
-            model_name='inventoryreservation',
-            name='return_condition_notes',
-            field=models.CharField(blank=True, max_length=240, verbose_name='return condition notes'),
-        ),
-        migrations.AddField(
-            model_name='inventoryreservation',
-            name='return_quantity',
-            field=models.PositiveIntegerField(blank=True, null=True, verbose_name='return quantity'),
-        ),
-        migrations.AddField(
-            model_name='inventoryreservation',
-            name='returned_at',
-            field=models.DateTimeField(blank=True, null=True, verbose_name='returned at'),
-        ),
-        migrations.AddField(
-            model_name='inventoryreservation',
-            name='returned_by',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='inventory_reservations_returned', to=settings.AUTH_USER_MODEL, verbose_name='return accepted by'),
-        ),
-        migrations.CreateModel(
-            name='ReservationTransitionEvent',
-            fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('action', models.CharField(max_length=32, verbose_name='action')),
-                ('from_status', models.CharField(max_length=32, verbose_name='from status')),
-                ('to_status', models.CharField(max_length=32, verbose_name='to status')),
-                ('reason', models.CharField(blank=True, max_length=240, verbose_name='reason')),
-                ('notes', models.CharField(blank=True, max_length=240, verbose_name='notes')),
-                ('metadata', models.JSONField(blank=True, default=dict, verbose_name='metadata')),
-                ('idempotency_key', models.CharField(blank=True, db_index=True, max_length=64, verbose_name='idempotency key')),
-                ('occurred_at', models.DateTimeField(auto_now_add=True, verbose_name='occurred at')),
-                ('actor', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='inventory_reservation_transitions', to=settings.AUTH_USER_MODEL, verbose_name='actor')),
-                ('reservation', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='transition_events', to='inventory.inventoryreservation', verbose_name='reservation')),
+        migrations.SeparateDatabaseAndState(
+            state_operations=state_operations,
+            database_operations=[
+                RunPythonWithStates(apply_reservation_lifecycle),
             ],
-            options={
-                'verbose_name': 'reservation transition event',
-                'verbose_name_plural': 'reservation transition events',
-                'ordering': ['occurred_at', 'pk'],
-                'indexes': [models.Index(fields=['reservation', 'occurred_at'], name='inv_rsv_evt_res_occ')],
-            },
         ),
     ]
