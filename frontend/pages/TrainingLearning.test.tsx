@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import TrainingLearning from "@/pages/TrainingLearning";
@@ -78,7 +78,8 @@ describe("TrainingLearning", () => {
       screen.getByRole("heading", { name: "Training & learning" }),
     ).toBeInTheDocument();
     expect(screen.getByText("Ethics overview")).toBeInTheDocument();
-    expect(screen.getByText("Required")).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Required" })).toBeInTheDocument();
+    const card = screen.getByRole("article", { name: "Ethics overview" });
+    expect(within(card).getByText("Required")).toBeInTheDocument();
   });
 });
