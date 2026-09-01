@@ -2426,6 +2426,109 @@ export interface AnnouncementsPageProps extends PageProps {
   };
 }
 
+export interface TrainingPresentationBadge {
+  code: string;
+  label: string;
+  tone: StatusTone;
+  known: boolean;
+}
+
+export interface TrainingCompletion {
+  status: string;
+  label: string;
+}
+
+export interface TrainingRow {
+  id: number;
+  slug: string;
+  title: string;
+  summary: string;
+  contentType: TrainingPresentationBadge;
+  category: TrainingPresentationBadge;
+  scope: { level: string; label: string; officeName: string };
+  isRequired: boolean;
+  estimatedMinutes: number | null;
+  toolCode: string | null;
+  completion: TrainingCompletion;
+  publishedAt: string | null;
+  detailUrl: string;
+}
+
+export interface TrainingFilters {
+  category: string;
+  type: string;
+  required: string;
+  tool: string;
+  completion: string;
+  view: string;
+  q: string;
+  rejected?: string[];
+  [key: string]: string | string[] | undefined;
+}
+
+export interface TrainingEmbed {
+  url: string;
+  provider: string;
+  host?: string;
+  available: boolean;
+}
+
+export interface TranscriptionSegment {
+  startMs: number;
+  endMs: number;
+  text: string;
+}
+
+export interface TrainingTranscription {
+  segments: TranscriptionSegment[];
+  hasSearchableText: boolean;
+}
+
+export interface TrainingMediaItem {
+  id: number;
+  role: string;
+  displayName: string;
+  mediaType: string;
+  byteSize: number;
+  url: string;
+  processingState?: string;
+  isReadable?: boolean;
+}
+
+export interface TrainingModuleRow {
+  id: number;
+  title: string;
+  contentType: TrainingPresentationBadge;
+  sortOrder: number;
+  estimatedMinutes: number | null;
+}
+
+export interface TrainingDetail extends TrainingRow {
+  body: string;
+  bodyBlocks: AnnouncementBlock[];
+  externalUrl: { url: string; label: string } | null;
+  embed: TrainingEmbed | null;
+  primaryMedia: TrainingMediaItem | null;
+  attachments: TrainingMediaItem[];
+  transcription: TrainingTranscription | null;
+  modules: TrainingModuleRow[];
+  interactivity: "available" | "unavailable";
+}
+
+export interface TrainingLearningPageProps extends PageProps {
+  library: ListResponse<TrainingRow, TrainingFilters>;
+  filterOptions: {
+    categories: FilterOption[];
+    contentTypes: FilterOption[];
+    tools: FilterOption[];
+    completions: FilterOption[];
+  };
+}
+
+export interface TrainingDetailPageProps extends PageProps {
+  content: TrainingDetail;
+}
+
 /**
  * The administration workspace.
  *

@@ -856,6 +856,39 @@ ROUTE_POLICIES: dict[str, AuthorizationPolicy] = {
         scope_rule="delegated_user_scope",
         auth_behavior="json",
     ),
+    "training_library": AuthorizationPolicy(
+        key="training_library",
+        access="authenticated",
+        description=(
+            "Training library for the signed-in user. Audience is resolved "
+            "server-side; filters can only narrow the visible set."
+        ),
+        methods=("GET",),
+        route_names=("training_learning",),
+        scope_rule="training_audience_scope",
+    ),
+    "training_detail": AuthorizationPolicy(
+        key="training_detail",
+        access="authenticated",
+        description=(
+            "One training item by id. Authorized by the same audience "
+            "predicate as the library."
+        ),
+        methods=("GET",),
+        route_names=("training_detail",),
+        scope_rule="training_audience_scope",
+    ),
+    "training_media": AuthorizationPolicy(
+        key="training_media",
+        access="authenticated",
+        description=(
+            "Stream one training file from protected storage. Audience is "
+            "re-checked on every request."
+        ),
+        methods=("GET",),
+        route_names=("training_media",),
+        scope_rule="training_audience_scope",
+    ),
     "office_resource_download": AuthorizationPolicy(
         key="office_resource_download",
         access="authenticated",

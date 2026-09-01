@@ -47,6 +47,17 @@ QUICK_ACCESS_ICONS: tuple[tuple[str, str], ...] = (
 ICON_KEYS: frozenset[str] = frozenset(key for key, _label in QUICK_ACCESS_ICONS)
 DEFAULT_ICON = "app-window"
 
+# Hub sections that ship a real route rather than the Coming Soon placeholder.
+# Keep in sync with ``HUB_FEATURES`` in ``apps.web.navigation``.
+LIVE_HUB_ROUTES: dict[str, tuple[str, tuple[str, ...]]] = {
+    "announcements": ("announcements", ()),
+    "my-contract": ("my_contract", ()),
+    "office-info": ("office_info", ()),
+    "office-resources": ("office_resources", ()),
+    "office-inventory": ("office_inventory", ()),
+    "training-learning": ("training_learning", ()),
+}
+
 
 @dataclass(frozen=True)
 class InternalDestination:
@@ -66,15 +77,18 @@ def _hub_destinations() -> tuple[InternalDestination, ...]:
     # catalog, and the dashboard package imports ``web.models`` back.
     from apps.web.dashboard.sections import HUB_SECTIONS
 
-    return tuple(
-        InternalDestination(
-            key=f"hub:{section}",
-            label=title,
-            route_name="coming_soon",
-            args=(section,),
+    items: list[InternalDestination] = []
+    for section, title in HUB_SECTIONS.items():
+        route_name, args = LIVE_HUB_ROUTES.get(section, ("coming_soon", (section,)))
+        items.append(
+            InternalDestination(
+                key=f"hub:{section}",
+                label=title,
+                route_name=route_name,
+                args=args,
+            )
         )
-        for section, title in HUB_SECTIONS.items()
-    )
+    return tuple(items)
 
 
 @lru_cache(maxsize=1)

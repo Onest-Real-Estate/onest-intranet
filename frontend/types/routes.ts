@@ -1,5 +1,8 @@
 const URLS = {
     'activity_timeline': (record_type: string, record_id: string) => `/activity/${record_type}/${record_id}`,
+    'training_media': (media_id: number) => `/training-learning/media/${media_id}`,
+    'training_detail': (content_id: number) => `/training-learning/${content_id}`,
+    'training_learning': () => `/training-learning`,
     'admin_inventory_photo': (public_id: string) => `/operations/inventory/${public_id}/photo`,
     'admin_inventory_transfer': (public_id: string) => `/operations/inventory/${public_id}/transfer`,
     'admin_inventory_transition': (public_id: string) => `/operations/inventory/${public_id}/transition`,

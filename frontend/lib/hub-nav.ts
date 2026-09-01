@@ -302,14 +302,14 @@ export const HUB_NAV_REGISTRY: HubNavItem[] = [
   {
     key: "training-learning",
     label: "Training & learning",
-    route: route("coming_soon", routes.coming_soon("training-learning")),
+    route: route("training_learning", routes.training_learning()),
     icon: BookOpen,
     group: "tools",
     order: 10,
     access: "authenticated",
     permissions: {},
     feature: "training-learning",
-    activeMatch: active(routes.coming_soon("training-learning")),
+    activeMatch: active(routes.training_learning()),
   },
   {
     key: "documents-forms",

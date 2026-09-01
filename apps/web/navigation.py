@@ -35,6 +35,7 @@ HUB_FEATURES["office-resources"] = True
 HUB_FEATURES["office-inventory"] = True
 HUB_FEATURES["my-contract"] = True
 HUB_FEATURES["reports"] = True
+HUB_FEATURES["training-learning"] = True
 
 # Live destinations that are not Coming Soon ops stubs and are not agent
 # HUB_SECTIONS. Shared only when the actor holds the matching permission.

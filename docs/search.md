@@ -135,7 +135,7 @@ measured bottleneck.
 
 ## Sources not yet registered
 
-Documents, training, transactions, CRM contacts, and policies have no model
+Documents, transactions, CRM contacts, and policies have no model
 behind them. A provider over a table that does not exist would be a group
 heading that never returns anything, so they register with their domains.
 `test_search.py` asserts every registered provider's permission is catalogued
