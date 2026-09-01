@@ -37,8 +37,11 @@ superuser:       ## Create a Django superuser (prompts for username/email/passwo
 shell:           ## Open the Django shell
 	$(MANAGE) shell
 
-test:            ## Run the test suite with pytest (parallel + reuse-db via pyproject addopts)
-	$(COMPOSE) exec web uv run pytest
+test:           ## Open the Django shell
+	uv run pytest --create-db
+
+# test:            ## Run the test suite with pytest (parallel + reuse-db via pyproject addopts)
+# 	$(COMPOSE) exec web uv run pytest
 
 manage:          ## Run any management command, e.g. make manage cmd="check --deploy"
 	$(MANAGE) $(cmd)
