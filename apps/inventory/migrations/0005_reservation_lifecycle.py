@@ -308,18 +308,25 @@ def apply_reservation_lifecycle(from_state, schema_editor, _to_state):
     reservation = from_state.apps.get_model("inventory", "InventoryReservation")
     existing = _column_names(schema_editor, reservation._meta.db_table)
 
+    state = from_state.clone()
     for operation in _reservation_add_field_operations():
         field = operation.field.clone()
         field.set_attributes_from_name(operation.name)
         if field.column in existing:
+            operation.state_forwards("inventory", state)
             continue
-        schema_editor.add_field(reservation, field)
+        previous = state.clone()
+        operation.state_forwards("inventory", state)
+        operation.database_forwards("inventory", schema_editor, previous, state)
 
-    target_state = from_state.clone()
-    _transition_event_operation().state_forwards("inventory", target_state)
-    transition = target_state.apps.get_model("inventory", "ReservationTransitionEvent")
+    transition_operation = _transition_event_operation()
+    previous = state.clone()
+    transition_operation.state_forwards("inventory", state)
+    transition = state.apps.get_model("inventory", "ReservationTransitionEvent")
     if not _table_exists(schema_editor, transition._meta.db_table):
-        schema_editor.create_model(transition)
+        transition_operation.database_forwards(
+            "inventory", schema_editor, previous, state
+        )
 
 
 class RunPythonWithStates(migrations.RunPython):
