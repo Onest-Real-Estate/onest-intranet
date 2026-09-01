@@ -1,4 +1,6 @@
+import { Link } from "@inertiajs/react";
 import { Download, ExternalLink, GraduationCap } from "lucide-react";
+
 import { AnnouncementBody } from "@/components/announcements/AnnouncementBody";
 import {
   EmptyState,
@@ -20,6 +22,18 @@ export function TrainingArticle({ content }: { content: TrainingDetail }) {
   const contentType = contentTypePresentation(content.contentType);
   const completion = completionPresentation(content.completion.status);
   const duration = formatDuration(content.estimatedMinutes);
+  const hasBody = content.bodyBlocks.length > 0;
+  const hasPrimaryMedia =
+    content.embed?.available ||
+    content.primaryMedia?.isReadable ||
+    (content.primaryMedia && !content.primaryMedia.isReadable);
+  const hasVisibleSections =
+    hasPrimaryMedia ||
+    hasBody ||
+    content.modules.length > 0 ||
+    content.attachments.length > 0 ||
+    content.externalUrl ||
+    content.interactivity === "unavailable";
 
   return (
     <div className="grid gap-6">
@@ -32,7 +46,15 @@ export function TrainingArticle({ content }: { content: TrainingDetail }) {
         {duration ? (
           <span className="text-muted-foreground text-xs">{duration}</span>
         ) : null}
+        <span className="text-muted-foreground text-xs">
+          {content.scope.label} · {content.scope.officeName}
+        </span>
       </div>
+      <p className="sr-only">
+        {contentType.srLabel}.{" "}
+        {content.isRequired ? "Required training." : "Optional training."}{" "}
+        {completion.label}.
+      </p>
 
       {content.embed?.available ? (
         <TrainingVideoPlayer
@@ -44,13 +66,13 @@ export function TrainingArticle({ content }: { content: TrainingDetail }) {
           <SurfaceCardContent className="grid gap-3">
             <p className="text-sm font-medium">{content.primaryMedia.displayName}</p>
             {content.primaryMedia.mediaType.startsWith("video/") ? (
+              // biome-ignore lint/a11y/useMediaCaption: captions ship with uploaded media in P1-069
               <video
                 controls
                 className="aspect-video w-full rounded-lg bg-muted"
                 src={content.primaryMedia.url}
-              >
-                <track kind="captions" />
-              </video>
+                aria-label={`Training video: ${content.primaryMedia.displayName}`}
+              />
             ) : (
               <Button variant="outline" size="sm" asChild>
                 <a href={content.primaryMedia.url} download>
@@ -69,11 +91,17 @@ export function TrainingArticle({ content }: { content: TrainingDetail }) {
             description="This video cannot be embedded right now. Try again later or contact your office administrator."
           />
         </SurfaceCard>
+      ) : content.primaryMedia && !content.primaryMedia.isReadable ? (
+        <SurfaceCard>
+          <EmptyState
+            icon={GraduationCap}
+            title="Media is still processing"
+            description="This file is not ready to view yet. Check back later or contact your office administrator."
+          />
+        </SurfaceCard>
       ) : null}
 
-      {content.bodyBlocks.length > 0 ? (
-        <AnnouncementBody blocks={content.bodyBlocks} />
-      ) : null}
+      {hasBody ? <AnnouncementBody blocks={content.bodyBlocks} /> : null}
 
       {content.modules.length > 0 ? (
         <section aria-labelledby="training-modules" className="grid gap-3">
@@ -88,12 +116,12 @@ export function TrainingArticle({ content }: { content: TrainingDetail }) {
                   className="h-auto w-full justify-start"
                   asChild
                 >
-                  <a href={routes.training_detail(module.id)}>
+                  <Link href={routes.training_detail(module.id)}>
                     <span className="font-medium">{module.title}</span>
                     <span className="text-muted-foreground ml-2 text-xs">
                       {module.contentType.label}
                     </span>
-                  </a>
+                  </Link>
                 </Button>
               </li>
             ))}
@@ -136,6 +164,16 @@ export function TrainingArticle({ content }: { content: TrainingDetail }) {
             icon={GraduationCap}
             title="Interactive content coming soon"
             description="Quizzes, live sessions, and progress tracking will be available in a future update. You can still read the overview above."
+          />
+        </SurfaceCard>
+      ) : null}
+
+      {!hasVisibleSections ? (
+        <SurfaceCard>
+          <EmptyState
+            icon={GraduationCap}
+            title="No content published yet"
+            description="This training item does not have any readable content yet."
           />
         </SurfaceCard>
       ) : null}

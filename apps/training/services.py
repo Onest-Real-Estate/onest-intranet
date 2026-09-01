@@ -11,7 +11,10 @@ from django.urls import reverse
 from apps.announcements.richtext import body_payload, safe_url
 from apps.training.audience import visible_training_content
 from apps.training.embeds import embed_payload, parse_embed_url
-from apps.training.media_service import attachments_payload, primary_media_payload
+from apps.training.media_service import (
+    attachments_payload,
+    primary_media_detail_payload,
+)
 from apps.training.models import (
     TrainingCategory,
     TrainingContent,
@@ -330,7 +333,7 @@ def detail_payload(content: TrainingContent, *, user: User) -> dict[str, Any]:
         "bodyBlocks": body_payload(content.body),
         "externalUrl": external,
         "embed": _embed_detail(content),
-        "primaryMedia": primary_media_payload(content),
+        "primaryMedia": primary_media_detail_payload(content),
         "attachments": attachments_payload(content),
         "transcription": _transcription_payload(content),
         "modules": _modules_payload(content, user=user),
@@ -357,7 +360,12 @@ def build_library(
     total_pages = max(1, (total + size - 1) // size)
     current = min(max(page, 1), total_pages)
     start = (current - 1) * size
-    rows = [library_row(item, user=user) for item in queryset[start : start + size]]
+    page_items = list(queryset[start : start + size])
+    completion_map = completion_state(user, [item.pk for item in page_items])
+    rows = [
+        library_row(item, user=user, completion=completion_map[item.pk])
+        for item in page_items
+    ]
     payload = list_response(
         rows,
         page=current,

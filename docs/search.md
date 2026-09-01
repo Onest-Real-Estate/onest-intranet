@@ -14,6 +14,7 @@ provider starts from the domain's already-scoped queryset:
 | Announcements | `visible_announcements(actor)` |
 | Office resources | `effective_resources_queryset(actor)` |
 | Offices | Active offices — brokerage-public name and city only |
+| Training | `visible_training_content(actor)` |
 
 Search is therefore exactly as permissive as the pages those functions already
 serve, and a scope fix in a domain reaches search without anybody remembering

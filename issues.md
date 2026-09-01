@@ -175,9 +175,9 @@ Shipped features with follow-up work that is not tracked as separate GitHub issu
 
 | Area | Gap | Reference |
 | --- | --- | --- |
-| Global search | No providers yet for documents, training, transactions, CRM contacts, or policies | [docs/search.md](docs/search.md) |
+| Global search | No providers yet for documents, transactions, CRM contacts, or policies | [docs/search.md](docs/search.md) |
 | Notification delivery | Microsoft Graph and Slack are dormant stubs; email is the production push path | [docs/notifications.md](docs/notifications.md) |
-| Agent nav placeholders | Transactions, My Reservations, Training, Documents, Marketing Resources, Policies, Office Inventory, and Agent Directory still route to `coming_soon` | `frontend/lib/hub-nav.ts` |
+| Agent nav placeholders | Transactions, My Reservations, Documents, Marketing Resources, Policies, Office Inventory, and Agent Directory still route to `coming_soon` | `frontend/lib/hub-nav.ts` |
 
 ---
 

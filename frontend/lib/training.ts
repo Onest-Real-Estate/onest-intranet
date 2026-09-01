@@ -7,6 +7,7 @@ export function activeFilterCount(filters: TrainingFilters): number {
     Number(Boolean(filters.required)) +
     Number(Boolean(filters.tool)) +
     Number(Boolean(filters.completion)) +
+    Number(filters.view !== "all") +
     Number(Boolean(filters.q))
   );
 }

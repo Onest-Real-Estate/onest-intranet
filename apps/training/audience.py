@@ -1,16 +1,16 @@
 """The single audience predicate for contents.
 
-Every surface that shows an content — feed, detail, dashboard,
+Every surface that shows training content — library, detail, dashboard,
 notifications, search, attachment download — asks this module, and only this
 module, whether a reader may see it. There is no second implementation to fall
 out of step, and no materialized recipient list to go stale.
 
 Union semantics
 ---------------
-Selectors are **OR**. A reader who matches *any* selector on an content
+Selectors are **OR**. A reader who matches *any* selector on content
 sees it; matching several still yields exactly one feed entry, because
 membership is a set test against the audience table rather than a join that
-can fan out. The same wording appears in ``docs/contents.md`` and in the
+can fan out. The same wording appears in ``docs/training.md`` and in the
 UI copy.
 
 What each selector means

@@ -108,6 +108,11 @@ function TrainingCard({ row }: { row: TrainingRow }) {
                 {row.scope.label} · {row.scope.officeName}
               </span>
             </div>
+            <p className="sr-only">
+              {contentType.srLabel}.{" "}
+              {row.isRequired ? "Required training." : "Optional training."}{" "}
+              {completion.label}.
+            </p>
             <h2
               id={titleId}
               className="text-base leading-snug font-semibold text-balance"
@@ -168,25 +173,21 @@ export default function TrainingLearning() {
           description="Required and recommended training for your role and office. Required items are listed first."
         />
 
-        <div
-          className="flex flex-wrap gap-2"
-          role="tablist"
-          aria-label="Training views"
-        >
+        <fieldset className="flex flex-wrap gap-2 border-0 p-0">
+          <legend className="sr-only">Training views</legend>
           {VIEW_OPTIONS.map((option) => (
             <Button
               key={option.value}
               type="button"
               size="sm"
               variant={filters.view === option.value ? "default" : "outline"}
-              role="tab"
-              aria-selected={filters.view === option.value}
+              aria-pressed={filters.view === option.value}
               onClick={() => visit({ view: option.value })}
             >
               {option.label}
             </Button>
           ))}
-        </div>
+        </fieldset>
 
         <FilterControls
           activeCount={activeFilterCount(filters)}
@@ -197,6 +198,7 @@ export default function TrainingLearning() {
               required: "",
               tool: "",
               completion: "",
+              view: "all",
               q: "",
             })
           }

@@ -17,6 +17,7 @@ from django.core.cache import cache
 from django.urls import reverse
 
 from apps.announcements.models import Announcement, AnnouncementAudience
+from apps.training.models import TrainingContent
 from apps.user.models import Office, User, UserRoleAssignment
 from apps.user.tests.test_profile import completed_user
 from apps.web.search.contract import (
@@ -680,3 +681,82 @@ def test_the_index_migrations_are_a_no_op_away_from_postgres(seeded):
     for operation in index_ops:
         operation.state_forwards("announcements", before)
     assert before == {}
+
+
+def training_item(
+    slug: str,
+    *,
+    owner="onest-head-office",
+    title: str | None = None,
+    body: str = "",
+    audience_office: str | None = None,
+):
+    from django.utils import timezone
+
+    from apps.training.models import TrainingAudience, TrainingCategory, TrainingContent
+
+    content = TrainingContent.objects.create(
+        owner_office=office(owner),
+        slug=slug,
+        title=title or slug.replace("-", " ").title(),
+        summary="",
+        body=body,
+        content_type="article",
+        category=TrainingCategory.objects.get(code="general"),
+        status=TrainingContent.Status.PUBLISHED,
+        published_at=timezone.now(),
+    )
+    if audience_office:
+        TrainingAudience.objects.create(
+            content=content,
+            kind=TrainingAudience.Kind.OFFICE,
+            office=office(audience_office),
+        )
+    else:
+        TrainingAudience.objects.create(
+            content=content, kind=TrainingAudience.Kind.COMPANY
+        )
+    return content
+
+
+def test_training_for_another_office_contributes_nothing(seeded):
+    training_item(
+        "harrisburg-only",
+        body="SECRETHBG confidential to Harrisburg",
+        audience_office="harrisburg",
+    )
+
+    payload = run_search(reader(), "SECRETHBG")
+    serialized = json.dumps(payload["groups"])
+
+    assert payload["total"] == 0
+    assert "SECRETHBG" not in serialized
+    assert "harrisburg-only" not in serialized
+
+
+def test_a_draft_training_item_is_not_searchable(seeded):
+    live = training_item("live-training", body="visible training words")
+    draft = training_item("draft-training", body="SECRETDRAFT training words")
+    draft.status = TrainingContent.Status.DRAFT
+    draft.published_at = None
+    draft.save(update_fields=["status", "published_at"])
+
+    payload = run_search(reader(), "training")
+
+    assert titles(payload, "training") == [live.title]
+    assert "SECRETDRAFT" not in json.dumps(payload)
+
+
+def test_an_expired_training_item_leaves_search(seeded):
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    row = training_item("expired-training", body="SECRETEXPIRED training words")
+    row.expires_at = timezone.now() - timedelta(days=1)
+    row.save(update_fields=["expires_at"])
+
+    payload = run_search(reader(), "SECRETEXPIRED")
+
+    assert titles(payload, "training") == []
+    assert "SECRETEXPIRED" not in json.dumps(payload["groups"])

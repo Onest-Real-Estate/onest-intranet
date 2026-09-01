@@ -50,6 +50,28 @@ def primary_media_payload(content: TrainingContent) -> dict | None:
     return media_payload(primary) if primary else None
 
 
+def primary_media_detail_payload(content: TrainingContent) -> dict | None:
+    """Primary media for detail, including not-yet-readable uploads."""
+    primary = (
+        TrainingMedia.objects.filter(content=content, role=Role.PRIMARY, is_active=True)
+        .order_by("pk")
+        .first()
+    )
+    if primary is None:
+        return None
+    payload = {
+        "id": primary.pk,
+        "role": primary.role,
+        "displayName": primary.display_name,
+        "mediaType": primary.media_type,
+        "byteSize": primary.byte_size,
+        "processingState": primary.processing_state,
+        "isReadable": primary.is_readable,
+        "url": media_url(primary) if primary.is_readable else "",
+    }
+    return payload
+
+
 def attachments_payload(content: TrainingContent) -> list[dict]:
     return [
         media_payload(item)

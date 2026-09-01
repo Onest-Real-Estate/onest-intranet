@@ -74,7 +74,7 @@ export function TrainingVideoPlayer({
           allowFullScreen
         />
       </div>
-      {segments.length > 0 ? (
+      {segments.length > 0 || transcription?.hasSearchableText ? (
         <section aria-labelledby="training-transcript" className="grid gap-3">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <h2 id="training-transcript" className="text-base font-semibold">
@@ -90,7 +90,11 @@ export function TrainingVideoPlayer({
           </div>
           <ol className="grid max-h-80 gap-2 overflow-y-auto rounded-lg border p-3 text-sm">
             {matches.length === 0 ? (
-              <li className="text-muted-foreground">No transcript matches.</li>
+              <li className="text-muted-foreground">
+                {segments.length === 0
+                  ? "Transcript text is not available yet."
+                  : "No transcript matches."}
+              </li>
             ) : (
               matches.map((segment) => (
                 <li key={`${segment.startMs}-${segment.endMs}`}>
