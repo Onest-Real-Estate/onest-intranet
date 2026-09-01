@@ -374,6 +374,13 @@ NOTIFICATION_SLACK_BOT_TOKEN = config("NOTIFICATION_SLACK_BOT_TOKEN", default=""
 CONTRACT_SIGNATURE_REMINDER_DAYS = (3, 7, 14)
 CONTRACT_EXPIRATION_WARNING_DAYS = (30, 14, 7)
 
+# Inventory return reminder / escalation cadences (beat tasks re-check state).
+INVENTORY_NOTIFICATION_POLICY_VERSION = 1
+INVENTORY_RETURN_DUE_SOON_DAYS = (1, 3)
+INVENTORY_RETURN_OVERDUE_AGENT_DAYS = (1, 3, 7)
+INVENTORY_RETURN_OVERDUE_STAFF_DAYS = (1, 3, 7)
+INVENTORY_LOST_DAMAGED_STAFF_DAYS = (1, 3)
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # ---------------------------------------------------------------------------

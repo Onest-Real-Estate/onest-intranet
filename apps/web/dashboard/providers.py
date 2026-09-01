@@ -244,6 +244,13 @@ def action_items(context: DashboardContext) -> ProviderResult:
     )
 
 
+def overdue_inventory(context: DashboardContext) -> ProviderResult:
+    """Overdue checked-out reservations in the reader's effective scope."""
+    from apps.inventory.dashboard import overdue_inventory_queue
+
+    return overdue_inventory_queue(context)
+
+
 def market(context: DashboardContext) -> ProviderResult:
     return unavailable("No market data feed is connected to the hub yet.")
 

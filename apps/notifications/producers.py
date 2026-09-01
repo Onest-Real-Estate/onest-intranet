@@ -334,6 +334,147 @@ def contract_expiration_warning(envelope: EventEnvelope) -> list[NotificationReq
     return agent + staff
 
 
+def _reservation_public_id(envelope: EventEnvelope) -> str:
+    return str(envelope.payload.get("reservation_public_id") or "").strip()
+
+
+def _inventory_policy_suffix(envelope: EventEnvelope) -> str:
+    version = str(envelope.payload.get("policy_version") or "1").strip() or "1"
+    return f"v:{version}"
+
+
+def _inventory_owner_notice(
+    envelope: EventEnvelope,
+    *,
+    title: str,
+    action_key: str = "open_inventory_reservation",
+    priority: int = NotificationPriority.HIGH,
+    is_mandatory: bool = False,
+    threshold_key: str,
+    threshold_value: str,
+) -> list[NotificationRequest]:
+    owner_id = _int_or_none(envelope.payload.get("owner_id"))
+    reservation_id = _reservation_public_id(envelope)
+    if owner_id is None or not reservation_id:
+        return []
+    policy = _inventory_policy_suffix(envelope)
+    return [
+        NotificationRequest(
+            recipient_id=owner_id,
+            notification_type=NotificationType.INVENTORY,
+            event_key=envelope.name,
+            title=title,
+            dedupe_key=(
+                f"{envelope.name}:{reservation_id}:{policy}:{threshold_key}:"
+                f"{threshold_value}"
+            ),
+            priority=priority,
+            is_mandatory=is_mandatory,
+            source_module="inventory",
+            source_record_type="inventory_reservation",
+            source_record_id=reservation_id,
+            action_key=action_key,
+            action_args=(reservation_id,),
+        )
+    ]
+
+
+def _inventory_staff_notices(
+    envelope: EventEnvelope,
+    *,
+    title: str,
+    threshold_key: str,
+    threshold_value: str,
+    priority: int = NotificationPriority.NORMAL,
+    is_mandatory: bool = False,
+    staff_ids: list[int] | None = None,
+) -> list[NotificationRequest]:
+    reservation_id = _reservation_public_id(envelope)
+    if not reservation_id:
+        return []
+    recipients = staff_ids
+    if recipients is None:
+        raw = envelope.payload.get("staff_ids") or []
+        recipients = []
+        for value in raw:
+            parsed = _int_or_none(value)
+            if parsed is not None:
+                recipients.append(parsed)
+    if not recipients:
+        return []
+    policy = _inventory_policy_suffix(envelope)
+    dedupe_base = (
+        f"{envelope.name}:{reservation_id}:{policy}:{threshold_key}:{threshold_value}"
+    )
+    return [
+        NotificationRequest(
+            recipient_id=staff_id,
+            notification_type=NotificationType.INVENTORY,
+            event_key=envelope.name,
+            title=title,
+            dedupe_key=f"{dedupe_base}:staff:{staff_id}",
+            priority=priority,
+            is_mandatory=is_mandatory,
+            source_module="inventory",
+            source_record_type="inventory_reservation",
+            source_record_id=reservation_id,
+            action_key="open_admin_reservation",
+            action_args=(reservation_id,),
+        )
+        for staff_id in recipients
+    ]
+
+
+def inventory_return_due_soon(envelope: EventEnvelope) -> list[NotificationRequest]:
+    day = str(envelope.payload.get("lead_day") or "").strip() or "n"
+    return _inventory_owner_notice(
+        envelope,
+        title="Reminder: an inventory return is due soon",
+        priority=NotificationPriority.NORMAL,
+        threshold_key="lead",
+        threshold_value=f"day:{day}",
+    )
+
+
+def inventory_return_overdue(envelope: EventEnvelope) -> list[NotificationRequest]:
+    day = str(envelope.payload.get("overdue_day") or "").strip() or "n"
+    return _inventory_owner_notice(
+        envelope,
+        title="Reminder: an inventory return is overdue",
+        priority=NotificationPriority.HIGH,
+        is_mandatory=True,
+        threshold_key="overdue",
+        threshold_value=f"day:{day}",
+    )
+
+
+def inventory_return_overdue_staff(
+    envelope: EventEnvelope,
+) -> list[NotificationRequest]:
+    day = str(envelope.payload.get("overdue_day") or "").strip() or "n"
+    return _inventory_staff_notices(
+        envelope,
+        title="An inventory return is overdue in your office",
+        threshold_key="overdue",
+        threshold_value=f"day:{day}",
+        priority=NotificationPriority.HIGH,
+    )
+
+
+def inventory_lost_damaged_escalation(
+    envelope: EventEnvelope,
+) -> list[NotificationRequest]:
+    day = str(envelope.payload.get("escalation_day") or "").strip() or "n"
+    return _inventory_staff_notices(
+        envelope,
+        title="A lost or damaged inventory return needs follow-up",
+        threshold_key="escalation",
+        threshold_value=f"day:{day}",
+        priority=NotificationPriority.HIGH,
+        is_mandatory=True,
+    )
+
+
 EventBuilder = Callable[[EventEnvelope], list[NotificationRequest]]
 
 EVENT_PRODUCERS: dict[str, EventBuilder] = {
@@ -350,6 +491,10 @@ EVENT_PRODUCERS: dict[str, EventBuilder] = {
     "contract.generation_error": contract_generation_error,
     "contract.signature_reminder": contract_signature_reminder,
     "contract.expiration_warning": contract_expiration_warning,
+    "inventory.reservation.return_due_soon": inventory_return_due_soon,
+    "inventory.reservation.return_overdue": inventory_return_overdue,
+    "inventory.reservation.return_overdue_staff": inventory_return_overdue_staff,
+    "inventory.reservation.lost_damaged_escalation": inventory_lost_damaged_escalation,
 }
 
 

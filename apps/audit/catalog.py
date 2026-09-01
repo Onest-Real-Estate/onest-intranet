@@ -386,6 +386,81 @@ registry.register(
     description="Emitted when office marks a reservation damaged.",
 )
 
+registry.register(
+    name="inventory.reservation.return_due_soon",
+    version=1,
+    required_payload_keys={
+        "reservation_public_id",
+        "office_id",
+        "owner_id",
+        "lead_day",
+        "return_day",
+        "policy_version",
+        "occurred_at",
+    },
+    description=(
+        "Emitted on an approved lead time before the inclusive return date while "
+        "a reservation remains checked out. Beat tasks re-check status before "
+        "publishing."
+    ),
+)
+
+registry.register(
+    name="inventory.reservation.return_overdue",
+    version=1,
+    required_payload_keys={
+        "reservation_public_id",
+        "office_id",
+        "owner_id",
+        "overdue_day",
+        "return_day",
+        "policy_version",
+        "occurred_at",
+    },
+    description=(
+        "Emitted on an approved cadence while a checked-out reservation remains "
+        "overdue. Beat tasks re-check status before publishing."
+    ),
+)
+
+registry.register(
+    name="inventory.reservation.return_overdue_staff",
+    version=1,
+    required_payload_keys={
+        "reservation_public_id",
+        "office_id",
+        "owner_id",
+        "overdue_day",
+        "return_day",
+        "policy_version",
+        "occurred_at",
+        "staff_ids",
+    },
+    description=(
+        "Escalates an overdue return to authorized office staff on an approved "
+        "cadence. Beat tasks re-check status and recipient scope before publishing."
+    ),
+)
+
+registry.register(
+    name="inventory.reservation.lost_damaged_escalation",
+    version=1,
+    required_payload_keys={
+        "reservation_public_id",
+        "office_id",
+        "owner_id",
+        "escalation_day",
+        "status",
+        "policy_version",
+        "occurred_at",
+        "staff_ids",
+    },
+    description=(
+        "Escalates lost or damaged reservations to office staff on an approved "
+        "cadence. Beat tasks re-check status before publishing."
+    ),
+)
+
 # ---------------------------------------------------------------------------
 # announcement domain  (publisher: apps.announcements)
 # ---------------------------------------------------------------------------

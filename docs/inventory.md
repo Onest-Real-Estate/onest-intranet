@@ -131,6 +131,37 @@ Normal path: `requested → confirmed → ready_for_pickup → checked_out → r
 | `admin_reservation_detail` | Workspace + timeline + office actions |
 | `admin_reservation_transition` | POST lifecycle action |
 
+## Return reminders and overdue escalations
+
+Scheduled notices are published by the Celery beat task
+``send_inventory_return_notifications`` (``apps.inventory.tasks``), which
+re-syncs overdue status, re-reads each candidate under row lock, and emits audit
+events only while the reservation still qualifies.
+
+| Event | Audience | Cadence setting |
+| --- | --- | --- |
+| `inventory.reservation.return_due_soon` | Agent (owner) | `INVENTORY_RETURN_DUE_SOON_DAYS` (default 1, 3 calendar days before return) |
+| `inventory.reservation.return_overdue` | Agent (owner) | `INVENTORY_RETURN_OVERDUE_AGENT_DAYS` (default 1, 3, 7 days overdue) |
+| `inventory.reservation.return_overdue_staff` | Scoped office staff | `INVENTORY_RETURN_OVERDUE_STAFF_DAYS` |
+| `inventory.reservation.lost_damaged_escalation` | Scoped office staff | `INVENTORY_LOST_DAMAGED_STAFF_DAYS` |
+
+**Due semantics:** return dates are inclusive calendar days in the active
+timezone. ``ends_at`` is exclusive midnight on the day after the return date.
+A reservation is overdue when ``checked_out`` and ``ends_at <= now``, or when
+status is already ``overdue``. The same definition powers manager metrics
+(``teamOverdueInventory``), the overdue inventory dashboard widget, and action
+items.
+
+Idempotency keys include reservation public id, notification kind, policy
+version (`INVENTORY_NOTIFICATION_POLICY_VERSION`), threshold day, and staff
+recipient where applicable. Lifecycle transitions that settle a hold expire
+stale reminder rows via ``suppress_stale_reminders``.
+
+Staff recipients resolve from current effective office assignments with
+``inventory.approve_reservations`` — never from client input. Agent notices
+link only to the owner’s reservation detail; staff notices link to the scoped
+admin reservation workspace.
+
 ## Availability
 
 Available quantity for a requested interval is computed in
@@ -195,4 +226,5 @@ plug into availability through `reservation_windows_for_items`.
 - #62 Inventory reservation workflow
 - #63 Atomic double-booking hardening (this surface)
 - #64 Full reservation lifecycle transitions (implemented)
+- #65 Overdue inventory return notifications (implemented)
 - #71 Unified My Reservations (rooms + inventory)
