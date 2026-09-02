@@ -1,5 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { axe } from "vitest-axe";
 
 import TrainingDetail from "@/pages/TrainingDetail";
 
@@ -72,5 +73,10 @@ describe("TrainingDetail", () => {
       "href",
       "https://example.com/resource",
     );
+  });
+
+  it("has no automated accessibility violations", async () => {
+    const { container } = render(<TrainingDetail />);
+    expect(await axe(container)).toHaveNoViolations();
   });
 });

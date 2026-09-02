@@ -171,3 +171,28 @@ def test_archived_content_is_invisible(seeded):
     row.status = TrainingContent.Status.ARCHIVED
     row.save(update_fields=["status"])
     assert row.pk not in visible_training_content(reader).values_list("pk", flat=True)
+
+
+def test_or_union_matches_either_office_or_role_selector(seeded):
+    row = publish_content(
+        slug="union-target",
+        title="Union target",
+        owner_office=office("onest-head-office"),
+        audience=(),
+    )
+    TrainingAudience.objects.filter(content=row).delete()
+    TrainingAudience.objects.create(
+        content=row, kind=Kind.OFFICE, office=office("charlottesville-va")
+    )
+    TrainingAudience.objects.create(
+        content=row, kind=Kind.ROLE, role="transaction_coordinator"
+    )
+
+    office_match = person("office-match@example.com", "charlottesville-va")
+    role_match = person("role-match@example.com", "fairfax-va")
+    assign(role_match, "transaction_coordinator", "office", office("fairfax-va"))
+    outsider = person("outsider@example.com", "fairfax-va")
+
+    assert visible_to(office_match, row) is True
+    assert visible_to(role_match, row) is True
+    assert visible_to(outsider, row) is False
