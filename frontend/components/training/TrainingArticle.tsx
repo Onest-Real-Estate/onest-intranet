@@ -1,4 +1,3 @@
-import { Link } from "@inertiajs/react";
 import { Download, ExternalLink, GraduationCap } from "lucide-react";
 
 import { AnnouncementBody } from "@/components/announcements/AnnouncementBody";
@@ -8,17 +7,27 @@ import {
   SurfaceCard,
   SurfaceCardContent,
 } from "@/components/design-system";
+import { TrainingCourseModules } from "@/components/training/TrainingCourseModules";
+import { TrainingLiveSession } from "@/components/training/TrainingLiveSession";
+import { TrainingProgressPanel } from "@/components/training/TrainingProgressPanel";
+import { TrainingQuiz } from "@/components/training/TrainingQuiz";
 import { TrainingVideoPlayer } from "@/components/training/TrainingVideoPlayer";
 import { Button } from "@/components/ui/button";
-import { routes } from "@/lib/routes";
 import {
   completionPresentation,
   contentTypePresentation,
   formatDuration,
 } from "@/lib/training";
 import type { TrainingDetail } from "@/types";
+import type { ValidationErrors } from "@/types/design-system";
 
-export function TrainingArticle({ content }: { content: TrainingDetail }) {
+export function TrainingArticle({
+  content,
+  errors,
+}: {
+  content: TrainingDetail;
+  errors?: ValidationErrors;
+}) {
   const contentType = contentTypePresentation(content.contentType);
   const completion = completionPresentation(content.completion.status);
   const duration = formatDuration(content.estimatedMinutes);
@@ -27,12 +36,15 @@ export function TrainingArticle({ content }: { content: TrainingDetail }) {
     content.embed?.available ||
     content.primaryMedia?.isReadable ||
     (content.primaryMedia && !content.primaryMedia.isReadable);
+  const hasInteractive =
+    Boolean(content.quiz) || Boolean(content.liveSession) || content.modules.length > 0;
   const hasVisibleSections =
     hasPrimaryMedia ||
     hasBody ||
     content.modules.length > 0 ||
     content.attachments.length > 0 ||
     content.externalUrl ||
+    hasInteractive ||
     content.interactivity === "unavailable";
 
   return (
@@ -55,6 +67,8 @@ export function TrainingArticle({ content }: { content: TrainingDetail }) {
         {content.isRequired ? "Required training." : "Optional training."}{" "}
         {completion.label}.
       </p>
+
+      <TrainingProgressPanel content={content} errors={errors} />
 
       {content.embed?.available ? (
         <TrainingVideoPlayer
@@ -103,30 +117,23 @@ export function TrainingArticle({ content }: { content: TrainingDetail }) {
 
       {hasBody ? <AnnouncementBody blocks={content.bodyBlocks} /> : null}
 
+      {content.quiz ? (
+        <TrainingQuiz contentId={content.id} quiz={content.quiz} errors={errors} />
+      ) : null}
+
+      {content.liveSession ? (
+        <TrainingLiveSession
+          contentId={content.id}
+          session={content.liveSession}
+          errors={errors}
+        />
+      ) : null}
+
       {content.modules.length > 0 ? (
-        <section aria-labelledby="training-modules" className="grid gap-3">
-          <h2 id="training-modules" className="text-base font-semibold">
-            Course modules
-          </h2>
-          <ol className="grid gap-2">
-            {content.modules.map((module) => (
-              <li key={module.id}>
-                <Button
-                  variant="outline"
-                  className="h-auto w-full justify-start"
-                  asChild
-                >
-                  <Link href={routes.training_detail(module.id)}>
-                    <span className="font-medium">{module.title}</span>
-                    <span className="text-muted-foreground ml-2 text-xs">
-                      {module.contentType.label}
-                    </span>
-                  </Link>
-                </Button>
-              </li>
-            ))}
-          </ol>
-        </section>
+        <TrainingCourseModules
+          modules={content.modules}
+          rollup={content.courseRollup}
+        />
       ) : null}
 
       {content.attachments.length > 0 ? (
@@ -158,12 +165,12 @@ export function TrainingArticle({ content }: { content: TrainingDetail }) {
         </Button>
       ) : null}
 
-      {content.interactivity === "unavailable" ? (
+      {content.interactivity === "unavailable" && !hasInteractive ? (
         <SurfaceCard>
           <EmptyState
             icon={GraduationCap}
-            title="Interactive content coming soon"
-            description="Quizzes, live sessions, and progress tracking will be available in a future update. You can still read the overview above."
+            title="Interactive content not configured"
+            description="This quiz or live session is not ready yet. You can still read the overview above."
           />
         </SurfaceCard>
       ) : null}

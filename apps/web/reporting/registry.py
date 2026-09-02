@@ -27,6 +27,7 @@ from apps.web.reporting.calculators import (
     office_headcount,
     onboarding_progress,
     pending_source,
+    training_completion,
 )
 
 # Calculator aliases kept explicit for registry readability.
@@ -289,7 +290,7 @@ REPORT_DEFINITIONS: tuple[ReportDefinition, ...] = (
         order=100,
         scopes=(MetricScope.OFFICE, MetricScope.REGION, MetricScope.COMPANY),
         source_module=SourceModule.TRAINING,
-        calculator=pending_source,
+        calculator=training_completion,
         columns=(
             ReportColumn(key="name", label="Person"),
             ReportColumn(key="course", label="Course"),
@@ -297,7 +298,10 @@ REPORT_DEFINITIONS: tuple[ReportDefinition, ...] = (
         ),
         filters=(),
         time_grain="month",
-        definition="Training completion; marked unavailable until the source lands.",
+        definition=(
+            "Required training completion by person in the actor's office "
+            "tree. Out-of-scope learners are never included."
+        ),
         all_permissions=("web.manage_training",),
     ),
     ReportDefinition(

@@ -21,6 +21,7 @@ from apps.training.models import (
     TrainingEmbed,
     TrainingMedia,
     TrainingModule,
+    TrainingProgress,
     TrainingTranscription,
 )
 from apps.training.presentation import present_category, present_content_type
@@ -243,10 +244,21 @@ def _scope_payload(content: TrainingContent) -> dict[str, str]:
 
 
 def _completion_payload(user: User, content: TrainingContent) -> dict[str, Any]:
-    state = completion_state(user, [content.pk])[content.pk]
+    row = TrainingProgress.objects.filter(user=user, content=content).first()
+    if row is None:
+        return {
+            "status": "not_started",
+            "label": "Not Started",
+            "progressPercent": None,
+            "completedAt": None,
+            "startedAt": None,
+        }
     return {
-        "status": state,
-        "label": state.replace("_", " ").title(),
+        "status": row.status,
+        "label": row.status.replace("_", " ").title(),
+        "progressPercent": row.progress_percent,
+        "completedAt": row.completed_at.isoformat() if row.completed_at else None,
+        "startedAt": row.started_at.isoformat() if row.started_at else None,
     }
 
 
@@ -271,6 +283,9 @@ def library_row(
         "completion": {
             "status": status,
             "label": status.replace("_", " ").title(),
+            "progressPercent": None,
+            "completedAt": None,
+            "startedAt": None,
         },
         "publishedAt": (
             content.published_at.isoformat() if content.published_at else None
@@ -318,11 +333,13 @@ def _modules_payload(content: TrainingContent, *, user: User) -> list[dict]:
     visible_ids = set(
         visible_queryset(user).filter(pk__in=child_ids).values_list("pk", flat=True)
     )
+    completion_map = completion_state(user, child_ids)
     rows = []
     for module in modules:
         child = module.child
         if child.pk not in visible_ids:
             continue
+        status = completion_map.get(child.pk, "not_started")
         rows.append(
             {
                 "id": child.pk,
@@ -330,19 +347,60 @@ def _modules_payload(content: TrainingContent, *, user: User) -> list[dict]:
                 "contentType": present_content_type(child.content_type),
                 "sortOrder": module.sort_order,
                 "estimatedMinutes": child.estimated_minutes,
+                "completion": {
+                    "status": status,
+                    "label": status.replace("_", " ").title(),
+                },
+                "detailUrl": reverse("training_detail", args=[child.pk]),
             }
         )
     return rows
 
 
-def detail_payload(content: TrainingContent, *, user: User) -> dict[str, Any]:
-    row = library_row(content, user=user)
-    interactivity = "available"
+def _interactivity_for(content: TrainingContent) -> str:
+    from apps.training.quiz_service import quiz_is_configured
+    from apps.training.session_service import session_is_configured
+    from apps.training.taxonomy import (
+        CONTENT_TYPE_COURSE,
+        CONTENT_TYPE_LIVE_SESSION,
+        CONTENT_TYPE_QUIZ,
+    )
+
+    if content.content_type == CONTENT_TYPE_QUIZ:
+        return "available" if quiz_is_configured(content) else "unavailable"
+    if content.content_type == CONTENT_TYPE_LIVE_SESSION:
+        return "available" if session_is_configured(content) else "unavailable"
+    if content.content_type == CONTENT_TYPE_COURSE:
+        return "available"
     if content.is_interactive:
-        interactivity = "unavailable"
+        return "unavailable"
+    return "available"
+
+
+def detail_payload(content: TrainingContent, *, user: User) -> dict[str, Any]:
+    from apps.training.certificate_service import certificate_payload
+    from apps.training.course_service import course_rollup
+    from apps.training.quiz_service import quiz_payload
+    from apps.training.session_service import session_payload
+    from apps.training.taxonomy import CONTENT_TYPE_COURSE
+
+    row = library_row(content, user=user)
+    row["completion"] = _completion_payload(user, content)
+    interactivity = _interactivity_for(content)
     external = None
     if content.external_url and safe_url(content.external_url):
         external = {"url": content.external_url, "label": "Open resource"}
+
+    modules = _modules_payload(content, user=user)
+    rollup = None
+    if content.content_type == CONTENT_TYPE_COURSE:
+        rollup = course_rollup(user, content)
+        if (
+            rollup["percent"] is not None
+            and row["completion"]["progressPercent"] is None
+        ):
+            row["completion"]["progressPercent"] = rollup["percent"]
+
     return {
         **row,
         "body": content.body,
@@ -352,9 +410,19 @@ def detail_payload(content: TrainingContent, *, user: User) -> dict[str, Any]:
         "primaryMedia": primary_media_detail_payload(content),
         "attachments": attachments_payload(content),
         "transcription": _transcription_payload(content),
-        "modules": _modules_payload(content, user=user),
+        "modules": modules,
+        "courseRollup": rollup,
         "interactivity": interactivity,
-        "completion": _completion_payload(user, content),
+        "completion": row["completion"],
+        "quiz": quiz_payload(content, user),
+        "liveSession": session_payload(content, user),
+        "certificate": certificate_payload(content, user),
+        "versionNumber": content.version_number,
+        "versionCompletionPolicy": content.version_completion_policy,
+        "canMarkComplete": (
+            not content.is_interactive and row["completion"]["status"] != "completed"
+        ),
+        "canMarkStarted": row["completion"]["status"] == "not_started",
     }
 
 
@@ -365,6 +433,8 @@ def build_library(
     page: int,
     page_size: int = PAGE_SIZE,
 ) -> dict[str, Any]:
+    from apps.training.required_status import required_training_summary
+
     known_codes = frozenset(
         TrainingCategory.objects.active().values_list("code", flat=True)
     )
@@ -390,6 +460,7 @@ def build_library(
         filters=filters.as_payload(),
     )
     payload["filters"] = filters.as_payload()
+    payload["requiredSummary"] = required_training_summary(user)
     return payload
 
 

@@ -1029,6 +1029,114 @@ function TrainingWorkspacePage() {
             </SurfaceCardContent>
           </SurfaceCard>
         ) : null}
+
+        {editing ? (
+          <SurfaceCard>
+            <PanelHeader
+              divided
+              title="Usage"
+              description="Completion counts for audience-matched learners."
+            />
+            <SurfaceCardContent className="grid gap-3 sm:grid-cols-4">
+              <div>
+                <p className="text-muted-foreground text-xs">Recipients</p>
+                <p className="text-lg font-semibold tabular-nums">
+                  {content.usage.recipientEstimate}
+                </p>
+              </div>
+              <div>
+                <p className="text-muted-foreground text-xs">Completed</p>
+                <p className="text-lg font-semibold tabular-nums">
+                  {content.usage.completed}
+                </p>
+              </div>
+              <div>
+                <p className="text-muted-foreground text-xs">In progress</p>
+                <p className="text-lg font-semibold tabular-nums">
+                  {content.usage.inProgress}
+                </p>
+              </div>
+              <div>
+                <p className="text-muted-foreground text-xs">Not started</p>
+                <p className="text-lg font-semibold tabular-nums">
+                  {content.usage.notStarted}
+                </p>
+              </div>
+            </SurfaceCardContent>
+          </SurfaceCard>
+        ) : null}
+
+        {editing ? (
+          <SurfaceCard>
+            <PanelHeader
+              divided
+              title="Correct progress"
+              description="Scoped correction with a required reason for the audit trail."
+            />
+            <SurfaceCardContent>
+              <form
+                className="grid gap-4 sm:grid-cols-2"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  const form = new FormData(event.currentTarget);
+                  router.post(
+                    routes.training_progress_correct(content.id),
+                    {
+                      learnerId: form.get("learnerId"),
+                      status: form.get("status"),
+                      reason: form.get("reason"),
+                      kind: form.get("kind") || "progress",
+                    },
+                    { preserveScroll: true },
+                  );
+                }}
+              >
+                <FormField>
+                  <FormLabel htmlFor="correct-learner">Learner id</FormLabel>
+                  <Input id="correct-learner" name="learnerId" required />
+                </FormField>
+                <FormField>
+                  <FormLabel htmlFor="correct-status">Status</FormLabel>
+                  <select
+                    id="correct-status"
+                    name="status"
+                    defaultValue="completed"
+                    className="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
+                  >
+                    <option value="not_started">Not started</option>
+                    <option value="in_progress">In progress</option>
+                    <option value="completed">Completed</option>
+                    <option value="registered">Registered</option>
+                    <option value="attended">Attended</option>
+                    <option value="cancelled">Cancelled</option>
+                    <option value="no_show">No show</option>
+                  </select>
+                </FormField>
+                <FormField className="sm:col-span-2">
+                  <FormLabel htmlFor="correct-kind">Correction kind</FormLabel>
+                  <select
+                    id="correct-kind"
+                    name="kind"
+                    defaultValue="progress"
+                    className="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
+                  >
+                    <option value="progress">Progress</option>
+                    <option value="attendance">Attendance</option>
+                  </select>
+                </FormField>
+                <FormField className="sm:col-span-2">
+                  <FormLabel htmlFor="correct-reason">Reason</FormLabel>
+                  <Textarea id="correct-reason" name="reason" required rows={3} />
+                </FormField>
+                <div className="sm:col-span-2">
+                  <Button type="submit" size="sm">
+                    Save correction
+                  </Button>
+                </div>
+              </form>
+            </SurfaceCardContent>
+          </SurfaceCard>
+        ) : null}
       </div>
 
       <Dialog

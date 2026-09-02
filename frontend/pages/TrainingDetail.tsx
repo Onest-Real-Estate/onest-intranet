@@ -8,7 +8,7 @@ import { routes } from "@/lib/routes";
 import type { TrainingDetailPageProps } from "@/types";
 
 export default function TrainingDetail() {
-  const { content } = usePage<TrainingDetailPageProps>().props;
+  const { content, errors } = usePage<TrainingDetailPageProps>().props;
 
   return (
     <>
@@ -34,7 +34,7 @@ export default function TrainingDetail() {
             </Button>
           }
         />
-        <TrainingArticle content={content} />
+        <TrainingArticle content={content} errors={errors} />
       </div>
     </>
   );

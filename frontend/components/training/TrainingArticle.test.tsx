@@ -8,6 +8,9 @@ vi.mock("@inertiajs/react", () => ({
   Link: ({ href, children }: { href: string; children: React.ReactNode }) => (
     <a href={href}>{children}</a>
   ),
+  router: {
+    post: vi.fn(),
+  },
 }));
 
 const baseContent: TrainingDetail = {
@@ -33,6 +36,8 @@ const baseContent: TrainingDetail = {
   transcription: null,
   modules: [],
   interactivity: "available",
+  canMarkStarted: true,
+  canMarkComplete: true,
 };
 
 describe("TrainingArticle", () => {
@@ -74,16 +79,57 @@ describe("TrainingArticle", () => {
     expect(screen.getByText("Media is still processing")).toBeInTheDocument();
   });
 
-  it("shows the interactive placeholder for quizzes", () => {
+  it("shows progress actions for passive content", () => {
+    render(<TrainingArticle content={baseContent} />);
+    expect(screen.getByRole("button", { name: "Start" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Mark complete" })).toBeInTheDocument();
+  });
+
+  it("shows the unconfigured interactive placeholder for quizzes", () => {
     render(
       <TrainingArticle
         content={{
           ...baseContent,
           contentType: { code: "quiz", label: "Quiz", tone: "info", known: true },
           interactivity: "unavailable",
+          canMarkComplete: false,
         }}
       />,
     );
-    expect(screen.getByText("Interactive content coming soon")).toBeInTheDocument();
+    expect(screen.getByText("Interactive content not configured")).toBeInTheDocument();
+  });
+
+  it("renders a configured quiz", () => {
+    render(
+      <TrainingArticle
+        content={{
+          ...baseContent,
+          contentType: { code: "quiz", label: "Quiz", tone: "info", known: true },
+          canMarkComplete: false,
+          quiz: {
+            passThresholdPercent: 80,
+            maxAttempts: 3,
+            feedbackPolicy: "score_only",
+            attemptCount: 0,
+            attemptsRemaining: 3,
+            canAttempt: true,
+            latestAttempt: null,
+            questions: [
+              {
+                id: 10,
+                prompt: "What is fair housing?",
+                choices: [
+                  { id: "a", label: "Correct answer" },
+                  { id: "b", label: "Wrong answer" },
+                ],
+                sortOrder: 0,
+              },
+            ],
+          },
+        }}
+      />,
+    );
+    expect(screen.getByText(/What is fair housing\?/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Submit answers" })).toBeInTheDocument();
   });
 });

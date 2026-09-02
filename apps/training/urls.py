@@ -1,6 +1,7 @@
 from django.urls import path
 
 from .administration_views import (
+    training_certificate_approve,
     training_create,
     training_duplicate_version,
     training_edit,
@@ -10,11 +11,23 @@ from .administration_views import (
     training_media_reorder,
     training_media_replace,
     training_media_upload,
+    training_modules_save,
     training_new,
+    training_progress_correct,
+    training_quiz_save,
     training_recipient_search,
+    training_session_save,
     training_update,
 )
-from .views import training_detail, training_learning, training_media
+from .views import (
+    training_certificate,
+    training_detail,
+    training_learning,
+    training_media,
+    training_progress,
+    training_quiz_submit,
+    training_session_register,
+)
 
 urlpatterns = [
     path("training-learning", training_learning, name="training_learning"),
@@ -22,6 +35,26 @@ urlpatterns = [
         "training-learning/<int:content_id>",
         training_detail,
         name="training_detail",
+    ),
+    path(
+        "training-learning/<int:content_id>/progress",
+        training_progress,
+        name="training_progress",
+    ),
+    path(
+        "training-learning/<int:content_id>/quiz/submit",
+        training_quiz_submit,
+        name="training_quiz_submit",
+    ),
+    path(
+        "training-learning/<int:content_id>/session/register",
+        training_session_register,
+        name="training_session_register",
+    ),
+    path(
+        "training-learning/<int:content_id>/certificate",
+        training_certificate,
+        name="training_certificate",
     ),
     path(
         "training-learning/media/<int:media_id>",
@@ -62,6 +95,31 @@ urlpatterns = [
         "operations/training/<int:content_id>/duplicate-version",
         training_duplicate_version,
         name="training_duplicate_version",
+    ),
+    path(
+        "operations/training/<int:content_id>/quiz/save",
+        training_quiz_save,
+        name="training_quiz_save",
+    ),
+    path(
+        "operations/training/<int:content_id>/session/save",
+        training_session_save,
+        name="training_session_save",
+    ),
+    path(
+        "operations/training/<int:content_id>/modules/save",
+        training_modules_save,
+        name="training_modules_save",
+    ),
+    path(
+        "operations/training/<int:content_id>/progress/correct",
+        training_progress_correct,
+        name="training_progress_correct",
+    ),
+    path(
+        "operations/training/certificates/<int:certificate_id>/approve",
+        training_certificate_approve,
+        name="training_certificate_approve",
     ),
     path(
         "operations/training/<int:content_id>/media",

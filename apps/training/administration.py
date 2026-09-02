@@ -682,6 +682,7 @@ def _duplicate_version(
         display_order=source.display_order,
         version_family=source.version_family,
         version_number=next_number,
+        version_completion_policy=source.version_completion_policy,
         created_by=actor,
         updated_by=actor,
     )
@@ -713,6 +714,48 @@ def _duplicate_version(
     ):
         TrainingModule.objects.create(
             course=draft, child=module.child, sort_order=module.sort_order
+        )
+
+    from apps.training.models import (
+        TrainingLiveSession,
+        TrainingQuiz,
+        TrainingQuizQuestion,
+    )
+
+    quiz = TrainingQuiz.objects.filter(content=source).first()
+    if quiz is not None:
+        clone_quiz = TrainingQuiz.objects.create(
+            content=draft,
+            pass_threshold_percent=quiz.pass_threshold_percent,
+            max_attempts=quiz.max_attempts,
+            feedback_policy=quiz.feedback_policy,
+        )
+        TrainingQuizQuestion.objects.bulk_create(
+            [
+                TrainingQuizQuestion(
+                    quiz=clone_quiz,
+                    prompt=question.prompt,
+                    choices=question.choices,
+                    correct_choice_ids=question.correct_choice_ids,
+                    sort_order=question.sort_order,
+                )
+                for question in TrainingQuizQuestion.objects.filter(quiz=quiz).order_by(
+                    "sort_order", "pk"
+                )
+            ]
+        )
+
+    session = TrainingLiveSession.objects.filter(content=source).first()
+    if session is not None:
+        TrainingLiveSession.objects.create(
+            content=draft,
+            starts_at=session.starts_at,
+            timezone=session.timezone,
+            duration_minutes=session.duration_minutes,
+            capacity=session.capacity,
+            meeting_url=session.meeting_url,
+            registration_opens_at=session.registration_opens_at,
+            registration_closes_at=session.registration_closes_at,
         )
 
     clone_media_to(actor, source, draft)
@@ -981,6 +1024,10 @@ def admin_row(content: TrainingContent, *, now=None) -> dict[str, Any]:
 
 
 def detail_payload(content: TrainingContent, *, now=None) -> dict[str, Any]:
+    from apps.training.course_service import admin_modules_payload
+    from apps.training.quiz_service import admin_quiz_payload
+    from apps.training.session_service import admin_session_payload
+
     embed = TrainingEmbed.objects.filter(content=content).first()
     return {
         **admin_row(content, now=now),
@@ -998,6 +1045,10 @@ def detail_payload(content: TrainingContent, *, now=None) -> dict[str, Any]:
         "media": admin_media_payload(content),
         "mediaHref": f"/operations/training/{content.pk}/media",
         "versionFamily": str(content.version_family),
+        "versionCompletionPolicy": content.version_completion_policy,
+        "quiz": admin_quiz_payload(content),
+        "liveSession": admin_session_payload(content),
+        "modules": admin_modules_payload(content),
     }
 
 
