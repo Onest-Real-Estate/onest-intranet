@@ -1,15 +1,15 @@
 # oNEST Hub — issue tracker
 
-Last refreshed: 2026-08-31
+Last refreshed: 2026-09-02
 
-P0 platform work is complete. Remaining work is **41 open P1 feature issues** across inventory, reservations, training/docs/compliance, transactions, and CRM/MLS.
+P0 platform work is complete. Remaining work is **40 open P1 feature issues** across inventory, reservations, training/docs/compliance, transactions, and CRM/MLS.
 
 ## Summary
 
 | Status | Count |
 | --- | ---: |
-| Done (closed) | 61 |
-| Remaining (open) | 41 |
+| Done (closed) | 62 |
+| Remaining (open) | 40 |
 | Open bugs | 0 |
 | Open PRs | 0 |
 
@@ -25,6 +25,7 @@ Everything else in the sidebar still shows **Coming soon**. Permissions exist; t
 - Announcements
 - My Contract
 - My Office — Info & Resources
+- Training & learning
 - Reports
 
 ### Admin nav (`OPERATIONS_FEATURES = True`)
@@ -91,6 +92,7 @@ Platform Tasks (#96) closed as an internal module; `admin_platform_tasks` and `a
 - #96 Platform Tasks
 - #97 Activity timelines
 - #98 Operational reporting
+- #85 Training & Learning content library (admin #86 / progress #87 remain)
 
 ### Other closed
 
@@ -124,11 +126,10 @@ Platform Tasks (#96) closed as an internal module; `admin_platform_tasks` and `a
 | #70 | Room administration |
 | #71 | Unified My Reservations page |
 
-### Training, documents, marketing, compliance (#85–#93)
+### Training, documents, marketing, compliance (#86–#93)
 
 | Issue | Title |
 | ---: | --- |
-| #85 | Training & Learning content library |
 | #86 | Training administration & audience |
 | #87 | Training progress, quizzes, live sessions |
 | #88 | Documents & Forms library |
@@ -193,7 +194,7 @@ Shipped features with follow-up work that is not tracked as separate GitHub issu
 | Order | Area | Issues | Scope |
 | ---: | --- | --- | --- |
 | 1 | Operations | #59+ then #66+ | Inventory and room reservations (13 issues) |
-| 2 | Content | #85–#92 | Training, documents, marketing, compliance (8 issues) |
+| 2 | Content | #86–#92 | Training admin/progress, documents, marketing, compliance (7 issues) |
 | 3 | Transactions | #99–#108 | Full transaction stack (10 issues) |
 | 4 | CRM & MLS | #109–#117 | Leads through property search (9 issues) |
 | 5 | Agent Directory | #93 | Can ship after supporting domains exist |
