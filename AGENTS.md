@@ -113,6 +113,7 @@ docs/role-assignment-administration.md  Assign User Roles: preview, concurrency,
 docs/office-resources.md  Scoped office resources: inheritance, precedence, protected files
 docs/announcements.md  Announcements: taxonomy, audience union semantics, media pipeline
 docs/training.md   Training library + admin: audience, versioning, media, lifecycle
+docs/training.md   Training library: audience visibility, media, progress, admin
 docs/operational-tasks.md  Operational tasks: lifecycle, scope, conversion seam
 docs/feedback.md   Feedback intake: diagnostic redaction, idempotency, triage
 DESIGN.md          Design tokens + visual world (values win over docs/design-system.md)

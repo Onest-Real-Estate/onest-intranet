@@ -248,3 +248,176 @@ def test_library_page_query_count_is_bounded(seeded, client):
         return len(captured)
 
     assert cost(2) == cost(5)
+
+
+def test_category_type_tool_and_required_filters(seeded):
+    from apps.training.tests.factories import category as get_category
+
+    reader = agent()
+    ethics = publish_content(
+        slug="ethics-article",
+        title="Ethics article",
+        owner_office=office("onest-head-office"),
+        is_required=True,
+    )
+    ethics.category = get_category("ethics")
+    ethics.save(update_fields=["category"])
+    video = publish_content(
+        slug="skills-video",
+        title="Skills video",
+        owner_office=office("onest-head-office"),
+        content_type="video",
+        is_required=False,
+    )
+    video.category = get_category("skills")
+    video.save(update_fields=["category"])
+    tool = publish_content(
+        slug="lofty-onboarding",
+        title="Lofty onboarding",
+        owner_office=office("onest-head-office"),
+        content_type="tool_onboarding",
+        tool_code="lofty",
+    )
+
+    known = {"ethics", "skills", "general", "tools"}
+
+    by_category = list(
+        apply_filters(
+            visible_training_content(reader),
+            TrainingFilters.from_params(
+                {"category": "ethics"}, known_category_codes=known
+            ),
+            user=reader,
+        )
+    )
+    assert by_category == [ethics]
+
+    by_type = list(
+        apply_filters(
+            visible_training_content(reader),
+            TrainingFilters.from_params({"type": "video"}, known_category_codes=known),
+            user=reader,
+        )
+    )
+    assert by_type == [video]
+
+    by_tool = list(
+        apply_filters(
+            visible_training_content(reader),
+            TrainingFilters.from_params({"tool": "lofty"}, known_category_codes=known),
+            user=reader,
+        )
+    )
+    assert by_tool == [tool]
+
+    required_only = list(
+        apply_filters(
+            visible_training_content(reader),
+            TrainingFilters.from_params(
+                {"required": "true"}, known_category_codes=known
+            ),
+            user=reader,
+        )
+    )
+    assert required_only == [ethics]
+
+    optional_only = list(
+        apply_filters(
+            visible_training_content(reader),
+            TrainingFilters.from_params(
+                {"required": "false"}, known_category_codes=known
+            ),
+            user=reader,
+        )
+    )
+    assert ethics not in optional_only
+    assert video in optional_only
+    assert tool in optional_only
+
+
+def test_unknown_filters_are_rejected_without_narrowing(seeded):
+    reader = agent()
+    item = publish_content(
+        slug="kept",
+        title="Kept",
+        owner_office=office("onest-head-office"),
+    )
+    filters = TrainingFilters.from_params(
+        {
+            "category": "not-a-category",
+            "type": "not-a-type",
+            "tool": "not-a-tool",
+            "required": "maybe",
+            "completion": "done-ish",
+            "view": "favorites",
+        },
+        known_category_codes={"general"},
+    )
+    assert set(filters.rejected) == {
+        "category",
+        "type",
+        "tool",
+        "required",
+        "completion",
+        "view",
+    }
+    assert filters.category == ""
+    assert filters.content_type == ""
+    assert filters.tool == ""
+    assert filters.required == ""
+    assert filters.completion == ""
+    assert filters.view == "all"
+    rows = list(apply_filters(visible_training_content(reader), filters, user=reader))
+    assert item in rows
+
+
+def test_library_pagination_second_page(seeded):
+    from apps.training.services import PAGE_SIZE
+
+    reader = agent()
+    for index in range(PAGE_SIZE + 2):
+        publish_content(
+            slug=f"page-item-{index:02d}",
+            title=f"Page item {index:02d}",
+            owner_office=office("onest-head-office"),
+        )
+    page_one = build_library(reader, params={}, page=1)
+    page_two = build_library(reader, params={}, page=2)
+    assert page_one["pagination"]["totalItems"] == PAGE_SIZE + 2
+    assert page_one["pagination"]["totalPages"] == 2
+    assert len(page_one["items"]) == PAGE_SIZE
+    assert len(page_two["items"]) == 2
+    page_one_ids = {row["id"] for row in page_one["items"]}
+    page_two_ids = {row["id"] for row in page_two["items"]}
+    assert page_one_ids.isdisjoint(page_two_ids)
+
+
+def test_detail_denies_draft_expired_and_archived(seeded, client):
+    reader = agent()
+    draft = TrainingContent.objects.create(
+        owner_office=office("onest-head-office"),
+        slug="draft-detail",
+        title="Draft detail",
+        content_type="article",
+        category=category(),
+        status=TrainingContent.Status.DRAFT,
+    )
+    expired = publish_content(
+        slug="expired-detail",
+        title="Expired detail",
+        owner_office=office("onest-head-office"),
+    )
+    expired.expires_at = timezone.now() - timezone.timedelta(days=1)
+    expired.save(update_fields=["expires_at"])
+    archived = publish_content(
+        slug="archived-detail",
+        title="Archived detail",
+        owner_office=office("onest-head-office"),
+    )
+    archived.status = TrainingContent.Status.ARCHIVED
+    archived.save(update_fields=["status"])
+
+    client.force_login(reader)
+    for row in (draft, expired, archived):
+        response = client.get(reverse("training_detail", args=[row.pk]))
+        assert response.status_code == 403, row.slug

@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 from django.core.files.base import ContentFile
 from django.urls import reverse
+from django.utils import timezone
 
 from apps.training.audience import AudienceSelector
 from apps.training.models import TrainingAudience, TrainingMedia
@@ -87,6 +88,21 @@ def test_pending_media_is_not_streamed(seeded, client, settings, tmp_path):
         tmp_path=tmp_path,
         settings=settings,
     )
+
+    client.force_login(reader)
+    assert client.get(reverse("training_media", args=[media.pk])).status_code == 403
+
+
+def test_expired_content_media_is_denied(seeded, client, settings, tmp_path):
+    reader = agent()
+    content = publish_content(
+        slug="expired-file",
+        title="Expired file",
+        owner_office=office("onest-head-office"),
+    )
+    content.expires_at = timezone.now() - timezone.timedelta(days=1)
+    content.save(update_fields=["expires_at"])
+    media = _media_for(content, tmp_path=tmp_path, settings=settings)
 
     client.force_login(reader)
     assert client.get(reverse("training_media", args=[media.pk])).status_code == 403
