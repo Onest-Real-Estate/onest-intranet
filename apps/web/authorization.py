@@ -889,6 +889,132 @@ ROUTE_POLICIES: dict[str, AuthorizationPolicy] = {
         route_names=("training_media",),
         scope_rule="training_audience_scope",
     ),
+    "training_new": AuthorizationPolicy(
+        key="training_new",
+        access="permission_protected",
+        description="Open an empty training workspace within the actor's grant.",
+        methods=("GET",),
+        route_names=("training_new",),
+        all_permissions=("web.manage_training",),
+        scope_rule="publication_scope",
+    ),
+    "training_edit": AuthorizationPolicy(
+        key="training_edit",
+        access="permission_protected",
+        description=(
+            "Open one training item in the workspace. Loaded through the "
+            "actor's scoped queryset, so an out-of-scope id is a 404."
+        ),
+        methods=("GET",),
+        route_names=("training_edit",),
+        all_permissions=("web.manage_training",),
+        scope_rule="publication_scope",
+    ),
+    "training_create": AuthorizationPolicy(
+        key="training_create",
+        access="permission_protected",
+        description="Create one training draft. Publication is a separate action.",
+        methods=("POST",),
+        route_names=("training_create",),
+        all_permissions=("web.manage_training",),
+        scope_rule="publication_scope",
+    ),
+    "training_update": AuthorizationPolicy(
+        key="training_update",
+        access="permission_protected",
+        description=(
+            "Save training copy, window, required state, and audience. Guarded "
+            "by an update-timestamp token."
+        ),
+        methods=("POST",),
+        route_names=("training_update",),
+        all_permissions=("web.manage_training",),
+        scope_rule="publication_scope",
+    ),
+    "training_lifecycle": AuthorizationPolicy(
+        key="training_lifecycle",
+        access="permission_protected",
+        description=(
+            "Publish, schedule, unpublish, archive, or restore one training "
+            "item. Re-authorizes audience selectors before go-live."
+        ),
+        methods=("POST",),
+        route_names=("training_lifecycle",),
+        all_permissions=("web.manage_training",),
+        scope_rule="publication_scope",
+    ),
+    "training_duplicate_version": AuthorizationPolicy(
+        key="training_duplicate_version",
+        access="permission_protected",
+        description=(
+            "Fork a new draft version of published or archived training so "
+            "historical learner progress stays attached to the prior version."
+        ),
+        methods=("POST",),
+        route_names=("training_duplicate_version",),
+        all_permissions=("web.manage_training",),
+        scope_rule="publication_scope",
+    ),
+    "training_recipient_search": AuthorizationPolicy(
+        key="training_recipient_search",
+        access="permission_protected",
+        description=(
+            "Typeahead for individual training recipients, bounded by the "
+            "actor's administered users."
+        ),
+        methods=("GET",),
+        route_names=("training_recipient_search",),
+        all_permissions=("web.manage_training",),
+        scope_rule="delegated_user_scope",
+        auth_behavior="json",
+    ),
+    "training_media_manager": AuthorizationPolicy(
+        key="training_media_manager",
+        access="permission_protected",
+        description="Manage one training item's primary media and attachments.",
+        methods=("GET",),
+        route_names=("training_media_manager",),
+        all_permissions=("web.manage_training",),
+        scope_rule="office_tree_scope",
+    ),
+    "training_media_upload": AuthorizationPolicy(
+        key="training_media_upload",
+        access="permission_protected",
+        description="Upload primary media or an attachment to a draft training item.",
+        methods=("POST",),
+        route_names=("training_media_upload",),
+        all_permissions=("web.manage_training",),
+        scope_rule="office_tree_scope",
+        auth_behavior="json",
+    ),
+    "training_media_replace": AuthorizationPolicy(
+        key="training_media_replace",
+        access="permission_protected",
+        description="Replace one stored training file on a draft.",
+        methods=("POST",),
+        route_names=("training_media_replace",),
+        all_permissions=("web.manage_training",),
+        scope_rule="office_tree_scope",
+        auth_behavior="json",
+    ),
+    "training_media_remove": AuthorizationPolicy(
+        key="training_media_remove",
+        access="permission_protected",
+        description="Remove one training file from a draft.",
+        methods=("POST",),
+        route_names=("training_media_remove",),
+        all_permissions=("web.manage_training",),
+        scope_rule="office_tree_scope",
+    ),
+    "training_media_reorder": AuthorizationPolicy(
+        key="training_media_reorder",
+        access="permission_protected",
+        description="Set the display order of one training item's attachments.",
+        methods=("POST",),
+        route_names=("training_media_reorder",),
+        all_permissions=("web.manage_training",),
+        scope_rule="office_tree_scope",
+    ),
     "office_resource_download": AuthorizationPolicy(
         key="office_resource_download",
         access="authenticated",

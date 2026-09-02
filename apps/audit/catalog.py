@@ -545,6 +545,101 @@ registry.register(
 )
 
 # ---------------------------------------------------------------------------
+# training domain  (publisher: apps.training.administration)
+# ---------------------------------------------------------------------------
+
+registry.register(
+    name="training.published",
+    version=1,
+    required_payload_keys={
+        "content_id",
+        "owner_office_id",
+        "scope_level",
+        "status",
+        "version_number",
+        "version_family",
+        "occurred_at",
+    },
+    description=(
+        "Emitted when training content becomes published. Consumers holding "
+        "derived library state should re-evaluate visibility from this moment."
+    ),
+)
+
+registry.register(
+    name="training.scheduled",
+    version=1,
+    required_payload_keys={
+        "content_id",
+        "owner_office_id",
+        "scope_level",
+        "status",
+        "version_number",
+        "version_family",
+        "occurred_at",
+    },
+    description=(
+        "Emitted instead of training.published when the row is published with "
+        "a future publish_at. Nothing should notify recipients yet."
+    ),
+)
+
+registry.register(
+    name="training.unpublished",
+    version=1,
+    required_payload_keys={
+        "content_id",
+        "owner_office_id",
+        "scope_level",
+        "status",
+        "version_number",
+        "version_family",
+        "occurred_at",
+    },
+    description=(
+        "Training was pulled back to draft. Consumers should treat it as no "
+        "longer readable from this moment."
+    ),
+)
+
+registry.register(
+    name="training.archived",
+    version=1,
+    required_payload_keys={
+        "content_id",
+        "owner_office_id",
+        "scope_level",
+        "status",
+        "version_number",
+        "version_family",
+        "occurred_at",
+    },
+    description=(
+        "Training left the library. The row, media, and progress history are "
+        "retained; only visibility ends. Also emitted when a newer version "
+        "supersedes a previously live sibling."
+    ),
+)
+
+registry.register(
+    name="training.restored",
+    version=1,
+    required_payload_keys={
+        "content_id",
+        "owner_office_id",
+        "scope_level",
+        "status",
+        "version_number",
+        "version_family",
+        "occurred_at",
+    },
+    description=(
+        "Archived training was returned to draft. It is not readable again "
+        "until deliberately republished."
+    ),
+)
+
+# ---------------------------------------------------------------------------
 # inventory domain  (publisher: apps.inventory.services)
 # ---------------------------------------------------------------------------
 
