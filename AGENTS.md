@@ -62,8 +62,9 @@ Two ways to run things. Pick one and stay consistent within a task.
 
 **Docker dev stack (`make up`)** — bundles Postgres, Redis, Mailpit, MinIO,
 Celery worker + beat. Use when the task needs a real database, S3, mail,
-or background tasks. Management commands go through `make manage cmd="..."`,
-`make migrate`, `make makemigrations`, `make shell`, `make test`.
+or background tasks. Run commands in the `web` container via
+`make dockerexec cmd="…"` or `make manage cmd="…"`; see `docs/dockerexec.md`.
+Shortcuts: `make migrate`, `make makemigrations`, `make shell`, `make test-docker`.
 
 **Pre-commit gate** (`.husky/pre-commit` — lint, types, migration drift; no tests):
 
