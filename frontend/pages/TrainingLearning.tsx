@@ -149,9 +149,11 @@ function TrainingCard({ row }: { row: TrainingRow }) {
 }
 
 export default function TrainingLearning() {
-  const { library, filterOptions } = usePage<TrainingLearningPageProps>().props;
+  const { library, filterOptions, requiredSummary } =
+    usePage<TrainingLearningPageProps>().props;
   const filters = library.filters as TrainingFilters;
   const notice = rejectedFilterMessage(filters);
+  const summary = requiredSummary ?? library.requiredSummary;
 
   function visit(next: Partial<TrainingFilters>, page?: number) {
     router.get(
@@ -171,6 +173,15 @@ export default function TrainingLearning() {
         <PageHeader
           title="Training & learning"
           description="Required and recommended training for your role and office. Required items are listed first."
+          meta={
+            summary ? (
+              <span className="text-muted-foreground text-sm tabular-nums">
+                {summary.requiredCount === 0
+                  ? "No required training assigned"
+                  : `${summary.completedCount} of ${summary.requiredCount} required complete (${summary.percent}%)`}
+              </span>
+            ) : undefined
+          }
         />
 
         <fieldset className="flex flex-wrap gap-2 border-0 p-0">

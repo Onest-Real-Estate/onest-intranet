@@ -100,7 +100,7 @@ SOURCE_MODULE_AVAILABILITY: dict[str, bool] = {
     SourceModule.COMPLIANCE: False,
     SourceModule.INVENTORY: True,
     SourceModule.RESERVATIONS: False,
-    SourceModule.TRAINING: False,
+    SourceModule.TRAINING: True,
 }
 
 #: Shown on the card in place of a figure. Written out per module rather than
@@ -115,7 +115,7 @@ SOURCE_MODULE_UNAVAILABLE_REASON: dict[str, str] = {
     SourceModule.COMPLIANCE: "Compliance tracking is not connected to the hub yet.",
     SourceModule.INVENTORY: "Inventory is not connected to the hub yet.",
     SourceModule.RESERVATIONS: "Reservations are not connected to the hub yet.",
-    SourceModule.TRAINING: "Training is not connected to the hub yet.",
+    SourceModule.TRAINING: "Training progress is connected.",
 }
 
 

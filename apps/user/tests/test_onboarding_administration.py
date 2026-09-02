@@ -86,8 +86,8 @@ def test_state_is_derived_from_profile_sso_and_source_domains():
     assert by_key["profile"].status == "pending"
     assert by_key["microsoft_login"].status == "pending"
     assert by_key["contract_generated"].status == "pending"
-    assert by_key["required_training"].status == "unavailable"
-    assert state.overall_status == OverallStatus.BLOCKED
+    assert by_key["required_training"].status == "complete"
+    assert state.overall_status == OverallStatus.IN_PROGRESS
 
     user.profile_completed = True
     user.profile_completed_at = timezone.now()
@@ -163,7 +163,15 @@ def test_view_permission_does_not_grant_mutation(client):
 
 @pytest.mark.django_db
 def test_filters_run_on_derived_state_and_preserve_scoped_count(client):
-    account("blocked@example.com", "fairfax-va")
+    blocked = account("blocked@example.com", "fairfax-va")
+    case = UserOnboardingCase.objects.create(user=blocked)
+    OnboardingTask.objects.create(
+        case=case,
+        title="Blocking operational item",
+        is_blocking=True,
+        status=OnboardingTask.Status.OPEN,
+        created_by=blocked,
+    )
     actor = branch_manager("fairfax-va", "manager@example.com")
     client.force_login(actor)
 

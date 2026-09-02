@@ -13,6 +13,7 @@ vi.mock("@inertiajs/react", async () => {
     Link: ({ href, children }: { href: string; children: React.ReactNode }) => (
       <a href={href}>{children}</a>
     ),
+    router: { post: vi.fn(), get: vi.fn() },
     usePage: () => ({
       props: {
         content: {
@@ -56,6 +57,8 @@ vi.mock("@inertiajs/react", async () => {
           transcription: null,
           modules: [],
           interactivity: "available",
+          canMarkStarted: true,
+          canMarkComplete: true,
         },
       },
     }),

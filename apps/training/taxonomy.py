@@ -47,6 +47,76 @@ COMPLETION_CHOICES = (
 
 COMPLETION_FILTER_CODES = frozenset(code for code, _ in COMPLETION_CHOICES)
 
+VERSION_POLICY_CURRENT = "current_version"
+VERSION_POLICY_ANY = "any_version"
+
+VERSION_COMPLETION_POLICY_CHOICES = (
+    (VERSION_POLICY_CURRENT, _("Current live version")),
+    (VERSION_POLICY_ANY, _("Any completed version")),
+)
+
+VERSION_COMPLETION_POLICY_CODES = frozenset(
+    code for code, _ in VERSION_COMPLETION_POLICY_CHOICES
+)
+
+PROGRESS_SOURCE_LEARNER = "learner"
+PROGRESS_SOURCE_QUIZ = "quiz"
+PROGRESS_SOURCE_SESSION = "session"
+PROGRESS_SOURCE_COURSE_ROLLUP = "course_rollup"
+PROGRESS_SOURCE_ADMIN = "admin_correction"
+PROGRESS_SOURCE_SYSTEM = "system"
+
+PROGRESS_SOURCE_CHOICES = (
+    (PROGRESS_SOURCE_LEARNER, _("Learner")),
+    (PROGRESS_SOURCE_QUIZ, _("Quiz")),
+    (PROGRESS_SOURCE_SESSION, _("Live session")),
+    (PROGRESS_SOURCE_COURSE_ROLLUP, _("Course rollup")),
+    (PROGRESS_SOURCE_ADMIN, _("Admin correction")),
+    (PROGRESS_SOURCE_SYSTEM, _("System")),
+)
+
+PROGRESS_SOURCE_CODES = frozenset(code for code, _ in PROGRESS_SOURCE_CHOICES)
+
+QUIZ_FEEDBACK_NONE = "none"
+QUIZ_FEEDBACK_SCORE_ONLY = "score_only"
+QUIZ_FEEDBACK_REVIEW = "review"
+
+QUIZ_FEEDBACK_POLICY_CHOICES = (
+    (QUIZ_FEEDBACK_NONE, _("No feedback")),
+    (QUIZ_FEEDBACK_SCORE_ONLY, _("Score only")),
+    (QUIZ_FEEDBACK_REVIEW, _("Score and review")),
+)
+
+QUIZ_FEEDBACK_POLICY_CODES = frozenset(code for code, _ in QUIZ_FEEDBACK_POLICY_CHOICES)
+
+SESSION_REGISTERED = "registered"
+SESSION_CANCELLED = "cancelled"
+SESSION_ATTENDED = "attended"
+SESSION_NO_SHOW = "no_show"
+
+SESSION_REGISTRATION_STATUS_CHOICES = (
+    (SESSION_REGISTERED, _("Registered")),
+    (SESSION_CANCELLED, _("Cancelled")),
+    (SESSION_ATTENDED, _("Attended")),
+    (SESSION_NO_SHOW, _("No show")),
+)
+
+SESSION_REGISTRATION_STATUS_CODES = frozenset(
+    code for code, _ in SESSION_REGISTRATION_STATUS_CHOICES
+)
+
+CERTIFICATE_PENDING = "pending"
+CERTIFICATE_APPROVED = "approved"
+CERTIFICATE_REVOKED = "revoked"
+
+CERTIFICATE_STATUS_CHOICES = (
+    (CERTIFICATE_PENDING, _("Pending")),
+    (CERTIFICATE_APPROVED, _("Approved")),
+    (CERTIFICATE_REVOKED, _("Revoked")),
+)
+
+CERTIFICATE_STATUS_CODES = frozenset(code for code, _ in CERTIFICATE_STATUS_CHOICES)
+
 TOOL_CODES = frozenset(
     {"lofty", "skyslope", "microsoft365", "dotloop"},
 )

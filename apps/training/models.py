@@ -13,10 +13,17 @@ from django.utils.translation import gettext_lazy as _
 from apps.announcements.richtext import safe_url, unsafe_links
 from apps.training.embeds import validate_embed_url
 from apps.training.taxonomy import (
+    CERTIFICATE_STATUS_CHOICES,
     CONTENT_TYPE_CHOICES,
     INTERACTIVE_CONTENT_TYPES,
+    PROGRESS_SOURCE_CHOICES,
+    QUIZ_FEEDBACK_POLICY_CHOICES,
+    SESSION_REGISTRATION_STATUS_CHOICES,
     SYSTEM_CATEGORY_CODES,
     TOOL_CODES,
+    VERSION_COMPLETION_POLICY_CHOICES,
+    VERSION_POLICY_ANY,
+    VERSION_POLICY_CURRENT,
 )
 from apps.user.models import Office
 from apps.user.storage import private_storage
@@ -153,6 +160,17 @@ class TrainingContent(models.Model):
         help_text=_("Shared across successive versions of the same training item."),
     )
     version_number = models.PositiveIntegerField(_("version number"), default=1)
+    version_completion_policy = models.CharField(
+        _("version completion policy"),
+        max_length=32,
+        choices=VERSION_COMPLETION_POLICY_CHOICES,
+        default=VERSION_POLICY_ANY,
+        help_text=_(
+            "Whether required-training satisfaction needs the live version "
+            f"({VERSION_POLICY_CURRENT}) or any completed version "
+            f"({VERSION_POLICY_ANY})."
+        ),
+    )
     display_order = models.PositiveSmallIntegerField(_("display order"), default=100)
     created_by = models.ForeignKey(
         "user.User",
@@ -538,6 +556,14 @@ class TrainingProgress(models.Model):
         IN_PROGRESS = "in_progress", _("In progress")
         COMPLETED = "completed", _("Completed")
 
+    class Source(models.TextChoices):
+        LEARNER = "learner", _("Learner")
+        QUIZ = "quiz", _("Quiz")
+        SESSION = "session", _("Live session")
+        COURSE_ROLLUP = "course_rollup", _("Course rollup")
+        ADMIN_CORRECTION = "admin_correction", _("Admin correction")
+        SYSTEM = "system", _("System")
+
     user = models.ForeignKey(
         "user.User",
         verbose_name=_("user"),
@@ -556,7 +582,31 @@ class TrainingProgress(models.Model):
         choices=Status.choices,
         default=Status.NOT_STARTED,
     )
+    started_at = models.DateTimeField(_("started at"), null=True, blank=True)
     completed_at = models.DateTimeField(_("completed at"), null=True, blank=True)
+    progress_percent = models.PositiveSmallIntegerField(
+        _("progress percent"),
+        null=True,
+        blank=True,
+    )
+    content_version_number = models.PositiveIntegerField(
+        _("content version number"),
+        null=True,
+        blank=True,
+    )
+    is_required_at_completion = models.BooleanField(
+        _("required at completion"),
+        null=True,
+        blank=True,
+    )
+    source = models.CharField(
+        _("source"),
+        max_length=32,
+        choices=PROGRESS_SOURCE_CHOICES,
+        default=Source.SYSTEM,
+        blank=True,
+    )
+    evidence = models.JSONField(_("evidence"), default=dict, blank=True)
     updated_at = models.DateTimeField(_("updated at"), auto_now=True)
 
     class Meta:
@@ -567,7 +617,273 @@ class TrainingProgress(models.Model):
                 fields=["user", "content"],
                 name="training_progress_unique_user_content",
             ),
+            models.CheckConstraint(
+                condition=Q(progress_percent__isnull=True)
+                | (Q(progress_percent__gte=0) & Q(progress_percent__lte=100)),
+                name="training_progress_percent_range",
+            ),
         ]
         indexes = [
             models.Index(fields=["user", "status"], name="training_progress_user"),
+            models.Index(
+                fields=["content", "status"], name="training_progress_content"
+            ),
+        ]
+
+
+class TrainingQuiz(models.Model):
+    class FeedbackPolicy(models.TextChoices):
+        NONE = "none", _("No feedback")
+        SCORE_ONLY = "score_only", _("Score only")
+        REVIEW = "review", _("Score and review")
+
+    content = models.OneToOneField(
+        TrainingContent,
+        verbose_name=_("content"),
+        related_name="quiz",
+        on_delete=models.CASCADE,
+    )
+    pass_threshold_percent = models.PositiveSmallIntegerField(
+        _("pass threshold percent"),
+        default=80,
+    )
+    max_attempts = models.PositiveSmallIntegerField(
+        _("max attempts"),
+        null=True,
+        blank=True,
+        help_text=_("Leave blank for unlimited attempts."),
+    )
+    feedback_policy = models.CharField(
+        _("feedback policy"),
+        max_length=16,
+        choices=QUIZ_FEEDBACK_POLICY_CHOICES,
+        default=FeedbackPolicy.SCORE_ONLY,
+    )
+    created_at = models.DateTimeField(_("created at"), auto_now_add=True)
+    updated_at = models.DateTimeField(_("updated at"), auto_now=True)
+
+    class Meta:
+        verbose_name = _("training quiz")
+        verbose_name_plural = _("training quizzes")
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(pass_threshold_percent__gte=0)
+                & Q(pass_threshold_percent__lte=100),
+                name="training_quiz_threshold_range",
+            ),
+        ]
+
+
+class TrainingQuizQuestion(models.Model):
+    quiz = models.ForeignKey(
+        TrainingQuiz,
+        verbose_name=_("quiz"),
+        related_name="questions",
+        on_delete=models.CASCADE,
+    )
+    prompt = models.CharField(_("prompt"), max_length=500)
+    choices = models.JSONField(
+        _("choices"),
+        default=list,
+        help_text=_("List of {id, label} objects."),
+    )
+    correct_choice_ids = models.JSONField(
+        _("correct choice ids"),
+        default=list,
+        help_text=_("Server-only. Never serialize to learners."),
+    )
+    sort_order = models.PositiveSmallIntegerField(_("sort order"), default=0)
+    created_at = models.DateTimeField(_("created at"), auto_now_add=True)
+    updated_at = models.DateTimeField(_("updated at"), auto_now=True)
+
+    class Meta:
+        ordering = ["sort_order", "pk"]
+        verbose_name = _("training quiz question")
+        verbose_name_plural = _("training quiz questions")
+
+
+class TrainingQuizAttempt(models.Model):
+    user = models.ForeignKey(
+        "user.User",
+        verbose_name=_("user"),
+        related_name="training_quiz_attempts",
+        on_delete=models.CASCADE,
+    )
+    content = models.ForeignKey(
+        TrainingContent,
+        verbose_name=_("content"),
+        related_name="quiz_attempts",
+        on_delete=models.CASCADE,
+    )
+    attempt_number = models.PositiveSmallIntegerField(_("attempt number"))
+    answers = models.JSONField(_("answers"), default=dict)
+    score_percent = models.PositiveSmallIntegerField(_("score percent"))
+    passed = models.BooleanField(_("passed"), default=False)
+    submitted_at = models.DateTimeField(_("submitted at"), auto_now_add=True)
+    content_version_number = models.PositiveIntegerField(_("content version number"))
+
+    class Meta:
+        verbose_name = _("training quiz attempt")
+        verbose_name_plural = _("training quiz attempts")
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "content", "attempt_number"],
+                name="training_quiz_attempt_unique",
+            ),
+            models.CheckConstraint(
+                condition=Q(score_percent__gte=0) & Q(score_percent__lte=100),
+                name="training_quiz_score_range",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["user", "content"], name="training_quiz_attempt_user"),
+        ]
+
+
+class TrainingLiveSession(models.Model):
+    content = models.OneToOneField(
+        TrainingContent,
+        verbose_name=_("content"),
+        related_name="live_session",
+        on_delete=models.CASCADE,
+    )
+    starts_at = models.DateTimeField(_("starts at"))
+    timezone = models.CharField(
+        _("timezone"),
+        max_length=64,
+        default="America/New_York",
+        help_text=_("IANA timezone for display."),
+    )
+    duration_minutes = models.PositiveSmallIntegerField(
+        _("duration minutes"),
+        default=60,
+    )
+    capacity = models.PositiveIntegerField(
+        _("capacity"),
+        null=True,
+        blank=True,
+        help_text=_("Leave blank for unlimited capacity."),
+    )
+    meeting_url = models.CharField(_("meeting URL"), max_length=500, blank=True)
+    registration_opens_at = models.DateTimeField(
+        _("registration opens at"),
+        null=True,
+        blank=True,
+    )
+    registration_closes_at = models.DateTimeField(
+        _("registration closes at"),
+        null=True,
+        blank=True,
+    )
+    created_at = models.DateTimeField(_("created at"), auto_now_add=True)
+    updated_at = models.DateTimeField(_("updated at"), auto_now=True)
+
+    class Meta:
+        verbose_name = _("training live session")
+        verbose_name_plural = _("training live sessions")
+
+
+class TrainingSessionRegistration(models.Model):
+    class Status(models.TextChoices):
+        REGISTERED = "registered", _("Registered")
+        CANCELLED = "cancelled", _("Cancelled")
+        ATTENDED = "attended", _("Attended")
+        NO_SHOW = "no_show", _("No show")
+
+    user = models.ForeignKey(
+        "user.User",
+        verbose_name=_("user"),
+        related_name="training_session_registrations",
+        on_delete=models.CASCADE,
+    )
+    content = models.ForeignKey(
+        TrainingContent,
+        verbose_name=_("content"),
+        related_name="session_registrations",
+        on_delete=models.CASCADE,
+    )
+    status = models.CharField(
+        _("status"),
+        max_length=16,
+        choices=SESSION_REGISTRATION_STATUS_CHOICES,
+        default=Status.REGISTERED,
+    )
+    registered_at = models.DateTimeField(_("registered at"), auto_now_add=True)
+    cancelled_at = models.DateTimeField(_("cancelled at"), null=True, blank=True)
+    attended_at = models.DateTimeField(_("attended at"), null=True, blank=True)
+    updated_at = models.DateTimeField(_("updated at"), auto_now=True)
+
+    class Meta:
+        verbose_name = _("training session registration")
+        verbose_name_plural = _("training session registrations")
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "content"],
+                name="training_session_reg_unique_user",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["content", "status"], name="training_session_reg_status"
+            ),
+        ]
+
+
+def _certificate_upload_to(instance, filename):
+    from apps.training.media import storage_key
+
+    return storage_key(filename, prefix="certificates")
+
+
+class TrainingCertificate(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "pending", _("Pending")
+        APPROVED = "approved", _("Approved")
+        REVOKED = "revoked", _("Revoked")
+
+    user = models.ForeignKey(
+        "user.User",
+        verbose_name=_("user"),
+        related_name="training_certificates",
+        on_delete=models.CASCADE,
+    )
+    content = models.ForeignKey(
+        TrainingContent,
+        verbose_name=_("content"),
+        related_name="certificates",
+        on_delete=models.CASCADE,
+    )
+    status = models.CharField(
+        _("status"),
+        max_length=16,
+        choices=CERTIFICATE_STATUS_CHOICES,
+        default=Status.PENDING,
+    )
+    file = models.FileField(
+        _("file"),
+        max_length=255,
+        storage=private_storage,
+        upload_to=_certificate_upload_to,
+        blank=True,
+    )
+    approved_by = models.ForeignKey(
+        "user.User",
+        verbose_name=_("approved by"),
+        related_name="training_certificates_approved",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+    )
+    approved_at = models.DateTimeField(_("approved at"), null=True, blank=True)
+    created_at = models.DateTimeField(_("created at"), auto_now_add=True)
+    updated_at = models.DateTimeField(_("updated at"), auto_now=True)
+
+    class Meta:
+        verbose_name = _("training certificate")
+        verbose_name_plural = _("training certificates")
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "content"],
+                name="training_certificate_unique_user",
+            ),
         ]

@@ -2436,6 +2436,79 @@ export interface TrainingPresentationBadge {
 export interface TrainingCompletion {
   status: string;
   label: string;
+  progressPercent?: number | null;
+  completedAt?: string | null;
+  startedAt?: string | null;
+}
+
+export interface TrainingRequiredSummary {
+  requiredCount: number;
+  completedCount: number;
+  percent: number;
+  remainingCount: number;
+  nextItem: { id: number; title: string; detailUrl: string } | null;
+}
+
+export interface TrainingQuizChoice {
+  id: string;
+  label: string;
+}
+
+export interface TrainingQuizQuestion {
+  id: number;
+  prompt: string;
+  choices: TrainingQuizChoice[];
+  sortOrder: number;
+}
+
+export interface TrainingQuizPayload {
+  passThresholdPercent: number;
+  maxAttempts: number | null;
+  feedbackPolicy: string;
+  attemptCount: number;
+  attemptsRemaining: number | null;
+  canAttempt: boolean;
+  latestAttempt: {
+    attemptNumber: number;
+    scorePercent: number;
+    passed: boolean;
+    submittedAt: string;
+  } | null;
+  questions: TrainingQuizQuestion[];
+}
+
+export interface TrainingSessionRegistration {
+  status: string;
+  registeredAt: string;
+  cancelledAt: string | null;
+  attendedAt: string | null;
+}
+
+export interface TrainingSessionPayload {
+  startsAt: string;
+  timezone: string;
+  durationMinutes: number;
+  capacity: number | null;
+  seatsTaken: number;
+  seatsRemaining: number | null;
+  meetingUrl: string;
+  registrationOpensAt: string | null;
+  registrationClosesAt: string | null;
+  registration: TrainingSessionRegistration | null;
+}
+
+export interface TrainingCertificatePayload {
+  status: string;
+  available: boolean;
+  approvedAt: string | null;
+  downloadUrl: string | null;
+}
+
+export interface TrainingCourseRollup {
+  total: number;
+  completed: number;
+  percent: number;
+  modules: { id: number; completed: boolean }[];
 }
 
 export interface TrainingRow {
@@ -2501,6 +2574,8 @@ export interface TrainingModuleRow {
   contentType: TrainingPresentationBadge;
   sortOrder: number;
   estimatedMinutes: number | null;
+  completion?: TrainingCompletion;
+  detailUrl?: string;
 }
 
 export interface TrainingDetail extends TrainingRow {
@@ -2512,11 +2587,22 @@ export interface TrainingDetail extends TrainingRow {
   attachments: TrainingMediaItem[];
   transcription: TrainingTranscription | null;
   modules: TrainingModuleRow[];
+  courseRollup?: TrainingCourseRollup | null;
   interactivity: "available" | "unavailable";
+  quiz?: TrainingQuizPayload | null;
+  liveSession?: TrainingSessionPayload | null;
+  certificate?: TrainingCertificatePayload | null;
+  versionNumber?: number;
+  versionCompletionPolicy?: string;
+  canMarkComplete?: boolean;
+  canMarkStarted?: boolean;
 }
 
 export interface TrainingLearningPageProps extends PageProps {
-  library: ListResponse<TrainingRow, TrainingFilters>;
+  library: ListResponse<TrainingRow, TrainingFilters> & {
+    requiredSummary?: TrainingRequiredSummary;
+  };
+  requiredSummary?: TrainingRequiredSummary;
   filterOptions: {
     categories: FilterOption[];
     contentTypes: FilterOption[];
@@ -2527,6 +2613,7 @@ export interface TrainingLearningPageProps extends PageProps {
 
 export interface TrainingDetailPageProps extends PageProps {
   content: TrainingDetail;
+  errors?: ValidationErrors;
 }
 
 export interface TrainingLifecycle {
@@ -2589,6 +2676,7 @@ export interface TrainingAdminDetail extends TrainingAdminRow {
   embedUrl: string;
   displayOrder: number;
   versionFamily: string;
+  versionCompletionPolicy?: string;
   validation: TrainingValidation;
   history: TrainingHistoryEntry[];
   usage: {
@@ -2598,6 +2686,34 @@ export interface TrainingAdminDetail extends TrainingAdminRow {
     notStarted: number;
   };
   mediaHref: string;
+  quiz?: {
+    passThresholdPercent: number;
+    maxAttempts: number | null;
+    feedbackPolicy: string;
+    questions: {
+      id: number;
+      prompt: string;
+      choices: TrainingQuizChoice[];
+      correctChoiceIds: string[];
+      sortOrder: number;
+    }[];
+  } | null;
+  liveSession?: {
+    startsAt: string;
+    timezone: string;
+    durationMinutes: number;
+    capacity: number | null;
+    meetingUrl: string;
+    registrationOpensAt: string | null;
+    registrationClosesAt: string | null;
+    seatsTaken: number;
+  } | null;
+  modules?: {
+    id: number;
+    title: string;
+    contentType: string;
+    sortOrder: number;
+  }[];
 }
 
 export interface TrainingCapabilities {

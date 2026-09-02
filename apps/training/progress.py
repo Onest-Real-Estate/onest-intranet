@@ -46,7 +46,7 @@ def apply_completion_filter(
 
 
 def bulk_agent_onboarding_states(users):
-    """Adapter contract for onboarding; unavailable until P1-070."""
-    from apps.user.services.onboarding_state import _unavailable_training_state
+    """Adapter contract for onboarding required-training milestones."""
+    from apps.training.required_status import bulk_required_training_states
 
-    return {user.pk: _unavailable_training_state() for user in users}
+    return bulk_required_training_states(users)

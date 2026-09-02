@@ -19,8 +19,8 @@ Required content sorts before optional items, then `display_order`, then title.
 
 Articles, guides, videos, checklists, courses, quizzes, live sessions,
 recordings, and tool onboarding entries are modeled on `TrainingContent`.
-Quizzes and live sessions render informational detail pages until P1-070 ships
-interactive progress.
+Quizzes and live sessions become interactive once their definitions are saved
+on the draft and published with the content.
 
 ## Transcriptions
 
@@ -37,10 +37,52 @@ task (`process_training_media`) moves them to `ready`, `quarantined`, or
 
 ## Progress
 
-`TrainingProgress` is read-only in P1-068. Missing rows mean `not_started`.
-Writes and dashboard/onboarding integration land in P1-070. Progress is keyed
-to a specific content primary key, so historical versions remain identifiable
-after a newer version supersedes them.
+`TrainingProgress` is keyed to `(user, content)` — a specific content primary
+key — so historical completions survive when a newer version supersedes them.
+
+Learners may start and complete passive content. Quizzes complete only through
+server-graded attempts. Live sessions complete through attendance (usually an
+admin correction). Courses roll up module completions.
+
+Writes are idempotent: repeating the same status does not write a second audit
+event. Learner mutations always bind to the authenticated user and cannot be
+forged for another person. Admins with `web.manage_training` may correct
+progress or attendance inside their publication and learner scope with a
+required reason.
+
+### Version completion policy
+
+Each content row carries `version_completion_policy`:
+
+- `current_version` — required-training satisfaction needs completion of the
+  **live published** row in the version family.
+- `any_version` — any completed row in the family satisfies.
+
+Required-training status for onboarding and the dashboard is computed by
+`apps.training.required_status` and reused by:
+
+- `bulk_agent_onboarding_states`
+- the dashboard `training` provider
+- the `trainingCompletion` operational report
+
+## Quizzes
+
+`TrainingQuiz` + `TrainingQuizQuestion` define MCQ quizzes. Attempts store
+submitted answers, server-computed score, pass result, attempt number, and
+content version. Client-supplied scores are rejected. Learner payloads never
+include correct choice ids (except under the `review` feedback policy after
+submit).
+
+## Live sessions
+
+`TrainingLiveSession` stores schedule (UTC + IANA timezone), capacity,
+meeting URL, and registration window. `TrainingSessionRegistration` tracks
+register / cancel / attended / no-show. Capacity is enforced under row lock.
+
+## Certificates
+
+`TrainingCertificate` is approval-gated. Learners only see a download when the
+certificate is `approved` and stored in private storage.
 
 ## Administration
 
@@ -62,7 +104,7 @@ Scoped publishers manage drafts at `/operations/training`:
 - **Preview.** Workspace preview reuses the learner detail payload and
   production renderers. Drafts never enter `visible_training_content`.
 - **Audit / domain events.** Publish, schedule, unpublish, archive, restore,
-  audience, required-state, and version-created changes are audited.
-  Lifecycle go-live also emits catalogued domain events
-  (`training.published`, `.scheduled`, `.unpublished`, `.archived`,
-  `.restored`).
+  audience, required-state, version-created, progress, attendance, and quiz
+  submission changes are audited. Lifecycle go-live also emits catalogued
+  domain events (`training.published`, `.scheduled`, `.unpublished`,
+  `.archived`, `.restored`).

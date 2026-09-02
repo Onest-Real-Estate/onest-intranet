@@ -199,10 +199,32 @@ def active_transactions(context: DashboardContext) -> ProviderResult:
 
 
 def training(context: DashboardContext) -> ProviderResult:
-    return unavailable(
-        "Training progress is not tracked in the hub yet.",
-        action_label="Go to training",
-        action_href=reverse("training_learning"),
+    from apps.training.required_status import required_training_summary
+
+    summary = required_training_summary(context.user, at=context.now)
+    next_item = summary.get("nextItem")
+    if summary["requiredCount"] == 0:
+        label = "No required training assigned"
+        resource_title = "Browse the training library"
+        resource_hint = "Optional resources are available when you need them."
+    elif summary["remainingCount"] == 0:
+        label = f"{summary['completedCount']} of {summary['requiredCount']} complete"
+        resource_title = "All required training complete"
+        resource_hint = "You are caught up on required learning."
+    else:
+        label = f"{summary['completedCount']} of {summary['requiredCount']} complete"
+        resource_title = next_item["title"] if next_item else "Continue learning"
+        resource_hint = f"{summary['remainingCount']} required item(s) remaining."
+    return ready(
+        {
+            "percent": summary["percent"],
+            "label": label,
+            "resourceTitle": resource_title,
+            "resourceHint": resource_hint,
+            "resourceHref": (
+                next_item["detailUrl"] if next_item else reverse("training_learning")
+            ),
+        }
     )
 
 

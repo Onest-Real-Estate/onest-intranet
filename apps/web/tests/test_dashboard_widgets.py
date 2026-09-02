@@ -224,7 +224,6 @@ def test_modules_without_a_backing_source_report_unavailable_not_empty():
     context = build_context(user)
     for key in (
         "active_transactions",
-        "training",
         "market",
         "quick_documents",
     ):
@@ -232,6 +231,16 @@ def test_modules_without_a_backing_source_report_unavailable_not_empty():
         assert payload["status"] == WidgetStatus.UNAVAILABLE, key
         # Not retryable: asking again will not build the module.
         assert payload["unavailable"]["retryable"] is False, key
+
+
+@pytest.mark.django_db
+def test_training_widget_reports_ready_when_source_is_connected():
+    user = make_user("training-widget@example.com")
+    context = build_context(user)
+    payload = widget_payload(WIDGET_BY_KEY["training"], context)
+    assert payload["status"] == WidgetStatus.READY
+    assert payload["data"]["percent"] == 100
+    assert payload["data"]["label"]
 
 
 @pytest.mark.django_db

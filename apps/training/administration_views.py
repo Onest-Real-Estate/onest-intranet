@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.views.decorators.http import require_GET, require_POST
@@ -577,3 +577,176 @@ def training_media_reorder(request: HttpRequest, content_id: int):
     except ValidationError as exc:
         return _media_error(exc)
     return redirect("training_media_manager", content_id=content.pk)
+
+
+def _parse_json_list(raw: str | None) -> list:
+    import json
+
+    if not raw:
+        return []
+    try:
+        parsed = json.loads(raw)
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return []
+    return parsed if isinstance(parsed, list) else []
+
+
+@enforce_policy("training_quiz_save")
+@require_POST
+def training_quiz_save(request: HttpRequest, content_id: int):
+    from apps.training.quiz_service import save_quiz_definition
+
+    actor = cast(User, request.user)
+    content = _target(request, content_id)
+    raw_max = (request.POST.get("maxAttempts") or "").strip()
+    max_attempts = int(raw_max) if raw_max.isdigit() else None
+    try:
+        threshold = int(request.POST.get("passThresholdPercent") or "80")
+    except (TypeError, ValueError):
+        threshold = 80
+    questions = _parse_json_list(request.POST.get("questions"))
+    try:
+        save_quiz_definition(
+            actor=actor,
+            content=content,
+            pass_threshold_percent=threshold,
+            max_attempts=max_attempts,
+            feedback_policy=(
+                request.POST.get("feedbackPolicy") or "score_only"
+            ).strip(),
+            questions=questions,
+        )
+    except ValidationError as exc:
+        return _render_workspace(
+            request, content=content, errors=_validation_payload(exc), status=422
+        )
+    return redirect("training_edit", content_id=content.pk)
+
+
+@enforce_policy("training_session_save")
+@require_POST
+def training_session_save(request: HttpRequest, content_id: int):
+    from apps.training.session_service import save_session_definition
+
+    actor = cast(User, request.user)
+    content = _target(request, content_id)
+    raw_capacity = (request.POST.get("capacity") or "").strip()
+    capacity = int(raw_capacity) if raw_capacity.isdigit() else None
+    try:
+        duration = int(request.POST.get("durationMinutes") or "60")
+    except (TypeError, ValueError):
+        duration = 60
+    try:
+        save_session_definition(
+            actor=actor,
+            content=content,
+            starts_at=request.POST.get("startsAt"),
+            timezone_name=(request.POST.get("timezone") or "").strip(),
+            duration_minutes=duration,
+            capacity=capacity,
+            meeting_url=request.POST.get("meetingUrl") or "",
+            registration_opens_at=request.POST.get("registrationOpensAt") or None,
+            registration_closes_at=request.POST.get("registrationClosesAt") or None,
+        )
+    except ValidationError as exc:
+        return _render_workspace(
+            request, content=content, errors=_validation_payload(exc), status=422
+        )
+    return redirect("training_edit", content_id=content.pk)
+
+
+@enforce_policy("training_modules_save")
+@require_POST
+def training_modules_save(request: HttpRequest, content_id: int):
+    from apps.training.course_service import save_modules
+
+    actor = cast(User, request.user)
+    content = _target(request, content_id)
+    child_ids = [
+        int(value)
+        for value in (
+            request.POST.getlist("childIds")
+            or _parse_json_list(request.POST.get("childIds"))
+        )
+        if str(value).isdigit() or isinstance(value, int)
+    ]
+    try:
+        save_modules(actor=actor, course=content, child_ids=child_ids)
+    except ValidationError as exc:
+        return _render_workspace(
+            request, content=content, errors=_validation_payload(exc), status=422
+        )
+    return redirect("training_edit", content_id=content.pk)
+
+
+@enforce_policy("training_progress_correct")
+@require_POST
+def training_progress_correct(request: HttpRequest, content_id: int):
+    from apps.training.progress_service import correct_progress
+    from apps.training.session_service import correct_attendance
+
+    actor = cast(User, request.user)
+    content = _target(request, content_id)
+    raw_learner = (request.POST.get("learnerId") or "").strip()
+    if not raw_learner.isdigit():
+        return _render_workspace(
+            request,
+            content=content,
+            errors={"fields": {"learnerId": ["Choose a learner."]}, "form": []},
+            status=422,
+        )
+    learner = get_object_or_404(User, pk=int(raw_learner))
+    kind = (request.POST.get("kind") or "progress").strip()
+    reason = request.POST.get("reason") or ""
+    status_value = (request.POST.get("status") or "").strip()
+    try:
+        if kind == "attendance":
+            correct_attendance(
+                actor=actor,
+                learner=learner,
+                content=content,
+                status=status_value,
+                reason=reason,
+            )
+        else:
+            correct_progress(
+                actor=actor,
+                learner=learner,
+                content=content,
+                status=status_value,
+                reason=reason,
+            )
+    except ValidationError as exc:
+        return _render_workspace(
+            request, content=content, errors=_validation_payload(exc), status=422
+        )
+    except PermissionDenied:
+        raise
+    return redirect("training_edit", content_id=content.pk)
+
+
+@enforce_policy("training_certificate_approve")
+@require_POST
+def training_certificate_approve(request: HttpRequest, certificate_id: int):
+    from apps.training.certificate_service import approve_certificate
+    from apps.training.models import TrainingCertificate
+
+    actor = cast(User, request.user)
+    certificate = get_object_or_404(
+        TrainingCertificate.objects.select_related(
+            "content", "content__owner_office", "user"
+        ),
+        pk=certificate_id,
+    )
+    try:
+        approve_certificate(actor=actor, certificate=certificate)
+    except ValidationError as exc:
+        return _render_workspace(
+            request,
+            content=certificate.content,
+            errors=_validation_payload(exc),
+            status=422,
+        )
+    except PermissionDenied:
+        raise
+    return redirect("training_edit", content_id=certificate.content.pk)
