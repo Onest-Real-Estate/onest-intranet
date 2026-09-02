@@ -269,6 +269,7 @@ OPERATIONS_FEATURES["admin-assign-roles"] = True
 OPERATIONS_FEATURES["admin-offices"] = True
 OPERATIONS_FEATURES["admin-office-resources"] = True
 OPERATIONS_FEATURES["admin-announcements"] = True
+OPERATIONS_FEATURES["admin-training"] = True
 OPERATIONS_FEATURES["admin-contract-templates"] = True
 OPERATIONS_FEATURES["admin-operational-tasks"] = True
 OPERATIONS_FEATURES["admin-feedback"] = True

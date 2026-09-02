@@ -127,6 +127,7 @@ def test_registry_has_exact_destinations_order_routes_and_permissions():
                 "admin_office_resources",
                 "admin_offices",
                 "admin_announcements",
+                "admin_training",
                 "admin_contract_templates",
                 "operational_tasks",
                 "admin_feedback",
@@ -263,6 +264,11 @@ def test_brokerage_admin_can_reach_every_registered_destination(client):
             continue
         if destination.route_name == "admin_announcements":
             assert "announcements" in props
+            assert "filterOptions" in props
+            assert "capabilities" in props
+            continue
+        if destination.route_name == "admin_training":
+            assert "trainings" in props
             assert "filterOptions" in props
             assert "capabilities" in props
             continue
