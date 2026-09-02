@@ -10,6 +10,7 @@ from apps.contract.views.agent_contract_views import agent_contract_index
 from apps.feedback.views import feedback_inbox
 from apps.inventory.views.administration_views import inventory_admin_index
 from apps.operational_tasks.views import tasks_index
+from apps.training.administration_views import training_administration_index
 from apps.user.services.role_assignments import get_effective_access
 from apps.user.views.directory_views import user_directory
 from apps.user.views.office_administration_views import office_administration_index
@@ -110,6 +111,7 @@ OPERATIONS_VIEWS = {
     for destination in OPERATIONS_DESTINATIONS
 }
 OPERATIONS_VIEWS["admin_announcements"] = announcement_administration_index
+OPERATIONS_VIEWS["admin_training"] = training_administration_index
 OPERATIONS_VIEWS["admin_contract_templates"] = contract_template_index
 OPERATIONS_VIEWS["admin_agent_contracts"] = agent_contract_index
 OPERATIONS_VIEWS["admin_users"] = user_directory

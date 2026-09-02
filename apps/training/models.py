@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import uuid
+
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import F, Q
@@ -143,6 +145,14 @@ class TrainingContent(models.Model):
     archived_at = models.DateTimeField(
         _("archived at"), null=True, blank=True, editable=False
     )
+    version_family = models.UUIDField(
+        _("version family"),
+        default=uuid.uuid4,
+        editable=False,
+        db_index=True,
+        help_text=_("Shared across successive versions of the same training item."),
+    )
+    version_number = models.PositiveIntegerField(_("version number"), default=1)
     display_order = models.PositiveSmallIntegerField(_("display order"), default=100)
     created_by = models.ForeignKey(
         "user.User",
@@ -186,6 +196,10 @@ class TrainingContent(models.Model):
                 | Q(expires_at__gt=F("publish_at")),
                 name="training_window_ordered",
             ),
+            models.UniqueConstraint(
+                fields=["version_family", "version_number"],
+                name="training_content_unique_version",
+            ),
         ]
         indexes = [
             models.Index(
@@ -195,6 +209,10 @@ class TrainingContent(models.Model):
             models.Index(
                 fields=["status", "content_type"],
                 name="training_status_type",
+            ),
+            models.Index(
+                fields=["version_family", "version_number"],
+                name="training_version_family",
             ),
         ]
 

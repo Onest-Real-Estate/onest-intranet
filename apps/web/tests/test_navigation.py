@@ -65,6 +65,7 @@ def test_only_the_live_destinations_are_enabled():
             "reports": True,
             "admin-operational-tasks": True,
             "admin-feedback": True,
+            "admin-training": True,
         }.items()
         if enabled
     }

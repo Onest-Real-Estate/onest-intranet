@@ -2529,6 +2529,189 @@ export interface TrainingDetailPageProps extends PageProps {
   content: TrainingDetail;
 }
 
+export interface TrainingLifecycle {
+  code: "draft" | "scheduled" | "live" | "expired" | "archived";
+  label: string;
+  tone: StatusTone;
+}
+
+export interface TrainingAdminRow {
+  id: number;
+  slug: string;
+  title: string;
+  summary: string;
+  lifecycle: TrainingLifecycle;
+  status: "draft" | "published" | "archived";
+  contentType: { code: string; label: string };
+  category: { code: string; label: string } | null;
+  isRequired: boolean;
+  versionNumber: number;
+  versionLabel: string;
+  ownerOffice: { id: number; name: string };
+  scopeLevel: string;
+  audience: AnnouncementAudienceEntry[];
+  publishAt: string | null;
+  expiresAt: string | null;
+  publishedAt: string | null;
+  updatedAt: string | null;
+  updatedBy: string;
+  createdBy: string;
+  /** Opaque concurrency token. Sent back on every write; a mismatch is a 409. */
+  version: string;
+}
+
+export interface TrainingValidationItem {
+  field: string;
+  message: string;
+}
+
+export interface TrainingValidation {
+  isPublishable: boolean;
+  items: TrainingValidationItem[];
+}
+
+export interface TrainingHistoryEntry {
+  id: string;
+  action: string;
+  label: string;
+  tone: StatusTone;
+  actor: string;
+  occurredAt: string;
+}
+
+export interface TrainingAdminDetail extends TrainingAdminRow {
+  body: string;
+  categoryCode: string;
+  contentTypeCode: string;
+  toolCode: string;
+  estimatedMinutes: number | null;
+  externalUrl: string;
+  embedUrl: string;
+  displayOrder: number;
+  versionFamily: string;
+  validation: TrainingValidation;
+  history: TrainingHistoryEntry[];
+  usage: {
+    recipientEstimate: number;
+    completed: number;
+    inProgress: number;
+    notStarted: number;
+  };
+  mediaHref: string;
+}
+
+export interface TrainingCapabilities {
+  canAuthor: boolean;
+  canPublish: boolean;
+}
+
+export interface TrainingWorkspaceFilters {
+  q: string;
+  lifecycle: string;
+  category: string;
+  type: string;
+  audience: string;
+  author: string;
+  office: string;
+  required: string;
+  publishedFrom: string;
+  publishedTo: string;
+  [key: string]: string | string[];
+}
+
+export interface TrainingCreateSheet {
+  open: boolean;
+  draft: Record<string, string | string[]>;
+}
+
+export interface TrainingAdministrationPageProps extends PageProps {
+  trainings: ListResponse<TrainingAdminRow, TrainingWorkspaceFilters>;
+  filterOptions: {
+    categories: FilterOption[];
+    contentTypes: FilterOption[];
+    offices: AnnouncementOfficeOption[];
+  };
+  createOptions: {
+    offices: AnnouncementOfficeOption[];
+    categories: FilterOption[];
+    contentTypes: FilterOption[];
+    tools: FilterOption[];
+    audience: AnnouncementAudienceOptions;
+  };
+  createSheet: TrainingCreateSheet | null;
+  capabilities: TrainingCapabilities;
+  errors: ValidationErrors;
+}
+
+export interface TrainingPreviewReach {
+  chosen: boolean;
+  matched: boolean;
+  officeId: number | null;
+  officeName: string;
+  roleCode: string;
+  hasNamedRecipients: boolean;
+}
+
+export interface TrainingPreview {
+  article: TrainingDetail;
+  reach: TrainingPreviewReach;
+  roleCode: string;
+  officeId: number | null;
+}
+
+export interface TrainingWorkspacePageProps extends PageProps {
+  content: TrainingAdminDetail | null;
+  officeOptions: AnnouncementOfficeOption[];
+  categoryOptions: FilterOption[];
+  contentTypeOptions: FilterOption[];
+  toolOptions: FilterOption[];
+  audienceOptions: AnnouncementAudienceOptions;
+  capabilities: TrainingCapabilities;
+  preview: TrainingPreview | null;
+  errors: ValidationErrors;
+  posted: Record<string, string[]> | null;
+}
+
+export interface TrainingRecipientResult {
+  id: number;
+  name: string;
+  email: string;
+  officeName: string;
+}
+
+export interface TrainingMediaAdmin {
+  id: number;
+  role: "primary" | "attachment";
+  displayName: string;
+  mediaType: string;
+  byteSize: number;
+  width: number | null;
+  height: number | null;
+  isImage: boolean;
+  url: string;
+  variants: Record<string, string>;
+  processingState: "pending" | "ready" | "quarantined" | "failed";
+  processingNote: string;
+  isActive: boolean;
+  checksum: string;
+  sortOrder: number;
+}
+
+export interface TrainingMediaLimits {
+  primary: { extensions: string[]; maxBytes: number; minWidth?: number };
+  attachment: { extensions: string[]; maxBytes: number; maxCount: number };
+}
+
+export interface TrainingMediaManagerPageProps extends PageProps {
+  content: { id: number; title: string; status: string };
+  media: {
+    primary: TrainingMediaAdmin | null;
+    attachments: TrainingMediaAdmin[];
+  };
+  limits: TrainingMediaLimits;
+  validation: ValidationErrors;
+}
+
 /**
  * The administration workspace.
  *

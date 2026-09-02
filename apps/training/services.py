@@ -191,6 +191,9 @@ def order_for_library(queryset: QuerySet[TrainingContent]) -> QuerySet[TrainingC
 def validation_debt(content: TrainingContent) -> list[tuple[str, Any]]:
     from django.utils.translation import gettext_lazy as _
 
+    from apps.training.audience import selectors_for
+    from apps.training.media_service import media_publish_debt
+
     debt: list[tuple[str, Any]] = []
     if content.category is None:
         debt.append(("category", _("Choose a category before publishing.")))
@@ -214,7 +217,20 @@ def validation_debt(content: TrainingContent) -> list[tuple[str, Any]]:
             )
     if content.content_type == "tool_onboarding" and not content.tool_code:
         debt.append(("tool_code", _("Choose the tool this onboarding covers.")))
+    if content.pk is not None and not selectors_for(content).exists():
+        debt.append(("audience", _("Choose who this training is for.")))
+    debt.extend(media_publish_debt(content))
     return debt
+
+
+def validation_debt_payload(content: TrainingContent) -> dict[str, Any]:
+    debt = validation_debt(content)
+    return {
+        "isPublishable": not debt,
+        "items": [
+            {"field": field_name, "message": str(msg)} for field_name, msg in debt
+        ],
+    }
 
 
 def _scope_payload(content: TrainingContent) -> dict[str, str]:
@@ -421,5 +437,6 @@ __all__ = [
     "order_for_library",
     "tool_filter_options",
     "validation_debt",
+    "validation_debt_payload",
     "visible_queryset",
 ]
