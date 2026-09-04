@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -245,5 +246,101 @@ describe("TrainingWorkspace", () => {
 
     expect(screen.getByText(/Somebody else saved this training/i)).toBeVisible();
     expect(screen.getByLabelText(/^Title/)).toHaveValue("Their wording");
+  });
+
+  it("shows the quiz editor for quiz drafts and posts to quiz save", async () => {
+    const user = userEvent.setup();
+    setPage({
+      content: detail({
+        contentType: { code: "quiz", label: "Quiz" },
+        contentTypeCode: "quiz",
+        title: "Fair housing quiz",
+        quiz: null,
+      }),
+      contentTypeOptions: [
+        { value: "article", label: "Article" },
+        { value: "quiz", label: "Quiz" },
+      ],
+    });
+    render(<TrainingWorkspace />);
+
+    expect(screen.getByRole("heading", { name: "Quiz" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save quiz" })).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText(/^Prompt/), "Which is true?");
+    const choiceInputs = screen.getAllByPlaceholderText("Choice text");
+    await user.type(choiceInputs[0], "Correct");
+    await user.type(choiceInputs[1], "Wrong");
+    await user.click(screen.getByRole("button", { name: "Save quiz" }));
+
+    expect(routerPost).toHaveBeenCalled();
+    const [url, body] = routerPost.mock.calls.at(-1) ?? [];
+    expect(url).toContain("/quiz/save");
+    expect(body).toBeInstanceOf(FormData);
+    expect(body.get("passThresholdPercent")).toBe("80");
+    const questions = JSON.parse(String(body.get("questions")));
+    expect(questions).toHaveLength(1);
+    expect(questions[0].prompt).toBe("Which is true?");
+  });
+
+  it("shows the live session editor for live session drafts", async () => {
+    const user = userEvent.setup();
+    setPage({
+      content: detail({
+        contentType: { code: "live_session", label: "Live session" },
+        contentTypeCode: "live_session",
+        title: "Office hours",
+        liveSession: null,
+      }),
+      contentTypeOptions: [
+        { value: "article", label: "Article" },
+        { value: "live_session", label: "Live session" },
+      ],
+    });
+    render(<TrainingWorkspace />);
+
+    expect(screen.getByRole("heading", { name: "Live session" })).toBeInTheDocument();
+    const startsAt = screen.getByLabelText(/^Starts at/);
+    await user.clear(startsAt);
+    await user.type(startsAt, "2026-10-01T15:00");
+    await user.click(screen.getByRole("button", { name: "Save session" }));
+
+    expect(routerPost).toHaveBeenCalled();
+    const [url, body] = routerPost.mock.calls.at(-1) ?? [];
+    expect(url).toContain("/session/save");
+    expect(body).toBeInstanceOf(FormData);
+    expect(body.get("startsAt")).toBe("2026-10-01T15:00");
+  });
+
+  it("hides quiz save when the item is not a draft", () => {
+    setPage({
+      content: detail({
+        status: "published",
+        lifecycle: { code: "live", label: "Live", tone: "success" },
+        contentType: { code: "quiz", label: "Quiz" },
+        contentTypeCode: "quiz",
+        quiz: {
+          passThresholdPercent: 80,
+          maxAttempts: null,
+          feedbackPolicy: "score_only",
+          questions: [
+            {
+              id: 1,
+              prompt: "Ready?",
+              choices: [
+                { id: "a", label: "Yes" },
+                { id: "b", label: "No" },
+              ],
+              correctChoiceIds: ["a"],
+              sortOrder: 0,
+            },
+          ],
+        },
+      }),
+    });
+    render(<TrainingWorkspace />);
+
+    expect(screen.getByRole("heading", { name: "Quiz" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Save quiz" })).not.toBeInTheDocument();
   });
 });

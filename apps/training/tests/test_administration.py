@@ -313,3 +313,79 @@ def test_archive_transition(seeded):
     draft.refresh_from_db()
     assert draft.status == TrainingContent.Status.ARCHIVED
     assert AuditEvent.objects.filter(action="training.archived").exists()
+
+
+@pytest.mark.django_db
+def test_json_quiz_save_configures_questions(seeded, client: Client):
+    import json
+
+    from apps.training.models import TrainingQuiz, TrainingQuizQuestion
+    from apps.training.quiz_service import quiz_is_configured
+
+    actor = publisher()
+    draft = _draft(actor, content_type="quiz", title="Quiz draft")
+    client.force_login(actor)
+    response = client.post(
+        reverse("training_quiz_save", args=[draft.pk]),
+        data=json.dumps(
+            {
+                "passThresholdPercent": 70,
+                "maxAttempts": 3,
+                "feedbackPolicy": "score_only",
+                "questions": json.dumps(
+                    [
+                        {
+                            "prompt": "Which is fair housing?",
+                            "choices": [
+                                {"id": "a", "label": "Equal access"},
+                                {"id": "b", "label": "Steering"},
+                            ],
+                            "correctChoiceIds": ["a"],
+                            "sortOrder": 0,
+                        }
+                    ]
+                ),
+            }
+        ),
+        content_type="application/json",
+    )
+    assert response.status_code in {302, 303}, response.content[:2000]
+    draft.refresh_from_db()
+    assert quiz_is_configured(draft)
+    quiz = TrainingQuiz.objects.get(content=draft)
+    assert quiz.pass_threshold_percent == 70
+    assert TrainingQuizQuestion.objects.filter(quiz=quiz).count() == 1
+
+
+@pytest.mark.django_db
+def test_json_session_save_configures_schedule(seeded, client: Client):
+    import json
+
+    from apps.training.models import TrainingLiveSession
+    from apps.training.session_service import session_is_configured
+
+    actor = publisher()
+    draft = _draft(actor, content_type="live_session", title="Session draft")
+    client.force_login(actor)
+    response = client.post(
+        reverse("training_session_save", args=[draft.pk]),
+        data=json.dumps(
+            {
+                "startsAt": "2026-10-01T15:00",
+                "timezone": "America/New_York",
+                "durationMinutes": 45,
+                "capacity": 20,
+                "meetingUrl": "https://meet.example/room",
+                "registrationOpensAt": "",
+                "registrationClosesAt": "",
+            }
+        ),
+        content_type="application/json",
+    )
+    assert response.status_code in {302, 303}, response.content[:2000]
+    draft.refresh_from_db()
+    assert session_is_configured(draft)
+    session = TrainingLiveSession.objects.get(content=draft)
+    assert session.duration_minutes == 45
+    assert session.capacity == 20
+    assert session.meeting_url == "https://meet.example/room"
