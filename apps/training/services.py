@@ -194,6 +194,9 @@ def validation_debt(content: TrainingContent) -> list[tuple[str, Any]]:
 
     from apps.training.audience import selectors_for
     from apps.training.media_service import media_publish_debt
+    from apps.training.quiz_service import quiz_is_configured
+    from apps.training.session_service import session_is_configured
+    from apps.training.taxonomy import CONTENT_TYPE_LIVE_SESSION, CONTENT_TYPE_QUIZ
 
     debt: list[tuple[str, Any]] = []
     if content.category is None:
@@ -218,6 +221,22 @@ def validation_debt(content: TrainingContent) -> list[tuple[str, Any]]:
             )
     if content.content_type == "tool_onboarding" and not content.tool_code:
         debt.append(("tool_code", _("Choose the tool this onboarding covers.")))
+    if content.content_type == CONTENT_TYPE_QUIZ and not quiz_is_configured(content):
+        debt.append(
+            (
+                "quiz",
+                _("Add at least one quiz question before publishing."),
+            )
+        )
+    if content.content_type == CONTENT_TYPE_LIVE_SESSION and not session_is_configured(
+        content
+    ):
+        debt.append(
+            (
+                "session",
+                _("Save the live session schedule before publishing."),
+            )
+        )
     if content.pk is not None and not selectors_for(content).exists():
         debt.append(("audience", _("Choose who this training is for.")))
     debt.extend(media_publish_debt(content))

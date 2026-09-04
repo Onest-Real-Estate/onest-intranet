@@ -20,7 +20,11 @@ Required content sorts before optional items, then `display_order`, then title.
 Articles, guides, videos, checklists, courses, quizzes, live sessions,
 recordings, and tool onboarding entries are modeled on `TrainingContent`.
 Quizzes and live sessions become interactive once their definitions are saved
-on the draft and published with the content.
+on the draft and published with the content. The training workspace shows a
+quiz or live-session editor (draft-only) after the content type is saved; those
+forms post to `training_quiz_save` / `training_session_save` separately from the
+main content draft. Publish validation refuses unconfigured quiz or session
+items.
 
 ## Transcriptions
 

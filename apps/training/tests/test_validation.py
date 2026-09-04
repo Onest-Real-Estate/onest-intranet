@@ -90,6 +90,28 @@ def test_validation_debt_for_missing_category(seeded):
     assert "category" in fields
 
 
+def test_validation_debt_for_unconfigured_quiz(seeded):
+    row = publish_content(
+        slug="bare-quiz",
+        title="Bare quiz",
+        owner_office=office("onest-head-office"),
+        content_type="quiz",
+    )
+    fields = {field for field, _msg in validation_debt(row)}
+    assert "quiz" in fields
+
+
+def test_validation_debt_for_unconfigured_live_session(seeded):
+    row = publish_content(
+        slug="bare-session",
+        title="Bare session",
+        owner_office=office("onest-head-office"),
+        content_type="live_session",
+    )
+    fields = {field for field, _msg in validation_debt(row)}
+    assert "session" in fields
+
+
 def test_published_clean_surfaces_validation_debt(seeded):
     row = publish_content(
         slug="publish-debt",

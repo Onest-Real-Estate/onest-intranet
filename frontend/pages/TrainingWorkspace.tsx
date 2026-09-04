@@ -5,6 +5,7 @@ import {
   CircleAlert,
   Copy,
   Eye,
+  GraduationCap,
   Images,
   Send,
   Undo2,
@@ -36,6 +37,8 @@ import {
 import { HubLayout } from "@/components/HubLayout";
 import { PermissionRequired } from "@/components/PermissionRequired";
 import { TrainingArticle } from "@/components/training/TrainingArticle";
+import { TrainingLiveSessionEditor } from "@/components/training/TrainingLiveSessionEditor";
+import { TrainingQuizEditor } from "@/components/training/TrainingQuizEditor";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -76,6 +79,20 @@ const FIELD_LABELS: Record<string, string> = {
   audience_regions: "Regions",
   audience_offices: "Offices",
   audience_users: "Named people",
+  quiz: "Quiz",
+  questions: "Questions",
+  pass_threshold_percent: "Pass threshold",
+  max_attempts: "Max attempts",
+  feedback_policy: "Feedback policy",
+  session: "Live session",
+  starts_at: "Starts at",
+  timezone: "Timezone",
+  duration_minutes: "Duration",
+  capacity: "Capacity",
+  meeting_url: "Meeting URL",
+  registration_opens_at: "Registration opens",
+  registration_closes_at: "Registration closes",
+  content: "Content",
 };
 
 const ACTIONS_BY_STATE: Record<string, string[]> = {
@@ -851,6 +868,50 @@ function TrainingWorkspacePage() {
             </Button>
           </FormActionBar>
         </form>
+
+        {editing &&
+        draft.contentType === "quiz" &&
+        content.contentTypeCode !== "quiz" ? (
+          <SurfaceCard>
+            <EmptyState
+              icon={GraduationCap}
+              title="Save the content type first"
+              description="Set Content type to Quiz, save the draft, then configure questions here."
+            />
+          </SurfaceCard>
+        ) : null}
+
+        {editing &&
+        draft.contentType === "live_session" &&
+        content.contentTypeCode !== "live_session" ? (
+          <SurfaceCard>
+            <EmptyState
+              icon={GraduationCap}
+              title="Save the content type first"
+              description="Set Content type to Live session, save the draft, then configure the schedule here."
+            />
+          </SurfaceCard>
+        ) : null}
+
+        {editing && content.contentTypeCode === "quiz" ? (
+          <TrainingQuizEditor
+            contentId={content.id}
+            quiz={content.quiz}
+            isDraft={content.status === "draft"}
+            canAuthor={capabilities.canAuthor}
+            errors={errors}
+          />
+        ) : null}
+
+        {editing && content.contentTypeCode === "live_session" ? (
+          <TrainingLiveSessionEditor
+            contentId={content.id}
+            session={content.liveSession}
+            isDraft={content.status === "draft"}
+            canAuthor={capabilities.canAuthor}
+            errors={errors}
+          />
+        ) : null}
       </div>
 
       <div className="grid gap-8">
