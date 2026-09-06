@@ -273,6 +273,7 @@ OPERATIONS_FEATURES["admin-training"] = True
 OPERATIONS_FEATURES["admin-contract-templates"] = True
 OPERATIONS_FEATURES["admin-operational-tasks"] = True
 OPERATIONS_FEATURES["admin-feedback"] = True
+OPERATIONS_FEATURES["admin-it-support"] = True
 OPERATIONS_FEATURES["admin-agent-contracts"] = True
 OPERATIONS_FEATURES["admin-inventory"] = True
 

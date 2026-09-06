@@ -9,6 +9,7 @@ from apps.contract.views.administration_views import contract_template_index
 from apps.contract.views.agent_contract_views import agent_contract_index
 from apps.feedback.views import feedback_inbox
 from apps.inventory.views.administration_views import inventory_admin_index
+from apps.it_support.views import it_support_queue
 from apps.operational_tasks.views import tasks_index
 from apps.training.administration_views import training_administration_index
 from apps.user.services.role_assignments import get_effective_access
@@ -127,6 +128,7 @@ OPERATIONS_VIEWS["admin_office_resources"] = office_resources_admin_index
 OPERATIONS_VIEWS["admin_feedback"] = feedback_inbox
 OPERATIONS_VIEWS["admin_inventory"] = inventory_admin_index
 OPERATIONS_VIEWS["operational_tasks"] = tasks_index
+OPERATIONS_VIEWS["admin_it_support"] = it_support_queue
 
 
 _CATALOG_CONTRACTS = (

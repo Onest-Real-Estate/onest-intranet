@@ -64,7 +64,14 @@ class OperationsPermission(models.Model):
             ("assign_operational_tasks", _("Can assign operational tasks")),
             ("comment_operational_tasks", _("Can comment on operational tasks")),
             ("manage_offices", _("Can manage scoped offices")),
+            ("manage_onboarding_tools", _("Can manage the agent tool catalog")),
             ("view_it_support", _("Can view scoped IT support requests")),
+            ("triage_it_support", _("Can triage scoped IT support requests")),
+            ("assign_it_support", _("Can assign IT support requests")),
+            (
+                "note_it_support",
+                _("Can write internal notes on IT support requests"),
+            ),
             (
                 "manage_quick_access",
                 _("Can manage scoped Quick Access links"),

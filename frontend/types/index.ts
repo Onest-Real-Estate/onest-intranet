@@ -640,6 +640,259 @@ export interface TaskDraft {
   tags: string;
 }
 
+/** Mirrors `it_support.taxonomy`. Codes are stable; labels are presentation. */
+export interface SupportPerson {
+  id: number;
+  name: string;
+}
+
+export interface SupportTicketRow {
+  id: string;
+  reference: string;
+  subject: string;
+  category: { code: string; label: string };
+  status: TaskStatusBadge;
+  priority: TaskPriorityBadge;
+  office: { id: number; name: string } | null;
+  submitter: SupportPerson | null;
+  /** Set when the ticket is about somebody other than its submitter. */
+  aboutUser: SupportPerson | null;
+  assignee: SupportPerson | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SupportReply {
+  id: string;
+  author: SupportPerson | null;
+  body: string;
+  /** IT-only. The server never serializes one to a reader without the note
+   *  grant, so this is a display hint, never the boundary. */
+  internal: boolean;
+  /** The reply that closed the loop, led with rather than buried in a thread. */
+  isResolution: boolean;
+  createdAt: string;
+}
+
+/** No URL: files are fetched through `routes.it_support_attachment`, which
+ *  re-authorizes the reader against the parent ticket on every request. */
+export interface SupportAttachment {
+  id: string;
+  displayName: string;
+  mediaType: string;
+  byteSize: number;
+  internal: boolean;
+  uploadedBy: SupportPerson | null;
+  createdAt: string;
+}
+
+export interface SupportTransition {
+  target: string;
+  label: string;
+  requiresNote: boolean;
+  tone: StatusTone;
+}
+
+export interface SupportTicketDetail extends SupportTicketRow {
+  description: string;
+  location: string;
+  preferredContact: { code: string; label: string };
+  /** Empty for a requester: diagnostics describe their own machine and are of
+   *  no use to them on a page they may screen-share. */
+  deviceInfo: string;
+  pageUrl: string;
+  resolvedAt: string | null;
+  closedAt: string | null;
+  replies: SupportReply[];
+  attachments: SupportAttachment[];
+  transitions: SupportTransition[];
+}
+
+/** Mirrors the service's grants so the UI can hide what it may not do. Never
+ *  the authorization — every write re-checks server-side. */
+export interface SupportCapabilities {
+  triage: boolean;
+  assign: boolean;
+  note: boolean;
+  reply: boolean;
+}
+
+export interface SupportOptions {
+  statuses: FilterOption[];
+  categories: FilterOption[];
+  priorities: FilterOption[];
+  contactMethods: FilterOption[];
+}
+
+export interface AgentTool {
+  slug: string;
+  name: string;
+  description: string;
+  group: string;
+  provisioning: "self_serve" | "onest" | "both";
+  provisioningLabel: string;
+  selfServe: boolean;
+  required: boolean;
+  openUrl: string;
+  helpUrl: string;
+  /** The guide. Both halves travel: a self-serve tool can still have somebody
+   *  to chase when a step fails. */
+  steps: string[];
+  contact: string;
+  requestPath: string;
+  state: { code: string; label: string; tone: StatusTone };
+  complete: boolean;
+  note: string;
+  updatedAt: string | null;
+}
+
+/** Grouped server-side so the order, counts, and empty groups are the same
+ *  fact the readiness figure reads. */
+export interface AgentToolGroup {
+  code: string;
+  label: string;
+  tools: AgentTool[];
+  ready: number;
+  total: number;
+}
+
+export interface ToolReadiness {
+  ready: number;
+  total: number;
+  percent: number;
+  complete: boolean;
+}
+
+export interface MyToolsPageProps extends PageProps {
+  agent: {
+    id: number;
+    name: string;
+    office: string | null;
+    isSelf: boolean;
+  };
+  groups: AgentToolGroup[];
+  readiness: ToolReadiness;
+  /** Whether this reader may move this agent's rows. Self-management is
+   *  refused, so an admin viewing their own page gets a read-only checklist. */
+  canManage: boolean;
+  stateOptions: FilterOption[];
+  supportPath: string;
+  errors: ValidationErrors;
+}
+
+/** One catalog row as the management screen reads it. */
+export interface CatalogTool {
+  slug: string;
+  name: string;
+  description: string;
+  group: string;
+  provisioning: string;
+  provisioningLabel: string;
+  openUrl: string;
+  helpUrl: string;
+  steps: string[];
+  contact: string;
+  requestPath: string;
+  companyWide: boolean;
+  /** Named in words: "not company-wide" tells an administrator nothing about
+   *  who actually gets the tool. */
+  appliesTo: string;
+  officeIds: number[];
+  required: boolean;
+  active: boolean;
+  sortOrder: number;
+}
+
+export interface OnboardingToolCatalogPageProps extends PageProps {
+  groups: { code: string; label: string; tools: CatalogTool[] }[];
+  offices: FilterOption[];
+  options: {
+    groups: FilterOption[];
+    provisioning: FilterOption[];
+  };
+  maxSteps: number;
+  /** Which row's editor is open — a slug, "new", or "". */
+  editing: string;
+  /** Echoed back on a refused save so nothing typed is lost. */
+  draft: Partial<{
+    slug: string;
+    name: string;
+    description: string;
+    group: string;
+    provisioning: string;
+    openUrl: string;
+    helpUrl: string;
+    contact: string;
+    requestPath: string;
+    companyWide: boolean;
+    required: boolean;
+    active: boolean;
+    sortOrder: string;
+    steps: string[];
+    officeIds: number[];
+  }>;
+  errors: ValidationErrors;
+}
+
+export interface TeamToolReadinessPageProps extends PageProps {
+  filters: { q: string };
+  agents: {
+    id: number;
+    name: string;
+    office: string | null;
+    ready: number;
+    total: number;
+    percent: number;
+    complete: boolean;
+  }[];
+  errors: ValidationErrors;
+}
+
+export interface ITSupportPageProps extends PageProps {
+  tickets: SupportTicketRow[];
+  openCount: number;
+  options: SupportOptions;
+  /** Echoed back on a refused save; the form posts natively, so anything the
+   *  server does not return is lost. */
+  draft: Record<string, string>;
+  errors: ValidationErrors;
+}
+
+export interface ITSupportTicketPageProps extends PageProps {
+  ticket: SupportTicketDetail;
+  can: SupportCapabilities;
+  assignees: SupportPerson[];
+  options: SupportOptions;
+  errors: ValidationErrors;
+}
+
+export interface SupportQueueFilters {
+  status: string;
+  category: string;
+  priority: string;
+  assigned: string;
+  office: string;
+  q: string;
+  [key: string]: string | string[];
+}
+
+export interface ITSupportQueuePageProps extends PageProps {
+  tickets: ListResponse<SupportTicketRow, SupportQueueFilters>;
+  /** Counted on the scoped queryset, so a triager whose reach is one branch
+   *  sees that branch's figures rather than the brokerage's. */
+  metrics: {
+    open: number;
+    urgent: number;
+    unassigned: number;
+    waitingUser: number;
+    resolvedRecently: number;
+  };
+  options: SupportOptions;
+  offices: FilterOption[];
+  can: SupportCapabilities;
+  errors: ValidationErrors;
+}
+
 export interface OperationalTasksPageProps extends PageProps {
   tasks: ListResponse<TaskRow, TaskFilters>;
   /** Present only in board view; the list view sends null. */

@@ -27,6 +27,7 @@ import {
   UserRoundSearch,
   Users,
   Warehouse,
+  Wrench,
 } from "lucide-react";
 
 import { hasPermission, type PermissionCheck } from "@/lib/permissions";
@@ -260,6 +261,18 @@ export const HUB_NAV_REGISTRY: HubNavItem[] = [
     // agent record; everyone else reads it as their own staff profile.
     labelForRoles: { roles: PRODUCING_ROLES, label: "Agent profile" },
     activeMatch: active(routes.profile()),
+  },
+  {
+    key: "my-tools",
+    label: "My tools",
+    route: route("my_tools", routes.my_tools()),
+    icon: Wrench,
+    group: "general",
+    order: 25,
+    access: "authenticated",
+    permissions: {},
+    feature: "my-tools",
+    activeMatch: active(routes.my_tools()),
   },
   {
     key: "my-contract",
@@ -651,6 +664,19 @@ export const HUB_NAV_REGISTRY: HubNavItem[] = [
     permissions: { all: ["web.view_it_support"] },
     feature: "admin-it-support",
     activeMatch: active(routes.admin_it_support()),
+  },
+  {
+    key: "admin-tool-catalog",
+    label: "Tool catalog",
+    route: route("onboarding_tool_catalog", routes.onboarding_tool_catalog()),
+    icon: Wrench,
+    group: "administration",
+    section: "admin-governance-support",
+    order: 175,
+    access: "permission-protected",
+    permissions: { all: ["web.manage_onboarding_tools"] },
+    feature: "admin-tool-catalog",
+    activeMatch: active(routes.onboarding_tool_catalog()),
   },
 ];
 

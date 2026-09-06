@@ -18,6 +18,7 @@ import {
   Sun,
   UserRound,
   WifiOff,
+  Wrench,
 } from "lucide-react";
 import {
   type CSSProperties,
@@ -793,6 +794,12 @@ function ShellWorkspace({
                 <Link href={routes.feedback_mine()}>
                   <Inbox className="size-4" strokeWidth={1.5} />
                   My reports
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href={routes.it_support()}>
+                  <Wrench className="size-4" strokeWidth={1.5} />
+                  IT support
                 </Link>
               </DropdownMenuItem>
               {helpUrl ? (

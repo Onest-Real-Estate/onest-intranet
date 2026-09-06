@@ -28,13 +28,19 @@ from apps.web.operations import OPERATIONS_DESTINATIONS, OPERATIONS_FEATURES
 HUB_FEATURES: dict[str, bool] = {
     **dict.fromkeys(HUB_SECTIONS, False),
     **OPERATIONS_FEATURES,
+    # Live destinations that are neither an agent section nor an operations
+    # Coming Soon stub. Shared only when the actor holds the matching grant.
+    "reports": False,
+    "admin-tool-catalog": False,
 }
 HUB_FEATURES["announcements"] = True
 HUB_FEATURES["office-info"] = True
 HUB_FEATURES["office-resources"] = True
 HUB_FEATURES["office-inventory"] = True
 HUB_FEATURES["my-contract"] = True
+HUB_FEATURES["my-tools"] = True
 HUB_FEATURES["reports"] = True
+HUB_FEATURES["admin-tool-catalog"] = True
 HUB_FEATURES["training-learning"] = True
 HUB_FEATURES["admin-training"] = True
 
@@ -42,6 +48,7 @@ HUB_FEATURES["admin-training"] = True
 # HUB_SECTIONS. Shared only when the actor holds the matching permission.
 STANDALONE_FEATURES: dict[str, str] = {
     "reports": "web.view_reports",
+    "admin-tool-catalog": "web.manage_onboarding_tools",
 }
 
 
