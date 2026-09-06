@@ -683,3 +683,39 @@ registry.register(
         "by the item's public id is preserved."
     ),
 )
+
+# ---------------------------------------------------------------------------
+# office-space domain  (publisher: apps.reservations.services)
+# ---------------------------------------------------------------------------
+
+registry.register(
+    name="reservations.space.created",
+    version=1,
+    required_payload_keys={"target_type", "target_id"},
+    description="A reservable office space was created within scoped ownership.",
+)
+
+registry.register(
+    name="reservations.space.retired",
+    version=1,
+    required_payload_keys={"target_type", "target_id"},
+    description=(
+        "A space was retired without deleting its identity, schedules, or history."
+    ),
+)
+
+registry.register(
+    name="reservations.space.transferred",
+    version=1,
+    required_payload_keys={"target_type", "target_id"},
+    description=(
+        "A space moved offices through the explicit history-preserving operation."
+    ),
+)
+
+registry.register(
+    name="reservations.space.availability_blocked",
+    version=1,
+    required_payload_keys={"target_type", "target_id"},
+    description="A holiday, maintenance, closure, or administrative hold was added.",
+)

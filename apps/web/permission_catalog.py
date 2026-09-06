@@ -53,6 +53,7 @@ _PEOPLE_READERS = (
     COMPLIANCE,
     IT_SUPPORT,
 )
+_SPACE_ADMINS = (*_MANAGERS, BRANCH_ADMIN, REGIONAL_ADMIN)
 
 
 @dataclass(frozen=True)
@@ -358,6 +359,52 @@ PERMISSION_DEFINITIONS: tuple[PermissionDefinition, ...] = (
             "mandatory reason. Never bypasses physical capacity."
         ),
         default_roles=(*_MANAGERS,),
+        sensitive=True,
+    ),
+    PermissionDefinition(
+        codename="reservations.view_spaces",
+        name="Can view scoped office spaces",
+        domain="reservations",
+        action="view",
+        description="View room and space records within effective office scope.",
+        default_roles=_SPACE_ADMINS,
+    ),
+    PermissionDefinition(
+        codename="reservations.manage_spaces",
+        name="Can manage scoped office spaces",
+        domain="reservations",
+        action="manage",
+        description=(
+            "Create, update, retire, and explicitly migrate spaces within "
+            "effective office scope."
+        ),
+        default_roles=_SPACE_ADMINS,
+        risk="high",
+        sensitive=True,
+    ),
+    PermissionDefinition(
+        codename="reservations.manage_space_schedules",
+        name="Can manage scoped space schedules and exceptions",
+        domain="reservations",
+        action="manage",
+        description=(
+            "Manage weekly availability and maintenance or closure blocks for "
+            "spaces within effective office scope."
+        ),
+        default_roles=_SPACE_ADMINS,
+        risk="high",
+        sensitive=True,
+    ),
+    PermissionDefinition(
+        codename="reservations.view_space_sensitive",
+        name="Can view sensitive space access and maintenance details",
+        domain="reservations",
+        action="view",
+        description=(
+            "Read internal access instructions and internal-only availability "
+            "exception reasons for spaces in scope."
+        ),
+        default_roles=_SPACE_ADMINS,
         sensitive=True,
     ),
     # --- Content ---

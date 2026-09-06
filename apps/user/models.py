@@ -8,6 +8,8 @@ from django.db.models import Q
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
+from apps.user.timezones import validate_iana_timezone
+
 from .administration_fields import (
     ACTIVE as ACTIVE_AGENT_STATUS,
 )
@@ -146,6 +148,13 @@ class Office(models.Model):
     )
     updated_at = models.DateTimeField(_("updated at"), auto_now=True)
     created_at = models.DateTimeField(_("created at"), default=timezone.now)
+    timezone = models.CharField(
+        _("timezone"),
+        max_length=64,
+        default="America/New_York",
+        validators=[validate_iana_timezone],
+        help_text=_("IANA timezone used for office schedules and local dates."),
+    )
 
     class Meta:
         ordering = ["sort_order", "name"]
