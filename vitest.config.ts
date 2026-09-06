@@ -19,7 +19,9 @@ export default defineConfig({
     include: ["frontend/**/*.test.{ts,tsx}"],
     setupFiles: ["frontend/test/setup.ts"],
     execArgv: disableNodeWebstorage,
-    // jsdom + Radix under parallel load routinely exceeds Vitest's 5s default.
-    testTimeout: 15_000,
+    // jsdom + Radix under parallel load routinely exceeds Vitest's 5s default;
+    // axe on large pages and character-typed forms need more headroom as the
+    // suite grows (HubLayout alone accounts for ~2 minutes of wall time).
+    testTimeout: 30_000,
   },
 });

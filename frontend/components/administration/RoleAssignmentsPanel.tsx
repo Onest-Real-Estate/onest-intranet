@@ -126,8 +126,11 @@ export function RoleAssignmentsPanel({
                   <RoleBadge
                     code={row.role}
                     label={row.roleLabel}
-                    scopeLabel={row.scopeLabel}
-                    title={row.roleDescription || undefined}
+                    title={
+                      row.roleDescription
+                        ? `${row.roleDescription} · Scope: ${row.scopeLabel}`
+                        : `Scope: ${row.scopeLabel}`
+                    }
                   />
                   <span className="text-muted-foreground text-xs @md:hidden">
                     {row.scopeLabel}
@@ -138,8 +141,12 @@ export function RoleAssignmentsPanel({
             {
               id: "scope",
               header: "Scope",
-              cell: (row) => row.scopeLabel,
-              className: "hidden @md:table-cell",
+              cell: (row) => (
+                <span className="block max-w-md truncate" title={row.scopeLabel}>
+                  {row.scopeLabel}
+                </span>
+              ),
+              className: "hidden max-w-md @md:table-cell",
               headerClassName: "hidden @md:table-cell",
             },
             {

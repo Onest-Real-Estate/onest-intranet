@@ -223,6 +223,100 @@ def office_headcount(context: ReportContext) -> ReportResult:
     )
 
 
+def training_completion(context: ReportContext) -> ReportResult:
+    """Required training progress for people in effective scope.
+
+    Inclusion rules:
+    - Population is ``scoped_users`` (office tree / company).
+    - Optional ``office`` intersects; out-of-scope keys empty the set.
+    - Rows are one per person with required-count / completed-count / status.
+    - Aggregates use the same filtered rows. No prior-period comparison in v1.
+    """
+    from apps.training.required_status import bulk_required_training_states
+
+    office_key = context.filters.get("office")
+    queryset = scoped_users(
+        context.user, access=context.access, office_stable_key=office_key or None
+    ).filter(is_active=True)
+    users, truncated = _apply_row_limit(
+        queryset.select_related("office", "office__region").order_by(
+            "last_name", "first_name", "pk"
+        ),
+        context.row_limit,
+    )
+    states = bulk_required_training_states(users)
+    rows: list[dict[str, Any]] = []
+    for user in users:
+        state = states.get(user.pk)
+        if state is None:
+            continue
+        required = state.required_count or 0
+        completed = state.completed_count or 0
+        if required == 0:
+            status = "not_assigned"
+            status_label = "Not assigned"
+        elif completed >= required:
+            status = "completed"
+            status_label = "Completed"
+        elif completed > 0:
+            status = "in_progress"
+            status_label = "In progress"
+        else:
+            status = "not_started"
+            status_label = "Not started"
+        office = user.office
+        rows.append(
+            {
+                "userId": user.pk,
+                "name": user.get_full_name() or user.email,
+                "course": "Required training",
+                "status": status,
+                "statusLabel": status_label,
+                "requiredCount": required,
+                "completedCount": completed,
+                "office": office.name if office else "",
+                "officeKey": office.stable_key if office else "",
+            }
+        )
+
+    counts = Counter(row["status"] for row in rows)
+    series = tuple(
+        ReportSeriesPoint(key=key, label=label, value=counts.get(key, 0))
+        for key, label in (
+            ("completed", "Completed"),
+            ("in_progress", "In progress"),
+            ("not_started", "Not started"),
+            ("not_assigned", "Not assigned"),
+        )
+    )
+    empty = None
+    if not rows:
+        empty = (
+            "No people match these filters in your scope."
+            if context.filters
+            else "No people are in your scope right now."
+        )
+    return ReportResult(
+        aggregates={
+            "total": len(rows),
+            "completed": counts.get("completed", 0),
+            "inProgress": counts.get("in_progress", 0),
+            "notStarted": counts.get("not_started", 0),
+            "notAssigned": counts.get("not_assigned", 0),
+            "truncated": truncated,
+            "syncRowLimit": context.row_limit,
+        },
+        rows=tuple(rows),
+        series=series,
+        chart_kind="bar",
+        empty_reason=empty,
+        data_as_of=context.now,
+        comparison_note=(
+            "Counts are a point-in-time snapshot of required-training status."
+        ),
+    )
+
+
 def _status_label(status: str) -> str:
     return {
         OverallStatus.NOT_STARTED: "Not started",

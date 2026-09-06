@@ -955,6 +955,12 @@ export interface ShellSharedProps {
   };
 }
 
+export interface FlashMessage {
+  /** Django ``messages`` tag / ``set_flash`` level. */
+  level: "debug" | "info" | "success" | "warning" | "error";
+  message: string;
+}
+
 export interface PageProps {
   user: User | null;
   csrfToken: string;
@@ -966,6 +972,8 @@ export interface PageProps {
   notifications: NotificationShell | null;
   /** Quick Create actions, already filtered to what this actor may start. */
   quickCreate?: QuickCreate;
+  /** One-shot toast from the previous mutating request; absent or null when none. */
+  flash?: FlashMessage | null;
   [key: string]: unknown;
 }
 
@@ -2671,6 +2679,408 @@ export interface AnnouncementsPageProps extends PageProps {
   };
 }
 
+export interface TrainingPresentationBadge {
+  code: string;
+  label: string;
+  tone: StatusTone;
+  known: boolean;
+}
+
+export interface TrainingCompletion {
+  status: string;
+  label: string;
+  progressPercent?: number | null;
+  completedAt?: string | null;
+  startedAt?: string | null;
+}
+
+export interface TrainingRequiredSummary {
+  requiredCount: number;
+  completedCount: number;
+  percent: number;
+  remainingCount: number;
+  nextItem: { id: number; title: string; detailUrl: string } | null;
+}
+
+export interface TrainingQuizChoice {
+  id: string;
+  label: string;
+}
+
+export interface TrainingQuizQuestion {
+  id: number;
+  prompt: string;
+  choices: TrainingQuizChoice[];
+  sortOrder: number;
+}
+
+export interface TrainingQuizPayload {
+  passThresholdPercent: number;
+  maxAttempts: number | null;
+  feedbackPolicy: string;
+  attemptCount: number;
+  attemptsRemaining: number | null;
+  canAttempt: boolean;
+  latestAttempt: {
+    attemptNumber: number;
+    scorePercent: number;
+    passed: boolean;
+    submittedAt: string;
+  } | null;
+  questions: TrainingQuizQuestion[];
+}
+
+export interface TrainingSessionRegistration {
+  status: string;
+  registeredAt: string;
+  cancelledAt: string | null;
+  attendedAt: string | null;
+}
+
+export interface TrainingSessionPayload {
+  startsAt: string;
+  timezone: string;
+  durationMinutes: number;
+  capacity: number | null;
+  seatsTaken: number;
+  seatsRemaining: number | null;
+  meetingUrl: string;
+  registrationOpensAt: string | null;
+  registrationClosesAt: string | null;
+  registration: TrainingSessionRegistration | null;
+}
+
+export interface TrainingCertificatePayload {
+  status: string;
+  available: boolean;
+  approvedAt: string | null;
+  downloadUrl: string | null;
+}
+
+export interface TrainingCourseRollup {
+  total: number;
+  completed: number;
+  percent: number;
+  modules: { id: number; completed: boolean }[];
+}
+
+export interface TrainingRow {
+  id: number;
+  slug: string;
+  title: string;
+  summary: string;
+  contentType: TrainingPresentationBadge;
+  category: TrainingPresentationBadge;
+  scope: { level: string; label: string; officeName: string };
+  isRequired: boolean;
+  estimatedMinutes: number | null;
+  toolCode: string | null;
+  completion: TrainingCompletion;
+  publishedAt: string | null;
+  detailUrl: string;
+}
+
+export interface TrainingFilters {
+  category: string;
+  type: string;
+  required: string;
+  tool: string;
+  completion: string;
+  view: string;
+  q: string;
+  rejected?: string[];
+  [key: string]: string | string[] | undefined;
+}
+
+export interface TrainingEmbed {
+  url: string;
+  provider: string;
+  host?: string;
+  available: boolean;
+}
+
+export interface TranscriptionSegment {
+  startMs: number;
+  endMs: number;
+  text: string;
+}
+
+export interface TrainingTranscription {
+  segments: TranscriptionSegment[];
+  hasSearchableText: boolean;
+}
+
+export interface TrainingMediaItem {
+  id: number;
+  role: string;
+  displayName: string;
+  mediaType: string;
+  byteSize: number;
+  url: string;
+  processingState?: string;
+  isReadable?: boolean;
+}
+
+export interface TrainingModuleRow {
+  id: number;
+  title: string;
+  contentType: TrainingPresentationBadge;
+  sortOrder: number;
+  estimatedMinutes: number | null;
+  completion?: TrainingCompletion;
+  detailUrl?: string;
+}
+
+export interface TrainingDetail extends TrainingRow {
+  body: string;
+  bodyBlocks: AnnouncementBlock[];
+  externalUrl: { url: string; label: string } | null;
+  embed: TrainingEmbed | null;
+  primaryMedia: TrainingMediaItem | null;
+  attachments: TrainingMediaItem[];
+  transcription: TrainingTranscription | null;
+  modules: TrainingModuleRow[];
+  courseRollup?: TrainingCourseRollup | null;
+  interactivity: "available" | "unavailable";
+  quiz?: TrainingQuizPayload | null;
+  liveSession?: TrainingSessionPayload | null;
+  certificate?: TrainingCertificatePayload | null;
+  versionNumber?: number;
+  versionCompletionPolicy?: string;
+  canMarkComplete?: boolean;
+  canMarkStarted?: boolean;
+}
+
+export interface TrainingLearningPageProps extends PageProps {
+  library: ListResponse<TrainingRow, TrainingFilters> & {
+    requiredSummary?: TrainingRequiredSummary;
+  };
+  requiredSummary?: TrainingRequiredSummary;
+  filterOptions: {
+    categories: FilterOption[];
+    contentTypes: FilterOption[];
+    tools: FilterOption[];
+    completions: FilterOption[];
+  };
+}
+
+export interface TrainingDetailPageProps extends PageProps {
+  content: TrainingDetail;
+  errors?: ValidationErrors;
+}
+
+export interface TrainingLifecycle {
+  code: "draft" | "scheduled" | "live" | "expired" | "archived";
+  label: string;
+  tone: StatusTone;
+}
+
+export interface TrainingAdminRow {
+  id: number;
+  slug: string;
+  title: string;
+  summary: string;
+  lifecycle: TrainingLifecycle;
+  status: "draft" | "published" | "archived";
+  contentType: { code: string; label: string };
+  category: { code: string; label: string } | null;
+  isRequired: boolean;
+  versionNumber: number;
+  versionLabel: string;
+  ownerOffice: { id: number; name: string };
+  scopeLevel: string;
+  audience: AnnouncementAudienceEntry[];
+  publishAt: string | null;
+  expiresAt: string | null;
+  publishedAt: string | null;
+  updatedAt: string | null;
+  updatedBy: string;
+  createdBy: string;
+  /** Opaque concurrency token. Sent back on every write; a mismatch is a 409. */
+  version: string;
+}
+
+export interface TrainingValidationItem {
+  field: string;
+  message: string;
+}
+
+export interface TrainingValidation {
+  isPublishable: boolean;
+  items: TrainingValidationItem[];
+}
+
+export interface TrainingHistoryEntry {
+  id: string;
+  action: string;
+  label: string;
+  tone: StatusTone;
+  actor: string;
+  occurredAt: string;
+}
+
+export interface TrainingAdminDetail extends TrainingAdminRow {
+  body: string;
+  categoryCode: string;
+  contentTypeCode: string;
+  toolCode: string;
+  estimatedMinutes: number | null;
+  externalUrl: string;
+  embedUrl: string;
+  displayOrder: number;
+  versionFamily: string;
+  versionCompletionPolicy?: string;
+  validation: TrainingValidation;
+  history: TrainingHistoryEntry[];
+  usage: {
+    recipientEstimate: number;
+    completed: number;
+    inProgress: number;
+    notStarted: number;
+  };
+  mediaHref: string;
+  quiz?: {
+    passThresholdPercent: number;
+    maxAttempts: number | null;
+    feedbackPolicy: string;
+    questions: {
+      id: number;
+      prompt: string;
+      choices: TrainingQuizChoice[];
+      correctChoiceIds: string[];
+      sortOrder: number;
+    }[];
+  } | null;
+  liveSession?: {
+    startsAt: string;
+    timezone: string;
+    durationMinutes: number;
+    capacity: number | null;
+    meetingUrl: string;
+    registrationOpensAt: string | null;
+    registrationClosesAt: string | null;
+    seatsTaken: number;
+  } | null;
+  modules?: {
+    id: number;
+    title: string;
+    contentType: string;
+    sortOrder: number;
+  }[];
+}
+
+export interface TrainingCapabilities {
+  canAuthor: boolean;
+  canPublish: boolean;
+}
+
+export interface TrainingWorkspaceFilters {
+  q: string;
+  lifecycle: string;
+  category: string;
+  type: string;
+  audience: string;
+  author: string;
+  office: string;
+  required: string;
+  publishedFrom: string;
+  publishedTo: string;
+  [key: string]: string | string[];
+}
+
+export interface TrainingCreateSheet {
+  open: boolean;
+  draft: Record<string, string | string[]>;
+}
+
+export interface TrainingAdministrationPageProps extends PageProps {
+  trainings: ListResponse<TrainingAdminRow, TrainingWorkspaceFilters>;
+  filterOptions: {
+    categories: FilterOption[];
+    contentTypes: FilterOption[];
+    offices: AnnouncementOfficeOption[];
+  };
+  createOptions: {
+    offices: AnnouncementOfficeOption[];
+    categories: FilterOption[];
+    contentTypes: FilterOption[];
+    tools: FilterOption[];
+    audience: AnnouncementAudienceOptions;
+  };
+  createSheet: TrainingCreateSheet | null;
+  capabilities: TrainingCapabilities;
+  errors: ValidationErrors;
+}
+
+export interface TrainingPreviewReach {
+  chosen: boolean;
+  matched: boolean;
+  officeId: number | null;
+  officeName: string;
+  roleCode: string;
+  hasNamedRecipients: boolean;
+}
+
+export interface TrainingPreview {
+  article: TrainingDetail;
+  reach: TrainingPreviewReach;
+  roleCode: string;
+  officeId: number | null;
+}
+
+export interface TrainingWorkspacePageProps extends PageProps {
+  content: TrainingAdminDetail | null;
+  officeOptions: AnnouncementOfficeOption[];
+  categoryOptions: FilterOption[];
+  contentTypeOptions: FilterOption[];
+  toolOptions: FilterOption[];
+  audienceOptions: AnnouncementAudienceOptions;
+  capabilities: TrainingCapabilities;
+  preview: TrainingPreview | null;
+  errors: ValidationErrors;
+  posted: Record<string, string[]> | null;
+}
+
+export interface TrainingRecipientResult {
+  id: number;
+  name: string;
+  email: string;
+  officeName: string;
+}
+
+export interface TrainingMediaAdmin {
+  id: number;
+  role: "primary" | "attachment";
+  displayName: string;
+  mediaType: string;
+  byteSize: number;
+  width: number | null;
+  height: number | null;
+  isImage: boolean;
+  url: string;
+  variants: Record<string, string>;
+  processingState: "pending" | "ready" | "quarantined" | "failed";
+  processingNote: string;
+  isActive: boolean;
+  checksum: string;
+  sortOrder: number;
+}
+
+export interface TrainingMediaLimits {
+  primary: { extensions: string[]; maxBytes: number; minWidth?: number };
+  attachment: { extensions: string[]; maxBytes: number; maxCount: number };
+}
+
+export interface TrainingMediaManagerPageProps extends PageProps {
+  content: { id: number; title: string; status: string };
+  media: {
+    primary: TrainingMediaAdmin | null;
+    attachments: TrainingMediaAdmin[];
+  };
+  limits: TrainingMediaLimits;
+  validation: ValidationErrors;
+}
+
 /**
  * The administration workspace.
  *
@@ -2856,6 +3266,20 @@ export interface ContractTemplateRow {
   effectiveUntil: string;
   activeVersionPk?: number | null;
   activeVersionId: string | null;
+  /** Version workspace to open: latest draft, else active, else newest. */
+  workspaceVersionPk?: number | null;
+}
+
+export interface ContractTemplateFieldLayoutItem {
+  id: string;
+  name: string;
+  type: string;
+  role: string;
+  page: number;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
 }
 
 export interface ContractTemplateVersionDetail {
@@ -2869,6 +3293,10 @@ export interface ContractTemplateVersionDetail {
   sourceFormat: string;
   sourceMediaType: string;
   sourceChecksum: string;
+  sourcePdfUrl: string;
+  fieldLayout: ContractTemplateFieldLayoutItem[];
+  fieldAiConfigured: boolean;
+  mergeSourceOptions: string[];
   placeholderKeys: string[];
   mergeSchema: Array<Record<string, unknown>>;
   mergeSchemaJson: string;
@@ -2901,6 +3329,7 @@ export interface ContractTemplateAdministrationPageProps extends PageProps {
   capabilities: ContractTemplateCapabilities;
   createSheet: ContractTemplateCreateSheet | null;
   errors: ValidationErrors;
+  states: StateOption[];
 }
 
 export interface ContractTemplateWorkspacePageProps extends PageProps {
@@ -2915,6 +3344,51 @@ export interface AgentContractCapabilities {
   canManage: boolean;
   canViewCommission: boolean;
   canViewNotes: boolean;
+  canCreateAmendment?: boolean;
+  canCreateReplacement?: boolean;
+}
+
+export interface AgentContractTermDiffRow {
+  key: string;
+  label: string;
+  before: string;
+  after: string;
+  changed: boolean;
+}
+
+export interface AgentContractTermComparison {
+  basePublicId: string;
+  baseVersionNumber: number;
+  baseStatus: string;
+  baseStatusLabel: string;
+  baseEffectiveOn: string;
+  baseExpiresOn: string | null;
+  draftEffectiveOn: string;
+  draftExpiresOn: string | null;
+  changeKind: string;
+  changeKindLabel: string;
+  changeSummary: string;
+  rows: AgentContractTermDiffRow[];
+  effectiveDateNote: string;
+}
+
+export interface AgentContractFamilyHistoryRow {
+  publicId: string;
+  versionNumber: number;
+  changeKind: string;
+  changeKindLabel: string;
+  role: string;
+  governing: string;
+  status: string;
+  statusLabel: string;
+  statusTone: string;
+  effectiveOn: string;
+  expiresOn: string | null;
+  isFocus: boolean;
+  amendsPublicId: string | null;
+  supersedesPublicId: string | null;
+  hasArtifact: boolean;
+  href: string;
 }
 
 export interface AgentContractListRow {
@@ -2938,12 +3412,21 @@ export interface AgentContractAdministrationPageProps extends PageProps {
   errors: ValidationErrors;
 }
 
+export interface AgentContractPayeeSummary {
+  id: number;
+  name: string;
+  email: string;
+  officeId?: number | null;
+  officeName?: string;
+}
+
 export interface AgentContractRecipientResult {
   id: number;
   name: string;
   email: string;
   officeId: number | null;
   officeName: string;
+  officeState?: string;
   licenseState: string;
   agentIdentifier: string;
 }
@@ -2991,6 +3474,10 @@ export interface AgentContractWorkspacePageProps extends PageProps {
     effectiveOn: string;
     expiresOn: string | null;
     templateVersionId: number | null;
+    changeKind?: string;
+    changeKindLabel?: string;
+    changeSummary?: string;
+    versionNumber?: number;
     commission?: Record<string, unknown>;
     internalNotes?: string;
   };
@@ -3001,8 +3488,12 @@ export interface AgentContractWorkspacePageProps extends PageProps {
   recipient: AgentContractRecipientResult & { agentStatus?: string };
   office: Record<string, unknown>;
   templateOptions: AgentContractTemplateOption[];
+  commissionBasisOptions: Array<{ value: string; label: string }>;
   commercialPreview: AgentContractCommercialPreview | null;
   statusOptions: Array<{ value: string; label: string; tone: string }>;
+  familyHistory?: AgentContractFamilyHistoryRow[];
+  termComparison?: AgentContractTermComparison | null;
+  governingTerms?: Record<string, unknown> | null;
   errors: ValidationErrors;
   agreementPreview: AgentContractAgreementPreview | null;
 }
@@ -3059,6 +3550,9 @@ export interface MyContractDetail {
   publicId: string;
   familyId: string;
   versionNumber: number;
+  changeKind?: string;
+  changeKindLabel?: string;
+  changeSummary?: string;
   status: string;
   statusLabel: string;
   statusTone: string;
@@ -3077,10 +3571,18 @@ export interface MyContractDetail {
   expectedVersion: string;
   generatedPdf: MyContractArtifactMeta | null;
   signedPdf: MyContractArtifactMeta | null;
+  signedPdfFinalization?: {
+    status: string;
+    error: string | null;
+    signaturePublicId: string;
+    ready: boolean;
+  } | null;
   previewUrl: string | null;
   downloadUrl: string | null;
   artifactKind: string | null;
+  verifyUrl?: string | null;
   isCurrentFocus: boolean;
+  isGoverning?: boolean;
   amendsPublicId: string | null;
   supersedesPublicId: string | null;
   commission?: MyContractCommission;
@@ -3093,6 +3595,10 @@ export interface MyContractDetail {
 export interface MyContractHistoryRow {
   publicId: string;
   versionNumber: number;
+  changeKind?: string;
+  changeKindLabel?: string;
+  role?: string;
+  governing?: string;
   status: string;
   statusLabel: string;
   statusTone: string;
@@ -3101,6 +3607,8 @@ export interface MyContractHistoryRow {
   isFocus: boolean;
   hasArtifact: boolean;
   href: string;
+  amendsPublicId?: string | null;
+  supersedesPublicId?: string | null;
 }
 
 export interface MyContractNextAction {
@@ -3114,7 +3622,7 @@ export interface MyContractNextAction {
 export interface MyContractCapabilities {
   canViewCommission: boolean;
   canSign: boolean;
-  /** False until P1-042 wires the signing ceremony. */
+  /** True when Hub signing (and org seal when required) is available. */
   signingReady: boolean;
 }
 
@@ -3126,6 +3634,57 @@ export interface MyContractPageProps extends PageProps {
   capabilities: MyContractCapabilities;
   disclaimer: string;
   empty: { kind: string; title: string; description: string } | null;
+}
+
+export interface SigningDisclosure {
+  version: string;
+  title: string;
+  body: string;
+  acknowledgementLabel: string;
+}
+
+export interface SigningCeremonyContract {
+  publicId: string;
+  versionNumber: number;
+  status: string;
+  statusLabel: string;
+  effectiveOn: string;
+  expectedVersion: string;
+  artifactChecksum: string;
+  partyDisplayName: string;
+  signerEmail: string;
+}
+
+export interface SigningCeremonyEmbed {
+  intentPublicId: string;
+  expiresAt: string;
+  reviewPdfUrl: string;
+  agentFields: Array<{
+    id: string;
+    name: string;
+    type: string;
+    role: string;
+    page: number;
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+  }>;
+}
+
+export interface SigningCeremonyRecovery {
+  code: string;
+  message: string;
+}
+
+export interface MyContractSignPageProps extends PageProps {
+  canSign: boolean;
+  signingReady: boolean;
+  recovery: SigningCeremonyRecovery | null;
+  disclosure: SigningDisclosure;
+  contract: SigningCeremonyContract | null;
+  ceremony: SigningCeremonyEmbed | null;
+  errors: { fields: Record<string, string[]>; form: string[] };
 }
 
 export interface ReportScopePayload {
@@ -3222,6 +3781,356 @@ export interface ReportDetailPayload {
 
 export interface ReportDetailPageProps extends PageProps {
   report: ReportDetailPayload;
+}
+
+export interface InventoryListFilters {
+  q: string;
+  category: string;
+  tracking_mode: string;
+  condition: string;
+  state: string;
+  owner: string;
+  include_retired: string;
+  [key: string]: string;
+}
+
+export interface AdminInventoryRow {
+  publicId: string;
+  name: string;
+  category: string;
+  categoryLabel: string;
+  trackingMode: string;
+  trackingModeLabel: string;
+  totalQuantity: number;
+  availabilityState: string;
+  availabilityStateLabel: string;
+  ownerOffice: { id: number; stableKey: string; name: string };
+  version: string;
+  detailHref: string;
+}
+
+export interface InventoryItemDetail {
+  publicId: string;
+  name: string;
+  category: string;
+  categoryLabel: string;
+  trackingMode: string;
+  trackingModeLabel: string;
+  totalQuantity: number;
+  effectiveQuantity: number;
+  condition: string;
+  conditionLabel: string;
+  availabilityState: string;
+  availabilityStateLabel: string;
+  isReservable: boolean;
+  storageLocation: string;
+  notes: string;
+  photoIsPublic: boolean;
+  hasPhoto: boolean;
+  ownerOffice: { id: number; stableKey: string; name: string };
+  createdAt: string;
+  updatedAt: string;
+  retiredAt?: string | null;
+  activatedAt?: string | null;
+  assetId?: string;
+  serialNumber?: string;
+  internalNotes?: string;
+  replacementValue?: string;
+  replacementCurrency?: string;
+}
+
+export interface InventoryAdministrationPageProps extends PageProps {
+  items: ListResponse<AdminInventoryRow, InventoryListFilters>;
+  writableOffices: { id: number; label: string; kind: string }[];
+  createSheet: { open: boolean; draft: Record<string, string> } | null;
+  filterOptions: {
+    categories: FilterOption[];
+    trackingModes: FilterOption[];
+    conditions: FilterOption[];
+    states: FilterOption[];
+    owners: FilterOption[];
+  };
+  capabilities: { canManage: boolean; canViewSensitive: boolean };
+  scope: { level: string; label: string };
+  validation: ValidationErrors;
+}
+
+export interface InventoryReservationRow {
+  publicId: string;
+  summary: string;
+  startsAt: string;
+  endsAt: string;
+}
+
+export interface InventoryItemWorkspacePageProps extends PageProps {
+  item: InventoryItemDetail | null;
+  version: string;
+  writableOffices: { id: number; label: string; kind: string }[];
+  capabilities: { canManage: boolean; canViewSensitive: boolean };
+  filterOptions: {
+    categories: FilterOption[];
+    trackingModes: FilterOption[];
+    conditions: FilterOption[];
+  };
+  transfers: {
+    publicId: string;
+    fromOffice: string;
+    toOffice: string;
+    performedAt: string;
+    reason: string;
+  }[];
+  reservations: InventoryReservationRow[];
+  committedQuantity: number;
+  availabilityPreview: {
+    start: string;
+    end: string;
+    availableQuantity: number;
+    totalQuantity: number;
+    physicalState: string;
+    physicalStateLabel: string;
+    isReservableCatalogState: boolean;
+  } | null;
+  scope: { level: string; label: string };
+  validation: ValidationErrors;
+}
+
+export interface OfficeInventoryFilters {
+  q: string;
+  category: string;
+  condition: string;
+  pickup: string;
+  return: string;
+  quantity: string;
+  view: string;
+  available_only: string;
+  [key: string]: string;
+}
+
+export interface OfficeInventoryAvailability {
+  start: string;
+  end: string;
+  requestedQuantity: number;
+  availableQuantity: number;
+  totalQuantity: number;
+  isAvailable: boolean;
+  reason: string;
+  reasonLabel: string;
+}
+
+export interface OfficeInventoryItemRow {
+  publicId: string;
+  name: string;
+  category: string;
+  categoryLabel: string;
+  trackingMode: string;
+  trackingModeLabel: string;
+  totalQuantity: number;
+  condition: string;
+  conditionLabel: string;
+  ownerOffice: { id: number; name: string };
+  hasPhoto: boolean;
+  photoHref: string | null;
+  detailHref: string;
+  storageLocation?: string;
+  notes?: string;
+  assetId?: string;
+  availability: OfficeInventoryAvailability | null;
+  myReservation: { status: string; statusLabel: string; returnDue: string } | null;
+  reserveHref: string;
+}
+
+export interface OfficeInventoryPageProps extends PageProps {
+  items: ListResponse<OfficeInventoryItemRow, OfficeInventoryFilters>;
+  office: { id: number; name: string } | null;
+  filterOptions: {
+    categories: FilterOption[];
+    conditions: FilterOption[];
+  };
+  capabilities: { canViewSensitive: boolean };
+  dateErrors: string[];
+  serviceError: string | null;
+  empty: {
+    kind: "no-office" | "no-items" | "no-results" | "unavailable-range";
+    title: string;
+    description: string;
+  } | null;
+}
+
+export interface OfficeInventoryItemPageProps extends PageProps {
+  item: OfficeInventoryItemRow;
+  office: { id: number; name: string } | null;
+  filters: OfficeInventoryFilters;
+  filterOptions: {
+    categories: FilterOption[];
+    conditions: FilterOption[];
+  };
+  capabilities: { canViewSensitive: boolean };
+  dateErrors: string[];
+  serviceError: string | null;
+}
+
+export interface InventoryReservationTerms {
+  requiresApproval: boolean;
+  autoConfirm: boolean;
+  maxHorizonDays: number;
+  maxDurationDays: number;
+  cancelCutoffHours: number;
+  approvalLabel: string;
+  cancelPolicyLabel: string;
+}
+
+export interface InventoryReservationSummary {
+  item: {
+    publicId: string;
+    name: string;
+    trackingMode: string;
+    requiresApproval: boolean;
+    totalQuantity: number;
+    storageLocation: string;
+    notes: string;
+  };
+  office: { id: number; name: string };
+  pickup: string;
+  return: string;
+  startsAt: string;
+  endsAt: string;
+  quantity: number;
+  purpose: string;
+  availableQuantity: number;
+  isAvailable: boolean;
+  status: string;
+  statusLabel: string;
+  terms: InventoryReservationTerms;
+  instructions: { storageLocation: string; notes: string };
+}
+
+export interface InventoryReservationNewPageProps extends PageProps {
+  item: OfficeInventoryItemRow | null;
+  draft: {
+    item: string;
+    pickup: string;
+    return: string;
+    quantity: string;
+    purpose: string;
+  };
+  review: boolean;
+  summary: InventoryReservationSummary | null;
+  office: { id: number; name: string } | null;
+  links: {
+    inventoryHref: string;
+    myReservationsHref: string;
+    dashboardHref: string;
+  };
+  errors: ValidationErrors;
+}
+
+export interface InventoryReservationTimelineEntry {
+  id: string;
+  action: string;
+  actionLabel: string;
+  fromStatus: string;
+  toStatus: string;
+  reason: string;
+  notes: string;
+  occurredAt: string;
+  actor: { id: number; name: string } | null;
+  metadata: Record<string, unknown>;
+}
+
+export interface InventoryReservationAction {
+  action: string;
+  label: string;
+  targetStatus: string;
+  requiresReason: boolean;
+  requiresNote: boolean;
+  overrideOnly: boolean;
+}
+
+export interface InventoryReservationDetailPayload {
+  publicId: string;
+  reference: string;
+  itemName: string;
+  itemPublicId: string;
+  office: { id: number; name: string };
+  owner?: { id: number; name: string; email: string } | null;
+  quantity: number;
+  purpose: string;
+  status: string;
+  statusLabel: string;
+  expectedVersion: string;
+  startsAt: string;
+  endsAt: string;
+  pickupLabel: string;
+  returnLabel: string;
+  instructions: { storageLocation: string; notes: string };
+  terms: InventoryReservationTerms;
+  canCancel: boolean;
+  cancelCutoffAt: string | null;
+  cancelledAt: string | null;
+  checkedOutAt: string | null;
+  returnedAt: string | null;
+  completedAt: string | null;
+  checkoutQuantity: number | null;
+  returnQuantity: number | null;
+  returnConditionNotes: string;
+  createdAt: string;
+  timeline: InventoryReservationTimelineEntry[];
+  actions: InventoryReservationAction[];
+  itemHref: string;
+  myReservationsHref: string;
+  dashboardHref: string;
+  adminHref?: string | null;
+}
+
+export interface InventoryReservationDetailPageProps extends PageProps {
+  reservation: InventoryReservationDetailPayload;
+  errors: ValidationErrors;
+  justCreated: boolean;
+}
+
+export interface InventoryReservationListRow {
+  publicId: string;
+  reference: string;
+  itemName: string;
+  itemPublicId: string;
+  officeName: string;
+  quantity: number;
+  purpose: string;
+  status: string;
+  statusLabel: string;
+  startsAt: string;
+  endsAt: string;
+  pickupLabel: string;
+  returnLabel: string;
+  detailHref: string;
+  owner?: { id: number; name: string; email: string };
+}
+
+export interface AdminReservationsPageProps extends PageProps {
+  reservations: ListResponse<
+    InventoryReservationListRow,
+    { q: string; status: string }
+  >;
+  filterOptions: { statuses: FilterOption[] };
+  can: { approve: boolean; override: boolean };
+  scope: { level: string; label: string };
+  errors: ValidationErrors;
+}
+
+export interface AdminReservationDetailPageProps extends PageProps {
+  reservation: InventoryReservationDetailPayload;
+  can: { approve: boolean; override: boolean };
+  scope: { level: string; label: string };
+  errors: ValidationErrors;
+}
+
+export interface InventoryReservationsPageProps extends PageProps {
+  reservations: ListResponse<InventoryReservationListRow, Record<string, string>>;
+  links: {
+    inventoryHref: string;
+    dashboardHref: string;
+  };
+  errors: ValidationErrors;
 }
 
 export interface ReportExportJobPayload {

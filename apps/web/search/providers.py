@@ -6,7 +6,7 @@ function the domain already uses to serve its pages — that is the property tha
 keeps search from becoming the surface where authorization is re-implemented
 slightly differently.
 
-Sources named in the specification that are absent — documents, training,
+Sources named in the specification that are absent — documents,
 transactions, CRM contacts, policies — have no model behind them yet. They are
 deliberately not registered: a provider over a table that does not exist would
 be a group heading that never returns anything, and inventing one to satisfy a
@@ -127,6 +127,34 @@ def search_announcements(actor: User, query: str, limit: int) -> list[SearchHit]
 
 
 # --------------------------------------------------------------------------- #
+# Training
+# --------------------------------------------------------------------------- #
+
+
+def search_training(actor: User, query: str, limit: int) -> list[SearchHit]:
+    """Published, in-window training addressed to this reader."""
+    from apps.training.audience import visible_training_content
+
+    rows = search_ranked(
+        visible_training_content(actor),
+        query,
+        fields=("title", "summary", "body", "transcription__search_text"),
+        trigram_field="title",
+        order=("display_order", "title"),
+    )[:limit]
+    return [
+        SearchHit(
+            id=str(row.pk),
+            title=row.title,
+            href=reverse("training_detail", args=[row.pk]),
+            snippet=snippet_from(row.summary or row.body, query),
+            meta=row.category.label if row.category else "Training",
+        )
+        for row in rows
+    ]
+
+
+# --------------------------------------------------------------------------- #
 # Offices
 # --------------------------------------------------------------------------- #
 
@@ -222,6 +250,15 @@ SEARCH_PROVIDERS: tuple[SearchProvider, ...] = (
         permission="",
         order=20,
         all_results_route="announcements",
+    ),
+    SearchProvider(
+        key="training",
+        label="Training",
+        icon="graduation-cap",
+        search=search_training,
+        permission="",
+        order=25,
+        all_results_route="training_learning",
     ),
     SearchProvider(
         key="office-resources",

@@ -98,9 +98,9 @@ SOURCE_MODULE_AVAILABILITY: dict[str, bool] = {
     SourceModule.LEADS: False,
     SourceModule.CONTRACTS: False,
     SourceModule.COMPLIANCE: False,
-    SourceModule.INVENTORY: False,
+    SourceModule.INVENTORY: True,
     SourceModule.RESERVATIONS: False,
-    SourceModule.TRAINING: False,
+    SourceModule.TRAINING: True,
 }
 
 #: Shown on the card in place of a figure. Written out per module rather than
@@ -115,7 +115,7 @@ SOURCE_MODULE_UNAVAILABLE_REASON: dict[str, str] = {
     SourceModule.COMPLIANCE: "Compliance tracking is not connected to the hub yet.",
     SourceModule.INVENTORY: "Inventory is not connected to the hub yet.",
     SourceModule.RESERVATIONS: "Reservations are not connected to the hub yet.",
-    SourceModule.TRAINING: "Training is not connected to the hub yet.",
+    SourceModule.TRAINING: "Training progress is connected.",
 }
 
 
@@ -397,6 +397,29 @@ def pending_source(context: MetricContext) -> MetricValue:
     )
 
 
+def calculate_team_overdue_inventory(context: MetricContext) -> MetricValue:
+    """Checked-out reservations past return deadline in the caller's scope."""
+    from apps.inventory.models import InventoryReservation
+    from apps.inventory.overdue import overdue_queryset
+
+    scoped = scope_queryset_for_user_office(
+        context.user,
+        InventoryReservation.objects.all(),
+        field_name="office",
+        access=context.access,
+    )
+    count = overdue_queryset(scoped, now=context.now).count()
+    tone = "destructive" if count else "neutral"
+    return MetricValue(
+        value=format_count(count),
+        hint="Past return deadline in your scope",
+        tone=tone,
+        trend="flat",
+        raw_value=count,
+        unit="count",
+    )
+
+
 def calculate_new_agents(context: MetricContext) -> MetricValue:
     """Agents who joined the caller's scope inside the trailing window.
 
@@ -597,7 +620,7 @@ METRIC_DEFINITIONS: tuple[MetricDefinition, ...] = (
         order=130,
         scopes=MANAGED_SCOPES,
         source_module=SourceModule.INVENTORY,
-        calculator=pending_source,
+        calculator=calculate_team_overdue_inventory,
         all_permissions=("web.view_inventory",),
         drill_down=MetricDrillDown(
             route_name="admin_inventory",

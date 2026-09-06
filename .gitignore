@@ -57,3 +57,5 @@ node_modules/*
 .impeccable/
 .impeccable-live/
 .impeccable-live.json
+
+issues.md

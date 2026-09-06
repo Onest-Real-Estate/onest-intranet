@@ -100,32 +100,379 @@ def account_reactivated(envelope: EventEnvelope) -> list[NotificationRequest]:
     ]
 
 
-def contract_pdf_ready(envelope: EventEnvelope) -> list[NotificationRequest]:
-    """Tell the recipient agent their review PDF is ready.
+def _contract_id(envelope: EventEnvelope) -> str:
+    return str(envelope.payload.get("contract_id") or "").strip()
 
-    Dedupe on contract identity (not event id) so a retried generation that
-    somehow re-emitted would still collapse — the publisher already avoids
-    duplicate events; this is belt-and-suspenders.
-    """
-    agent_id = _int_or_none(envelope.payload.get("agent_id"))
-    contract_id = str(envelope.payload.get("contract_id") or "").strip()
-    if agent_id is None or not contract_id:
+
+def _agent_contract_change(
+    envelope: EventEnvelope,
+    *,
+    title: str,
+    recipient_payload_key: str = "agent_id",
+    action_key: str = "open_my_contract",
+    priority: int = NotificationPriority.HIGH,
+    is_mandatory: bool = True,
+    dedupe_suffix: str = "",
+) -> list[NotificationRequest]:
+    """Shared builder for recipient-facing contract lifecycle notifications."""
+    recipient_id = _int_or_none(envelope.payload.get(recipient_payload_key))
+    contract_id = _contract_id(envelope)
+    if recipient_id is None or not contract_id:
         return []
+    dedupe = f"{envelope.name}:{contract_id}"
+    if dedupe_suffix:
+        dedupe = f"{dedupe}:{dedupe_suffix}"
     return [
         NotificationRequest(
-            recipient_id=agent_id,
+            recipient_id=recipient_id,
             notification_type=NotificationType.CONTRACT,
             event_key=envelope.name,
-            title="Your agent contract is ready to review",
-            dedupe_key=f"contract.pdf_ready:{contract_id}",
-            priority=NotificationPriority.HIGH,
+            title=title,
+            dedupe_key=dedupe,
+            priority=priority,
+            is_mandatory=is_mandatory,
             source_module="contract",
             source_record_type="agent_contract",
             source_record_id=contract_id,
-            action_key="open_dashboard",
+            action_key=action_key,
             action_args=(),
         )
     ]
+
+
+def _staff_contract_notices(
+    envelope: EventEnvelope,
+    *,
+    title: str,
+    action_key: str = "open_agent_contract",
+    priority: int = NotificationPriority.NORMAL,
+    is_mandatory: bool = False,
+    dedupe_suffix: str = "",
+    staff_ids: list[int] | None = None,
+) -> list[NotificationRequest]:
+    """Notices for authorized operational staff about one contract."""
+    contract_id = _contract_id(envelope)
+    if not contract_id:
+        return []
+    recipients = staff_ids
+    if recipients is None:
+        raw = envelope.payload.get("staff_ids") or []
+        recipients = []
+        for value in raw:
+            parsed = _int_or_none(value)
+            if parsed is not None:
+                recipients.append(parsed)
+    if not recipients:
+        return []
+    dedupe_base = f"{envelope.name}:{contract_id}"
+    if dedupe_suffix:
+        dedupe_base = f"{dedupe_base}:{dedupe_suffix}"
+    return [
+        NotificationRequest(
+            recipient_id=staff_id,
+            notification_type=NotificationType.CONTRACT,
+            event_key=envelope.name,
+            title=title,
+            dedupe_key=f"{dedupe_base}:staff:{staff_id}",
+            priority=priority,
+            is_mandatory=is_mandatory,
+            source_module="contract",
+            source_record_type="agent_contract",
+            source_record_id=contract_id,
+            action_key=action_key,
+            action_args=(contract_id,),
+        )
+        for staff_id in recipients
+    ]
+
+
+def _load_staff_ids(envelope: EventEnvelope) -> list[int]:
+    """Resolve staff from payload or from the live contract + roles."""
+    if "staff_ids" in envelope.payload:
+        raw = envelope.payload.get("staff_ids") or []
+        if not isinstance(raw, list):
+            return []
+        resolved = [_int_or_none(value) for value in raw]
+        return [value for value in resolved if value is not None]
+    contract_id = _contract_id(envelope)
+    if not contract_id:
+        return []
+    from apps.contract.models import AgentContract
+    from apps.contract.notification_recipients import operational_staff_ids
+
+    contract = (
+        AgentContract.objects.select_related("office", "office__region")
+        .filter(public_id=contract_id)
+        .first()
+    )
+    if contract is None:
+        return []
+    return operational_staff_ids(contract)
+
+
+def contract_pdf_ready(envelope: EventEnvelope) -> list[NotificationRequest]:
+    """Tell the recipient agent their review PDF is ready."""
+    return _agent_contract_change(
+        envelope,
+        title="Your agent contract is ready to sign",
+        action_key="open_my_contract_sign",
+        is_mandatory=True,
+    )
+
+
+def contract_issued(envelope: EventEnvelope) -> list[NotificationRequest]:
+    return _agent_contract_change(
+        envelope,
+        title="Your agent contract was issued",
+        is_mandatory=True,
+    )
+
+
+def contract_viewed(envelope: EventEnvelope) -> list[NotificationRequest]:
+    """Optional staff notice when the agent opens an issued contract."""
+    return _staff_contract_notices(
+        envelope,
+        title="An agent viewed their contract",
+        priority=NotificationPriority.LOW,
+        is_mandatory=False,
+        staff_ids=_load_staff_ids(envelope),
+    )
+
+
+def contract_signed(envelope: EventEnvelope) -> list[NotificationRequest]:
+    """Confirm to the signing agent that the agreement was recorded."""
+    agent = _agent_contract_change(
+        envelope,
+        title="Your agent contract is signed",
+        recipient_payload_key="signer_id",
+        is_mandatory=True,
+    )
+    staff = _staff_contract_notices(
+        envelope,
+        title="An agent contract was signed",
+        priority=NotificationPriority.NORMAL,
+        is_mandatory=False,
+        staff_ids=_load_staff_ids(envelope),
+    )
+    return agent + staff
+
+
+def contract_activated(envelope: EventEnvelope) -> list[NotificationRequest]:
+    return _agent_contract_change(
+        envelope,
+        title="Your agent contract is now active",
+        is_mandatory=True,
+    )
+
+
+def contract_superseded(envelope: EventEnvelope) -> list[NotificationRequest]:
+    return _agent_contract_change(
+        envelope,
+        title="Your agent contract was superseded",
+        is_mandatory=True,
+    )
+
+
+def contract_terminated(envelope: EventEnvelope) -> list[NotificationRequest]:
+    return _agent_contract_change(
+        envelope,
+        title="Your agent contract was terminated",
+        is_mandatory=True,
+    )
+
+
+def contract_expired(envelope: EventEnvelope) -> list[NotificationRequest]:
+    return _agent_contract_change(
+        envelope,
+        title="Your agent contract has expired",
+        is_mandatory=True,
+    )
+
+
+def contract_generation_error(envelope: EventEnvelope) -> list[NotificationRequest]:
+    """Route PDF/finalization failure to ops staff — no contract contents."""
+    return _staff_contract_notices(
+        envelope,
+        title="Contract PDF preparation failed",
+        priority=NotificationPriority.HIGH,
+        is_mandatory=True,
+        staff_ids=_load_staff_ids(envelope),
+    )
+
+
+def contract_signature_reminder(envelope: EventEnvelope) -> list[NotificationRequest]:
+    """Cadenced reminder while the contract is still signable."""
+    day = str(envelope.payload.get("reminder_day") or "").strip() or "n"
+    return _agent_contract_change(
+        envelope,
+        title="Reminder: your agent contract is waiting for signature",
+        action_key="open_my_contract_sign",
+        priority=NotificationPriority.HIGH,
+        is_mandatory=True,
+        dedupe_suffix=f"day:{day}",
+    )
+
+
+def contract_expiration_warning(envelope: EventEnvelope) -> list[NotificationRequest]:
+    """Warn the agent (and optionally staff) that expiry is approaching."""
+    day = str(envelope.payload.get("warning_day") or "").strip() or "n"
+    agent = _agent_contract_change(
+        envelope,
+        title="Your agent contract is approaching expiration",
+        priority=NotificationPriority.HIGH,
+        is_mandatory=True,
+        dedupe_suffix=f"day:{day}",
+    )
+    staff = _staff_contract_notices(
+        envelope,
+        title="An agent contract is approaching expiration",
+        priority=NotificationPriority.NORMAL,
+        is_mandatory=False,
+        dedupe_suffix=f"day:{day}",
+        staff_ids=_load_staff_ids(envelope),
+    )
+    return agent + staff
+
+
+def _reservation_public_id(envelope: EventEnvelope) -> str:
+    return str(envelope.payload.get("reservation_public_id") or "").strip()
+
+
+def _inventory_policy_suffix(envelope: EventEnvelope) -> str:
+    version = str(envelope.payload.get("policy_version") or "1").strip() or "1"
+    return f"v:{version}"
+
+
+def _inventory_owner_notice(
+    envelope: EventEnvelope,
+    *,
+    title: str,
+    action_key: str = "open_inventory_reservation",
+    priority: int = NotificationPriority.HIGH,
+    is_mandatory: bool = False,
+    threshold_key: str,
+    threshold_value: str,
+) -> list[NotificationRequest]:
+    owner_id = _int_or_none(envelope.payload.get("owner_id"))
+    reservation_id = _reservation_public_id(envelope)
+    if owner_id is None or not reservation_id:
+        return []
+    policy = _inventory_policy_suffix(envelope)
+    return [
+        NotificationRequest(
+            recipient_id=owner_id,
+            notification_type=NotificationType.INVENTORY,
+            event_key=envelope.name,
+            title=title,
+            dedupe_key=(
+                f"{envelope.name}:{reservation_id}:{policy}:{threshold_key}:"
+                f"{threshold_value}"
+            ),
+            priority=priority,
+            is_mandatory=is_mandatory,
+            source_module="inventory",
+            source_record_type="inventory_reservation",
+            source_record_id=reservation_id,
+            action_key=action_key,
+            action_args=(reservation_id,),
+        )
+    ]
+
+
+def _inventory_staff_notices(
+    envelope: EventEnvelope,
+    *,
+    title: str,
+    threshold_key: str,
+    threshold_value: str,
+    priority: int = NotificationPriority.NORMAL,
+    is_mandatory: bool = False,
+    staff_ids: list[int] | None = None,
+) -> list[NotificationRequest]:
+    reservation_id = _reservation_public_id(envelope)
+    if not reservation_id:
+        return []
+    recipients = staff_ids
+    if recipients is None:
+        raw = envelope.payload.get("staff_ids") or []
+        recipients = []
+        for value in raw:
+            parsed = _int_or_none(value)
+            if parsed is not None:
+                recipients.append(parsed)
+    if not recipients:
+        return []
+    policy = _inventory_policy_suffix(envelope)
+    dedupe_base = (
+        f"{envelope.name}:{reservation_id}:{policy}:{threshold_key}:{threshold_value}"
+    )
+    return [
+        NotificationRequest(
+            recipient_id=staff_id,
+            notification_type=NotificationType.INVENTORY,
+            event_key=envelope.name,
+            title=title,
+            dedupe_key=f"{dedupe_base}:staff:{staff_id}",
+            priority=priority,
+            is_mandatory=is_mandatory,
+            source_module="inventory",
+            source_record_type="inventory_reservation",
+            source_record_id=reservation_id,
+            action_key="open_admin_reservation",
+            action_args=(reservation_id,),
+        )
+        for staff_id in recipients
+    ]
+
+
+def inventory_return_due_soon(envelope: EventEnvelope) -> list[NotificationRequest]:
+    day = str(envelope.payload.get("lead_day") or "").strip() or "n"
+    return _inventory_owner_notice(
+        envelope,
+        title="Reminder: an inventory return is due soon",
+        priority=NotificationPriority.NORMAL,
+        threshold_key="lead",
+        threshold_value=f"day:{day}",
+    )
+
+
+def inventory_return_overdue(envelope: EventEnvelope) -> list[NotificationRequest]:
+    day = str(envelope.payload.get("overdue_day") or "").strip() or "n"
+    return _inventory_owner_notice(
+        envelope,
+        title="Reminder: an inventory return is overdue",
+        priority=NotificationPriority.HIGH,
+        is_mandatory=True,
+        threshold_key="overdue",
+        threshold_value=f"day:{day}",
+    )
+
+
+def inventory_return_overdue_staff(
+    envelope: EventEnvelope,
+) -> list[NotificationRequest]:
+    day = str(envelope.payload.get("overdue_day") or "").strip() or "n"
+    return _inventory_staff_notices(
+        envelope,
+        title="An inventory return is overdue in your office",
+        threshold_key="overdue",
+        threshold_value=f"day:{day}",
+        priority=NotificationPriority.HIGH,
+    )
+
+
+def inventory_lost_damaged_escalation(
+    envelope: EventEnvelope,
+) -> list[NotificationRequest]:
+    day = str(envelope.payload.get("escalation_day") or "").strip() or "n"
+    return _inventory_staff_notices(
+        envelope,
+        title="A lost or damaged inventory return needs follow-up",
+        threshold_key="escalation",
+        threshold_value=f"day:{day}",
+        priority=NotificationPriority.HIGH,
+        is_mandatory=True,
+    )
 
 
 EventBuilder = Callable[[EventEnvelope], list[NotificationRequest]]
@@ -134,6 +481,20 @@ EVENT_PRODUCERS: dict[str, EventBuilder] = {
     "user.onboarding.owner_assigned": onboarding_owner_assigned,
     "user.account.state_changed": account_reactivated,
     "contract.pdf_ready": contract_pdf_ready,
+    "contract.issued": contract_issued,
+    "contract.viewed": contract_viewed,
+    "contract.signed": contract_signed,
+    "contract.activated": contract_activated,
+    "contract.superseded": contract_superseded,
+    "contract.terminated": contract_terminated,
+    "contract.expired": contract_expired,
+    "contract.generation_error": contract_generation_error,
+    "contract.signature_reminder": contract_signature_reminder,
+    "contract.expiration_warning": contract_expiration_warning,
+    "inventory.reservation.return_due_soon": inventory_return_due_soon,
+    "inventory.reservation.return_overdue": inventory_return_overdue,
+    "inventory.reservation.return_overdue_staff": inventory_return_overdue_staff,
+    "inventory.reservation.lost_damaged_escalation": inventory_lost_damaged_escalation,
 }
 
 

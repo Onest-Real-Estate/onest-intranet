@@ -106,6 +106,10 @@ const baseProps = {
     {
       publicId: activeContract.publicId,
       versionNumber: 2,
+      changeKind: "original",
+      changeKindLabel: "Original agreement",
+      role: "base",
+      governing: "current",
       status: "active",
       statusLabel: "Active",
       statusTone: "success",
@@ -114,10 +118,16 @@ const baseProps = {
       isFocus: true,
       hasArtifact: true,
       href: "/my-contract",
+      amendsPublicId: null,
+      supersedesPublicId: null,
     },
     {
       publicId: "44444444-4444-4444-4444-444444444444",
       versionNumber: 1,
+      changeKind: "original",
+      changeKindLabel: "Original agreement",
+      role: "base",
+      governing: "historical",
       status: "superseded",
       statusLabel: "Superseded",
       statusTone: "neutral",
@@ -126,6 +136,8 @@ const baseProps = {
       isFocus: false,
       hasArtifact: true,
       href: "/my-contract?v=44444444-4444-4444-4444-444444444444",
+      amendsPublicId: null,
+      supersedesPublicId: null,
     },
   ],
   capabilities: {
@@ -241,6 +253,36 @@ describe("MyContract", () => {
     render(<MyContract />);
     const sign = screen.getByRole("button", { name: /Sign contract/i });
     expect(sign).toHaveAttribute("aria-disabled");
+  });
+
+  it("links to the signing ceremony when signable and ready", () => {
+    pageProps = {
+      ...pageProps,
+      state: "awaiting_signature",
+      capabilities: {
+        canViewCommission: true,
+        canSign: true,
+        signingReady: true,
+      },
+      nextAction: {
+        title: "Signature required",
+        description: "Review and sign.",
+        ctaLabel: "Sign contract",
+        ctaKind: "sign",
+        ctaHref: "",
+      },
+      contract: {
+        ...activeContract,
+        status: "viewed",
+        statusLabel: "Viewed",
+        statusTone: "info",
+      },
+    };
+    render(<MyContract />);
+    expect(screen.getByRole("link", { name: /Sign contract/i })).toHaveAttribute(
+      "href",
+      "/my-contract/sign",
+    );
   });
 
   it("hides sign when the version is not signable", () => {

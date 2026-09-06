@@ -16,6 +16,7 @@ import { HubLayout } from "@/components/HubLayout";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import { toFormData } from "@/lib/form-data";
 import { routes } from "@/lib/routes";
 import type {
   NotificationCategoryPreference,
@@ -174,11 +175,10 @@ export default function NotificationPreferences() {
 
   function submit() {
     setSaving(true);
-    router.post(
-      routes.notification_preferences_submit(),
-      { ...draft },
-      { preserveScroll: true, onFinish: () => setSaving(false) },
-    );
+    router.post(routes.notification_preferences_submit(), toFormData({ ...draft }), {
+      preserveScroll: true,
+      onFinish: () => setSaving(false),
+    });
   }
 
   return (

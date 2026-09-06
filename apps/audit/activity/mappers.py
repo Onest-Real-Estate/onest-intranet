@@ -186,6 +186,10 @@ CONTRACT_MAPPER = DomainMapper(
         "contract.generation_error": "Contract generation error",
         "contract.generation_retried": "Contract generation retried",
         "contract.pdf_generated": "Contract PDF generated",
+        "contract.signed_pdf_generated": "Signed contract PDF generated",
+        "contract.signed_pdf_generation_failed": (
+            "Signed contract PDF generation failed"
+        ),
         "contract.artifact.downloaded": "Contract artifact downloaded",
     },
     typed_actions={

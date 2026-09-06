@@ -157,6 +157,7 @@ def test_contract_versions_are_pinned():
         "training": 1,
         "my_day": 1,
         "action_items": 2,
+        "overdue_inventory": 1,
         "market": 1,
         "quick_documents": 1,
     }
@@ -223,7 +224,6 @@ def test_modules_without_a_backing_source_report_unavailable_not_empty():
     context = build_context(user)
     for key in (
         "active_transactions",
-        "training",
         "market",
         "quick_documents",
     ):
@@ -231,6 +231,16 @@ def test_modules_without_a_backing_source_report_unavailable_not_empty():
         assert payload["status"] == WidgetStatus.UNAVAILABLE, key
         # Not retryable: asking again will not build the module.
         assert payload["unavailable"]["retryable"] is False, key
+
+
+@pytest.mark.django_db
+def test_training_widget_reports_ready_when_source_is_connected():
+    user = make_user("training-widget@example.com")
+    context = build_context(user)
+    payload = widget_payload(WIDGET_BY_KEY["training"], context)
+    assert payload["status"] == WidgetStatus.READY
+    assert payload["data"]["percent"] == 100
+    assert payload["data"]["label"]
 
 
 @pytest.mark.django_db
@@ -737,7 +747,8 @@ def test_widget_providers_are_bounded_in_queries():
 
     # The live provider reads two scoped counts — the trailing window and the
     # preceding one its delta compares against — plus the scope's display name.
-    with assert_application_queries(3):
+    # Inventory overdue count adds one query now that the module is connected.
+    with assert_application_queries(4):
         widget_payload(WIDGET_BY_KEY["performance"], context)
 
     # Providers awaiting their module must not touch the database at all.
@@ -745,10 +756,11 @@ def test_widget_providers_are_bounded_in_queries():
         with assert_application_queries(0):
             widget_payload(WIDGET_BY_KEY[key], context)
 
-    # My Day is one query per *available* source, never one per row. Today the
-    # only live source is operational tasks; each module that lights up adds
-    # exactly one, which is what keeps the widget's cost legible as it grows.
-    with assert_application_queries(1):
+    # My Day is one query per *available* source, never one per row. Live
+    # sources today: operational tasks + inventory reservations. Each module
+    # that lights up adds exactly one, which is what keeps the widget's cost
+    # legible as it grows.
+    with assert_application_queries(2):
         widget_payload(WIDGET_BY_KEY["my_day"], context)
 
     # Announcements is bounded by the audience predicate, not by the number of

@@ -1,22 +1,23 @@
-"""The email delivery pipeline: queue after commit, claim, revalidate, send.
+"""Outbound delivery pipeline: queue after commit, claim, revalidate, send.
 
 The in-app notification is the domain fact. This module is the *ledger* for
-pushing a copy of it out over email, and it is deliberately separate so that
-nothing about a deferred, bounced, or abandoned email touches the notification
-itself. A dead delivery leaves the reader's inbox exactly as it was.
+pushing a copy of it out over one or more channels (email today; Microsoft
+Graph, Slack, … when enabled). Providers live in
+:mod:`apps.notifications.providers`; this file owns the shared queue, claim,
+retry, and recovery mechanics so a new channel never rewrites them.
 
 Five guarantees live here:
 
 * **After commit.** Rows are written inside the producing transaction and the
   worker is only told about them from ``transaction.on_commit``. A rolled-back
-  workflow mails nobody.
-* **At most one send.** ``(recipient, channel, delivery_key)`` is unique and
-  ``delivery_key`` is the notification's own idempotency key, so a replayed
-  event, a re-run fan-out chunk, and a duplicated task all converge on one row.
-  The row is then *claimed* with a compare-and-set before the SMTP call, so two
-  workers racing on the same row produce one send and one no-op.
-* **Revalidated at the last moment.** Preferences, account state, the address
-  itself, the notification's lifecycle, and the source domain's willingness to
+  workflow notifies nobody.
+* **At most one send per channel.** ``(recipient, channel, delivery_key)`` is
+  unique and ``delivery_key`` is the notification's own idempotency key, so a
+  replayed event, a re-run fan-out chunk, and a duplicated task all converge on
+  one row per channel. The row is then *claimed* with a compare-and-set before
+  the provider call, so two workers racing produce one send and one no-op.
+* **Revalidated at the last moment.** Preferences, account state, the channel
+  address, the notification's lifecycle, and the source domain's willingness to
   vouch for the reader are all re-checked immediately before the message is
   built — never trusted from when it was queued.
 * **Bounded retries.** Attempts are counted on the row, backed off, and end in
@@ -32,9 +33,6 @@ import logging
 from collections.abc import Sequence
 from datetime import datetime, timedelta
 
-from django.core.exceptions import ValidationError
-from django.core.mail import EmailMultiAlternatives, get_connection
-from django.core.validators import validate_email
 from django.db import transaction
 from django.db.models import DateTimeField, F, Q, Value
 from django.db.models.functions import Coalesce
@@ -42,12 +40,30 @@ from django.utils import timezone
 
 from apps.audit.models import AuditEvent
 from apps.audit.service import AuditTarget, log_event, system_actor
-from apps.notifications.categories import CHANNEL_EMAIL
-from apps.notifications.emails import render_notification_email
 from apps.notifications.models import Notification, NotificationEmail
-from apps.notifications.preferences import channel_refusal, stored_choices_map
-from apps.notifications.sources import resolve_sources
+from apps.notifications.preferences import stored_choices_map
+from apps.notifications.providers.email import (
+    SUPPRESSED_ALREADY_READ,
+    SUPPRESSED_ARCHIVED,
+    SUPPRESSED_EXPIRED,
+    SUPPRESSED_INVALID_ADDRESS,
+    SUPPRESSED_NO_ADDRESS,
+    SUPPRESSED_RECIPIENT_INACTIVE,
+    SUPPRESSED_SOURCE,
+)
+from apps.notifications.providers.registry import enabled_providers, get_provider
 from apps.user.models import User
+
+# Re-export email suppression codes so existing tests and callers keep working.
+__all_suppressed__ = (
+    SUPPRESSED_ALREADY_READ,
+    SUPPRESSED_ARCHIVED,
+    SUPPRESSED_EXPIRED,
+    SUPPRESSED_INVALID_ADDRESS,
+    SUPPRESSED_NO_ADDRESS,
+    SUPPRESSED_RECIPIENT_INACTIVE,
+    SUPPRESSED_SOURCE,
+)
 
 logger = logging.getLogger("apps.notifications")
 
@@ -56,30 +72,21 @@ logger = logging.getLogger("apps.notifications")
 MAX_ATTEMPTS = 5
 
 #: Seconds to wait before attempt *n+1*. Longer than the event dispatcher's
-#: because the failures this sees are mail-server failures, which are measured
+#: because the failures this sees are remote API failures, which are measured
 #: in minutes rather than seconds.
 _BACKOFF = (60, 300, 900, 3600, 10800)
 
 #: How long a row may sit in ``sending`` before it is assumed the worker holding
-#: it died. Long enough to cover a slow SMTP conversation, short enough that a
-#: restart does not strand the message for a working day.
+#: it died. Long enough to cover a slow SMTP / Graph conversation, short enough
+#: that a restart does not strand the message for a working day.
 STALE_CLAIM = timedelta(minutes=15)
 
 #: How many deliveries one dispatch task hands to the queue before passing the
 #: rest to a fresh task.
 DISPATCH_CHUNK_SIZE = 200
 
-# Coarse, machine-readable reasons a message was never sent. None of them
-# names a record: the ledger says *that* a delivery stopped, never what it
-# would have been about.
-SUPPRESSED_RECIPIENT_INACTIVE = "recipient_inactive"
-SUPPRESSED_NO_ADDRESS = "no_email_address"
-SUPPRESSED_INVALID_ADDRESS = "invalid_email_address"
-SUPPRESSED_EXPIRED = "notification_expired"
-SUPPRESSED_ARCHIVED = "notification_archived"
-SUPPRESSED_ALREADY_READ = "already_read_in_app"
-SUPPRESSED_SOURCE = "source_unavailable"
 SUPPRESSED_MISSING = "notification_missing"
+SUPPRESSED_UNKNOWN_CHANNEL = "unknown_channel"
 
 
 def _now(now: datetime | None = None) -> datetime:
@@ -98,19 +105,27 @@ def _backoff(attempt: int) -> int:
 def queue_emails(
     notifications: Sequence[Notification], *, now: datetime | None = None
 ) -> list[str]:
-    """Write the ledger rows for a batch and schedule their dispatch.
+    """Backward-compatible alias for :func:`queue_deliveries`."""
+    return queue_deliveries(notifications, now=now)
 
-    Every notification gets a row, including one that is already refused: the
-    ledger is how "we deliberately did not email this person" is answerable
-    later, and a silent skip is not. Only the rows that survive the pre-flight
-    check are handed to the queue.
+
+def queue_deliveries(
+    notifications: Sequence[Notification], *, now: datetime | None = None
+) -> list[str]:
+    """Write ledger rows for every enabled push provider and schedule dispatch.
+
+    Every notification × enabled channel gets a row, including one that is
+    already refused: the ledger is how "we deliberately did not deliver this"
+    is answerable later. Only the rows that survive the pre-flight check are
+    handed to the queue.
 
     Returns the public ids queued for dispatch. Safe to call twice — the
     unique constraint absorbs the duplicate rows and the second call queues
     nothing new.
     """
     rows = [row for row in notifications if row.pk]
-    if not rows:
+    providers = enabled_providers()
+    if not rows or not providers:
         return []
     moment = _now(now)
 
@@ -125,34 +140,32 @@ def queue_emails(
     pending: list[NotificationEmail] = []
     for row in rows:
         recipient = recipients.get(row.recipient_id)
-        reason = _preflight_reason(row, recipient, choices)
-        pending.append(
-            NotificationEmail(
-                notification=row,
-                recipient_id=row.recipient_id,
-                channel=CHANNEL_EMAIL,
-                delivery_key=row.dedupe_key,
-                status=NotificationEmail.Status.SUPPRESSED
-                if reason
-                else NotificationEmail.Status.PENDING,
-                suppression_reason=reason,
-                queued_at=moment,
-                resolved_at=moment if reason else None,
-                # A notification scheduled for later is queued now and becomes
-                # due then; nothing emails a reader about something their inbox
-                # will not show for another week.
-                next_attempt_at=max(row.available_at, moment),
+        for provider in providers:
+            reason = provider.preflight_refusal(
+                row, recipient, choices.get(row.recipient_id, {})
             )
-        )
+            pending.append(
+                NotificationEmail(
+                    notification=row,
+                    recipient_id=row.recipient_id,
+                    channel=provider.channel,
+                    delivery_key=row.dedupe_key,
+                    status=NotificationEmail.Status.SUPPRESSED
+                    if reason
+                    else NotificationEmail.Status.PENDING,
+                    suppression_reason=reason,
+                    queued_at=moment,
+                    resolved_at=moment if reason else None,
+                    next_attempt_at=max(row.available_at, moment),
+                )
+            )
 
     NotificationEmail.objects.bulk_create(pending, ignore_conflicts=True)
 
-    # ``ignore_conflicts`` leaves the in-memory rows without primary keys, and
-    # some of them may already have existed. Read back exactly the rows that
-    # are ours to dispatch.
+    channel_keys = [provider.channel for provider in providers]
     queued = list(
         NotificationEmail.objects.filter(
-            channel=CHANNEL_EMAIL,
+            channel__in=channel_keys,
             status=NotificationEmail.Status.PENDING,
             notification_id__in=[row.pk for row in rows],
         ).values_list("public_id", flat=True)
@@ -168,32 +181,10 @@ def queue_emails(
         try:
             dispatch_notification_emails.delay(ids)
         except Exception:
-            # Same outbox posture as the event publisher: a broker outage must
-            # not fail the workflow that produced the notification. The rows
-            # are committed as pending and the sweep picks them up.
-            logger.exception("notifications.email_queue_failed count=%d", len(ids))
+            logger.exception("notifications.delivery_queue_failed count=%d", len(ids))
 
     transaction.on_commit(_enqueue)
     return ids
-
-
-def _preflight_reason(
-    notification: Notification,
-    recipient: User | None,
-    choices: dict[int, dict[str, dict[str, bool]]],
-) -> str:
-    """The cheap refusal, so a settled "no" never becomes a queued task.
-
-    This is an optimisation, not the authority. :func:`send_reason` re-runs the
-    same checks against fresh state immediately before the message is built.
-    """
-    if recipient is None or not recipient.is_active:
-        return SUPPRESSED_RECIPIENT_INACTIVE
-    if not recipient.email:
-        return SUPPRESSED_NO_ADDRESS
-    return channel_refusal(
-        choices.get(recipient.pk, {}), notification, channel_key=CHANNEL_EMAIL
-    )
 
 
 # --------------------------------------------------------------------------- #
@@ -204,52 +195,19 @@ def _preflight_reason(
 def send_reason(
     notification: Notification, recipient: User | None, *, now: datetime
 ) -> str:
-    """Why this message must not go out now, or ``""`` when it may.
+    """Why the *email* channel must not go out now, or ``""`` when it may.
 
-    Everything here can have changed since the row was queued, which is the
-    whole point of checking it here rather than there: the account can have
-    been disabled, the address changed, the notification read or archived in
-    the hub, the preference switched off, or the source domain can have stopped
-    vouching for the reader's access to the record it points at.
+    Kept for tests and callers that still reason about email specifically.
+    Provider-aware sending uses :meth:`DeliveryProvider.send_refusal`.
     """
-    if recipient is None or not recipient.is_active:
-        return SUPPRESSED_RECIPIENT_INACTIVE
-    if not recipient.email:
-        return SUPPRESSED_NO_ADDRESS
-    try:
-        validate_email(recipient.email)
-    except ValidationError:
-        return SUPPRESSED_INVALID_ADDRESS
-    if notification.is_expired(now=now):
-        return SUPPRESSED_EXPIRED
-    if notification.archived_at is not None:
-        return SUPPRESSED_ARCHIVED
-    # A reminder about something the reader has already seen in the hub is
-    # noise, and by the time a retry lands it is usually exactly that.
-    if notification.read_at is not None:
-        return SUPPRESSED_ALREADY_READ
-    refusal = channel_refusal(
-        stored_choices_map([recipient.pk]).get(recipient.pk, {}),
-        notification,
-        channel_key=CHANNEL_EMAIL,
-    )
-    if refusal:
-        return refusal
-    # The same authorization the notification centre applies on every read. A
-    # grant withdrawn between queueing and sending stops the email too.
-    resolution = resolve_sources(recipient, [notification]).get(notification.public_id)
-    if resolution is None or not resolution.available:
-        return SUPPRESSED_SOURCE
-    return ""
+    provider = get_provider("email")
+    if provider is None:
+        return SUPPRESSED_UNKNOWN_CHANNEL
+    return provider.send_refusal(notification, recipient, now=now)
 
 
 def _claim(public_id, *, now: datetime) -> bool:
-    """Compare-and-set the row into ``sending``, counting the attempt.
-
-    The single write is what makes concurrent workers safe without holding a
-    row lock across an SMTP conversation: exactly one of them updates a row,
-    and the losers see zero rows affected and stop.
-    """
+    """Compare-and-set the row into ``sending``, counting the attempt."""
     updated = (
         NotificationEmail.objects.filter(public_id=public_id)
         .filter(
@@ -280,26 +238,23 @@ def _resolve(public_id, *, now: datetime) -> str:
 
 
 def attempt_delivery(public_id, *, now: datetime | None = None) -> str:
-    """Send one queued message. Returns the row's status afterwards.
+    """Send one queued message via its channel provider. Returns final status.
 
     Never raises for an ordinary failure: the outcome is recorded on the row
-    and the caller decides whether to reschedule. That is what keeps a mail
+    and the caller decides whether to reschedule. That is what keeps a remote
     outage from propagating back into the workflow that produced the
     notification.
     """
     moment = _now(now)
     email = NotificationEmail.objects.filter(public_id=public_id).first()
     if email is None:
-        logger.warning("notifications.email_missing id=%s", public_id)
+        logger.warning("notifications.delivery_missing id=%s", public_id)
         return SUPPRESSED_MISSING
     if email.is_terminal:
         return email.status
     if email.next_attempt_at is not None and email.next_attempt_at > moment:
-        # Scheduled for later, or backing off. The sweep will bring it back.
         return email.status
     if not _claim(public_id, now=moment):
-        # Another worker holds it, or it settled between the read and the
-        # claim. Either way this task is done.
         return (
             NotificationEmail.objects.filter(public_id=public_id)
             .values_list("status", flat=True)
@@ -315,59 +270,65 @@ def attempt_delivery(public_id, *, now: datetime | None = None) -> str:
         )
         return _resolve(public_id, now=moment)
 
-    reason = send_reason(notification, recipient, now=moment)
+    provider = get_provider(email.channel)
+    if provider is None or not provider.is_enabled():
+        NotificationEmail.objects.filter(public_id=public_id).update(
+            suppression_reason=SUPPRESSED_UNKNOWN_CHANNEL
+        )
+        logger.info(
+            "notifications.delivery_suppressed id=%s channel=%s reason=%s",
+            public_id,
+            email.channel,
+            SUPPRESSED_UNKNOWN_CHANNEL,
+        )
+        return _resolve(public_id, now=moment)
+
+    reason = provider.send_refusal(notification, recipient, now=moment)
     if reason:
         NotificationEmail.objects.filter(public_id=public_id).update(
             suppression_reason=reason
         )
         logger.info(
-            "notifications.email_suppressed id=%s event=%s reason=%s",
+            "notifications.delivery_suppressed id=%s channel=%s event=%s reason=%s",
             public_id,
+            email.channel,
             notification.event_key,
             reason,
         )
         return _resolve(public_id, now=moment)
 
-    if recipient is None:  # pragma: no cover - send_reason already refused
+    if recipient is None:  # pragma: no cover - send_refusal already refused
         return _resolve(public_id, now=moment)
     try:
-        _send_message(notification, recipient)
+        result = provider.send(notification, recipient)
     except Exception as exc:
-        return _record_failure(public_id, notification, exc, now=moment)
+        return _record_failure(public_id, notification, email.channel, exc, now=moment)
 
     NotificationEmail.objects.filter(public_id=public_id).update(
         status=NotificationEmail.Status.SENT,
         sent_at=moment,
         resolved_at=moment,
-        to_email=recipient.email,
+        to_email=result.address[:254],
         last_error="",
         suppression_reason="",
     )
     logger.info(
-        "notifications.email_sent id=%s event=%s type=%s",
+        "notifications.delivery_sent id=%s channel=%s event=%s type=%s",
         public_id,
+        email.channel,
         notification.event_key,
         notification.notification_type,
     )
     return NotificationEmail.Status.SENT
 
 
-def _send_message(notification: Notification, recipient: User) -> None:
-    rendered = render_notification_email(notification, recipient)
-    message = EmailMultiAlternatives(
-        subject=rendered.subject,
-        body=rendered.text_body,
-        to=[recipient.email],
-        connection=get_connection(),
-    )
-    message.attach_alternative(rendered.html_body, "text/html")
-    # ``fail_silently`` stays off: a send that quietly did nothing would settle
-    # the row as sent and lose the message for good.
-    message.send(fail_silently=False)
-
-
 def _record_failure(
-    public_id, notification: Notification, exc: Exception, *, now: datetime
+    public_id,
+    notification: Notification,
+    channel: str,
+    exc: Exception,
+    *,
+    now: datetime,
 ) -> str:
     attempts = (
         NotificationEmail.objects.filter(public_id=public_id)
@@ -384,13 +345,17 @@ def _record_failure(
             resolved_at=now,
         )
         logger.error(
-            "notifications.email_dead id=%s event=%s attempts=%d error=%s",
+            "notifications.delivery_dead id=%s channel=%s event=%s "
+            "attempts=%d error=%s",
             public_id,
+            channel,
             notification.event_key,
             attempts,
             error,
         )
-        _audit_dead(public_id, notification, attempts=attempts, error=error)
+        _audit_dead(
+            public_id, notification, channel=channel, attempts=attempts, error=error
+        )
         return NotificationEmail.Status.DEAD
 
     delay = _backoff(attempts)
@@ -400,8 +365,10 @@ def _record_failure(
         next_attempt_at=now + timedelta(seconds=delay),
     )
     logger.warning(
-        "notifications.email_retry id=%s event=%s attempt=%d delay=%ds error=%s",
+        "notifications.delivery_retry id=%s channel=%s event=%s "
+        "attempt=%d delay=%ds error=%s",
         public_id,
+        channel,
         notification.event_key,
         attempts,
         delay,
@@ -411,13 +378,14 @@ def _record_failure(
 
 
 def _audit_dead(
-    public_id, notification: Notification, *, attempts: int, error: str
+    public_id,
+    notification: Notification,
+    *,
+    channel: str,
+    attempts: int,
+    error: str,
 ) -> None:
-    """A terminal failure is an operational fact worth an audit row.
-
-    Counts, keys, and the transport error only — never the address, the title,
-    or anything the notification points at.
-    """
+    """A terminal failure is an operational fact worth an audit row."""
 
     def _log() -> None:
         log_event(
@@ -428,7 +396,7 @@ def _audit_dead(
                 target_id=str(public_id),
                 target_label=notification.event_key,
                 target_snapshot={
-                    "channel": CHANNEL_EMAIL,
+                    "channel": channel,
                     "eventKey": notification.event_key,
                     "notificationType": notification.notification_type,
                     "attempts": attempts,
@@ -449,12 +417,7 @@ def _audit_dead(
 
 
 def reclaim_stalled(*, now: datetime | None = None) -> int:
-    """Return rows abandoned mid-send to the retry queue.
-
-    A worker killed between the claim and the outcome leaves the row in
-    ``sending`` forever. The attempt it consumed still counts, so a repeatedly
-    crashing worker exhausts the budget and the row dies rather than looping.
-    """
+    """Return rows abandoned mid-send to the retry queue."""
     moment = _now(now)
     return NotificationEmail.objects.filter(
         status=NotificationEmail.Status.SENDING,
@@ -469,12 +432,7 @@ def reclaim_stalled(*, now: datetime | None = None) -> int:
 def due_delivery_ids(
     *, now: datetime | None = None, limit: int = DISPATCH_CHUNK_SIZE
 ) -> list[str]:
-    """Deliveries the queue should be holding but may not be.
-
-    The database, not the broker, is the source of truth for outstanding work,
-    so a lost task, a dropped queue, or a restarted worker costs a delay rather
-    than a message.
-    """
+    """Deliveries the queue should be holding but may not be."""
     moment = _now(now)
     due = Q(next_attempt_at__isnull=True) | Q(next_attempt_at__lte=moment)
     rows = (

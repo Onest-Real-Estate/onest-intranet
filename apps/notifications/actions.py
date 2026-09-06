@@ -66,6 +66,28 @@ ACTION_DEFINITIONS: tuple[NotificationAction, ...] = (
         label="Open contract",
         arg_types=(str,),
     ),
+    NotificationAction(
+        key="open_my_contract",
+        route_name="my_contract",
+        label="Open My Contract",
+    ),
+    NotificationAction(
+        key="open_my_contract_sign",
+        route_name="my_contract_sign",
+        label="Sign your contract",
+    ),
+    NotificationAction(
+        key="open_inventory_reservation",
+        route_name="inventory_reservation_detail",
+        label="Open reservation",
+        arg_types=(str,),
+    ),
+    NotificationAction(
+        key="open_admin_reservation",
+        route_name="admin_reservation_detail",
+        label="Open reservation",
+        arg_types=(str,),
+    ),
 )
 
 ACTION_BY_KEY: dict[str, NotificationAction] = {

@@ -357,6 +357,8 @@ def test_directions_url_empty_without_address():
     target = office(FAIRFAX)
     target.street_address = ""
     target.city = ""
+    target.state = ""
+    target.zip_code = ""
     target.save()
     payload = office_info_payload(target, include_internal=True)
     assert payload["directionsUrl"] == ""

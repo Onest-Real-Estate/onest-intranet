@@ -14,6 +14,7 @@ provider starts from the domain's already-scoped queryset:
 | Announcements | `visible_announcements(actor)` |
 | Office resources | `effective_resources_queryset(actor)` |
 | Offices | Active offices — brokerage-public name and city only |
+| Training | `visible_training_content(actor)` |
 
 Search is therefore exactly as permissive as the pages those functions already
 serve, and a scope fix in a domain reaches search without anybody remembering
@@ -135,7 +136,7 @@ measured bottleneck.
 
 ## Sources not yet registered
 
-Documents, training, transactions, CRM contacts, and policies have no model
+Documents, transactions, CRM contacts, and policies have no model
 behind them. A provider over a table that does not exist would be a group
 heading that never returns anything, so they register with their domains.
 `test_search.py` asserts every registered provider's permission is catalogued

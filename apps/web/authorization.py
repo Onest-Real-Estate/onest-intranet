@@ -345,6 +345,63 @@ ROUTE_POLICIES: dict[str, AuthorizationPolicy] = {
         all_permissions=("web.manage_office_resources",),
         scope_rule="office_tree_scope",
     ),
+    "admin_inventory_create": AuthorizationPolicy(
+        key="admin_inventory_create",
+        access="permission_protected",
+        description="Create an inventory item within the actor's boundary.",
+        methods=("POST",),
+        route_names=("admin_inventory_create",),
+        all_permissions=("inventory.manage_inventory",),
+        scope_rule="inventory_office_scope",
+    ),
+    "admin_inventory_item": AuthorizationPolicy(
+        key="admin_inventory_item",
+        access="permission_protected",
+        description="Render one scoped inventory item workspace.",
+        methods=("GET",),
+        route_names=("admin_inventory_item",),
+        all_permissions=("web.view_inventory",),
+        scope_rule="inventory_office_scope",
+    ),
+    "admin_inventory_update": AuthorizationPolicy(
+        key="admin_inventory_update",
+        access="permission_protected",
+        description="Edit one scoped inventory item with optimistic concurrency.",
+        methods=("POST",),
+        route_names=("admin_inventory_update",),
+        all_permissions=("inventory.manage_inventory",),
+        scope_rule="inventory_office_scope",
+    ),
+    "admin_inventory_transition": AuthorizationPolicy(
+        key="admin_inventory_transition",
+        access="permission_protected",
+        description=(
+            "Lifecycle transitions (unavailable, damaged, lost, restore, retire) "
+            "for one scoped inventory item."
+        ),
+        methods=("POST",),
+        route_names=("admin_inventory_transition",),
+        all_permissions=("inventory.manage_inventory",),
+        scope_rule="inventory_office_scope",
+    ),
+    "admin_inventory_transfer": AuthorizationPolicy(
+        key="admin_inventory_transfer",
+        access="permission_protected",
+        description="Transfer one scoped inventory item between offices.",
+        methods=("POST",),
+        route_names=("admin_inventory_transfer",),
+        all_permissions=("inventory.manage_inventory",),
+        scope_rule="inventory_office_scope",
+    ),
+    "admin_inventory_photo": AuthorizationPolicy(
+        key="admin_inventory_photo",
+        access="permission_protected",
+        description="Upload or replace one scoped inventory photo.",
+        methods=("POST",),
+        route_names=("admin_inventory_photo",),
+        all_permissions=("inventory.manage_inventory",),
+        scope_rule="inventory_office_scope",
+    ),
     "office_info": AuthorizationPolicy(
         key="office_info",
         access="authenticated",
@@ -473,6 +530,116 @@ ROUTE_POLICIES: dict[str, AuthorizationPolicy] = {
         methods=("GET",),
         route_names=("it_support_attachment",),
         scope_rule="support_request_scope",
+    ),
+    "office_inventory": AuthorizationPolicy(
+        key="office_inventory",
+        access="authenticated",
+        description=(
+            "Agent Office Inventory browser for the signed-in user's primary "
+            "office. Returns only active reservable records; never accepts an "
+            "office id from the client."
+        ),
+        methods=("GET",),
+        route_names=("office_inventory",),
+        scope_rule="self_only",
+    ),
+    "office_inventory_item": AuthorizationPolicy(
+        key="office_inventory_item",
+        access="authenticated",
+        description=(
+            "One reservable inventory item resolved through the reader's "
+            "office-scoped queryset so a foreign office id is a 404."
+        ),
+        methods=("GET",),
+        route_names=("office_inventory_item",),
+        scope_rule="self_only",
+    ),
+    "office_inventory_photo": AuthorizationPolicy(
+        key="office_inventory_photo",
+        access="authenticated",
+        description=(
+            "Stream an agent-visible inventory photo after re-checking the "
+            "reader's office catalog and photo_is_public."
+        ),
+        methods=("GET",),
+        route_names=("office_inventory_photo",),
+        scope_rule="self_only",
+    ),
+    "inventory_reservations_mine": AuthorizationPolicy(
+        key="inventory_reservations_mine",
+        access="authenticated",
+        description=(
+            "Self-service list of the signed-in user's inventory reservations. "
+            "Never accepts a user selector."
+        ),
+        methods=("GET",),
+        route_names=("inventory_reservations_mine",),
+        scope_rule="self_only",
+    ),
+    "inventory_reservation_new": AuthorizationPolicy(
+        key="inventory_reservation_new",
+        access="authenticated",
+        description=(
+            "Agent reservation form and authoritative availability/terms "
+            "summary for the reader's office inventory."
+        ),
+        methods=("GET",),
+        route_names=("inventory_reservation_new",),
+        scope_rule="self_only",
+    ),
+    "inventory_reservation_create": AuthorizationPolicy(
+        key="inventory_reservation_create",
+        access="authenticated",
+        description=(
+            "Create an inventory reservation for the signed-in user after "
+            "revalidating availability under the item lock."
+        ),
+        methods=("POST",),
+        route_names=("inventory_reservation_create",),
+        scope_rule="self_only",
+    ),
+    "inventory_reservation_detail": AuthorizationPolicy(
+        key="inventory_reservation_detail",
+        access="authenticated",
+        description=(
+            "Confirmation and detail for one of the signed-in user's "
+            "inventory reservations."
+        ),
+        methods=("GET",),
+        route_names=("inventory_reservation_detail",),
+        scope_rule="self_only",
+    ),
+    "inventory_reservation_cancel": AuthorizationPolicy(
+        key="inventory_reservation_cancel",
+        access="authenticated",
+        description=("Cancel an owned inventory reservation before the policy cutoff."),
+        methods=("POST",),
+        route_names=("inventory_reservation_cancel",),
+        scope_rule="self_only",
+    ),
+    "admin_reservation_detail": AuthorizationPolicy(
+        key="admin_reservation_detail",
+        access="permission_protected",
+        description="Render one scoped inventory reservation workspace.",
+        methods=("GET",),
+        route_names=("admin_reservation_detail",),
+        all_permissions=("web.view_reservations",),
+        scope_rule="reservation_office_scope",
+    ),
+    "admin_reservation_transition": AuthorizationPolicy(
+        key="admin_reservation_transition",
+        access="permission_protected",
+        description=(
+            "Lifecycle transitions (approve, checkout, return, exceptions) "
+            "for one scoped inventory reservation."
+        ),
+        methods=("POST",),
+        route_names=("admin_reservation_transition",),
+        any_permissions=(
+            "inventory.approve_reservations",
+            "inventory.override_reservations",
+        ),
+        scope_rule="reservation_office_scope",
     ),
     "feedback_submit": AuthorizationPolicy(
         key="feedback_submit",
@@ -794,6 +961,248 @@ ROUTE_POLICIES: dict[str, AuthorizationPolicy] = {
         all_permissions=("web.manage_announcements",),
         scope_rule="delegated_user_scope",
         auth_behavior="json",
+    ),
+    "training_library": AuthorizationPolicy(
+        key="training_library",
+        access="authenticated",
+        description=(
+            "Training library for the signed-in user. Audience is resolved "
+            "server-side; filters can only narrow the visible set."
+        ),
+        methods=("GET",),
+        route_names=("training_learning",),
+        scope_rule="training_audience_scope",
+    ),
+    "training_detail": AuthorizationPolicy(
+        key="training_detail",
+        access="authenticated",
+        description=(
+            "One training item by id. Authorized by the same audience "
+            "predicate as the library."
+        ),
+        methods=("GET",),
+        route_names=("training_detail",),
+        scope_rule="training_audience_scope",
+    ),
+    "training_media": AuthorizationPolicy(
+        key="training_media",
+        access="authenticated",
+        description=(
+            "Stream one training file from protected storage. Audience is "
+            "re-checked on every request."
+        ),
+        methods=("GET",),
+        route_names=("training_media",),
+        scope_rule="training_audience_scope",
+    ),
+    "training_new": AuthorizationPolicy(
+        key="training_new",
+        access="permission_protected",
+        description="Open an empty training workspace within the actor's grant.",
+        methods=("GET",),
+        route_names=("training_new",),
+        all_permissions=("web.manage_training",),
+        scope_rule="publication_scope",
+    ),
+    "training_edit": AuthorizationPolicy(
+        key="training_edit",
+        access="permission_protected",
+        description=(
+            "Open one training item in the workspace. Loaded through the "
+            "actor's scoped queryset, so an out-of-scope id is a 404."
+        ),
+        methods=("GET",),
+        route_names=("training_edit",),
+        all_permissions=("web.manage_training",),
+        scope_rule="publication_scope",
+    ),
+    "training_create": AuthorizationPolicy(
+        key="training_create",
+        access="permission_protected",
+        description="Create one training draft. Publication is a separate action.",
+        methods=("POST",),
+        route_names=("training_create",),
+        all_permissions=("web.manage_training",),
+        scope_rule="publication_scope",
+    ),
+    "training_update": AuthorizationPolicy(
+        key="training_update",
+        access="permission_protected",
+        description=(
+            "Save training copy, window, required state, and audience. Guarded "
+            "by an update-timestamp token."
+        ),
+        methods=("POST",),
+        route_names=("training_update",),
+        all_permissions=("web.manage_training",),
+        scope_rule="publication_scope",
+    ),
+    "training_lifecycle": AuthorizationPolicy(
+        key="training_lifecycle",
+        access="permission_protected",
+        description=(
+            "Publish, schedule, unpublish, archive, or restore one training "
+            "item. Re-authorizes audience selectors before go-live."
+        ),
+        methods=("POST",),
+        route_names=("training_lifecycle",),
+        all_permissions=("web.manage_training",),
+        scope_rule="publication_scope",
+    ),
+    "training_duplicate_version": AuthorizationPolicy(
+        key="training_duplicate_version",
+        access="permission_protected",
+        description=(
+            "Fork a new draft version of published or archived training so "
+            "historical learner progress stays attached to the prior version."
+        ),
+        methods=("POST",),
+        route_names=("training_duplicate_version",),
+        all_permissions=("web.manage_training",),
+        scope_rule="publication_scope",
+    ),
+    "training_recipient_search": AuthorizationPolicy(
+        key="training_recipient_search",
+        access="permission_protected",
+        description=(
+            "Typeahead for individual training recipients, bounded by the "
+            "actor's administered users."
+        ),
+        methods=("GET",),
+        route_names=("training_recipient_search",),
+        all_permissions=("web.manage_training",),
+        scope_rule="delegated_user_scope",
+        auth_behavior="json",
+    ),
+    "training_media_manager": AuthorizationPolicy(
+        key="training_media_manager",
+        access="permission_protected",
+        description="Manage one training item's primary media and attachments.",
+        methods=("GET",),
+        route_names=("training_media_manager",),
+        all_permissions=("web.manage_training",),
+        scope_rule="office_tree_scope",
+    ),
+    "training_media_upload": AuthorizationPolicy(
+        key="training_media_upload",
+        access="permission_protected",
+        description="Upload primary media or an attachment to a draft training item.",
+        methods=("POST",),
+        route_names=("training_media_upload",),
+        all_permissions=("web.manage_training",),
+        scope_rule="office_tree_scope",
+        auth_behavior="json",
+    ),
+    "training_media_replace": AuthorizationPolicy(
+        key="training_media_replace",
+        access="permission_protected",
+        description="Replace one stored training file on a draft.",
+        methods=("POST",),
+        route_names=("training_media_replace",),
+        all_permissions=("web.manage_training",),
+        scope_rule="office_tree_scope",
+        auth_behavior="json",
+    ),
+    "training_media_remove": AuthorizationPolicy(
+        key="training_media_remove",
+        access="permission_protected",
+        description="Remove one training file from a draft.",
+        methods=("POST",),
+        route_names=("training_media_remove",),
+        all_permissions=("web.manage_training",),
+        scope_rule="office_tree_scope",
+    ),
+    "training_media_reorder": AuthorizationPolicy(
+        key="training_media_reorder",
+        access="permission_protected",
+        description="Set the display order of one training item's attachments.",
+        methods=("POST",),
+        route_names=("training_media_reorder",),
+        all_permissions=("web.manage_training",),
+        scope_rule="office_tree_scope",
+    ),
+    "training_progress": AuthorizationPolicy(
+        key="training_progress",
+        access="authenticated",
+        description=(
+            "Learner progress mutation for one visible training item. "
+            "Always bound to the authenticated user."
+        ),
+        methods=("POST",),
+        route_names=("training_progress",),
+        scope_rule="training_audience_scope",
+    ),
+    "training_quiz_submit": AuthorizationPolicy(
+        key="training_quiz_submit",
+        access="authenticated",
+        description="Submit one quiz attempt for a visible training quiz.",
+        methods=("POST",),
+        route_names=("training_quiz_submit",),
+        scope_rule="training_audience_scope",
+    ),
+    "training_session_register": AuthorizationPolicy(
+        key="training_session_register",
+        access="authenticated",
+        description="Register or cancel registration for a live training session.",
+        methods=("POST",),
+        route_names=("training_session_register",),
+        scope_rule="training_audience_scope",
+    ),
+    "training_certificate": AuthorizationPolicy(
+        key="training_certificate",
+        access="authenticated",
+        description="Download an approved training certificate for the learner.",
+        methods=("GET",),
+        route_names=("training_certificate",),
+        scope_rule="training_audience_scope",
+    ),
+    "training_quiz_save": AuthorizationPolicy(
+        key="training_quiz_save",
+        access="permission_protected",
+        description="Save quiz definition on a draft training item.",
+        methods=("POST",),
+        route_names=("training_quiz_save",),
+        all_permissions=("web.manage_training",),
+        scope_rule="office_tree_scope",
+    ),
+    "training_session_save": AuthorizationPolicy(
+        key="training_session_save",
+        access="permission_protected",
+        description="Save live-session schedule on a draft training item.",
+        methods=("POST",),
+        route_names=("training_session_save",),
+        all_permissions=("web.manage_training",),
+        scope_rule="office_tree_scope",
+    ),
+    "training_modules_save": AuthorizationPolicy(
+        key="training_modules_save",
+        access="permission_protected",
+        description="Save course module ordering on a draft training course.",
+        methods=("POST",),
+        route_names=("training_modules_save",),
+        all_permissions=("web.manage_training",),
+        scope_rule="office_tree_scope",
+    ),
+    "training_progress_correct": AuthorizationPolicy(
+        key="training_progress_correct",
+        access="permission_protected",
+        description=(
+            "Admin correction of learner progress or live-session attendance "
+            "with a required reason."
+        ),
+        methods=("POST",),
+        route_names=("training_progress_correct",),
+        all_permissions=("web.manage_training",),
+        scope_rule="office_tree_scope",
+    ),
+    "training_certificate_approve": AuthorizationPolicy(
+        key="training_certificate_approve",
+        access="permission_protected",
+        description="Approve a pending training certificate for a scoped learner.",
+        methods=("POST",),
+        route_names=("training_certificate_approve",),
+        all_permissions=("web.manage_training",),
+        scope_rule="office_tree_scope",
     ),
     "office_resource_download": AuthorizationPolicy(
         key="office_resource_download",
@@ -1211,6 +1620,39 @@ ROUTE_POLICIES["contract_template_action"] = AuthorizationPolicy(
     ),
     scope_rule="user_office_scope",
 )
+ROUTE_POLICIES["contract_template_field_layout"] = AuthorizationPolicy(
+    key="contract_template_field_layout",
+    access="permission_protected",
+    description="Save Hub field placer layout for a contract template draft.",
+    methods=("POST",),
+    route_names=("contract_template_field_layout",),
+    all_permissions=("contract.manage_contract_templates",),
+    scope_rule="user_office_scope",
+)
+ROUTE_POLICIES["contract_template_source_pdf"] = AuthorizationPolicy(
+    key="contract_template_source_pdf",
+    access="permission_protected",
+    description="Stream the protected template PDF for the Hub field placer.",
+    methods=("GET",),
+    route_names=("contract_template_source_pdf",),
+    any_permissions=(
+        "contract.manage_contract_templates",
+        "contract.approve_contract_templates",
+    ),
+    scope_rule="user_office_scope",
+)
+ROUTE_POLICIES["contract_template_preview_pdf"] = AuthorizationPolicy(
+    key="contract_template_preview_pdf",
+    access="permission_protected",
+    description="Stream the protected synthetic template preview PDF.",
+    methods=("GET",),
+    route_names=("contract_template_preview_pdf",),
+    any_permissions=(
+        "contract.manage_contract_templates",
+        "contract.approve_contract_templates",
+    ),
+    scope_rule="user_office_scope",
+)
 
 ROUTE_POLICIES["agent_contract_admin"] = AuthorizationPolicy(
     key="agent_contract_admin",
@@ -1242,6 +1684,8 @@ ROUTE_POLICIES["agent_contract_manage"] = AuthorizationPolicy(
         "agent_contract_new",
         "agent_contract_create",
         "agent_contract_update",
+        "agent_contract_create_amendment",
+        "agent_contract_create_replacement",
         "agent_contract_lifecycle",
         "agent_contract_recipient_search",
         "agent_contract_template_options",
@@ -1259,6 +1703,17 @@ ROUTE_POLICIES["agent_contract_artifact_download"] = AuthorizationPolicy(
     ),
     methods=("GET",),
     route_names=("agent_contract_artifact_download",),
+    scope_rule="assigned_or_self",
+)
+ROUTE_POLICIES["agent_contract_signed_pdf_verify"] = AuthorizationPolicy(
+    key="agent_contract_signed_pdf_verify",
+    access="authenticated",
+    description=(
+        "Integrity metadata for a final signed contract PDF (checksums, "
+        "signature id, renderer version) without streaming private bytes."
+    ),
+    methods=("GET",),
+    route_names=("agent_contract_signed_pdf_verify",),
     scope_rule="assigned_or_self",
 )
 ROUTE_POLICIES["my_contract"] = AuthorizationPolicy(
@@ -1282,6 +1737,50 @@ ROUTE_POLICIES["my_contract_artifact_preview"] = AuthorizationPolicy(
     ),
     methods=("GET",),
     route_names=("my_contract_artifact_preview",),
+    scope_rule="self_only",
+)
+ROUTE_POLICIES["my_contract_signed_pdf_verify"] = AuthorizationPolicy(
+    key="my_contract_signed_pdf_verify",
+    access="authenticated",
+    description=(
+        "Recipient integrity check for their own final signed PDF metadata. "
+        "Does not expose private PDF bytes."
+    ),
+    methods=("GET",),
+    route_names=("my_contract_signed_pdf_verify",),
+    scope_rule="self_only",
+)
+ROUTE_POLICIES["my_contract_sign"] = AuthorizationPolicy(
+    key="my_contract_sign",
+    access="authenticated",
+    description=(
+        "Recipient signing ceremony for the authenticated agent's own contract. "
+        "Admins cannot sign on an agent's behalf through this route."
+    ),
+    methods=("GET", "POST"),
+    route_names=("my_contract_sign",),
+    scope_rule="self_only",
+)
+ROUTE_POLICIES["my_contract_sign_status"] = AuthorizationPolicy(
+    key="my_contract_sign_status",
+    access="authenticated",
+    description=(
+        "Poll whether a durable signature record exists for the recipient's "
+        "signing ceremony success gate."
+    ),
+    methods=("GET",),
+    route_names=("my_contract_sign_status",),
+    scope_rule="self_only",
+)
+ROUTE_POLICIES["my_contract_sign_complete"] = AuthorizationPolicy(
+    key="my_contract_sign_complete",
+    access="authenticated",
+    description=(
+        "Commit Hub-native signature appearance, seal, and durable signature "
+        "record for the authenticated recipient."
+    ),
+    methods=("POST",),
+    route_names=("my_contract_sign_complete",),
     scope_rule="self_only",
 )
 

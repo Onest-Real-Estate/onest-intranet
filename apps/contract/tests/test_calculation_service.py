@@ -8,14 +8,14 @@ from decimal import Decimal
 import pytest
 from django.core.exceptions import PermissionDenied, ValidationError
 
-from apps.contract.calculation_service import (
+from apps.contract.calculations import CURRENT_RULE_VERSION
+from apps.contract.models import CommissionCalculation
+from apps.contract.services import create_draft_contract
+from apps.contract.services.calculation_service import (
     persist_commission_calculation,
     preview_commission,
     serialize_commission_calculation,
 )
-from apps.contract.calculations import CURRENT_RULE_VERSION
-from apps.contract.models import CommissionCalculation
-from apps.contract.services import create_draft_contract
 from apps.contract.statuses import ContractStatus
 from apps.contract.terms import CommissionBasis
 from apps.contract.tests.conftest import agent, company_admin

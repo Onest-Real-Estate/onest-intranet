@@ -302,6 +302,64 @@ PERMISSION_DEFINITIONS: tuple[PermissionDefinition, ...] = (
         description="View reservations within effective scope.",
         default_roles=(*_MANAGERS, BRANCH_ADMIN, REGIONAL_ADMIN),
     ),
+    PermissionDefinition(
+        codename="inventory.manage_inventory",
+        name="Can manage scoped inventory items",
+        domain="inventory",
+        action="manage",
+        description=(
+            "Create, update, retire, and transfer inventory within effective "
+            "scope. Retirement preserves history and blocks new reservations."
+        ),
+        default_roles=(*_MANAGERS, REGIONAL_TRANSACTION_COORDINATOR),
+        sensitive=True,
+    ),
+    PermissionDefinition(
+        codename="inventory.view_inventory_sensitive",
+        name="Can view inventory serial numbers, valuation, and internal notes",
+        domain="inventory",
+        action="view",
+        description=(
+            "Read asset identifiers, replacement value, and staff-only notes "
+            "on inventory in scope."
+        ),
+        default_roles=(*_MANAGERS, REGIONAL_TRANSACTION_COORDINATOR),
+        sensitive=True,
+    ),
+    PermissionDefinition(
+        codename="inventory.reserve_on_behalf",
+        name="Can create inventory reservations for other users",
+        domain="inventory",
+        action="manage",
+        description=(
+            "Create inventory reservations on behalf of another agent. "
+            "Actor, subject, and reason must be recorded."
+        ),
+        default_roles=(*_MANAGERS,),
+        sensitive=True,
+    ),
+    PermissionDefinition(
+        codename="inventory.approve_reservations",
+        name="Can approve or deny inventory reservations",
+        domain="inventory",
+        action="manage",
+        description=(
+            "Approve or deny inventory reservations that require office review."
+        ),
+        default_roles=(*_MANAGERS, BRANCH_ADMIN, REGIONAL_ADMIN),
+    ),
+    PermissionDefinition(
+        codename="inventory.override_reservations",
+        name="Can override inventory reservation policy",
+        domain="inventory",
+        action="manage",
+        description=(
+            "Override cancel cutoffs or related reservation policy with a "
+            "mandatory reason. Never bypasses physical capacity."
+        ),
+        default_roles=(*_MANAGERS,),
+        sensitive=True,
+    ),
     # --- Content ---
     PermissionDefinition(
         codename="web.manage_announcements",

@@ -67,6 +67,17 @@ idempotent for free (see `apps/audit/tasks.dispatch_event`).
 EVENT_PRODUCERS = {
     "user.onboarding.owner_assigned": onboarding_owner_assigned,
     "user.account.state_changed": account_reactivated,
+    "contract.pdf_ready": contract_pdf_ready,
+    "contract.issued": contract_issued,
+    "contract.viewed": contract_viewed,
+    "contract.signed": contract_signed,
+    "contract.activated": contract_activated,
+    "contract.superseded": contract_superseded,
+    "contract.terminated": contract_terminated,
+    "contract.expired": contract_expired,
+    "contract.generation_error": contract_generation_error,
+    "contract.signature_reminder": contract_signature_reminder,
+    "contract.expiration_warning": contract_expiration_warning,
 }
 ```
 
@@ -127,6 +138,7 @@ Shipped resolvers:
 | Module | Checks | Result |
 | --- | --- | --- |
 | `onboarding` | `web.view_new_agents` and the agent is still in the reader's administrative scope | "Onboarding for <name>" and the case destination |
+| `contract` | Reader still reaches the contract via `accessible_contract_queryset`; signature reminders fail closed once the row is no longer signable | Status-derived detail and My Contract / workspace action |
 | *(none)* | Self-contained notification about the reader themselves | Title only; action still re-authorizes at the destination |
 
 The unavailable copy is deliberately identical for a lost grant, an
@@ -212,8 +224,27 @@ absent reads as a channel that does not exist.
 ## Email delivery
 
 Code: `apps/notifications/delivery.py` (the pipeline),
+`apps/notifications/providers/` (pluggable push backends),
 `apps/notifications/emails.py` (rendering), `templates/notifications/email/`,
 `apps/notifications/tasks.py` (the three tasks).
+
+### Pluggable push providers
+
+Outbound channels implement `DeliveryProvider` and register in
+`apps.notifications.providers.registry`. The shared ledger
+(`NotificationEmail`) and claim/retry/sweep mechanics are channel-agnostic —
+adding Microsoft Graph or Slack means registering a provider, not rewriting
+producers.
+
+| Provider | Channel key | Enabled when |
+| --- | --- | --- |
+| `EmailDeliveryProvider` | `email` | Always |
+| `MicrosoftDeliveryProvider` | `microsoft` | `NOTIFICATION_MICROSOFT_ENABLED` + client id |
+| `SlackDeliveryProvider` | `slack` | `NOTIFICATION_SLACK_ENABLED` + bot token |
+
+Microsoft and Slack ship as dormant stubs: preferences hide them until enabled,
+and `send` raises until a real Graph/Slack sender is approved. Email remains
+the production push path.
 
 The in-app notification is the domain fact. `NotificationEmail` is a *ledger*
 for pushing a copy of it out, deliberately separate so nothing about a

@@ -28,6 +28,8 @@ import {
   useRef,
   useState,
 } from "react";
+
+import { FlashToasts } from "@/components/FlashToasts";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { QuickCreateMenu } from "@/components/QuickCreateMenu";
 import { GlobalSearch } from "@/components/search/GlobalSearch";
@@ -1058,6 +1060,7 @@ export function HubLayout({ children, context, variant = "standard" }: HubLayout
         variant={variant}
         onSignOut={signOut}
       >
+        <FlashToasts />
         {children}
       </ShellWorkspace>
     </SidebarProvider>

@@ -8,7 +8,6 @@ name: onest-dev
 #
 # Services: web (Django) · db (PostgreSQL) · redis · mailpit · minio (S3)
 #          · celery (workers) · celery-beat (django-celery-beat scheduler)
-#          · docuseal (document signing)
 
 # Shared config for the celery worker and beat services (dev image: code
 # bind-mounted, deps in the venv volume, PostgreSQL + Redis from the stack).
@@ -194,21 +193,6 @@ services:
       - ..:/app
       - celery_beat_venv:/app/.venv
 
-  # DocuSeal — self-hosted document signing (e-signatures). SQLite-backed by
-  # default; data persists in the docuseal_data volume. Web UI + API:
-  # http://localhost:${DOCUSEAL_PORT:-3000} (initial account is created on
-  # first visit).
-  docuseal:
-    image: docuseal/docuseal:latest
-    restart: unless-stopped
-    environment:
-      # Used to build absolute links (e.g. in signing emails). If you change
-      # DOCUSEAL_PORT, mirror it here.
-      HOST: localhost:${DOCUSEAL_PORT:-3000}
-    volumes:
-      - docuseal_data:/data
-    ports:
-      - "${DOCUSEAL_PORT:-3000}:3000"
 
   # One-shot: waits for MinIO, creates the bucket, and makes it publicly
   # readable so browsers can fetch media URLs built from AWS_S3_CUSTOM_DOMAIN.
@@ -240,4 +224,3 @@ volumes:
   celery_venv:
   celery_beat_venv:
   minio_data:
-  docuseal_data:

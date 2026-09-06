@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -120,6 +120,11 @@ function destinationField(): HTMLElement {
   return field;
 }
 
+/** Controlled inputs: one change event beats character-by-character typing under parallel load. */
+function setInputValue(element: HTMLElement, value: string) {
+  fireEvent.change(element, { target: { value } });
+}
+
 beforeEach(() => {
   routerPost.mockClear();
   setPage();
@@ -127,13 +132,11 @@ beforeEach(() => {
 
 describe("QuickAccessLinkForm", () => {
   it("confirms before publishing a brand new link", async () => {
-    // delay: null — character-by-character typing under full-suite load
-    // otherwise trips the default 5s timeout.
-    const user = userEvent.setup({ delay: null });
+    const user = userEvent.setup();
     render(<QuickAccessLinkForm />);
-    await user.type(screen.getByLabelText(/^name/i), "New CRM");
-    await user.type(screen.getByLabelText(/stable key/i), "new-crm");
-    await user.type(destinationField(), "https://crm.example.com");
+    setInputValue(screen.getByLabelText(/^name/i), "New CRM");
+    setInputValue(screen.getByLabelText(/stable key/i), "new-crm");
+    setInputValue(destinationField(), "https://crm.example.com");
     await user.click(screen.getByLabelText(/Mid-Atlantic \/ Virginia \/ Fairfax VA/));
     await user.click(screen.getByRole("button", { name: /create link/i }));
 
@@ -150,15 +153,13 @@ describe("QuickAccessLinkForm", () => {
       }),
       expect.anything(),
     );
-  }, 15_000);
+  });
 
   it("confirms a destination change on an existing link", async () => {
     const user = userEvent.setup();
     setPage({ link: existing });
     render(<QuickAccessLinkForm />);
-    const destination = destinationField();
-    await user.clear(destination);
-    await user.type(destination, "https://elsewhere.example.com");
+    setInputValue(destinationField(), "https://elsewhere.example.com");
     await user.click(screen.getByRole("button", { name: /save changes/i }));
 
     expect(routerPost).not.toHaveBeenCalled();

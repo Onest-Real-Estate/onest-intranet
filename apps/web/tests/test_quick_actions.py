@@ -150,15 +150,15 @@ def test_an_action_is_absent_without_its_permission(seeded):
     assert "new-announcement" in keys(User.objects.get(pk=granted.pk))
 
 
-def test_a_dark_feature_is_never_serialized_even_with_the_permission(seeded):
-    """Training is catalogued and permitted but its module is not live."""
+def test_training_quick_action_is_offered_when_the_module_is_live(seeded):
+    """Training is catalogued, permitted, and its module is live."""
     from apps.web.navigation import HUB_FEATURES
 
     user = grant(agent("trainer@example.com"), "web.manage_training")
     assign(user, "regional_admin", "region", office("region-mid-atlantic"))
 
-    assert HUB_FEATURES["admin-training"] is False
-    assert "new-training" not in keys(User.objects.get(pk=user.pk))
+    assert HUB_FEATURES["admin-training"] is True
+    assert "new-training" in keys(User.objects.get(pk=user.pk))
 
 
 def test_an_out_of_scope_action_is_not_serialized(seeded):

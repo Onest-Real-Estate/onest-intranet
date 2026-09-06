@@ -34,8 +34,16 @@ registration, and deployment; don't duplicate it here.
 11. **Check dependency blocks when requested.** If a prompt says to check
     dependencies, inspect its blocking GitHub issues with `gh`. Stop when an
     unresolved blocker is open and report the required work in dependency order.
-12. Check for well maintained django and react packages before implementing yourself, do not implement
+12. **Check for well maintained django and react packages before implementing yourself**, do not implement
     something that is already available as a package it would save lots of time
+13. **Use Self Hosted [Centrifugo](https://centrifugal.dev/) for all real time works**, do not use django channels and others use
+    pusher compatible Open source Centrifugo if you reach for any realtime activity
+14. **Use Pattern /apps/views/{agents_views.py,*}** : Use the above patterns for the file structure
+15. **Use Enum instead of Raw Strings for comapraision**: Always create an Enum for all the states of comparison, if using database and if there is text choices use that for comparsion
+16. **Hub-native agent contract e-sign**. Agent contracts use Hub field
+ placement, Hub signing UI, and pyHanko org PKCS#12 sealing — not DocuSeal.
+ Customer/transaction packages remain out of scope until a later decision.
+17. **Use `inertiajs's` `router.post` and `router.get` or <Form/> component instead of default <form tag>**
 
 ## Commands
 
@@ -47,15 +55,16 @@ Two ways to run things. Pick one and stay consistent within a task.
 | --- | --- |
 | `uv run python manage.py runserver` | Django on :8000 |
 | `pnpm run dev` | Vite dev server on :5173 (HMR) |
-| `uv run pytest` | Backend tests |
+| `uv run pytest` | Backend tests (`-n auto --reuse-db`) |
 | `pnpm test` | Frontend tests (vitest) |
 | `pnpm run typecheck` | `tsc --noEmit` |
 | `pnpm run routes:generate` | Regenerate `frontend/types/routes.ts` |
 
 **Docker dev stack (`make up`)** — bundles Postgres, Redis, Mailpit, MinIO,
-DocuSeal, Celery worker + beat. Use when the task needs a real database, S3, mail,
-or background tasks. Management commands go through `make manage cmd="..."`,
-`make migrate`, `make makemigrations`, `make shell`, `make test`.
+Celery worker + beat. Use when the task needs a real database, S3, mail,
+or background tasks. Run commands in the `web` container via
+`make dockerexec cmd="…"` or `make manage cmd="…"`; see `docs/dockerexec.md`.
+Shortcuts: `make migrate`, `make makemigrations`, `make shell`, `make test-docker`.
 
 **Pre-commit gate** (`.husky/pre-commit` — lint, types, migration drift; no tests):
 
@@ -103,6 +112,8 @@ docs/reporting.md  Scoped operational reports registry, exports, reconciliation
 docs/role-assignment-administration.md  Assign User Roles: preview, concurrency, scopes
 docs/office-resources.md  Scoped office resources: inheritance, precedence, protected files
 docs/announcements.md  Announcements: taxonomy, audience union semantics, media pipeline
+docs/training.md   Training library + admin: audience, versioning, media, lifecycle
+docs/training.md   Training library: audience visibility, media, progress, admin
 docs/operational-tasks.md  Operational tasks: lifecycle, scope, conversion seam
 docs/feedback.md   Feedback intake: diagnostic redaction, idempotency, triage
 docs/it-support.md IT help desk: lifecycle, scope, internal notes, onboarding seam

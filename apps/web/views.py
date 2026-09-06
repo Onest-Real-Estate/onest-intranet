@@ -5,11 +5,13 @@ from inertia import inertia, render
 from apps.announcements.administration_views import (
     announcement_administration_index,
 )
-from apps.contract.administration_views import contract_template_index
-from apps.contract.agent_contract_views import agent_contract_index
+from apps.contract.views.administration_views import contract_template_index
+from apps.contract.views.agent_contract_views import agent_contract_index
 from apps.feedback.views import feedback_inbox
+from apps.inventory.views.administration_views import inventory_admin_index
 from apps.it_support.views import it_support_queue
 from apps.operational_tasks.views import tasks_index
+from apps.training.administration_views import training_administration_index
 from apps.user.services.role_assignments import get_effective_access
 from apps.user.views.directory_views import user_directory
 from apps.user.views.office_administration_views import office_administration_index
@@ -110,6 +112,7 @@ OPERATIONS_VIEWS = {
     for destination in OPERATIONS_DESTINATIONS
 }
 OPERATIONS_VIEWS["admin_announcements"] = announcement_administration_index
+OPERATIONS_VIEWS["admin_training"] = training_administration_index
 OPERATIONS_VIEWS["admin_contract_templates"] = contract_template_index
 OPERATIONS_VIEWS["admin_agent_contracts"] = agent_contract_index
 OPERATIONS_VIEWS["admin_users"] = user_directory
@@ -123,6 +126,7 @@ OPERATIONS_VIEWS["admin_office_resources"] = office_resources_admin_index
 # `apps.web` is included before those apps, so a duplicate path would resolve
 # to the placeholder however the module was actually built.
 OPERATIONS_VIEWS["admin_feedback"] = feedback_inbox
+OPERATIONS_VIEWS["admin_inventory"] = inventory_admin_index
 OPERATIONS_VIEWS["operational_tasks"] = tasks_index
 OPERATIONS_VIEWS["admin_it_support"] = it_support_queue
 

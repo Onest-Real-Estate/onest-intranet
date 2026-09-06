@@ -12,6 +12,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from django.db import transaction
+
 
 @dataclass
 class SeedReport:
@@ -104,6 +106,30 @@ OFFICE_DETAILS: dict[str, dict] = {
         "main_phone": "(571) 222-5555",
         "public_email": "prashanna@onest.realestate",
     },
+    "fairfax-va": {
+        "street_address": "",
+        "city": "Fairfax",
+        "state": "VA",
+        "zip_code": "",
+        "main_phone": "",
+        "public_email": "",
+    },
+    "maryland": {
+        "street_address": "",
+        "city": "",
+        "state": "MD",
+        "zip_code": "",
+        "main_phone": "",
+        "public_email": "",
+    },
+    "ro-virginia": {
+        "street_address": "",
+        "city": "",
+        "state": "VA",
+        "zip_code": "",
+        "main_phone": "",
+        "public_email": "",
+    },
 }
 
 
@@ -180,7 +206,14 @@ def upsert_office(
 
 
 def seed_offices(office_model=None) -> SeedReport:
-    """Idempotent: safe to re-run. Returns a SeedReport."""
+    """Idempotent: safe to re-run. Returns a SeedReport.
+
+    Runs inside ``transaction.atomic`` because :func:`upsert_office` locks rows
+    with ``select_for_update``. Callers that already open a transaction (the
+    management command, default ``django_db`` tests) nest a savepoint; callers
+    that do not (``django_db(transaction=True)`` fixtures on PostgreSQL) get a
+    real transaction so the lock is legal.
+    """
     from apps.user.models import Office as LiveOffice
 
     Office = office_model or LiveOffice
@@ -193,6 +226,26 @@ def seed_offices(office_model=None) -> SeedReport:
     regional_office = "regional_office"
     branch = "branch"
 
+    with transaction.atomic():
+        return _seed_offices_locked(
+            Office,
+            report,
+            head_office=head_office,
+            region=region,
+            regional_office=regional_office,
+            branch=branch,
+        )
+
+
+def _seed_offices_locked(
+    Office,
+    report: SeedReport,
+    *,
+    head_office: str,
+    region: str,
+    regional_office: str,
+    branch: str,
+) -> SeedReport:
     head = upsert_office(
         Office,
         report,

@@ -25,6 +25,9 @@ dependencies = [
     "pillow>=12.3.0",
     "python-docx>=1.2.0",
     "pypdf>=6.16.2",
+    "pyjwt>=2.13.0",
+    "reportlab>=5.0.1",
+    "pyhanko[opentype]>=0.36.2",
 ]
 
 [dependency-groups]
@@ -34,6 +37,7 @@ dev = [
     "faker>=40.36.0",
     "pytest>=8.3.0",
     "pytest-django>=4.9.0",
+    "pytest-xdist>=3.8.0",
     "ruff>=0.16.3",
     "ty>=0.0.72",
 ]
@@ -41,11 +45,12 @@ dev = [
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "config.settings_test"
 testpaths = ["apps"]
+addopts = ["-n", "auto", "--reuse-db"]
 
 [tool.ruff]
 line-length = 88
 target-version = "py313"
-exclude = ["assets", "staticfiles", "frontend", "apps/**/migrations"]
+exclude = ["assets", "staticfiles", "frontend", "apps/**/migrations", ".agents"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "SIM", "C4"]

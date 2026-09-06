@@ -36,10 +36,13 @@ HUB_FEATURES: dict[str, bool] = {
 HUB_FEATURES["announcements"] = True
 HUB_FEATURES["office-info"] = True
 HUB_FEATURES["office-resources"] = True
+HUB_FEATURES["office-inventory"] = True
 HUB_FEATURES["my-contract"] = True
 HUB_FEATURES["my-tools"] = True
 HUB_FEATURES["reports"] = True
 HUB_FEATURES["admin-tool-catalog"] = True
+HUB_FEATURES["training-learning"] = True
+HUB_FEATURES["admin-training"] = True
 
 # Live destinations that are not Coming Soon ops stubs and are not agent
 # HUB_SECTIONS. Shared only when the actor holds the matching permission.

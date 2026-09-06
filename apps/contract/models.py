@@ -19,6 +19,7 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from apps.contract.calculations.rules import CURRENT_RULE_VERSION
+from apps.contract.change_kinds import AMENDMENT_KINDS, ContractChangeKind
 from apps.contract.statuses import ContractStatus
 from apps.contract.terms import (
     HUNDRED,
@@ -30,6 +31,22 @@ from apps.contract.terms import (
     quantize_percent,
 )
 from apps.user.storage import private_storage
+
+#: Once issued (or terminal), legal/financial fields and family links freeze.
+#: Lifecycle timestamps, status (via the transition service), and current
+#: artifact *pointers* may still change.
+FROZEN_CONTRACT_STATUSES = frozenset(
+    {
+        ContractStatus.SENT,
+        ContractStatus.VIEWED,
+        ContractStatus.SIGNED,
+        ContractStatus.ACTIVE,
+        ContractStatus.SUPERSEDED,
+        ContractStatus.EXPIRED,
+        ContractStatus.TERMINATED,
+        ContractStatus.GENERATION_ERROR,
+    }
+)
 
 if TYPE_CHECKING:
     from apps.user.models import User  # noqa: F401
@@ -60,6 +77,18 @@ def _template_preview_upload_to(
         "contract-templates/"
         f"{instance.template.public_id}/{instance.public_id}/preview/{suffix}"
     )
+
+
+def _signature_appearance_upload_to(instance: ContractSignature, filename: str) -> str:
+    safe = Path(filename).name or "appearance.png"
+    suffix = f"{uuid.uuid4().hex}_{safe}"
+    return f"contracts/{instance.contract.public_id}/signature-appearance/{suffix}"
+
+
+def _signature_initials_upload_to(instance: ContractSignature, filename: str) -> str:
+    safe = Path(filename).name or "initials.png"
+    suffix = f"{uuid.uuid4().hex}_{safe}"
+    return f"contracts/{instance.contract.public_id}/signature-initials/{suffix}"
 
 
 class ContractTemplate(models.Model):
@@ -263,7 +292,7 @@ class ContractTemplateVersion(models.Model):
         _("source format"),
         max_length=16,
         blank=True,
-        help_text=_("Allowed values are docx and pdf."),
+        help_text=_("Allowed value is pdf (Hub field placer)."),
     )
     source_media_type = models.CharField(
         _("source media type"),
@@ -283,6 +312,28 @@ class ContractTemplateVersion(models.Model):
         max_length=64,
         blank=True,
         help_text=_("SHA-256 hex digest of the uploaded source bytes."),
+    )
+    docuseal_template_id = models.PositiveBigIntegerField(
+        _("DocuSeal template id"),
+        null=True,
+        blank=True,
+        help_text=_("Remote DocuSeal template used for field placement and signing."),
+    )
+    docuseal_external_id = models.CharField(
+        _("DocuSeal external id"),
+        max_length=120,
+        blank=True,
+        default="",
+        help_text=_("Stable hub key mirrored to DocuSeal as external_id."),
+    )
+    field_layout = models.JSONField(
+        _("field layout"),
+        default=list,
+        blank=True,
+        help_text=_(
+            "Hub-placed fields: name, type, role, page, x, y, w, h "
+            "(PDF points at scale 1)."
+        ),
     )
     merge_schema = models.JSONField(
         _("merge schema"),
@@ -398,6 +449,8 @@ class ContractTemplateVersion(models.Model):
             "source_media_type",
             "source_document",
             "source_checksum",
+            "docuseal_template_id",
+            "docuseal_external_id",
             "merge_schema",
             "extracted_placeholder_keys",
             "preview_pdf",
@@ -415,9 +468,9 @@ class ContractTemplateVersion(models.Model):
                 str(_("A template version cannot supersede itself."))
             )
 
-        if self.source_format and self.source_format not in {"docx", "pdf"}:
+        if self.source_format and self.source_format not in {"pdf"}:
             errors.setdefault("source_format", []).append(
-                str(_("Source format must be either docx or pdf."))
+                str(_("Source format must be pdf."))
             )
 
         if self.source_checksum and (
@@ -532,6 +585,10 @@ class AgentContractQuerySet(models.QuerySet["AgentContract"]):
             "template_version",
             "template_version__template",
             "created_by",
+            "mentor_payee",
+            "mentor_payee__office",
+            "referral_payee",
+            "referral_payee__office",
             "generated_pdf",
             "signed_pdf",
         )
@@ -561,6 +618,26 @@ class AgentContract(models.Model):
         _("version number"),
         default=1,
         help_text=_("Monotonic revision within the family. Starts at 1."),
+    )
+    change_kind = models.CharField(
+        _("change kind"),
+        max_length=32,
+        choices=ContractChangeKind.choices,
+        default=ContractChangeKind.ORIGINAL,
+        db_index=True,
+        help_text=_(
+            "Why this family version exists: original, amendment/addendum, "
+            "or full replacement. Never rewrite a signed original in place."
+        ),
+    )
+    change_summary = models.TextField(
+        _("change summary"),
+        blank=True,
+        help_text=_(
+            "Legal narrative for an amendment or addendum: what changes and "
+            "effective-date implications. Empty on originals and most "
+            "replacements."
+        ),
     )
     recipient = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -716,6 +793,20 @@ class AgentContract(models.Model):
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
+    )
+    docuseal_submission_id = models.PositiveBigIntegerField(
+        _("DocuSeal submission id"),
+        null=True,
+        blank=True,
+        unique=True,
+        help_text=_("Issue-time DocuSeal submission reused for agent signing."),
+    )
+    docuseal_agent_submitter_slug = models.CharField(
+        _("DocuSeal agent submitter slug"),
+        max_length=120,
+        blank=True,
+        default="",
+        help_text=_("Agent role submitter slug for the embedded signing form."),
     )
 
     # --- Lifecycle timestamps --------------------------------------------
@@ -875,6 +966,17 @@ class AgentContract(models.Model):
                 ),
                 name="contract_splits_both_or_neither",
             ),
+            models.CheckConstraint(
+                condition=(
+                    ~Q(change_kind__in=["amendment", "addendum"])
+                    | Q(amends__isnull=False)
+                ),
+                name="contract_amendment_requires_amends",
+            ),
+            models.CheckConstraint(
+                condition=(~Q(change_kind="replacement") | Q(supersedes__isnull=False)),
+                name="contract_replacement_requires_supersedes",
+            ),
         ]
         indexes = [
             models.Index(
@@ -897,6 +999,51 @@ class AgentContract(models.Model):
 
     def __str__(self) -> str:
         return f"{self.public_id} ({self.status})"
+
+    def _immutable_field_names(self) -> tuple[str, ...]:
+        """Legal, financial, snapshot, and family identity fields.
+
+        Status, lifecycle timestamps, and current artifact pointer FKs stay
+        mutable so the lifecycle and PDF services can finish their work.
+        """
+        return (
+            "recipient_id",
+            "office_id",
+            "template_version_id",
+            "family_id",
+            "version_number",
+            "change_kind",
+            "change_summary",
+            "effective_on",
+            "expires_on",
+            "agent_split_percent",
+            "office_split_percent",
+            "transaction_fee_amount",
+            "transaction_fee_percent",
+            "annual_cap_amount",
+            "mentor_percent",
+            "mentor_fixed_amount",
+            "mentor_cap_amount",
+            "mentor_basis",
+            "mentor_payee_id",
+            "mentor_notes",
+            "referral_percent",
+            "referral_fixed_amount",
+            "referral_cap_amount",
+            "referral_basis",
+            "referral_payee_id",
+            "referral_notes",
+            "special_arrangements",
+            "addenda_references",
+            "party_snapshot",
+            "office_snapshot",
+            "terms_snapshot",
+            "calculation_rule_version",
+            "root_agreement_id",
+            "supersedes_id",
+            "amends_id",
+            "created_by_id",
+        )
 
     def clean(self):
         super().clean()
@@ -1004,6 +1151,48 @@ class AgentContract(models.Model):
                 str(_("A contract cannot amend itself."))
             )
 
+        if self.change_kind in AMENDMENT_KINDS and not self.amends_id:
+            errors.setdefault("amends", []).append(
+                str(_("Amendments and addenda must reference a base version."))
+            )
+        if (
+            self.change_kind == ContractChangeKind.REPLACEMENT
+            and not self.supersedes_id
+        ):
+            errors.setdefault("supersedes", []).append(
+                str(_("Replacements must reference the version they supersede."))
+            )
+        if self.change_kind == ContractChangeKind.ORIGINAL and (
+            self.amends_id or self.supersedes_id
+        ):
+            errors.setdefault("change_kind", []).append(
+                str(
+                    _(
+                        "Original agreements cannot amend or supersede another "
+                        "version; use amendment or replacement."
+                    )
+                )
+            )
+
+        if self.pk:
+            original = type(self).objects.filter(pk=self.pk).first()
+            if original and original.status in FROZEN_CONTRACT_STATUSES:
+                changed = [
+                    field
+                    for field in self._immutable_field_names()
+                    if getattr(original, field) != getattr(self, field)
+                ]
+                if changed:
+                    errors.setdefault("__all__", []).append(
+                        str(
+                            _(
+                                "Issued and historical contract versions are "
+                                "immutable; create an amendment or replacement "
+                                "draft instead."
+                            )
+                        )
+                    )
+
         if errors:
             raise ValidationError(errors)
 
@@ -1031,6 +1220,25 @@ class AgentContract(models.Model):
                         )
                     }
                 )
+            # Enforce immutability even when callers skip full_clean().
+            if previous is not None and previous in FROZEN_CONTRACT_STATUSES:
+                original = type(self).objects.filter(pk=self.pk).first()
+                if original is not None:
+                    changed = [
+                        field
+                        for field in self._immutable_field_names()
+                        if getattr(original, field) != getattr(self, field)
+                    ]
+                    if changed:
+                        raise ValidationError(
+                            {
+                                "__all__": _(
+                                    "Issued and historical contract versions are "
+                                    "immutable; create an amendment or replacement "
+                                    "draft instead."
+                                )
+                            }
+                        )
         super().save(*args, **kwargs)
 
 
@@ -1045,6 +1253,10 @@ class ContractArtifact(models.Model):
     class Kind(models.TextChoices):
         GENERATED_PDF = "generated_pdf", _("Generated PDF")
         SIGNED_PDF = "signed_pdf", _("Signed PDF")
+        CERTIFICATE_OF_COMPLETION = (
+            "certificate_of_completion",
+            _("Certificate of completion"),
+        )
         ADDENDUM = "addendum", _("Addendum")
         OTHER = "other", _("Other")
 
@@ -1139,6 +1351,22 @@ class ContractArtifact(models.Model):
     def __str__(self) -> str:
         return f"{self.kind}:{self.display_name}"
 
+    def _immutable_field_names(self) -> tuple[str, ...]:
+        return (
+            "contract_id",
+            "kind",
+            "display_name",
+            "file",
+            "media_type",
+            "byte_size",
+            "checksum",
+            "renderer_version",
+            "rule_version",
+            "input_fingerprint",
+            "generation_metadata",
+            "created_by_id",
+        )
+
     def clean(self):
         super().clean()
         if self.byte_size is not None and self.byte_size <= 0:
@@ -1169,6 +1397,45 @@ class ContractArtifact(models.Model):
             raise ValidationError(
                 {"generation_metadata": _("Generation metadata must be an object.")}
             )
+        if self.pk:
+            original = type(self).objects.filter(pk=self.pk).first()
+            if original is not None:
+                changed = [
+                    field
+                    for field in self._immutable_field_names()
+                    if getattr(original, field) != getattr(self, field)
+                ]
+                if changed:
+                    raise ValidationError(
+                        {
+                            "__all__": _(
+                                "Contract artifacts are immutable after create; "
+                                "retain the prior file and attach a new artifact "
+                                "on a new contract version if needed."
+                            )
+                        }
+                    )
+
+    def save(self, *args, **kwargs):
+        if self.pk is not None:
+            original = type(self).objects.filter(pk=self.pk).first()
+            if original is not None:
+                changed = [
+                    field
+                    for field in self._immutable_field_names()
+                    if getattr(original, field) != getattr(self, field)
+                ]
+                if changed:
+                    raise ValidationError(
+                        {
+                            "__all__": _(
+                                "Contract artifacts are immutable after create; "
+                                "retain the prior file and attach a new artifact "
+                                "on a new contract version if needed."
+                            )
+                        }
+                    )
+        super().save(*args, **kwargs)
 
 
 def _required_money(**kwargs):
@@ -1258,3 +1525,404 @@ class CommissionCalculation(models.Model):
 
     def __str__(self) -> str:
         return f"{self.public_id}@{self.rule_version}"
+
+
+class ContractSigningIntent(models.Model):
+    """Short-lived, single-use recipient signing ceremony binding.
+
+    Bound to the authenticated recipient, contract row version, generated PDF
+    checksum, and session. Completion is Hub-authoritative (not a vendor webhook).
+    """
+
+    class Status(models.TextChoices):
+        PENDING = "pending", _("Pending")
+        CONSUMED = "consumed", _("Consumed")
+        EXPIRED = "expired", _("Expired")
+        CANCELLED = "cancelled", _("Cancelled")
+
+    public_id = models.UUIDField(
+        _("public id"), default=uuid.uuid4, unique=True, editable=False
+    )
+    contract = models.ForeignKey(
+        AgentContract,
+        verbose_name=_("contract"),
+        related_name="signing_intents",
+        on_delete=models.PROTECT,
+    )
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        verbose_name=_("actor"),
+        related_name="contract_signing_intents",
+        on_delete=models.PROTECT,
+    )
+    contract_version = models.CharField(_("contract version token"), max_length=64)
+    artifact = models.ForeignKey(
+        ContractArtifact,
+        verbose_name=_("generated artifact"),
+        related_name="signing_intents",
+        on_delete=models.PROTECT,
+    )
+    artifact_checksum = models.CharField(_("artifact checksum"), max_length=64)
+    session_key_hash = models.CharField(_("session key hash"), max_length=64)
+    request_ip_hash = models.CharField(
+        _("request IP hash"),
+        max_length=64,
+        blank=True,
+        default="",
+    )
+    request_ua_hash = models.CharField(
+        _("request user-agent hash"),
+        max_length=64,
+        blank=True,
+        default="",
+    )
+    disclosure_version = models.CharField(_("disclosure version"), max_length=64)
+    consent_accepted_at = models.DateTimeField(_("consent accepted at"))
+    status = models.CharField(
+        _("status"),
+        max_length=16,
+        choices=Status.choices,
+        default=Status.PENDING,
+        db_index=True,
+    )
+    docuseal_submission_id = models.PositiveBigIntegerField(
+        _("legacy DocuSeal submission id"),
+        null=True,
+        blank=True,
+        unique=True,
+    )
+    docuseal_submitter_slug = models.CharField(
+        _("legacy DocuSeal submitter slug"),
+        max_length=120,
+        blank=True,
+        default="",
+    )
+    embed_src = models.TextField(
+        _("legacy embed src"),
+        blank=True,
+        default="",
+        help_text=_("Unused for Hub-native signing; retained for historical rows."),
+    )
+    expires_at = models.DateTimeField(_("expires at"), db_index=True)
+    created_at = models.DateTimeField(_("created at"), default=timezone.now)
+    consumed_at = models.DateTimeField(_("consumed at"), null=True, blank=True)
+
+    if TYPE_CHECKING:
+        contract_id: int
+        actor_id: int
+        artifact_id: int
+
+    class Meta:
+        ordering = ["-created_at", "-pk"]
+        verbose_name = _("contract signing intent")
+        verbose_name_plural = _("contract signing intents")
+        indexes = [
+            models.Index(
+                fields=["contract", "status", "-created_at"],
+                name="contract_sign_intent_lookup",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.public_id}:{self.status}"
+
+
+class ContractSignature(models.Model):
+    """Durable recipient electronic signature for one contract version.
+
+    Ceremony facts (signer, disclosure, appearance, source checksum) are
+    immutable after create. Final signed-PDF attachment and finalization
+    status may update once through the signed-PDF generation pipeline.
+    """
+
+    class Method(models.TextChoices):
+        HUB_EMBEDDED = "hub_embedded", _("Hub embedded")
+        DOCUSEAL_EMBEDDED = "docuseal_embedded", _("DocuSeal embedded (legacy)")
+
+    class FinalizationStatus(models.TextChoices):
+        PENDING = "pending", _("Pending")
+        READY = "ready", _("Ready")
+        FAILED = "failed", _("Failed")
+
+    public_id = models.UUIDField(
+        _("public id"), default=uuid.uuid4, unique=True, editable=False
+    )
+    contract = models.OneToOneField(
+        AgentContract,
+        verbose_name=_("contract"),
+        related_name="signature_record",
+        on_delete=models.PROTECT,
+    )
+    intent = models.OneToOneField(
+        ContractSigningIntent,
+        verbose_name=_("signing intent"),
+        related_name="signature",
+        on_delete=models.PROTECT,
+    )
+    signer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        verbose_name=_("signer"),
+        related_name="contract_signatures",
+        on_delete=models.PROTECT,
+    )
+    artifact = models.ForeignKey(
+        ContractArtifact,
+        verbose_name=_("signed artifact"),
+        related_name="signature_records",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        help_text=_(
+            "Authoritative final signed PDF once generation succeeds. "
+            "Null while finalization is pending or failed."
+        ),
+    )
+    certificate_of_completion = models.ForeignKey(
+        ContractArtifact,
+        verbose_name=_("certificate of completion"),
+        related_name="completion_certificate_for",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+    )
+    source_checksum = models.CharField(
+        _("source review PDF checksum"),
+        max_length=64,
+        blank=True,
+        default="",
+        help_text=_(
+            "SHA-256 of the issued/reviewed PDF bytes used as signing input. "
+            "Final generation must bind to this checksum, never re-render terms."
+        ),
+    )
+    signed_date_value = models.CharField(
+        _("signed date value"),
+        max_length=64,
+        blank=True,
+        default="",
+        help_text=_("Date text stamped onto Agent date fields during finalization."),
+    )
+    appearance_file = models.FileField(
+        _("signature appearance"),
+        max_length=255,
+        storage=private_storage,
+        upload_to=_signature_appearance_upload_to,
+        blank=True,
+        default="",
+        help_text=_("Protected PNG/JPEG used to stamp Agent signature fields."),
+    )
+    initials_file = models.FileField(
+        _("initials appearance"),
+        max_length=255,
+        storage=private_storage,
+        upload_to=_signature_initials_upload_to,
+        blank=True,
+        default="",
+    )
+    agent_text_values = models.JSONField(
+        _("agent text values"),
+        default=dict,
+        blank=True,
+        help_text=_("Optional Agent text/checkbox values applied during finalization."),
+    )
+    finalization_status = models.CharField(
+        _("finalization status"),
+        max_length=16,
+        choices=FinalizationStatus.choices,
+        default=FinalizationStatus.PENDING,
+        db_index=True,
+    )
+    finalization_error = models.CharField(
+        _("finalization error code"),
+        max_length=64,
+        blank=True,
+        default="",
+        help_text=_("Non-PII outcome code when final PDF generation fails."),
+    )
+    generation_task_id = models.CharField(
+        _("generation task id"),
+        max_length=255,
+        blank=True,
+        default="",
+        help_text=_("Celery task identity for the latest finalization attempt."),
+    )
+    signed_at = models.DateTimeField(_("signed at"), default=timezone.now)
+    disclosure_version = models.CharField(_("disclosure version"), max_length=64)
+    signature_method = models.CharField(
+        _("signature method"),
+        max_length=32,
+        choices=Method.choices,
+        default=Method.HUB_EMBEDDED,
+    )
+    appearance_checksum = models.CharField(
+        _("signature appearance checksum"),
+        max_length=64,
+        blank=True,
+        default="",
+        help_text=_("SHA-256 of the signature appearance bytes applied to the PDF."),
+    )
+    seal_cert_subject = models.CharField(
+        _("org seal certificate subject"),
+        max_length=512,
+        blank=True,
+        default="",
+    )
+    seal_cert_fingerprint = models.CharField(
+        _("org seal certificate fingerprint"),
+        max_length=64,
+        blank=True,
+        default="",
+        help_text=_("SHA-256 of the org sealing certificate DER bytes."),
+    )
+    docuseal_submission_id = models.PositiveBigIntegerField(
+        _("legacy DocuSeal submission id"),
+        null=True,
+        blank=True,
+        unique=True,
+    )
+    docuseal_submitter_slug = models.CharField(
+        _("legacy DocuSeal submitter slug"),
+        max_length=120,
+        blank=True,
+        default="",
+    )
+    # Minimized network metadata — hashed / truncated; never store raw IP.
+    request_ip_hash = models.CharField(
+        _("request IP hash"),
+        max_length=64,
+        blank=True,
+        default="",
+        help_text=_("SHA-256 of client IP at intent start; empty if unavailable."),
+    )
+    request_ua_hash = models.CharField(
+        _("request user-agent hash"),
+        max_length=64,
+        blank=True,
+        default="",
+        help_text=_("SHA-256 of truncated user agent at intent start."),
+    )
+    created_at = models.DateTimeField(_("created at"), default=timezone.now)
+
+    if TYPE_CHECKING:
+        contract_id: int
+        intent_id: int
+        signer_id: int
+        artifact_id: int | None
+        certificate_of_completion_id: int | None
+
+    class Meta:
+        ordering = ["-signed_at", "-pk"]
+        verbose_name = _("contract signature")
+        verbose_name_plural = _("contract signatures")
+
+    #: Ceremony facts never change after the durable signature row is created.
+    _CEREMONY_IMMUTABLE_FIELDS = (
+        "contract_id",
+        "intent_id",
+        "signer_id",
+        "source_checksum",
+        "signed_date_value",
+        "agent_text_values",
+        "signed_at",
+        "disclosure_version",
+        "signature_method",
+        "appearance_checksum",
+        "request_ip_hash",
+        "request_ua_hash",
+        "docuseal_submission_id",
+        "docuseal_submitter_slug",
+    )
+
+    #: Final PDF pipeline may set these exactly once (or update failure status).
+    _FINALIZATION_FIELDS = (
+        "artifact",
+        "certificate_of_completion",
+        "finalization_status",
+        "finalization_error",
+        "generation_task_id",
+        "seal_cert_subject",
+        "seal_cert_fingerprint",
+    )
+
+    def save(self, *args, **kwargs):
+        if self.pk is not None:
+            original = type(self).objects.filter(pk=self.pk).first()
+            if original is not None:
+                changed_ceremony = [
+                    field
+                    for field in self._CEREMONY_IMMUTABLE_FIELDS
+                    if getattr(original, field) != getattr(self, field)
+                ]
+                if changed_ceremony:
+                    raise ValidationError(
+                        {
+                            "__all__": _(
+                                "Contract signature ceremony facts are immutable "
+                                "after create."
+                            )
+                        }
+                    )
+                # Appearance files are write-once; empty→set is allowed on create path
+                # only (handled by excluding them from ceremony list and blocking
+                # replacement here).
+                if original.appearance_file and self.appearance_file != (
+                    original.appearance_file
+                ):
+                    raise ValidationError(
+                        {
+                            "appearance_file": _(
+                                "Signature appearance cannot be replaced."
+                            )
+                        }
+                    )
+                if original.initials_file and self.initials_file != (
+                    original.initials_file
+                ):
+                    raise ValidationError(
+                        {"initials_file": _("Signature initials cannot be replaced.")}
+                    )
+                if (
+                    original.artifact_id
+                    and self.artifact_id
+                    and original.artifact_id != self.artifact_id
+                ):
+                    raise ValidationError(
+                        {
+                            "artifact": _(
+                                "Final signed PDF cannot be replaced once attached."
+                            )
+                        }
+                    )
+                original_coc_id = getattr(
+                    original, "certificate_of_completion_id", None
+                )
+                self_coc_id = getattr(self, "certificate_of_completion_id", None)
+                if original_coc_id and self_coc_id and original_coc_id != self_coc_id:
+                    raise ValidationError(
+                        {
+                            "certificate_of_completion": _(
+                                "Certificate of completion cannot be replaced."
+                            )
+                        }
+                    )
+                # Disallow unknown field mutations beyond finalization allowlist.
+                update_fields = kwargs.get("update_fields")
+                if update_fields is not None:
+                    allowed = set(self._FINALIZATION_FIELDS) | {
+                        "appearance_file",
+                        "initials_file",
+                    }
+                    illegal = set(update_fields) - allowed
+                    if illegal:
+                        raise ValidationError(
+                            {
+                                "__all__": _(
+                                    "Only finalization fields may change on an "
+                                    "existing signature record."
+                                )
+                            }
+                        )
+        super().save(*args, **kwargs)
+
+    def __str__(self) -> str:
+        return f"{self.public_id}:{self.signature_method}"

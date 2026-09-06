@@ -5,6 +5,8 @@ import {
   CreateSheet,
   DataTable,
   FormErrorSummary,
+  FormFieldError,
+  fieldA11yProps,
   PageHeader,
   PanelHeader,
   SearchControl,
@@ -13,25 +15,55 @@ import {
 } from "@/components/design-system";
 import { HubLayout } from "@/components/HubLayout";
 import { PermissionRequired } from "@/components/PermissionRequired";
+import { StateMultiSelect } from "@/components/StateMultiSelect";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { routes } from "@/lib/routes";
+import { firstFieldError } from "@/lib/validation";
 import type { ContractTemplateAdministrationPageProps } from "@/types";
 
 const ACCESS = {
   any: ["contract.manage_contract_templates", "contract.approve_contract_templates"],
 };
 
+function formatJurisdictionLabel(codes: string[]): string {
+  if (codes.length === 0) return "All jurisdictions";
+  if (codes.length <= 4) return codes.join(", ");
+  return `${codes.length} states (${codes.slice(0, 3).join(", ")}…)`;
+}
+
+function templateSubtitle(row: {
+  stableKey: string;
+  jurisdictionStateCodes: string[];
+}): { text: string; title: string } {
+  const jurisdictions =
+    row.jurisdictionStateCodes.length === 0
+      ? "All jurisdictions"
+      : row.jurisdictionStateCodes.join(", ");
+  return {
+    text: `${row.stableKey} · ${formatJurisdictionLabel(row.jurisdictionStateCodes)}`,
+    title: `${row.stableKey} · ${jurisdictions}`,
+  };
+}
+
 export default function ContractTemplateAdministration() {
-  const { templates, capabilities, createSheet, errors } =
+  const { templates, capabilities, createSheet, errors, states } =
     usePage<ContractTemplateAdministrationPageProps>().props;
   const [createOpen, setCreateOpen] = useState(Boolean(createSheet?.open));
   const [query, setQuery] = useState(templates.filters.q ?? "");
   const rows = templates.items;
   const total = templates.pagination.totalItems;
+  const draftJurisdiction = Array.isArray(createSheet?.draft?.jurisdiction_state_codes)
+    ? (createSheet?.draft?.jurisdiction_state_codes as string[])
+    : typeof createSheet?.draft?.jurisdiction_state_codes === "string"
+      ? String(createSheet.draft.jurisdiction_state_codes)
+          .split(",")
+          .map((part) => part.trim())
+          .filter(Boolean)
+      : [];
   const activeFilters = useMemo(
     () =>
       [templates.filters.status, templates.filters.jurisdiction].filter(Boolean)
@@ -83,38 +115,70 @@ export default function ContractTemplateAdministration() {
           <div className="grid gap-4" id="contract-template-create-form">
             <div className="grid gap-2">
               <Label htmlFor="stable_key">Stable key</Label>
-              <Input id="stable_key" name="stable_key" required />
+              <Input
+                id="stable_key"
+                name="stable_key"
+                required
+                defaultValue={String(createSheet?.draft?.stable_key ?? "")}
+                {...fieldA11yProps("stable_key", errors)}
+              />
+              <FormFieldError message={firstFieldError(errors, "stable_key")} />
             </div>
             <div className="grid gap-2">
               <Label htmlFor="name">Display name</Label>
-              <Input id="name" name="name" required />
+              <Input
+                id="name"
+                name="name"
+                required
+                defaultValue={String(createSheet?.draft?.name ?? "")}
+                {...fieldA11yProps("name", errors)}
+              />
+              <FormFieldError message={firstFieldError(errors, "name")} />
             </div>
             <div className="grid gap-2">
               <Label htmlFor="version_label">Initial version</Label>
               <Input
                 id="version_label"
                 name="version_label"
-                defaultValue="1.0.0"
+                defaultValue={String(createSheet?.draft?.version_label ?? "1.0.0")}
                 required
+                {...fieldA11yProps("version_label", errors)}
               />
+              <FormFieldError message={firstFieldError(errors, "version_label")} />
             </div>
-            <div className="grid gap-2">
-              <Label htmlFor="jurisdiction_state_codes">Jurisdiction states</Label>
-              <Input
-                id="jurisdiction_state_codes"
-                name="jurisdiction_state_codes"
-                placeholder="VA, MD"
-              />
-            </div>
+            <StateMultiSelect
+              id="jurisdiction_state_codes"
+              name="jurisdiction_state_codes"
+              label="Jurisdiction states"
+              options={states ?? []}
+              defaultValue={draftJurisdiction}
+              placeholder="Select states (optional)"
+              hint="Leave empty for all jurisdictions. Matching agent offices must use one of these states."
+            />
             <div className="grid gap-2">
               <Label htmlFor="description">Description</Label>
-              <Textarea id="description" name="description" rows={4} />
+              <Textarea
+                id="description"
+                name="description"
+                rows={4}
+                defaultValue={String(createSheet?.draft?.description ?? "")}
+                {...fieldA11yProps("description", errors)}
+              />
+              <FormFieldError message={firstFieldError(errors, "description")} />
             </div>
             <label
               className="flex items-center gap-2 text-sm font-medium"
               htmlFor="company_wide"
             >
-              <Checkbox id="company_wide" name="company_wide" value="on" />
+              <Checkbox
+                id="company_wide"
+                name="company_wide"
+                value="on"
+                defaultChecked={
+                  createSheet?.draft?.company_wide === "on" ||
+                  createSheet?.draft?.company_wide === true
+                }
+              />
               Company-wide applicability
             </label>
           </div>
@@ -158,15 +222,21 @@ export default function ContractTemplateAdministration() {
                   id: "name",
                   header: "Template",
                   icon: FileText,
-                  cell: (row) => (
-                    <div className="grid gap-0.5">
-                      <span className="font-semibold">{row.name}</span>
-                      <span className="text-muted-foreground text-xs">
-                        {row.stableKey} ·{" "}
-                        {row.jurisdictionStateCodes.join(", ") || "No states"}
+                  className: "max-w-0 whitespace-normal",
+                  cell: (row) => {
+                    const subtitle = templateSubtitle(row);
+                    return (
+                      <span className="grid min-w-0 gap-0.5">
+                        <span className="truncate font-semibold">{row.name}</span>
+                        <span
+                          className="text-muted-foreground truncate text-xs"
+                          title={subtitle.title}
+                        >
+                          {subtitle.text}
+                        </span>
                       </span>
-                    </div>
-                  ),
+                    );
+                  },
                 },
                 {
                   id: "scope",
@@ -190,17 +260,22 @@ export default function ContractTemplateAdministration() {
                   id: "actions",
                   header: <span className="sr-only">Actions</span>,
                   cell: (row) =>
-                    row.activeVersionPk ? (
+                    row.workspaceVersionPk ? (
                       <Button asChild variant="outline" size="sm">
                         <Link
-                          href={routes.contract_template_workspace(row.activeVersionPk)}
+                          href={routes.contract_template_workspace(
+                            row.workspaceVersionPk,
+                          )}
                         >
-                          Open
+                          {row.activeVersionPk &&
+                          row.workspaceVersionPk === row.activeVersionPk
+                            ? "Open"
+                            : "Edit draft"}
                         </Link>
                       </Button>
                     ) : (
                       <span className="text-muted-foreground text-xs">
-                        No active version
+                        No version yet
                       </span>
                     ),
                   className: "text-right",

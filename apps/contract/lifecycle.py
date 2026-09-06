@@ -34,6 +34,7 @@ from apps.audit.service import (
     system_actor,
 )
 from apps.contract.calculations.rules import CURRENT_RULE_VERSION
+from apps.contract.emails import AGENT_EMAIL_ACTIONS
 from apps.contract.models import AgentContract
 from apps.contract.permissions import MANAGE_AGENT_CONTRACTS
 from apps.contract.snapshots import (
@@ -109,11 +110,13 @@ _AUDIT_ACTION: dict[str, str] = {
 
 _DOMAIN_EVENT: dict[str, str] = {
     "issue": "contract.issued",
+    "mark_viewed": "contract.viewed",
     "mark_signed": "contract.signed",
     "activate": "contract.activated",
     "supersede": "contract.superseded",
     "terminate": "contract.terminated",
     "expire": "contract.expired",
+    "mark_generation_error": "contract.generation_error",
 }
 
 
@@ -209,7 +212,7 @@ def _ensure_manage(actor: User | None) -> None:
 def _authorize(actor: User | None, contract: AgentContract, action: str) -> None:
     if action in SYSTEM_ACTIONS and actor is None:
         return
-    if action == "mark_viewed":
+    if action in {"mark_viewed", "mark_signed"}:
         if actor is None:
             raise PermissionDenied(_("Authentication required."))
         if getattr(actor, "is_superuser", False):
@@ -523,7 +526,59 @@ def _transition(
     if action in {"issue", "retry_generation"}:
         _queue_pdf_generation(locked.pk)
 
+    if action in AGENT_EMAIL_ACTIONS:
+        _queue_agent_status_email(locked.pk, action=action)
+
+    if action in {
+        "mark_signed",
+        "activate",
+        "supersede",
+        "terminate",
+        "expire",
+    }:
+        _queue_suppress_stale_reminders(locked.pk)
+
     return locked
+
+
+def _queue_suppress_stale_reminders(contract_pk: int) -> None:
+    def _run() -> None:
+        from apps.contract.notification_schedule import suppress_stale_reminders
+
+        refreshed = AgentContract.objects.filter(pk=contract_pk).first()
+        if refreshed is None:
+            return
+        try:
+            suppress_stale_reminders(refreshed)
+        except Exception:  # noqa: BLE001
+            logger.exception(
+                "suppress stale contract reminders failed id=%s", contract_pk
+            )
+
+    transaction.on_commit(_run)
+
+
+def _queue_agent_status_email(contract_pk: int, *, action: str) -> None:
+    from apps.contract.emails import send_lifecycle_status_email
+
+    def _send() -> None:
+        refreshed = (
+            AgentContract.objects.select_related("recipient")
+            .filter(pk=contract_pk)
+            .first()
+        )
+        if refreshed is None:
+            return
+        try:
+            send_lifecycle_status_email(refreshed, action=action)
+        except Exception:  # noqa: BLE001
+            logger.exception(
+                "lifecycle email after %s failed id=%s",
+                action,
+                contract_pk,
+            )
+
+    transaction.on_commit(_send)
 
 
 @dataclass(frozen=True)

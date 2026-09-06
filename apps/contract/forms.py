@@ -6,19 +6,25 @@ import json
 from typing import Any
 
 from django import forms
+from django.core.validators import validate_slug
 from django.utils.translation import gettext_lazy as _
 
+from apps.contract.models import ContractTemplate
 from apps.user.models import Office, User
+from apps.user.us import US_STATE_CHOICES, US_STATE_CODES
 from apps.web.authorization import scope_queryset_for_offices
 
 
 class ContractTemplateCreateForm(forms.Form):
-    stable_key = forms.SlugField()
+    # CharField + validate_slug: forms.SlugField accepts max_length at runtime
+    # via **kwargs, but django-stubs omits it from the typed signature.
+    stable_key = forms.CharField(max_length=80, validators=[validate_slug])
     name = forms.CharField(max_length=180)
     description = forms.CharField(required=False, widget=forms.Textarea)
-    jurisdiction_state_codes = forms.CharField(
+    jurisdiction_state_codes = forms.MultipleChoiceField(
+        choices=US_STATE_CHOICES,
         required=False,
-        help_text=_("Comma-separated two-letter state codes, e.g. VA, MD."),
+        help_text=_("Leave empty for all jurisdictions."),
     )
     company_wide = forms.BooleanField(required=False)
     applicable_offices = forms.ModelMultipleChoiceField(
@@ -46,11 +52,23 @@ class ContractTemplateCreateForm(forms.Form):
             kind__in=[Office.Kind.HEAD_OFFICE, Office.Kind.REGION]
         )
 
+    def clean_stable_key(self) -> str:
+        key = (self.cleaned_data.get("stable_key") or "").strip().lower()
+        if ContractTemplate.objects.filter(stable_key=key).exists():
+            raise forms.ValidationError(
+                _("A contract template with this stable key already exists.")
+            )
+        return key
+
     def clean_jurisdiction_state_codes(self) -> list[str]:
-        raw = self.cleaned_data["jurisdiction_state_codes"]
-        if not raw:
-            return []
-        return [part.strip().upper() for part in raw.split(",") if part.strip()]
+        raw = self.cleaned_data.get("jurisdiction_state_codes") or []
+        codes = sorted({str(code).strip().upper() for code in raw if str(code).strip()})
+        unknown = [code for code in codes if code not in US_STATE_CODES]
+        if unknown:
+            raise forms.ValidationError(
+                _("Unknown state codes: %(codes)s") % {"codes": ", ".join(unknown)}
+            )
+        return codes
 
 
 class ContractTemplateVersionForm(forms.Form):
@@ -80,8 +98,24 @@ class ContractTemplateActionForm(forms.Form):
     action = forms.ChoiceField(
         choices=[
             ("preview", "preview"),
+            ("suggest_fields", "suggest_fields"),
             ("publish", "publish"),
             ("activate", "activate"),
             ("retire", "retire"),
         ]
     )
+
+
+class ContractTemplateFieldLayoutForm(forms.Form):
+    field_layout_json = forms.CharField(required=False, widget=forms.Textarea)
+    expected_version = forms.CharField(required=False)
+
+    def clean_field_layout_json(self) -> list:
+        raw = self.cleaned_data.get("field_layout_json") or "[]"
+        try:
+            value = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise forms.ValidationError("Enter valid field layout JSON.") from exc
+        if not isinstance(value, list):
+            raise forms.ValidationError("Field layout must be an array.")
+        return value

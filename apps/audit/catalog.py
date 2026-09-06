@@ -176,6 +176,87 @@ registry.register(
     ),
 )
 
+registry.register(
+    name="contract.signed_pdf_ready",
+    version=1,
+    required_payload_keys={
+        "contract_id",
+        "office_id",
+        "agent_id",
+        "signature_id",
+        "artifact_id",
+        "checksum",
+        "source_checksum",
+        "occurred_at",
+    },
+    description=(
+        "Emitted once when the authoritative final signed PDF (legal pages + "
+        "certificate) is stored for a signature record. Idempotent retries "
+        "must not emit a second event."
+    ),
+)
+
+registry.register(
+    name="contract.viewed",
+    version=1,
+    required_payload_keys={
+        "contract_id",
+        "office_id",
+        "agent_id",
+        "status",
+        "occurred_at",
+    },
+    description="Emitted when the recipient first views an issued contract.",
+)
+
+registry.register(
+    name="contract.generation_error",
+    version=1,
+    required_payload_keys={
+        "contract_id",
+        "office_id",
+        "agent_id",
+        "status",
+        "occurred_at",
+    },
+    description=(
+        "Emitted when PDF/finalization fails. Payload carries ids only — never "
+        "party or commercial content."
+    ),
+)
+
+registry.register(
+    name="contract.signature_reminder",
+    version=1,
+    required_payload_keys={
+        "contract_id",
+        "office_id",
+        "agent_id",
+        "reminder_day",
+        "occurred_at",
+    },
+    description=(
+        "Emitted on an approved cadence while a contract remains signable. "
+        "Beat tasks re-check status before publishing."
+    ),
+)
+
+registry.register(
+    name="contract.expiration_warning",
+    version=1,
+    required_payload_keys={
+        "contract_id",
+        "office_id",
+        "agent_id",
+        "warning_day",
+        "occurred_at",
+    },
+    description=(
+        "Emitted when an active contract is within an approved window of "
+        "expires_on. Beat tasks re-check status before publishing."
+    ),
+)
+
 # ---------------------------------------------------------------------------
 # transaction domain  (publisher: apps.transaction — future)
 # ---------------------------------------------------------------------------
@@ -202,14 +283,182 @@ registry.register(
 )
 
 # ---------------------------------------------------------------------------
-# reservation domain  (publisher: apps.reservation — future)
+# reservation domain  (publisher: apps.inventory.reservations)
 # ---------------------------------------------------------------------------
 
 registry.register(
     name="reservation.created",
     version=1,
     required_payload_keys={"reservation_id", "property_id", "agent_id"},
-    description="Emitted when a property reservation is recorded.",
+    description=(
+        "Legacy CRM/property reservation stub. Prefer "
+        "inventory.reservation.created for office inventory."
+    ),
+)
+
+registry.register(
+    name="inventory.reservation.created",
+    version=1,
+    required_payload_keys={
+        "reservation_public_id",
+        "item_public_id",
+        "status",
+        "quantity",
+        "starts_at",
+        "ends_at",
+        "owner_id",
+    },
+    description="Emitted after an inventory reservation is committed.",
+)
+
+registry.register(
+    name="inventory.reservation.cancelled",
+    version=1,
+    required_payload_keys={"reservation_public_id", "reason"},
+    description="Emitted after an inventory reservation is cancelled.",
+)
+
+registry.register(
+    name="inventory.reservation.approved",
+    version=1,
+    required_payload_keys={
+        "reservation_public_id",
+        "action",
+        "from_status",
+        "to_status",
+    },
+    description="Emitted after a requested reservation is approved.",
+)
+
+registry.register(
+    name="inventory.reservation.denied",
+    version=1,
+    required_payload_keys={"reservation_public_id", "reason"},
+    description="Emitted after a requested reservation is denied.",
+)
+
+registry.register(
+    name="inventory.reservation.ready",
+    version=1,
+    required_payload_keys={"reservation_public_id"},
+    description="Emitted when office marks a reservation ready for pickup.",
+)
+
+registry.register(
+    name="inventory.reservation.checked_out",
+    version=1,
+    required_payload_keys={"reservation_public_id"},
+    description="Emitted when office checks out a reservation.",
+)
+
+registry.register(
+    name="inventory.reservation.returned",
+    version=1,
+    required_payload_keys={"reservation_public_id"},
+    description="Emitted when office accepts a return.",
+)
+
+registry.register(
+    name="inventory.reservation.completed",
+    version=1,
+    required_payload_keys={"reservation_public_id"},
+    description="Emitted when office completes a returned reservation.",
+)
+
+registry.register(
+    name="inventory.reservation.overdue",
+    version=1,
+    required_payload_keys={"reservation_public_id"},
+    description="Emitted when a checked-out reservation passes its return deadline.",
+)
+
+registry.register(
+    name="inventory.reservation.lost",
+    version=1,
+    required_payload_keys={"reservation_public_id", "reason"},
+    description="Emitted when office marks a reservation lost.",
+)
+
+registry.register(
+    name="inventory.reservation.damaged",
+    version=1,
+    required_payload_keys={"reservation_public_id", "reason"},
+    description="Emitted when office marks a reservation damaged.",
+)
+
+registry.register(
+    name="inventory.reservation.return_due_soon",
+    version=1,
+    required_payload_keys={
+        "reservation_public_id",
+        "office_id",
+        "owner_id",
+        "lead_day",
+        "return_day",
+        "policy_version",
+        "occurred_at",
+    },
+    description=(
+        "Emitted on an approved lead time before the inclusive return date while "
+        "a reservation remains checked out. Beat tasks re-check status before "
+        "publishing."
+    ),
+)
+
+registry.register(
+    name="inventory.reservation.return_overdue",
+    version=1,
+    required_payload_keys={
+        "reservation_public_id",
+        "office_id",
+        "owner_id",
+        "overdue_day",
+        "return_day",
+        "policy_version",
+        "occurred_at",
+    },
+    description=(
+        "Emitted on an approved cadence while a checked-out reservation remains "
+        "overdue. Beat tasks re-check status before publishing."
+    ),
+)
+
+registry.register(
+    name="inventory.reservation.return_overdue_staff",
+    version=1,
+    required_payload_keys={
+        "reservation_public_id",
+        "office_id",
+        "owner_id",
+        "overdue_day",
+        "return_day",
+        "policy_version",
+        "occurred_at",
+        "staff_ids",
+    },
+    description=(
+        "Escalates an overdue return to authorized office staff on an approved "
+        "cadence. Beat tasks re-check status and recipient scope before publishing."
+    ),
+)
+
+registry.register(
+    name="inventory.reservation.lost_damaged_escalation",
+    version=1,
+    required_payload_keys={
+        "reservation_public_id",
+        "office_id",
+        "owner_id",
+        "escalation_day",
+        "status",
+        "policy_version",
+        "occurred_at",
+        "staff_ids",
+    },
+    description=(
+        "Escalates lost or damaged reservations to office staff on an approved "
+        "cadence. Beat tasks re-check status before publishing."
+    ),
 )
 
 # ---------------------------------------------------------------------------
@@ -292,5 +541,145 @@ registry.register(
     description=(
         "An archived announcement was returned to draft. It is not readable "
         "again until it is deliberately republished."
+    ),
+)
+
+# ---------------------------------------------------------------------------
+# training domain  (publisher: apps.training.administration)
+# ---------------------------------------------------------------------------
+
+registry.register(
+    name="training.published",
+    version=1,
+    required_payload_keys={
+        "content_id",
+        "owner_office_id",
+        "scope_level",
+        "status",
+        "version_number",
+        "version_family",
+        "occurred_at",
+    },
+    description=(
+        "Emitted when training content becomes published. Consumers holding "
+        "derived library state should re-evaluate visibility from this moment."
+    ),
+)
+
+registry.register(
+    name="training.scheduled",
+    version=1,
+    required_payload_keys={
+        "content_id",
+        "owner_office_id",
+        "scope_level",
+        "status",
+        "version_number",
+        "version_family",
+        "occurred_at",
+    },
+    description=(
+        "Emitted instead of training.published when the row is published with "
+        "a future publish_at. Nothing should notify recipients yet."
+    ),
+)
+
+registry.register(
+    name="training.unpublished",
+    version=1,
+    required_payload_keys={
+        "content_id",
+        "owner_office_id",
+        "scope_level",
+        "status",
+        "version_number",
+        "version_family",
+        "occurred_at",
+    },
+    description=(
+        "Training was pulled back to draft. Consumers should treat it as no "
+        "longer readable from this moment."
+    ),
+)
+
+registry.register(
+    name="training.archived",
+    version=1,
+    required_payload_keys={
+        "content_id",
+        "owner_office_id",
+        "scope_level",
+        "status",
+        "version_number",
+        "version_family",
+        "occurred_at",
+    },
+    description=(
+        "Training left the library. The row, media, and progress history are "
+        "retained; only visibility ends. Also emitted when a newer version "
+        "supersedes a previously live sibling."
+    ),
+)
+
+registry.register(
+    name="training.restored",
+    version=1,
+    required_payload_keys={
+        "content_id",
+        "owner_office_id",
+        "scope_level",
+        "status",
+        "version_number",
+        "version_family",
+        "occurred_at",
+    },
+    description=(
+        "Archived training was returned to draft. It is not readable again "
+        "until deliberately republished."
+    ),
+)
+
+# ---------------------------------------------------------------------------
+# inventory domain  (publisher: apps.inventory.services)
+# ---------------------------------------------------------------------------
+
+registry.register(
+    name="inventory.item.created",
+    version=1,
+    required_payload_keys={"target_type", "target_id"},
+    description="A new inventory item was created in scope.",
+)
+
+registry.register(
+    name="inventory.item.updated",
+    version=1,
+    required_payload_keys={"target_type", "target_id"},
+    description="An inventory item's catalog fields changed.",
+)
+
+registry.register(
+    name="inventory.item.state_changed",
+    version=1,
+    required_payload_keys={"target_type", "target_id"},
+    description="An inventory item's availability state changed.",
+)
+
+registry.register(
+    name="inventory.item.retired",
+    version=1,
+    required_payload_keys={"target_type", "target_id"},
+    description=(
+        "An inventory item was retired. History is preserved and new "
+        "reservations are blocked."
+    ),
+)
+
+registry.register(
+    name="inventory.item.transferred",
+    version=1,
+    required_payload_keys={"target_type", "target_id"},
+    description=(
+        "An inventory item moved between offices. Reservation history keyed "
+        "by the item's public id is preserved."
     ),
 )

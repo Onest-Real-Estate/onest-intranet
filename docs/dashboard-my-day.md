@@ -74,7 +74,8 @@ claim.
 | Key | Status | What it emits |
 | --- | --- | --- |
 | `operational_task` | **Live** | Tasks assigned to the reader that carry a due date |
-| `training`, `consultation`, `closing`, `meeting`, `room_booking`, `inventory` | Registered, dark | Nothing — each becomes available in the change that ships its module |
+| `inventory` | **Live** | Capacity-consuming inventory reservations owned by the reader |
+| `training`, `consultation`, `closing`, `meeting`, `room_booking` | Registered, dark | Nothing — each becomes available in the change that ships its module |
 | `microsoft_calendar` | Registered, dark | Nothing |
 
 A dark source has `available=False` and **no collector**, so it cannot be called
@@ -123,15 +124,13 @@ appointment but never a missed one. `total` stays uncapped so "1 of 9" is honest
   "timezone": "UTC",
   "overdue": [], "today": [], "upcoming": [],
   "total": 3,
-  "viewAllHref": "/hub/my-reservations",
-  "viewAllLabel": "View full calendar"
+  "viewAllHref": "/hub/inventory-reservations",
+  "viewAllLabel": "View my reservations"
 }
 ```
 
-`viewAllHref` resolves in `registry._calendar_destination`. The unified
-reservation/calendar page does not exist yet, so it points at the placeholder
-that names it honestly; when that page ships, that function is the only line
-that changes.
+`viewAllHref` resolves in `registry._calendar_destination` to the agent's
+inventory reservations list until the unified My Reservations page (#71) lands.
 
 ## Permissions
 

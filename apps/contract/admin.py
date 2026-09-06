@@ -11,6 +11,8 @@ from apps.contract.models import (
     AgentContract,
     CommissionCalculation,
     ContractArtifact,
+    ContractSignature,
+    ContractSigningIntent,
     ContractTemplate,
     ContractTemplateVersion,
 )
@@ -60,10 +62,11 @@ class AgentContractAdmin(admin.ModelAdmin):
         "recipient",
         "office",
         "status",
+        "change_kind",
         "effective_on",
         "version_number",
     )
-    list_filter = ("status",)
+    list_filter = ("status", "change_kind")
     search_fields = (
         "public_id",
         "recipient__email",
@@ -73,11 +76,15 @@ class AgentContractAdmin(admin.ModelAdmin):
     readonly_fields = (
         "public_id",
         "family_id",
+        "change_kind",
+        "change_summary",
         "status",
         "party_snapshot",
         "office_snapshot",
         "terms_snapshot",
         "calculation_rule_version",
+        "generated_pdf",
+        "signed_pdf",
         "created_at",
         "updated_at",
         "viewed_at",
@@ -107,14 +114,30 @@ class ContractArtifactAdmin(admin.ModelAdmin):
     search_fields = ("public_id", "display_name", "checksum")
     readonly_fields = (
         "public_id",
+        "contract",
+        "kind",
+        "display_name",
+        "file",
+        "media_type",
         "checksum",
         "byte_size",
         "renderer_version",
         "rule_version",
         "input_fingerprint",
         "generation_metadata",
+        "created_by",
         "created_at",
     )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        # Final signed / CoC artifacts must not be deleted through admin.
+        return False
 
 
 @admin.register(CommissionCalculation)
@@ -154,4 +177,96 @@ class CommissionCalculationAdmin(admin.ModelAdmin):
         return False
 
     def has_change_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(ContractSigningIntent)
+class ContractSigningIntentAdmin(admin.ModelAdmin):
+    list_display = (
+        "public_id",
+        "contract",
+        "actor",
+        "status",
+        "docuseal_submission_id",
+        "expires_at",
+        "created_at",
+    )
+    list_filter = ("status",)
+    search_fields = ("public_id", "docuseal_submission_id", "actor__email")
+    readonly_fields = (
+        "public_id",
+        "contract",
+        "actor",
+        "contract_version",
+        "artifact",
+        "artifact_checksum",
+        "session_key_hash",
+        "request_ip_hash",
+        "request_ua_hash",
+        "disclosure_version",
+        "consent_accepted_at",
+        "status",
+        "docuseal_submission_id",
+        "docuseal_submitter_slug",
+        "embed_src",
+        "expires_at",
+        "created_at",
+        "consumed_at",
+    )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(ContractSignature)
+class ContractSignatureAdmin(admin.ModelAdmin):
+    list_display = (
+        "public_id",
+        "contract",
+        "signer",
+        "signature_method",
+        "finalization_status",
+        "disclosure_version",
+        "signed_at",
+    )
+    list_filter = ("finalization_status", "signature_method")
+    search_fields = ("public_id", "signer__email", "docuseal_submission_id")
+    readonly_fields = (
+        "public_id",
+        "contract",
+        "intent",
+        "signer",
+        "artifact",
+        "certificate_of_completion",
+        "source_checksum",
+        "signed_date_value",
+        "appearance_file",
+        "initials_file",
+        "agent_text_values",
+        "finalization_status",
+        "finalization_error",
+        "generation_task_id",
+        "signed_at",
+        "disclosure_version",
+        "signature_method",
+        "appearance_checksum",
+        "seal_cert_subject",
+        "seal_cert_fingerprint",
+        "docuseal_submission_id",
+        "docuseal_submitter_slug",
+        "request_ip_hash",
+        "request_ua_hash",
+        "created_at",
+    )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
         return False

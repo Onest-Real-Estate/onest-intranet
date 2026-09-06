@@ -250,7 +250,7 @@ export const DASHBOARD_WIDGETS: readonly DashboardWidgetDefinition[] = [
     id: "overdueInventory",
     title: "Overdue inventory",
     prop: "overdueInventory",
-    backed: false,
+    backed: true,
     permissions: { all: ["web.view_inventory"] },
     deniedBehavior: "omit",
     column: "rail",
