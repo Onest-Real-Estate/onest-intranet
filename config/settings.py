@@ -57,6 +57,7 @@ INSTALLED_APPS = [
     "apps.onboarding_tools",
     "apps.feedback",
     "apps.inventory",
+    "apps.reservations",
     "apps.training",
 ]
 
