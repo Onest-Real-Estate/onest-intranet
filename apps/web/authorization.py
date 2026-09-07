@@ -565,6 +565,40 @@ ROUTE_POLICIES: dict[str, AuthorizationPolicy] = {
         route_names=("office_inventory_photo",),
         scope_rule="self_only",
     ),
+    "room_availability": AuthorizationPolicy(
+        key="room_availability",
+        access="permission_protected",
+        description=(
+            "Bounded room-availability calendar. The default office comes from "
+            "the signed-in user; any alternate office is re-checked against "
+            "effective organizational scope before serialization."
+        ),
+        methods=("GET",),
+        route_names=("room_availability",),
+        all_permissions=("reservations.book_spaces",),
+        scope_rule="reservation_office_scope",
+    ),
+    "room_reservation_new": AuthorizationPolicy(
+        key="room_reservation_new",
+        access="permission_protected",
+        description="Review one scoped room slot before authoritative submission.",
+        methods=("GET",),
+        route_names=("room_reservation_new",),
+        all_permissions=("reservations.book_spaces",),
+        scope_rule="reservation_office_scope",
+    ),
+    "room_reservation_create": AuthorizationPolicy(
+        key="room_reservation_create",
+        access="permission_protected",
+        description=(
+            "Create one room reservation after rule, schedule, scope, and "
+            "race-proof overlap validation."
+        ),
+        methods=("POST",),
+        route_names=("room_reservation_create",),
+        all_permissions=("reservations.book_spaces",),
+        scope_rule="reservation_office_scope",
+    ),
     "inventory_reservations_mine": AuthorizationPolicy(
         key="inventory_reservations_mine",
         access="authenticated",

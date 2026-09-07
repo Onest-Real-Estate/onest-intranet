@@ -15,6 +15,7 @@ HUB_SECTIONS: dict[str, str] = {
     "office-info": "Office info",
     "office-resources": "Office resources",
     "office-inventory": "Office inventory",
+    "room-availability": "Room availability",
     "training-learning": "Training & learning",
     "documents-forms": "Documents & forms",
     "marketing-resources": "Marketing resources",

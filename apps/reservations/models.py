@@ -565,6 +565,8 @@ class Occupancy(models.Model):
 
     if TYPE_CHECKING:
         space_id: int
+        reservation_record: Reservation
+        exception_record: SpaceAvailabilityException
 
     objects = OccupancyQuerySet.as_manager()
 

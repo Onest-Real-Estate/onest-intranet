@@ -3,7 +3,12 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from apps.reservations.models import Occupancy, Reservation, Space
+from apps.reservations.models import (
+    Occupancy,
+    Reservation,
+    Space,
+    WeeklyAvailability,
+)
 from apps.reservations.taxonomy import OccupancySource, SpaceType
 from apps.user.models import Office, UserRoleAssignment
 from apps.user.tests.test_profile import completed_user
@@ -40,6 +45,20 @@ def make_space(owner_slug: str = "fairfax-va", **fields) -> Space:
     space.full_clean()
     space.save()
     return space
+
+
+def make_weekly_hours(
+    space: Space, *, weekday: int, starts_at, ends_at
+) -> WeeklyAvailability:
+    interval = WeeklyAvailability(
+        space=space,
+        weekday=weekday,
+        starts_at=starts_at,
+        ends_at=ends_at,
+    )
+    interval.full_clean()
+    interval.save()
+    return interval
 
 
 def make_occupancy(
