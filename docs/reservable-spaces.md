@@ -1,9 +1,9 @@
 # Reservable office spaces
 
 `apps.reservations` owns the room/space catalog, booking policy, office-local
-weekly schedule, protected photos, availability exceptions, and transfer
-history. Actual bookings and overlap exclusion constraints belong to the
-downstream reservation workflow issues.
+weekly schedule, protected photos, availability exceptions, transfer history,
+the shared capacity ledger, and the reservation record. The Inertia calendar,
+booking pages, and reservation service layer are still downstream work.
 
 ## Domain records
 
@@ -15,6 +15,8 @@ downstream reservation workflow issues.
 | `SpaceAvailabilityException` | A half-open aware interval for a holiday, maintenance window, closure, or administrative hold |
 | `SpacePhoto` | Verified JPEG/PNG/WebP content in protected storage, with required alternative text and agent-visibility metadata |
 | `SpaceOfficeTransfer` | Immutable origin/destination history for an authorized office move |
+| `Occupancy` | The capacity ledger: one half-open aware interval per capacity consumer, tagged with its source |
+| `Reservation` | The audited booking — owner, office/space snapshot, purpose, lifecycle status, and the ledger row it holds |
 
 Durations and capacity are positive. Maximum duration cannot be below minimum
 duration. Notice, buffers, and cancellation cutoff are nonnegative. Recurrence
@@ -66,6 +68,14 @@ before the office/region/company reach is applied in SQL.
 | `reservations.manage_spaces` | Create, retire, and move spaces in effective scope |
 | `reservations.manage_space_schedules` | Manage weekly intervals and exceptions in effective scope |
 | `reservations.view_space_sensitive` | Read internal access instructions and internal exception details |
+| `reservations.book_spaces` | Book a reservable space at the assigned office and manage own reservations |
+| `reservations.manage_reservations` | Act on other people's reservations in effective scope |
+| `reservations.override_reservations` | Book outside notice/horizon/duration/capacity policy with a recorded reason |
+
+`SpacePermission` mirrors `Space.Meta.permissions`; `ReservationPermission`
+mirrors `Reservation.Meta.permissions`. Every catalog role may book. Managing
+someone else's reservation follows the scoped-administrator set; overriding
+policy stays with the manager roles.
 
 Without the sensitive permission, `access_instructions` is deferred and absent
 from presentation payloads, and internal exceptions are omitted. Internal blocks
@@ -80,7 +90,37 @@ office/state/type and office/reservable/display order for catalog queries,
 space/weekday/time for weekly resolution, and space/start/end plus
 space/kind/start for bounded exception overlap queries.
 
-The downstream PostgreSQL overlap-hardening issue will add the exclusion
-constraint shared by bookings and administrative blocks. These model intervals
-already use the same half-open semantics and aware UTC persistence required by
-that work.
+## The capacity ledger and the overlap invariant
+
+Bookings and administrative blocks consume the same resource, so they share one
+table. Every `Reservation` owns exactly one `Occupancy`, and so does every
+`SpaceAvailabilityException` — the exception's `save()` mints and keeps its
+ledger row in step, which is why `create_availability_exception` validates with
+`exclude={"occupancy"}`. A reservation's ledger interval is the booked interval
+widened by the space's configured buffers, so cleanup time is protected by the
+same invariant as the meeting itself.
+
+Overlap is decided by one PostgreSQL exclusion constraint added in migration
+`0003`:
+
+```sql
+EXCLUDE USING GIST ("space_id" WITH =, (TSTZRANGE("starts_at", "ends_at", '[)')) WITH &&)
+  WHERE ("consumes_capacity")
+```
+
+Three consequences worth stating plainly:
+
+- **`consumes_capacity` is the release switch.** Cancelling a reservation clears
+  the flag rather than deleting the row, so the time frees up while the audit
+  history stays.
+- **Two capacity-consuming blocks may no longer overlap on one space.** That was
+  legal before the ledger. Migration `0003` refuses to run rather than silently
+  drop one side, naming the offending rows so an operator resolves them.
+- **Away from PostgreSQL the invariant does not exist.** `apps.reservations.operations`
+  makes the constraint and its `btree_gist` extension no-ops on other backends,
+  and keeps them out of migration state so `makemigrations --check` stays clean.
+  The SQLite suite proves the service-level checks and the compiled DDL, never
+  the race. Any test that claims to prove the race must run on PostgreSQL.
+
+`Reservation` rows are never hard-deleted; `delete()` raises. Reference, public
+id, office snapshot, and ownership are immutable after creation.

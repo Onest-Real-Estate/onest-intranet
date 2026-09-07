@@ -222,7 +222,9 @@ def create_availability_exception(
         office=locked.owner_office,
     )
     exception = SpaceAvailabilityException(space=locked, created_by=actor, **fields)
-    exception.full_clean()
+    # The ledger row is derived from the validated interval, so ``save()`` mints
+    # it; validating the not-yet-assigned relation here would always fail.
+    exception.full_clean(exclude={"occupancy"})
     exception.save()
     log_on_commit(
         "reservations.space.availability_blocked",

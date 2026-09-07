@@ -54,6 +54,17 @@ _PEOPLE_READERS = (
     IT_SUPPORT,
 )
 _SPACE_ADMINS = (*_MANAGERS, BRANCH_ADMIN, REGIONAL_ADMIN)
+# Booking a room is ordinary staff work, so every catalog role holds it.
+_SPACE_BOOKERS = (
+    *_SPACE_ADMINS,
+    TRANSACTION_COORDINATOR,
+    REGIONAL_TRANSACTION_COORDINATOR,
+    REALTOR,
+    MARKETING_TEAM,
+    ACCOUNTANT,
+    COMPLIANCE,
+    IT_SUPPORT,
+)
 
 
 @dataclass(frozen=True)
@@ -392,6 +403,43 @@ PERMISSION_DEFINITIONS: tuple[PermissionDefinition, ...] = (
             "spaces within effective office scope."
         ),
         default_roles=_SPACE_ADMINS,
+        risk="high",
+        sensitive=True,
+    ),
+    PermissionDefinition(
+        codename="reservations.book_spaces",
+        name="Can book active spaces at the assigned office",
+        domain="reservations",
+        action="create",
+        description=(
+            "Create and manage own reservations for reservable spaces at the "
+            "user's assigned office."
+        ),
+        default_roles=_SPACE_BOOKERS,
+    ),
+    PermissionDefinition(
+        codename="reservations.manage_reservations",
+        name="Can manage scoped reservations",
+        domain="reservations",
+        action="manage",
+        description=(
+            "View, book on behalf of, reschedule, and cancel other people's "
+            "reservations within effective office scope."
+        ),
+        default_roles=_SPACE_ADMINS,
+        risk="high",
+        sensitive=True,
+    ),
+    PermissionDefinition(
+        codename="reservations.override_reservations",
+        name="Can override reservation policy with an audited reason",
+        domain="reservations",
+        action="manage",
+        description=(
+            "Book outside notice, horizon, duration, or capacity policy. The "
+            "reason is required and recorded on the audit event."
+        ),
+        default_roles=_MANAGERS,
         risk="high",
         sensitive=True,
     ),

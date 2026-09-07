@@ -59,11 +59,40 @@ class ExceptionVisibility(models.TextChoices):
     INTERNAL = "internal", _("Internal only")
 
 
+class ReservationStatus(models.TextChoices):
+    REQUESTED = "requested", _("Awaiting approval")
+    CONFIRMED = "confirmed", _("Confirmed")
+    CANCELLED = "cancelled", _("Cancelled")
+    DENIED = "denied", _("Denied")
+    COMPLETED = "completed", _("Completed")
+
+
+class OccupancySource(models.TextChoices):
+    RESERVATION = "reservation", _("Reservation")
+    EXCEPTION = "exception", _("Availability exception")
+
+
+class CalendarView(StrEnum):
+    DAY = "day"
+    WEEK = "week"
+    LIST = "list"
+
+
 class SpacePermission(StrEnum):
+    """Permissions declared on ``Space.Meta``."""
+
     VIEW = "reservations.view_spaces"
     MANAGE = "reservations.manage_spaces"
     MANAGE_SCHEDULE = "reservations.manage_space_schedules"
     VIEW_SENSITIVE = "reservations.view_space_sensitive"
+
+
+class ReservationPermission(StrEnum):
+    """Permissions declared on ``Reservation.Meta``."""
+
+    BOOK = "reservations.book_spaces"
+    MANAGE = "reservations.manage_reservations"
+    OVERRIDE = "reservations.override_reservations"
 
 
 class WallTimeBoundary(StrEnum):
