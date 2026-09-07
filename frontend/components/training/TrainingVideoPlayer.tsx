@@ -3,12 +3,21 @@ import { useMemo, useState } from "react";
 import { SearchControl } from "@/components/design-system";
 import type { TrainingEmbed, TrainingTranscription } from "@/types";
 
-function providerEmbedUrl(embed: TrainingEmbed): string {
+/**
+ * Build a provider embed URL. YouTube Error 153 ("Video player configuration
+ * error") appears when the player request lacks a usable Referer; the iframe
+ * also needs enablejsapi + origin for transcript seek postMessages.
+ */
+function providerEmbedUrl(embed: TrainingEmbed, pageOrigin: string): string {
   if (embed.provider === "youtube") {
     const match = embed.url.match(/(?:v=|youtu\.be\/)([\w-]+)/);
     const id = match?.[1];
     if (id) {
-      return `https://www.youtube.com/embed/${id}`;
+      const params = new URLSearchParams({ enablejsapi: "1" });
+      if (pageOrigin.startsWith("http")) {
+        params.set("origin", pageOrigin);
+      }
+      return `https://www.youtube.com/embed/${id}?${params.toString()}`;
     }
   }
   if (embed.provider === "vimeo") {
@@ -30,6 +39,11 @@ export function TrainingVideoPlayer({
 }) {
   const [query, setQuery] = useState("");
   const segments = transcription?.segments ?? [];
+  const pageOrigin = typeof window !== "undefined" ? window.location.origin : "";
+  const embedSrc = useMemo(
+    () => providerEmbedUrl(embed, pageOrigin),
+    [embed, pageOrigin],
+  );
 
   const matches = useMemo(() => {
     const term = query.trim().toLowerCase();
@@ -68,8 +82,9 @@ export function TrainingVideoPlayer({
         <iframe
           id="training-video-embed"
           title="Training video"
-          src={providerEmbedUrl(embed)}
+          src={embedSrc}
           className="size-full"
+          referrerPolicy="strict-origin-when-cross-origin"
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
           allowFullScreen
         />

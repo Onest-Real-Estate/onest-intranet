@@ -5,6 +5,29 @@ import { describe, expect, it, vi } from "vitest";
 import { TrainingVideoPlayer } from "@/components/training/TrainingVideoPlayer";
 
 describe("TrainingVideoPlayer", () => {
+  it("configures the YouTube iframe so Error 153 cannot suppress the Referer", () => {
+    render(
+      <TrainingVideoPlayer
+        embed={{
+          url: "https://www.youtube.com/watch?v=abc12345678",
+          provider: "youtube",
+          host: "www.youtube.com",
+          available: true,
+        }}
+        transcription={null}
+      />,
+    );
+
+    const iframe = screen.getByTitle("Training video");
+    expect(iframe).toHaveAttribute("referrerpolicy", "strict-origin-when-cross-origin");
+    expect(iframe).toHaveAttribute(
+      "src",
+      expect.stringContaining("https://www.youtube.com/embed/abc12345678?"),
+    );
+    expect(iframe.getAttribute("src")).toContain("enablejsapi=1");
+    expect(iframe.getAttribute("src")).toContain("origin=");
+  });
+
   it("filters transcript matches and exposes seek controls", async () => {
     const user = userEvent.setup();
     render(
