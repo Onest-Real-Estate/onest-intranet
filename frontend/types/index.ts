@@ -3260,6 +3260,8 @@ export interface ContractTemplateRow {
   name: string;
   description: string;
   status: string;
+  statusLabel: string;
+  statusTone: string;
   jurisdictionStateCodes: string[];
   companyWide: boolean;
   effectiveFrom: string;
@@ -3290,6 +3292,8 @@ export interface ContractTemplateVersionDetail {
   displayName: string;
   description: string;
   status: string;
+  statusLabel: string;
+  statusTone: string;
   sourceFormat: string;
   sourceMediaType: string;
   sourceChecksum: string;

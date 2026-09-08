@@ -16,6 +16,7 @@ import {
   StatusBadge,
   SurfaceCard,
   SurfaceCardContent,
+  toStatusTone,
 } from "@/components/design-system";
 import { HubLayout } from "@/components/HubLayout";
 import { PermissionRequired } from "@/components/PermissionRequired";
@@ -29,24 +30,9 @@ import {
 } from "@/components/ui/select";
 import { routes } from "@/lib/routes";
 import type { AgentContractAdministrationPageProps } from "@/types";
-import type { StatusTone } from "@/types/design-system";
 
 const ACCESS = { all: ["web.view_agent_contracts"] };
 const ALL = "__all__";
-
-function toTone(raw: string): StatusTone {
-  if (raw === "danger") return "destructive";
-  if (
-    raw === "neutral" ||
-    raw === "info" ||
-    raw === "success" ||
-    raw === "warning" ||
-    raw === "destructive"
-  ) {
-    return raw;
-  }
-  return "neutral";
-}
 
 export default function AgentContractAdministration() {
   const { contracts, capabilities, statusOptions, errors } =
@@ -153,7 +139,7 @@ export default function AgentContractAdministration() {
                     <StatusBadge
                       status={{
                         label: row.statusLabel,
-                        tone: toTone(row.statusTone),
+                        tone: toStatusTone(row.statusTone),
                       }}
                     />
                   ),

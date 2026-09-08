@@ -21,6 +21,30 @@ const toneClasses: Record<StatusTone, string> = {
   destructive: "border-chip-destructive-edge bg-chip-destructive text-destructive",
 };
 
+/**
+ * Narrow a server tone string to a tone this component can paint.
+ *
+ * The backend catalogues `danger` where the design system says `destructive`,
+ * and both vocabularies are load-bearing where they live — so the translation
+ * happens once, here, instead of in a copy of this function on every page that
+ * renders a status. Anything unrecognised falls back to neutral rather than
+ * throwing: an unknown status should still render, just without a claim about
+ * how alarming it is.
+ */
+export function toStatusTone(raw: string): StatusTone {
+  if (raw === "danger") return "destructive";
+  if (
+    raw === "neutral" ||
+    raw === "info" ||
+    raw === "success" ||
+    raw === "warning" ||
+    raw === "destructive"
+  ) {
+    return raw;
+  }
+  return "neutral";
+}
+
 export interface StatusBadgeProps
   extends Omit<React.ComponentProps<typeof Badge>, "children"> {
   status: StatusPresentation;

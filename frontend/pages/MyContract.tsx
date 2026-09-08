@@ -1,31 +1,39 @@
 import { Head, Link, router, usePage } from "@inertiajs/react";
 import {
   AlertTriangle,
+  BadgeCheck,
+  Check,
   Download,
   ExternalLink,
   FileText,
   FileWarning,
   Loader2,
+  type LucideIcon,
   PenLine,
   RefreshCw,
 } from "lucide-react";
 import { useId, useState } from "react";
 
 import {
+  Callout,
   EmptyState,
   MetricCard,
   MetricStrip,
   PageHeader,
   PanelHeader,
+  ReadOnlyValue,
   StatusBadge,
   SurfaceCard,
   SurfaceCardContent,
+  Timeline,
+  type TimelineItem,
+  toStatusTone,
 } from "@/components/design-system";
 import { HubLayout } from "@/components/HubLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { routes } from "@/lib/routes";
+import { cn } from "@/lib/utils";
 import type {
   MyContractDetail,
   MyContractHistoryRow,
@@ -33,20 +41,6 @@ import type {
   MyContractState,
 } from "@/types";
 import type { StatusTone } from "@/types/design-system";
-
-function toTone(raw: string): StatusTone {
-  if (raw === "danger") return "destructive";
-  if (
-    raw === "neutral" ||
-    raw === "info" ||
-    raw === "success" ||
-    raw === "warning" ||
-    raw === "destructive"
-  ) {
-    return raw;
-  }
-  return "neutral";
-}
 
 function formatDate(iso: string | null | undefined): string {
   if (!iso) return "—";
@@ -154,6 +148,10 @@ function PdfPreview({ contract }: { contract: MyContractDetail }) {
 }
 
 function CommissionSummary({ contract }: { contract: MyContractDetail }) {
+  // Generated, not hardcoded: two of these on one page would otherwise share
+  // an id and each `aria-labelledby` would resolve to whichever came first.
+  const mentorId = useId();
+  const referralId = useId();
   const commission = contract.commission;
   if (!commission) {
     return (
@@ -218,12 +216,18 @@ function CommissionSummary({ contract }: { contract: MyContractDetail }) {
         />
       </MetricStrip>
 
-      <div className="grid gap-4 md:grid-cols-2">
+      {/*
+        One ruled block split down the middle, not two bordered boxes inside a
+        card. A card nested in a card gives the eye two edges to compare and
+        says the inner thing is a separate object; mentor and referral are two
+        halves of the same set of terms.
+      */}
+      <div className="border-border/60 grid overflow-hidden rounded-lg border md:grid-cols-2">
         <section
-          aria-labelledby="mentor-terms"
-          className="border-border grid gap-2 rounded-lg border p-4"
+          aria-labelledby={mentorId}
+          className="border-border/60 grid gap-2 border-b p-4 md:border-r md:border-b-0"
         >
-          <h3 id="mentor-terms" className="text-sm font-semibold">
+          <h3 id={mentorId} className="text-sm font-semibold">
             Mentor
           </h3>
           {mentorSet ? (
@@ -255,11 +259,8 @@ function CommissionSummary({ contract }: { contract: MyContractDetail }) {
           )}
         </section>
 
-        <section
-          aria-labelledby="referral-terms"
-          className="border-border grid gap-2 rounded-lg border p-4"
-        >
-          <h3 id="referral-terms" className="text-sm font-semibold">
+        <section aria-labelledby={referralId} className="grid gap-2 p-4">
+          <h3 id={referralId} className="text-sm font-semibold">
             Referral
           </h3>
           {referralSet ? (
@@ -370,7 +371,7 @@ function HistoryList({ rows }: { rows: MyContractHistoryRow[] }) {
               <StatusBadge
                 status={{
                   label: row.statusLabel,
-                  tone: toTone(row.statusTone),
+                  tone: toStatusTone(row.statusTone),
                 }}
               />
             </Link>
@@ -401,40 +402,89 @@ function SignAction({
     );
   }
 
+  // The reason lives on the page, not in a tooltip on a button nobody can
+  // press. A tooltip on a disabled control is unreachable by touch and by
+  // keyboard, so the one explanation for why the page will not do the thing it
+  // is asking for was the hardest text on it to obtain.
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          type="button"
-          aria-label="Sign contract — electronic signing is not available yet"
-          aria-disabled
-          onClick={(event) => event.preventDefault()}
-        >
-          <PenLine className="size-3.5" aria-hidden />
-          Sign contract
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent>
-        Electronic signing is temporarily unavailable. You can still review and download
-        the PDF.
-      </TooltipContent>
-    </Tooltip>
+    <Callout tone="warning" title="Signing is temporarily unavailable">
+      You can still review and download the agreement below. Try again shortly.
+    </Callout>
   );
 }
 
-function stateIcon(state: MyContractState) {
-  switch (state) {
-    case "generating":
-      return Loader2;
-    case "generation_failed":
-      return FileWarning;
-    case "awaiting_signature":
-      return PenLine;
-    case "no_contract":
-      return FileText;
-    default:
-      return AlertTriangle;
+/** The mark beside the next action, and how loudly the card carries it. */
+const STATE_PRESENTATION: Record<
+  MyContractState,
+  { icon: LucideIcon; tone: StatusTone; spin?: boolean }
+> = {
+  no_contract: { icon: FileText, tone: "neutral" },
+  generating: { icon: Loader2, tone: "info", spin: true },
+  generation_failed: { icon: FileWarning, tone: "destructive" },
+  awaiting_signature: { icon: PenLine, tone: "warning" },
+  signed: { icon: Check, tone: "info" },
+  active: { icon: BadgeCheck, tone: "success" },
+  expired: { icon: AlertTriangle, tone: "warning" },
+  superseded: { icon: FileText, tone: "neutral" },
+  terminated: { icon: AlertTriangle, tone: "destructive" },
+};
+
+const MARK_TONE: Record<StatusTone, string> = {
+  neutral: "bg-chip-neutral text-muted-foreground",
+  info: "bg-chip-info text-info",
+  success: "bg-chip-success text-success",
+  warning: "bg-chip-warning text-warning-ink",
+  destructive: "bg-chip-destructive text-destructive",
+};
+
+/**
+ * How far the agreement has travelled, in the agent's own terms.
+ *
+ * Deliberately not the admin pipeline: `draft` and `ready_for_review` are
+ * brokerage-internal words for a period when this agreement was not yet the
+ * agent's business, and the four steps below are the ones they can actually
+ * act on or wait for.
+ */
+function progressItems(contract: MyContractDetail): TimelineItem[] {
+  const stages: Array<{ id: string; title: string; at: string | null }> = [
+    { id: "sent", title: "Sent to you", at: contract.sentAt },
+    { id: "viewed", title: "Opened", at: contract.viewedAt },
+    { id: "signed", title: "Signed", at: contract.signedAt },
+    { id: "active", title: "Active", at: contract.activatedAt },
+  ];
+  const ended =
+    (contract.terminatedAt && { title: "Terminated", tone: "destructive" as const }) ||
+    (contract.expiredAt && { title: "Expired", tone: "warning" as const }) ||
+    (contract.supersededAt && { title: "Replaced", tone: "neutral" as const }) ||
+    null;
+
+  const reached = stages.reduce(
+    (furthest, stage, index) => (stage.at ? index : furthest),
+    -1,
+  );
+  const walked = ended ? reached + 1 : stages.length;
+
+  const items: TimelineItem[] = stages.slice(0, walked).map((stage, index) => ({
+    id: stage.id,
+    title: stage.title,
+    meta: stage.at ? formatStamp(stage.at) : undefined,
+    tone: index < reached || ended ? "success" : index === reached ? "info" : "neutral",
+    current: !ended && index === reached,
+    icon: index < reached || (ended && index <= reached) ? Check : undefined,
+  }));
+
+  if (ended) {
+    items.push({
+      id: "ended",
+      title: ended.title,
+      meta: formatStamp(
+        contract.terminatedAt ?? contract.expiredAt ?? contract.supersededAt,
+      ),
+      tone: ended.tone,
+      current: true,
+    });
   }
+  return items;
 }
 
 /**
@@ -444,7 +494,8 @@ export default function MyContract() {
   const { state, nextAction, contract, history, capabilities, disclaimer, empty } =
     usePage<MyContractPageProps>().props;
 
-  const Icon = stateIcon(state);
+  const presentation = STATE_PRESENTATION[state] ?? STATE_PRESENTATION.no_contract;
+  const Icon = presentation.icon;
 
   function refresh() {
     router.get(routes.my_contract(), {}, { preserveScroll: true, replace: true });
@@ -461,7 +512,7 @@ export default function MyContract() {
             <StatusBadge
               status={{
                 label: contract.statusLabel,
-                tone: toTone(contract.statusTone),
+                tone: toStatusTone(contract.statusTone),
               }}
             />
           ) : null
@@ -469,22 +520,33 @@ export default function MyContract() {
       />
 
       {empty || !contract ? null : (
+        /*
+          The one thing to do next, and its mark carries the state. The icon was
+          previously always muted grey, so a failed PDF generation and a healthy
+          active agreement announced themselves identically — the words were the
+          only difference between "nothing to do" and "something is wrong".
+        */
         <SurfaceCard>
-          <SurfaceCardContent className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <div className="grid min-w-0 gap-2">
-              <div className="flex items-start gap-3">
+          <SurfaceCardContent className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex min-w-0 items-start gap-3.5">
+              <span
+                className={cn(
+                  "grid size-10 shrink-0 place-items-center rounded-md",
+                  MARK_TONE[presentation.tone],
+                )}
+              >
                 <Icon
-                  className={`text-muted-foreground mt-0.5 size-5 shrink-0 ${
-                    state === "generating" ? "animate-spin" : ""
-                  }`}
+                  className={cn("size-5", presentation.spin && "animate-spin")}
                   aria-hidden
                 />
-                <div className="grid gap-1">
-                  <h2 className="text-base font-semibold">{nextAction.title}</h2>
-                  <p className="text-muted-foreground text-sm">
-                    {nextAction.description}
-                  </p>
-                </div>
+              </span>
+              <div className="grid gap-1">
+                <h2 className="text-base leading-6 font-semibold">
+                  {nextAction.title}
+                </h2>
+                <p className="text-muted-foreground max-w-measure text-sm leading-5">
+                  {nextAction.description}
+                </p>
               </div>
             </div>
             <div className="flex shrink-0 flex-wrap gap-2">
@@ -535,56 +597,58 @@ export default function MyContract() {
       ) : (
         <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_20rem]">
           <div className="grid gap-6">
+            {/*
+              Four facts and a four-step progression. They were eight equal
+              label/value pairs, three of which — Sent, Viewed, Signed — are one
+              sequence read as a set of unrelated dates, with a 36-character id
+              in the middle of them.
+            */}
             <SurfaceCard>
               <PanelHeader
                 title="Agreement details"
                 description={`Version ${contract.versionNumber} · ${contract.officeName}`}
+                divided
               />
-              <SurfaceCardContent>
-                <dl className="grid gap-4 sm:grid-cols-2">
-                  <div className="grid gap-1">
-                    <dt className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
-                      Effective
-                    </dt>
-                    <dd className="text-sm">{formatDate(contract.effectiveOn)}</dd>
-                  </div>
-                  <div className="grid gap-1">
-                    <dt className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
-                      Expires
-                    </dt>
-                    <dd className="text-sm">{formatDate(contract.expiresOn)}</dd>
-                  </div>
-                  <div className="grid gap-1 sm:col-span-2">
-                    <dt className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
-                      Contract id
-                    </dt>
-                    <dd className="font-mono text-xs break-all">{contract.publicId}</dd>
-                  </div>
-                  <div className="grid gap-1">
-                    <dt className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
-                      Sent
-                    </dt>
-                    <dd className="text-sm">{formatStamp(contract.sentAt)}</dd>
-                  </div>
-                  <div className="grid gap-1">
-                    <dt className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
-                      Viewed
-                    </dt>
-                    <dd className="text-sm">{formatStamp(contract.viewedAt)}</dd>
-                  </div>
-                  <div className="grid gap-1">
-                    <dt className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
-                      Signed
-                    </dt>
-                    <dd className="text-sm">{formatStamp(contract.signedAt)}</dd>
-                  </div>
-                  <div className="grid gap-1">
-                    <dt className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
-                      Party
-                    </dt>
-                    <dd className="text-sm">{contract.partyDisplayName}</dd>
-                  </div>
+              <SurfaceCardContent className="grid gap-6">
+                <dl className="grid gap-4 sm:grid-cols-3">
+                  <ReadOnlyValue label="Effective">
+                    {formatDate(contract.effectiveOn)}
+                  </ReadOnlyValue>
+                  <ReadOnlyValue label="Expires">
+                    {contract.expiresOn ? (
+                      formatDate(contract.expiresOn)
+                    ) : (
+                      <span className="text-muted-foreground">No end date</span>
+                    )}
+                  </ReadOnlyValue>
+                  <ReadOnlyValue label="Party">
+                    {contract.partyDisplayName}
+                  </ReadOnlyValue>
                 </dl>
+
+                <div className="border-border/60 grid gap-3 border-t pt-5">
+                  <h3 className="text-muted-foreground text-xs font-semibold tracking-[0.06em] uppercase">
+                    Progress
+                  </h3>
+                  <Timeline
+                    aria-label="Agreement progress"
+                    items={progressItems(contract)}
+                  />
+                </div>
+
+                <div className="border-border/60 flex flex-wrap items-baseline gap-x-2 gap-y-1 border-t pt-5">
+                  <span className="text-muted-foreground text-xs font-semibold">
+                    Contract id
+                  </span>
+                  {/*
+                    Kept, because it is what support asks for, and demoted,
+                    because nobody reads a UUID as part of understanding their
+                    own agreement.
+                  */}
+                  <code className="text-muted-foreground font-mono text-xs break-all">
+                    {contract.publicId}
+                  </code>
+                </div>
               </SurfaceCardContent>
             </SurfaceCard>
 
@@ -607,15 +671,14 @@ export default function MyContract() {
               />
               <SurfaceCardContent>
                 {state === "generating" ? (
-                  <p className="text-muted-foreground flex items-center gap-2 text-sm">
-                    <Loader2 className="size-4 animate-spin" aria-hidden />
-                    Generating your PDF…
-                  </p>
+                  <Callout tone="info" title="Preparing your PDF">
+                    This usually takes a few seconds. Refresh above once it is ready.
+                  </Callout>
                 ) : state === "generation_failed" ? (
-                  <p className="text-muted-foreground text-sm">
-                    The PDF could not be generated. Ask your branch manager or
-                    operations team to retry.
-                  </p>
+                  <Callout tone="destructive" title="The PDF could not be generated">
+                    Ask your branch manager or the operations team to retry it. Your
+                    agreement and its terms are unaffected.
+                  </Callout>
                 ) : (
                   <PdfPreview
                     key={contract.previewUrl ?? contract.publicId}
@@ -625,7 +688,12 @@ export default function MyContract() {
               </SurfaceCardContent>
             </SurfaceCard>
 
-            <p className="text-muted-foreground text-xs">{disclaimer}</p>
+            {/*
+              A standing note about the whole page, so it gets the note's own
+              shape instead of being the smallest type on the screen, unlabelled
+              and floating under the last panel.
+            */}
+            <Callout tone="neutral">{disclaimer}</Callout>
           </div>
 
           <aside className="grid gap-6 self-start">

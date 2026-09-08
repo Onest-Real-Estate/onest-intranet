@@ -1,15 +1,27 @@
 import { Head, Link, router, usePage } from "@inertiajs/react";
+import { Download, FilePlus2, FileText, Replace } from "lucide-react";
 import { useMemo, useState } from "react";
 import { AccessChangeDialog } from "@/components/administration/AccessChangeDialog";
 import { CommissionCalculator } from "@/components/administration/CommissionCalculator";
+import { ContractLifecyclePanel } from "@/components/administration/ContractLifecyclePanel";
+import {
+  CONFIRM_LIFECYCLE,
+  type ConfirmLifecycleAction,
+  type ContractStamps,
+  type LifecycleActionCode,
+  needsConfirmation,
+} from "@/components/administration/contract-lifecycle";
+import { MergeValuePreview } from "@/components/administration/MergeValuePreview";
 import { ContractPayeeSearch } from "@/components/ContractPayeeSearch";
 import {
+  Callout,
   NativeSelect,
   PageHeader,
   PanelHeader,
   StatusBadge,
   SurfaceCard,
   SurfaceCardContent,
+  toStatusTone,
 } from "@/components/design-system";
 import { HubLayout } from "@/components/HubLayout";
 import { PermissionRequired } from "@/components/PermissionRequired";
@@ -31,7 +43,6 @@ import type {
   AgentContractPayeeSummary,
   AgentContractWorkspacePageProps,
 } from "@/types";
-import type { StatusTone } from "@/types/design-system";
 
 const ACCESS = {
   any: ["web.view_agent_contracts", "contract.manage_agent_contracts"],
@@ -39,67 +50,6 @@ const ACCESS = {
 
 /** Matches ``CommissionBasis.FIXED_ONLY`` — percent is invalid for this basis. */
 const FIXED_ONLY_BASIS = "fixed_only";
-
-/** High-impact lifecycle moves that require an AccessChangeDialog confirm. */
-type ConfirmLifecycleAction = "issue" | "activate" | "supersede" | "terminate";
-
-const CONFIRM_LIFECYCLE: Record<
-  ConfirmLifecycleAction,
-  {
-    title: string;
-    description: string;
-    confirmLabel: string;
-    toLabel: string;
-    impact: string;
-  }
-> = {
-  issue: {
-    title: "Issue this contract?",
-    description:
-      "Freezes party, office, terms, template version, and calculation rule version, then queues PDF generation and marks the contract sent.",
-    confirmLabel: "Confirm issue",
-    toLabel: "Sent to agent",
-    impact: "Agent can review the issued agreement after PDF generation.",
-  },
-  activate: {
-    title: "Activate this contract?",
-    description:
-      "Marks the signed agreement as the agent's active brokerage contract and supersedes any prior active contract for the same recipient.",
-    confirmLabel: "Confirm activate",
-    toLabel: "Active",
-    impact: "Onboarding and operations treat this version as the live agreement.",
-  },
-  supersede: {
-    title: "Supersede this contract?",
-    description:
-      "Ends this version without terminating the agent relationship. Use when a replacement agreement will take its place.",
-    confirmLabel: "Confirm supersede",
-    toLabel: "Superseded",
-    impact: "This version leaves the active pipeline and cannot be reactivated.",
-  },
-  terminate: {
-    title: "Terminate this contract?",
-    description:
-      "Ends this agreement. This is a terminal status and cannot be undone from the workspace.",
-    confirmLabel: "Confirm terminate",
-    toLabel: "Terminated",
-    impact: "The agent no longer has this version as a live or pending agreement.",
-  },
-};
-
-function toTone(raw: string): StatusTone {
-  if (raw === "danger") return "destructive";
-  if (
-    raw === "neutral" ||
-    raw === "info" ||
-    raw === "success" ||
-    raw === "warning" ||
-    raw === "destructive"
-  ) {
-    return raw;
-  }
-  return "neutral";
-}
 
 function field(commission: Record<string, unknown> | undefined, key: string): string {
   const value = commission?.[key];
@@ -232,6 +182,19 @@ export default function AgentContractWorkspace() {
     );
   }
 
+  /**
+   * One entry point for every lifecycle button. The registry decides whether a
+   * move needs the confirm dialog, so a new action can never reach the server
+   * unconfirmed just because someone forgot to wire its `setConfirmAction`.
+   */
+  function runLifecycle(action: LifecycleActionCode) {
+    if (needsConfirmation(action)) {
+      setConfirmAction(action);
+      return;
+    }
+    postLifecycle(action);
+  }
+
   return (
     <PermissionRequired permission={ACCESS}>
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_20rem]">
@@ -244,17 +207,17 @@ export default function AgentContractWorkspace() {
               <StatusBadge
                 status={{
                   label: contract.statusLabel,
-                  tone: toTone(contract.statusTone),
+                  tone: toStatusTone(contract.statusTone),
                 }}
               />
             }
           />
 
           {!canEdit ? (
-            <p className="text-muted-foreground text-sm" role="status">
+            <Callout tone="neutral" title="This version is read-only">
               Issued and historical versions are immutable. Create an amendment or
               replacement draft to change terms.
-            </p>
+            </Callout>
           ) : null}
           <form
             method="post"
@@ -688,146 +651,133 @@ export default function AgentContractWorkspace() {
 
           {agreementPreview?.status === "ready" && agreementPreview.mergeValues ? (
             <SurfaceCard>
-              <PanelHeader title="Agreement preview" />
+              <PanelHeader
+                title="Agreement preview"
+                description="The values that will be merged into the PDF when this contract is issued."
+                divided
+              />
               <SurfaceCardContent>
-                <dl className="grid gap-2 text-sm">
-                  {Object.entries(agreementPreview.mergeValues)
-                    .sort(([a], [b]) => a.localeCompare(b))
-                    .map(([key, value]) => (
-                      <div
-                        key={key}
-                        className="grid gap-1 border-b border-border/60 py-2 sm:grid-cols-[14rem_minmax(0,1fr)]"
-                      >
-                        <dt className="text-muted-foreground font-medium">{key}</dt>
-                        <dd>{value || "—"}</dd>
-                      </div>
-                    ))}
-                </dl>
+                <MergeValuePreview values={agreementPreview.mergeValues} />
               </SurfaceCardContent>
             </SurfaceCard>
           ) : null}
           {agreementPreview?.status === "error" ? (
-            <p className="text-destructive text-sm" role="alert">
-              {agreementPreview.message}
-            </p>
+            <Callout tone="destructive" title="Preview could not be built">
+              <span role="alert">{agreementPreview.message}</span>
+            </Callout>
           ) : null}
         </div>
 
         <aside className="grid gap-4 self-start">
-          <SurfaceCard>
-            <PanelHeader title="Lifecycle" />
-            <SurfaceCardContent className="grid gap-2">
-              {allowedActions.includes("submit_for_review") ? (
-                <Button
-                  type="button"
-                  onClick={() => postLifecycle("submit_for_review")}
-                >
-                  Submit for review
-                </Button>
-              ) : null}
-              {allowedActions.includes("reopen") ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => postLifecycle("reopen")}
-                >
-                  Reopen draft
-                </Button>
-              ) : null}
-              {allowedActions.includes("issue") ? (
-                <Button type="button" onClick={() => setConfirmAction("issue")}>
-                  Issue / send
-                </Button>
-              ) : null}
-              {allowedActions.includes("activate") ? (
-                <Button type="button" onClick={() => setConfirmAction("activate")}>
-                  Activate
-                </Button>
-              ) : null}
-              {allowedActions.includes("retry_generation") ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => postLifecycle("retry_generation")}
-                >
-                  Retry PDF generation
-                </Button>
-              ) : null}
-              {allowedActions.includes("supersede") ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setConfirmAction("supersede")}
-                >
-                  Supersede
-                </Button>
-              ) : null}
-              {allowedActions.includes("terminate") ? (
-                <Button
-                  type="button"
-                  variant="destructive"
-                  onClick={() => setConfirmAction("terminate")}
-                >
-                  Terminate
-                </Button>
-              ) : null}
-              {capabilities.canCreateAmendment ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() =>
-                    router.post(
-                      routes.agent_contract_create_amendment(contract.publicId),
-                      toFormData({ change_kind: "amendment" }),
-                    )
-                  }
-                >
-                  Create amendment
-                </Button>
-              ) : null}
-              {capabilities.canCreateReplacement ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() =>
-                    router.post(
-                      routes.agent_contract_create_replacement(contract.publicId),
-                      toFormData({}),
-                    )
-                  }
-                >
-                  Create replacement
-                </Button>
-              ) : null}
-              {generatedPdfUrl ? (
-                <Button type="button" variant="outline" asChild>
-                  <a href={generatedPdfUrl}>Download review PDF</a>
-                </Button>
-              ) : null}
-              {contract.status === "sent" && !generatedPdfUrl ? (
-                <p className="text-sm text-muted-foreground">
-                  Review PDF generation is in progress.
-                </p>
-              ) : null}
-              {contract.status === "generation_error" ? (
-                <p className="text-sm text-destructive" role="alert">
-                  PDF generation failed. Retry after checking the template and
-                  snapshots.
-                </p>
-              ) : null}
-              {capabilities.canManage ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() =>
-                    router.get(routes.agent_contract_preview(contract.publicId))
-                  }
-                >
-                  Preview agreement
-                </Button>
-              ) : null}
-            </SurfaceCardContent>
-          </SurfaceCard>
+          <ContractLifecyclePanel
+            status={contract.status}
+            statusLabel={contract.statusLabel}
+            stamps={contract as ContractStamps}
+            allowedActions={allowedActions}
+            onRun={runLifecycle}
+            footer={
+              contract.status === "generation_error" ? (
+                <Callout tone="destructive" title="PDF generation failed">
+                  Check the template version and the party and office snapshots, then
+                  retry.
+                </Callout>
+              ) : contract.status === "sent" && !generatedPdfUrl ? (
+                <Callout tone="info" title="Review PDF is generating">
+                  The download appears here once the agreement PDF is stored.
+                </Callout>
+              ) : null
+            }
+          />
+
+          {generatedPdfUrl || capabilities.canManage ? (
+            <SurfaceCard>
+              <PanelHeader
+                title="Documents"
+                description="The issued agreement and a merge-field preview of it."
+              />
+              <SurfaceCardContent className="grid gap-2">
+                {generatedPdfUrl ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full justify-start"
+                    asChild
+                  >
+                    <a href={generatedPdfUrl} download>
+                      <Download className="size-4" aria-hidden />
+                      Download review PDF
+                    </a>
+                  </Button>
+                ) : null}
+                {capabilities.canManage ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full justify-start"
+                    onClick={() =>
+                      router.get(routes.agent_contract_preview(contract.publicId))
+                    }
+                  >
+                    <FileText className="size-4" aria-hidden />
+                    Preview agreement
+                  </Button>
+                ) : null}
+              </SurfaceCardContent>
+            </SurfaceCard>
+          ) : null}
+
+          {capabilities.canCreateAmendment || capabilities.canCreateReplacement ? (
+            <SurfaceCard>
+              <PanelHeader
+                title="New version"
+                description="Issued versions are immutable. Both moves open a fresh draft and leave this one untouched."
+              />
+              <SurfaceCardContent className="grid gap-3">
+                {capabilities.canCreateAmendment ? (
+                  <div className="grid gap-1">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full justify-start"
+                      onClick={() =>
+                        router.post(
+                          routes.agent_contract_create_amendment(contract.publicId),
+                          toFormData({ change_kind: "amendment" }),
+                        )
+                      }
+                    >
+                      <FilePlus2 className="size-4" aria-hidden />
+                      Create amendment
+                    </Button>
+                    <p className="text-muted-foreground px-1 text-xs leading-4">
+                      Changes specific terms and keeps this agreement in force.
+                    </p>
+                  </div>
+                ) : null}
+                {capabilities.canCreateReplacement ? (
+                  <div className="grid gap-1">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full justify-start"
+                      onClick={() =>
+                        router.post(
+                          routes.agent_contract_create_replacement(contract.publicId),
+                          toFormData({}),
+                        )
+                      }
+                    >
+                      <Replace className="size-4" aria-hidden />
+                      Create replacement
+                    </Button>
+                    <p className="text-muted-foreground px-1 text-xs leading-4">
+                      Supersedes this agreement with a new one from the start.
+                    </p>
+                  </div>
+                ) : null}
+              </SurfaceCardContent>
+            </SurfaceCard>
+          ) : null}
 
           {commercialPreview ? (
             <CommissionCalculator
@@ -873,7 +823,7 @@ export default function AgentContractWorkspace() {
                         <StatusBadge
                           status={{
                             label: row.statusLabel,
-                            tone: toTone(row.statusTone),
+                            tone: toStatusTone(row.statusTone),
                           }}
                         />
                       </Link>

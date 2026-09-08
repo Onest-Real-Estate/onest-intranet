@@ -415,12 +415,17 @@ def agent_contract_lifecycle(request: HttpRequest, public_id: uuid.UUID):
     ) as exc:
         return _render_workspace_error(request, contract, exc)
 
+    # One entry per code ``allowed_actions`` can offer, so a move never lands
+    # with the generic fallback message.
     labels = {
         "submit_for_review": "Submitted for review",
         "reopen": "Draft reopened",
         "issue": "Contract issued",
+        "mark_viewed": "Marked as viewed",
+        "mark_signed": "Marked as signed",
         "activate": "Contract activated",
         "supersede": "Contract superseded",
+        "expire": "Contract expired",
         "retry_generation": "PDF generation retried",
         "terminate": "Contract terminated",
     }

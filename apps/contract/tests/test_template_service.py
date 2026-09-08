@@ -552,3 +552,43 @@ def test_create_rejects_duplicate_stable_key(seeded_offices, client):
     assert page["component"] == "ContractTemplateAdministration"
     assert page["props"]["createSheet"]["open"] is True
     assert "stable_key" in page["props"]["errors"]["fields"]
+
+
+@pytest.mark.django_db
+def test_template_rows_carry_their_own_status_presentation(seeded_offices):
+    """Pages render a StatusBadge, so the label and tone come from the server.
+
+    The template console previously printed the raw enum with a CSS
+    `capitalize`, which made it the one list in the app that disagreed with
+    every other one about how a status looks.
+    """
+    actor = company_admin(seeded_offices)
+    template = create_template_family(
+        actor,
+        stable_key="ica-status-presentation",
+        name="Status presentation",
+        company_wide=True,
+    )
+
+    row = serialize_template_row(
+        type(template)
+        .objects.prefetch_related("versions")
+        .select_related("active_version")
+        .get(pk=template.pk)
+    )
+
+    assert row["statusLabel"] == "Draft"
+    assert row["statusTone"] == "neutral"
+
+
+def test_version_detail_carries_its_own_status_presentation(seeded_offices):
+    from apps.contract.statuses import (
+        template_version_status_label,
+        template_version_status_tone,
+    )
+
+    assert template_version_status_label("published") == "Published"
+    assert template_version_status_tone("published") == "info"
+    assert template_version_status_tone("retired") == "warning"
+    # An unknown code still renders, just without a claim about severity.
+    assert template_version_status_tone("nonsense") == "neutral"

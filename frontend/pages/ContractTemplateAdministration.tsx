@@ -10,8 +10,10 @@ import {
   PageHeader,
   PanelHeader,
   SearchControl,
+  StatusBadge,
   SurfaceCard,
   SurfaceCardContent,
+  toStatusTone,
 } from "@/components/design-system";
 import { HubLayout } from "@/components/HubLayout";
 import { PermissionRequired } from "@/components/PermissionRequired";
@@ -253,7 +255,12 @@ export default function ContractTemplateAdministration() {
                   header: "Status",
                   icon: BadgeCheck,
                   cell: (row) => (
-                    <span className="text-sm capitalize">{row.status}</span>
+                    <StatusBadge
+                      status={{
+                        label: row.statusLabel,
+                        tone: toStatusTone(row.statusTone),
+                      }}
+                    />
                   ),
                 },
                 {

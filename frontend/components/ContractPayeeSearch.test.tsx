@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ContractPayeeSearch } from "./ContractPayeeSearch";
@@ -50,16 +50,13 @@ describe("ContractPayeeSearch", () => {
     );
 
     await user.type(screen.getByLabelText(/mentor payee/i), "men");
-    await waitFor(() => expect(fetch).toHaveBeenCalled());
-    await user.click(screen.getByRole("button", { name: /mentor person/i }));
+    await user.click(await screen.findByRole("option", { name: /mentor person/i }));
 
     const hidden = document.querySelector(
       'input[name="mentor_payee_id"]',
     ) as HTMLInputElement;
     expect(hidden.value).toBe("9");
-    expect(
-      screen.getByDisplayValue(/mentor person <mentor@example.com>/i),
-    ).toBeInTheDocument();
+    expect(screen.getByText("Mentor Person")).toBeVisible();
   });
 
   it("hydrates from an initial payee", () => {
@@ -76,12 +73,28 @@ describe("ContractPayeeSearch", () => {
         }}
       />,
     );
-    expect(
-      screen.getByDisplayValue(/referral agent <ref@example.com>/i),
-    ).toBeInTheDocument();
+
+    expect(screen.getByText("Referral Agent")).toBeVisible();
+    expect(screen.getByText(/ref@example\.com · Harrisburg/)).toBeVisible();
     expect(
       (document.querySelector('input[name="referral_payee_id"]') as HTMLInputElement)
         .value,
     ).toBe("3");
+  });
+
+  it("does not search while disabled", async () => {
+    const user = userEvent.setup();
+    render(
+      <ContractPayeeSearch
+        id="mentor_payee"
+        name="mentor_payee_id"
+        label="Mentor payee"
+        disabled
+      />,
+    );
+
+    await user.type(screen.getByLabelText(/mentor payee/i), "men");
+
+    expect(fetch).not.toHaveBeenCalled();
   });
 });

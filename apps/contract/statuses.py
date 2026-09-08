@@ -64,6 +64,49 @@ STATUS_TONES: dict[str, str] = {
 }
 
 
+#: Tone keys for the template family lifecycle (``ContractTemplate.Status``).
+TEMPLATE_STATUS_TONES: dict[str, str] = {
+    "draft": "neutral",
+    "active": "success",
+    "retired": "neutral",
+}
+
+#: Tone keys for one version of a template (``ContractTemplateVersion.Status``).
+TEMPLATE_VERSION_STATUS_TONES: dict[str, str] = {
+    "draft": "neutral",
+    "published": "info",
+    "superseded": "neutral",
+    "retired": "warning",
+}
+
+
+def _labelled(choices, code: str) -> str:
+    for value, label in choices:
+        if value == code:
+            return str(label)
+    return code
+
+
+def template_status_label(code: str) -> str:
+    from apps.contract.models import ContractTemplate
+
+    return _labelled(ContractTemplate.Status.choices, code)
+
+
+def template_status_tone(code: str) -> str:
+    return TEMPLATE_STATUS_TONES.get(code, "neutral")
+
+
+def template_version_status_label(code: str) -> str:
+    from apps.contract.models import ContractTemplateVersion
+
+    return _labelled(ContractTemplateVersion.Status.choices, code)
+
+
+def template_version_status_tone(code: str) -> str:
+    return TEMPLATE_VERSION_STATUS_TONES.get(code, "neutral")
+
+
 def status_label(code: str) -> str:
     try:
         return ContractStatus(code).label

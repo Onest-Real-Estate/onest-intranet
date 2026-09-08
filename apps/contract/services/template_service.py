@@ -25,6 +25,12 @@ from apps.contract.models import (
     ContractTemplateVersion,
 )
 from apps.contract.pdf_signing import fill_prefill_fields
+from apps.contract.statuses import (
+    template_status_label,
+    template_status_tone,
+    template_version_status_label,
+    template_version_status_tone,
+)
 from apps.contract.template_security import (
     MERGE_SOURCE_OPTIONS,
     inspect_template,
@@ -707,6 +713,8 @@ def serialize_template_row(template: ContractTemplate) -> dict[str, Any]:
         "name": template.name,
         "description": template.description,
         "status": template.status,
+        "statusLabel": template_status_label(template.status),
+        "statusTone": template_status_tone(template.status),
         "jurisdictionStateCodes": list(template.jurisdiction_state_codes or []),
         "companyWide": template.company_wide,
         "effectiveFrom": template.effective_from.isoformat()
@@ -735,6 +743,8 @@ def serialize_version_detail(version: ContractTemplateVersion) -> dict[str, Any]
         "displayName": version.display_name,
         "description": version.description,
         "status": version.status,
+        "statusLabel": template_version_status_label(version.status),
+        "statusTone": template_version_status_tone(version.status),
         "sourceFormat": version.source_format,
         "sourceMediaType": version.source_media_type,
         "sourceChecksum": version.source_checksum,

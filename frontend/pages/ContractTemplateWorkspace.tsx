@@ -1,4 +1,13 @@
 import { Head, router, usePage } from "@inertiajs/react";
+import {
+  Archive,
+  BadgeCheck,
+  Eye,
+  FileText,
+  MoreHorizontal,
+  Send,
+  Sparkles,
+} from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import {
   ContractTemplateFieldPlacer,
@@ -9,12 +18,22 @@ import {
   FormErrorSummary,
   PageHeader,
   PanelHeader,
+  ReadOnlyValue,
+  StatusBadge,
   SurfaceCard,
   SurfaceCardContent,
+  toStatusTone,
 } from "@/components/design-system";
 import { HubLayout } from "@/components/HubLayout";
 import { PermissionRequired } from "@/components/PermissionRequired";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -116,7 +135,8 @@ export default function ContractTemplateWorkspace() {
   const prefillNeedsSource = mergeRows.filter((row) => !row.source);
 
   const sourceOptions = versionDetail.mergeSourceOptions ?? [];
-  const canEdit = Boolean(capabilities.canManage && versionDetail.status === "draft");
+  const isDraft = versionDetail.status === "draft";
+  const canEdit = Boolean(capabilities.canManage && isDraft);
 
   const [savingFields, setSavingFields] = useState(false);
 
@@ -171,51 +191,94 @@ export default function ContractTemplateWorkspace() {
         />
         <PageHeader
           title={versionDetail.displayName || versionDetail.versionLabel}
-          description={`${versionDetail.template.name} · ${versionDetail.versionLabel} · ${versionDetail.status}`}
+          description={`${versionDetail.template.name} · ${versionDetail.versionLabel}`}
+          meta={
+            <StatusBadge
+              status={{
+                label: versionDetail.statusLabel,
+                tone: toStatusTone(versionDetail.statusTone),
+              }}
+            />
+          }
           actions={
-            <div className="flex flex-wrap gap-2">
+            /*
+             * One primary, and it is whichever move this version is actually
+             * waiting for. This row previously held five outline buttons and a
+             * destructive one, so nothing said which to press and the row wrapped
+             * into three lines on a laptop. Retire moves out of the row entirely
+             * — an irreversible action does not belong one pixel from "Publish".
+             */
+            <div className="flex flex-wrap items-center gap-2">
               {capabilities.canManage && versionDetail.fieldAiConfigured ? (
                 <Button
                   type="button"
-                  variant="outline"
+                  variant="ghost"
                   onClick={() => postAction("suggest_fields")}
                   disabled={!versionDetail.sourcePdfUrl || suggesting}
                 >
-                  {suggesting ? "Suggesting…" : "Suggest fields (AI)"}
+                  <Sparkles className="size-4" aria-hidden />
+                  {suggesting ? "Suggesting…" : "Suggest fields"}
                 </Button>
               ) : null}
               <Button
                 type="button"
-                variant="outline"
+                variant={isDraft ? "default" : "outline"}
                 onClick={() => postAction("preview")}
                 disabled={!versionDetail.sourcePdfUrl || fieldLayout.length === 0}
               >
+                <Eye className="size-4" aria-hidden />
                 Generate preview
               </Button>
+              {capabilities.canApprove && isDraft ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => postAction("publish")}
+                >
+                  <Send className="size-4" aria-hidden />
+                  Publish
+                </Button>
+              ) : null}
+              {capabilities.canApprove && !isDraft ? (
+                <Button type="button" onClick={() => postAction("activate")}>
+                  <BadgeCheck className="size-4" aria-hidden />
+                  Activate
+                </Button>
+              ) : null}
               {capabilities.canApprove ? (
-                <>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => postAction("publish")}
-                  >
-                    Publish
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => postAction("activate")}
-                  >
-                    Activate
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="destructive"
-                    onClick={() => postAction("retire")}
-                  >
-                    Retire
-                  </Button>
-                </>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      aria-label="More template actions"
+                    >
+                      <MoreHorizontal className="size-4" aria-hidden />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    {!isDraft ? (
+                      <DropdownMenuItem onSelect={() => postAction("publish")}>
+                        <Send className="size-4" aria-hidden />
+                        Publish
+                      </DropdownMenuItem>
+                    ) : (
+                      <DropdownMenuItem onSelect={() => postAction("activate")}>
+                        <BadgeCheck className="size-4" aria-hidden />
+                        Activate
+                      </DropdownMenuItem>
+                    )}
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      variant="destructive"
+                      onSelect={() => postAction("retire")}
+                    >
+                      <Archive className="size-4" aria-hidden />
+                      Retire this version
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               ) : null}
             </div>
           }
@@ -228,42 +291,88 @@ export default function ContractTemplateWorkspace() {
             description="Upload a blank PDF, place Prefill and Agent fields in the Hub placer, map merge sources, then preview and publish."
           />
           <SurfaceCardContent>
-            <div className="text-muted-foreground mb-4 grid gap-1 text-xs">
-              <span>Source format: {versionDetail.sourceFormat || "Not uploaded"}</span>
-              <span>
-                Prefill fields:{" "}
-                {versionDetail.placeholderKeys.length
-                  ? versionDetail.placeholderKeys.join(", ")
-                  : "None yet — place Prefill fields and save layout"}
-              </span>
-              <span>
-                Preview checksum:{" "}
-                {versionDetail.previewChecksum || "No preview generated"}
-              </span>
-              {versionDetail.sourcePdfUrl ? (
-                <a
-                  href={versionDetail.sourcePdfUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="underline"
-                >
-                  Open source PDF
-                </a>
+            {/*
+              Six facts that were a stack of muted 11px spans, one of which was a
+              64-character checksum sitting in the reading order between two
+              sentences. They are a record, so they get a record's shape, and the
+              checksum is monospace and truncated because nobody reads it — they
+              compare it.
+            */}
+            <dl className="bg-muted/40 border-border/60 mb-5 grid gap-4 rounded-lg border p-4 sm:grid-cols-3">
+              <ReadOnlyValue label="Source format">
+                {versionDetail.sourceFormat || (
+                  <span className="text-muted-foreground">Not uploaded</span>
+                )}
+              </ReadOnlyValue>
+              <ReadOnlyValue label="Contracts on this version">
+                <span className="tabular-nums">
+                  {versionDetail.contractsUsingVersion}
+                </span>
+              </ReadOnlyValue>
+              <ReadOnlyValue label="Preview checksum">
+                {versionDetail.previewChecksum ? (
+                  <span
+                    className="block truncate font-mono text-xs"
+                    title={versionDetail.previewChecksum}
+                  >
+                    {versionDetail.previewChecksum}
+                  </span>
+                ) : (
+                  <span className="text-muted-foreground">No preview generated</span>
+                )}
+              </ReadOnlyValue>
+              <div className="grid gap-1 sm:col-span-3">
+                <dt className="text-muted-foreground text-xs font-semibold">
+                  Prefill fields
+                </dt>
+                <dd className="min-w-0 text-sm break-words">
+                  {versionDetail.placeholderKeys.length ? (
+                    <span className="flex flex-wrap gap-1">
+                      {versionDetail.placeholderKeys.map((key) => (
+                        <code
+                          key={key}
+                          className="bg-card border-border/60 rounded-sm border px-1.5 py-0.5 font-mono text-xs"
+                        >
+                          {key}
+                        </code>
+                      ))}
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground">
+                      None yet — place Prefill fields and save the layout.
+                    </span>
+                  )}
+                </dd>
+              </div>
+              {versionDetail.sourcePdfUrl || versionDetail.previewUrl ? (
+                <div className="flex flex-wrap gap-2 sm:col-span-3">
+                  {versionDetail.sourcePdfUrl ? (
+                    <Button type="button" variant="outline" size="sm" asChild>
+                      <a
+                        href={versionDetail.sourcePdfUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        <FileText className="size-3.5" aria-hidden />
+                        Open source PDF
+                      </a>
+                    </Button>
+                  ) : null}
+                  {versionDetail.previewUrl ? (
+                    <Button type="button" variant="outline" size="sm" asChild>
+                      <a
+                        href={versionDetail.previewUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        <Eye className="size-3.5" aria-hidden />
+                        Open stored preview
+                      </a>
+                    </Button>
+                  ) : null}
+                </div>
               ) : null}
-              {versionDetail.previewUrl ? (
-                <a
-                  href={versionDetail.previewUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="underline"
-                >
-                  Open stored preview
-                </a>
-              ) : null}
-              <span>
-                Contracts using this version: {versionDetail.contractsUsingVersion}
-              </span>
-            </div>
+            </dl>
             {capabilities.canManage ? (
               <form
                 method="post"
