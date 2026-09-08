@@ -13,24 +13,67 @@
   color-scheme: light;
 
   --brand-gold: #ddb52a;
+  --brand-gold-deep: #c39a15;
   --brand-gold-soft: #fbf5df;
+  /* Ink that stays readable on a gold surface in either theme. */
+  --brand-on-gold: #231a00;
+  /* Ink for text laid directly over a photograph. Fixed in both themes on
+     purpose: the backdrop is an uploaded image, not a themed surface, so
+     flipping this to dark in light mode would put dark text on a dark photo. */
+  --on-media: #ffffff;
+  /* The signature a signer draws is rasterised and sealed into a legal PDF.
+     It is not a themed surface either — it is ink on paper that leaves the
+     app — so both values are stated once and are identical in the dark block.
+     A signature that followed the theme would be white-on-white in the
+     document a court reads. */
+  --signature-ink: #101014;
+  --signature-paper: #ffffff;
   --brand-ink: #0d0d0d;
 
-  --radius: 0.75rem;
-  --background: oklch(0.985 0.006 80);
-  --foreground: oklch(0.22 0.018 72);
+  /* Shape. 8px is the professional-density step: sharp enough that a card
+     reads as a panel rather than a lozenge, soft enough that it is not a
+     hairline box. Controls sit one step tighter than the panels holding them,
+     which is what makes nesting legible instead of concentric. */
+  --radius: 0.5rem;
+  --radius-card: 0.625rem;
+  --motion-fast: 150ms;
+  --motion-base: 200ms;
+  --motion-slow: 280ms;
+  --ease-standard: cubic-bezier(0.16, 1, 0.3, 1);
+  /* Depth is carried by the 1px border first and the shadow second. A wide
+     diffuse bloom under every card reads as decoration at this density; a
+     single tight contact shadow reads as a panel resting on the page. */
+  --elevation-card: 0 1px 2px oklch(0.2 0.003 286 / 6%);
+  --elevation-card-hover:
+    0 1px 2px oklch(0.2 0.003 286 / 7%), 0 4px 12px oklch(0.2 0.003 286 / 8%);
+  --elevation-popover:
+    0 2px 4px oklch(0.16 0.003 286 / 7%), 0 12px 32px oklch(0.16 0.003 286 / 13%);
+  /*
+   * The canvas is white and the neutrals are neutral.
+   *
+   * Every grey used to carry a hue-72–80 tilt, which read as warmth on one
+   * surface and as a yellow cast across a whole screen of them. Structure now
+   * comes from the border and from tonal steps that are genuinely achromatic,
+   * so the only colour on an ordinary page is the gold on its one primary
+   * action. A trace of chroma (0.002) survives on the greys: a perfectly
+   * achromatic panel beside a warm brand colour reads faintly blue by contrast.
+   */
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.21 0.003 286);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.22 0.018 72);
+  --card-foreground: oklch(0.21 0.003 286);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.22 0.018 72);
+  --popover-foreground: oklch(0.21 0.003 286);
+  /* Gold's readable step. Links, active navigation type, selection controls —
+     the places brand has to survive as ink rather than as a fill. */
   --primary: oklch(0.5 0.115 74);
   --primary-foreground: oklch(0.99 0.004 80);
-  --secondary: oklch(0.95 0.019 78);
-  --secondary-foreground: oklch(0.31 0.045 72);
-  --muted: oklch(0.96 0.008 78);
-  --muted-foreground: oklch(0.49 0.018 72);
-  --accent: oklch(0.92 0.04 78);
-  --accent-foreground: oklch(0.31 0.055 72);
+  --secondary: oklch(0.968 0.002 286);
+  --secondary-foreground: oklch(0.3 0.004 286);
+  --muted: oklch(0.968 0.002 286);
+  --muted-foreground: oklch(0.51 0.005 286);
+  --accent: oklch(0.955 0.003 286);
+  --accent-foreground: oklch(0.28 0.004 286);
   --destructive: oklch(0.56 0.2 27);
   --destructive-foreground: oklch(0.99 0 0);
   --success: oklch(0.49 0.12 150);
@@ -42,45 +85,116 @@
   --warning-ink: oklch(0.45 0.115 68);
   --info: oklch(0.52 0.13 245);
   --info-foreground: oklch(0.99 0 0);
-  --border: oklch(0.89 0.014 78);
-  --input: oklch(0.86 0.018 78);
+  --border: oklch(0.917 0.003 286);
+  --border-strong: oklch(0.8 0.004 286);
+  --input: oklch(0.885 0.004 286);
+  /* The focus ring stays gold: it is the one moment brand and state coincide. */
   --ring: oklch(0.61 0.12 76);
   --chart-1: oklch(0.63 0.14 77);
   --chart-2: oklch(0.55 0.1 153);
   --chart-3: oklch(0.53 0.1 244);
   --chart-4: oklch(0.66 0.12 42);
   --chart-5: oklch(0.5 0.08 310);
-  --sidebar: oklch(0.975 0.01 78);
-  --sidebar-foreground: oklch(0.22 0.018 72);
+  /* The rail sits one step off white so it reads as chrome beside a white
+     workspace, without becoming a second colour. */
+  --sidebar: oklch(0.982 0.002 286);
+  --sidebar-foreground: oklch(0.21 0.003 286);
   --sidebar-primary: oklch(0.5 0.115 74);
   --sidebar-primary-foreground: oklch(0.99 0.004 80);
-  --sidebar-accent: oklch(0.92 0.04 78);
-  --sidebar-accent-foreground: oklch(0.31 0.055 72);
-  --sidebar-border: oklch(0.89 0.014 78);
+  --sidebar-accent: oklch(0.945 0.003 286);
+  --sidebar-accent-foreground: oklch(0.24 0.004 286);
+  --sidebar-border: oklch(0.917 0.003 286);
   --sidebar-ring: oklch(0.61 0.12 76);
+
+  /*
+   * Chip surfaces and inks.
+   *
+   * A chip is a tinted surface behind a hairline of its own hue, and both are
+   * declared outright rather than composed from an alpha of the ink. Alpha made
+   * contrast context-dependent — the same `bg-x/10 text-x` pair that cleared AA
+   * on a white card fell to 4.2:1 on a dark one, because tinting a dark surface
+   * with the ink colour drags the background *toward* the text. Every pair
+   * below is verified at >=4.5:1 against its own surface and against the card,
+   * in both themes.
+   *
+   * Role inks encode breadth of authority. Hue carries the category; lightness
+   * carries the ordering, broadest reading darkest — lightness is the one
+   * channel every colour-vision deficiency preserves, so company and office
+   * stay tellable apart when their hues collapse. `assigned_record` is
+   * deliberately absent: the narrowest scope takes the neutral chip, which
+   * keeps brand gold spent on actions rather than on a badge.
+   */
+  --chip-neutral: oklch(0.968 0.002 286);
+  --chip-neutral-edge: oklch(0.9 0.003 286);
+  --chip-primary: oklch(0.965 0.027 74);
+  --chip-primary-edge: oklch(0.88 0.043 74);
+  --chip-success: oklch(0.965 0.027 150);
+  --chip-success-edge: oklch(0.88 0.043 150);
+  --chip-info: oklch(0.965 0.017 245);
+  --chip-info-edge: oklch(0.88 0.043 245);
+  --chip-warning: oklch(0.965 0.023 68);
+  --chip-warning-edge: oklch(0.88 0.043 68);
+  --chip-destructive: oklch(0.965 0.017 27);
+  --chip-destructive-edge: oklch(0.88 0.043 27);
+  --chip-role-company: oklch(0.965 0.017 244);
+  --chip-role-company-edge: oklch(0.88 0.043 244);
+  --role-company-ink: oklch(0.44 0.111 244);
+  --chip-role-region: oklch(0.965 0.017 42);
+  --chip-role-region-edge: oklch(0.88 0.043 42);
+  --role-region-ink: oklch(0.48 0.139 42);
+  --chip-role-office: oklch(0.965 0.027 153);
+  --chip-role-office-edge: oklch(0.88 0.043 153);
+  --role-office-ink: oklch(0.5 0.129 153);
+  --chip-role-protected: oklch(0.965 0.021 310);
+  --chip-role-protected-edge: oklch(0.88 0.043 310);
+  --role-protected-ink: oklch(0.46 0.139 310);
 }
 
 .dark {
   color-scheme: dark;
 
+  /* Depth inverts its mechanism in the dark. A tinted shadow disappears against
+     a dark canvas, so separation there comes from the surface step and the
+     border; only genuinely floating layers get a shadow, and it is black. */
+  --elevation-card: 0 1px 2px oklch(0 0 0 / 24%);
+  --elevation-card-hover: 0 1px 2px oklch(0 0 0 / 28%), 0 4px 12px oklch(0 0 0 / 24%);
+  --elevation-popover: 0 2px 4px oklch(0 0 0 / 32%), 0 12px 32px oklch(0 0 0 / 44%);
+
   --brand-gold: #d0a04a;
+  --brand-gold-deep: #b98733;
   --brand-gold-soft: #493719;
+  --brand-on-gold: #231a00;
+  /* Ink for text laid directly over a photograph. Fixed in both themes on
+     purpose: the backdrop is an uploaded image, not a themed surface, so
+     flipping this to dark in light mode would put dark text on a dark photo. */
+  --on-media: #ffffff;
+  /* The signature a signer draws is rasterised and sealed into a legal PDF.
+     It is not a themed surface either — it is ink on paper that leaves the
+     app — so both values are stated once and are identical in the dark block.
+     A signature that followed the theme would be white-on-white in the
+     document a court reads. */
+  --signature-ink: #101014;
+  --signature-paper: #ffffff;
   --brand-ink: #fff8eb;
 
-  --background: oklch(0.17 0.012 72);
-  --foreground: oklch(0.94 0.008 78);
-  --card: oklch(0.21 0.014 72);
-  --card-foreground: oklch(0.94 0.008 78);
-  --popover: oklch(0.21 0.014 72);
-  --popover-foreground: oklch(0.94 0.008 78);
+  /* The dark canvas is neutral for the same reason the light one is: a warm
+     tilt across every surface reads as a cast, not as warmth. The card still
+     sits a clear step above the background, because in the dark that step is
+     what separates a panel — the shadow cannot. */
+  --background: oklch(0.165 0.003 286);
+  --foreground: oklch(0.94 0.003 286);
+  --card: oklch(0.205 0.004 286);
+  --card-foreground: oklch(0.94 0.003 286);
+  --popover: oklch(0.205 0.004 286);
+  --popover-foreground: oklch(0.94 0.003 286);
   --primary: oklch(0.73 0.13 78);
   --primary-foreground: oklch(0.2 0.025 70);
-  --secondary: oklch(0.27 0.025 72);
-  --secondary-foreground: oklch(0.93 0.012 78);
-  --muted: oklch(0.25 0.012 72);
-  --muted-foreground: oklch(0.7 0.014 76);
-  --accent: oklch(0.31 0.045 75);
-  --accent-foreground: oklch(0.95 0.012 80);
+  --secondary: oklch(0.265 0.005 286);
+  --secondary-foreground: oklch(0.93 0.003 286);
+  --muted: oklch(0.245 0.004 286);
+  --muted-foreground: oklch(0.705 0.006 286);
+  --accent: oklch(0.29 0.006 286);
+  --accent-foreground: oklch(0.96 0.003 286);
   --destructive: oklch(0.67 0.19 25);
   --destructive-foreground: oklch(0.99 0 0);
   --success: oklch(0.68 0.13 150);
@@ -90,22 +204,50 @@
   --warning-ink: oklch(0.82 0.12 78);
   --info: oklch(0.7 0.12 245);
   --info-foreground: oklch(0.17 0.02 245);
-  --border: oklch(1 0 0 / 12%);
-  --input: oklch(1 0 0 / 16%);
+  --border: oklch(1 0 0 / 11%);
+  --border-strong: oklch(1 0 0 / 21%);
+  --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.7 0.12 78);
   --chart-1: oklch(0.72 0.13 78);
   --chart-2: oklch(0.7 0.11 153);
   --chart-3: oklch(0.7 0.1 244);
   --chart-4: oklch(0.72 0.12 42);
   --chart-5: oklch(0.68 0.09 310);
-  --sidebar: oklch(0.2 0.014 72);
-  --sidebar-foreground: oklch(0.94 0.008 78);
+  --sidebar: oklch(0.185 0.003 286);
+  --sidebar-foreground: oklch(0.94 0.003 286);
   --sidebar-primary: oklch(0.73 0.13 78);
   --sidebar-primary-foreground: oklch(0.2 0.025 70);
-  --sidebar-accent: oklch(0.31 0.045 75);
-  --sidebar-accent-foreground: oklch(0.95 0.012 80);
-  --sidebar-border: oklch(1 0 0 / 12%);
+  --sidebar-accent: oklch(0.275 0.005 286);
+  --sidebar-accent-foreground: oklch(0.96 0.003 286);
+  --sidebar-border: oklch(1 0 0 / 11%);
   --sidebar-ring: oklch(0.7 0.12 78);
+
+  /* Dark chip surfaces are composed, not inverted: a real elevated tint a step
+     above the card, with the ink lightened to clear AA on it. */
+  --chip-neutral: oklch(0.255 0.004 286);
+  --chip-neutral-edge: oklch(0.33 0.005 286);
+  --chip-primary: oklch(0.27 0.043 78);
+  --chip-primary-edge: oklch(0.385 0.059 78);
+  --chip-success: oklch(0.27 0.043 150);
+  --chip-success-edge: oklch(0.385 0.059 150);
+  --chip-info: oklch(0.27 0.043 245);
+  --chip-info-edge: oklch(0.385 0.059 245);
+  --chip-warning: oklch(0.27 0.043 68);
+  --chip-warning-edge: oklch(0.385 0.059 68);
+  --chip-destructive: oklch(0.27 0.043 27);
+  --chip-destructive-edge: oklch(0.385 0.059 27);
+  --chip-role-company: oklch(0.27 0.043 244);
+  --chip-role-company-edge: oklch(0.385 0.059 244);
+  --role-company-ink: oklch(0.82 0.097 244);
+  --chip-role-region: oklch(0.27 0.043 42);
+  --chip-role-region-edge: oklch(0.385 0.059 42);
+  --role-region-ink: oklch(0.78 0.135 42);
+  --chip-role-office: oklch(0.27 0.043 153);
+  --chip-role-office-edge: oklch(0.385 0.059 153);
+  --role-office-ink: oklch(0.76 0.139 153);
+  --chip-role-protected: oklch(0.27 0.043 310);
+  --chip-role-protected-edge: oklch(0.385 0.059 310);
+  --role-protected-ink: oklch(0.8 0.135 310);
 }
 
 @theme inline {
@@ -137,6 +279,7 @@
   --color-info: var(--info);
   --color-info-foreground: var(--info-foreground);
   --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
   --color-input: var(--input);
   --color-ring: var(--ring);
   --color-chart-1: var(--chart-1);
@@ -152,11 +295,59 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  /* Sub-xs chrome step: sidebar group labels, breadcrumbs, keycaps, counters.
+     One documented value so the chrome does not accumulate a private ramp of
+     10px/11px near-duplicates. Anything a reader must actually read stays at
+     text-xs or larger. */
+  /* Reading measure. 34rem holds ~70 characters at the 14px body step, which
+     is where a paragraph stops needing the reader to hunt for the next line.
+     Any prose block wider than its own content deserves this cap. */
+  --container-measure: 34rem;
+  --text-micro: 0.6875rem;
+  --text-micro--line-height: 1rem;
+  /* The stat figure, so MetricCard and anything that has to match it read the
+     same number from the system instead of restating a literal. */
+  --text-metric: 1.75rem;
+  --text-metric--line-height: 2.25rem;
+  /* 4 / 6 / 8 / 12 / 16. Chips and menu items at the bottom, panels at the top. */
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
   --radius-2xl: calc(var(--radius) + 8px);
+  --shadow-card: var(--elevation-card);
+  --shadow-card-hover: var(--elevation-card-hover);
+  --shadow-popover: var(--elevation-popover);
+  --color-brand-gold: var(--brand-gold);
+  --color-brand-gold-deep: var(--brand-gold-deep);
+  --color-brand-gold-soft: var(--brand-gold-soft);
+  --color-brand-on-gold: var(--brand-on-gold);
+  --color-on-media: var(--on-media);
+  --color-brand-ink: var(--brand-ink);
+  --color-chip-neutral: var(--chip-neutral);
+  --color-chip-neutral-edge: var(--chip-neutral-edge);
+  --color-chip-primary: var(--chip-primary);
+  --color-chip-primary-edge: var(--chip-primary-edge);
+  --color-chip-success: var(--chip-success);
+  --color-chip-success-edge: var(--chip-success-edge);
+  --color-chip-info: var(--chip-info);
+  --color-chip-info-edge: var(--chip-info-edge);
+  --color-chip-warning: var(--chip-warning);
+  --color-chip-warning-edge: var(--chip-warning-edge);
+  --color-chip-destructive: var(--chip-destructive);
+  --color-chip-destructive-edge: var(--chip-destructive-edge);
+  --color-chip-role-company: var(--chip-role-company);
+  --color-chip-role-company-edge: var(--chip-role-company-edge);
+  --color-role-company-ink: var(--role-company-ink);
+  --color-chip-role-region: var(--chip-role-region);
+  --color-chip-role-region-edge: var(--chip-role-region-edge);
+  --color-role-region-ink: var(--role-region-ink);
+  --color-chip-role-office: var(--chip-role-office);
+  --color-chip-role-office-edge: var(--chip-role-office-edge);
+  --color-role-office-ink: var(--role-office-ink);
+  --color-chip-role-protected: var(--chip-role-protected);
+  --color-chip-role-protected-edge: var(--chip-role-protected-edge);
+  --color-role-protected-ink: var(--role-protected-ink);
 }
 
 @layer base {
@@ -167,7 +358,8 @@
   html {
     @apply bg-background;
     /* Browser chrome ships with no design system of its own. */
-    scrollbar-color: var(--border) transparent;
+    scrollbar-color: var(--border-strong) transparent;
+    scroll-behavior: smooth;
   }
 
   body {
@@ -192,8 +384,93 @@
     vertical-align: middle;
   }
 
+  /*
+   * Everything below ships with a browser default that belongs to no design
+   * system: the scrollbar, the autofill wash, the native date picker's accent,
+   * the list marker, the selection colour. Left alone they are the loudest
+   * signal that a page was assembled rather than built, because they are the
+   * only pixels on screen that came from somewhere else.
+   */
+
   ::selection {
     background: color-mix(in oklab, var(--brand-gold) 35%, transparent);
+    /* Stated rather than inherited: the wash sits over ink of two different
+       lightnesses across the themes, and an unset colour leaves one of them
+       to chance. */
+    color: var(--foreground);
+  }
+
+  /* Native controls the app does not draw: the date picker's highlight, a
+     checkbox the browser owns, the range thumb. Gold, like everything else
+     that means "this one". */
+  :root {
+    accent-color: var(--brand-gold);
+  }
+
+  /* Firefox takes the two-value form; WebKit and Blink need the pseudo
+     elements. Both are stated so the bar matches in every supported browser. */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--border-strong);
+    border: 3px solid transparent;
+    border-radius: var(--radius-lg);
+    background-clip: content-box;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--muted-foreground);
+    background-clip: content-box;
+  }
+
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  /*
+   * Chrome paints its own pale wash over an autofilled field and ignores
+   * `background-color` to do it. The inset shadow is the only way to reach the
+   * surface, and the transition delay is the standard trick for holding it
+   * there — the browser repaints the wash on interaction otherwise.
+   */
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus,
+  textarea:-webkit-autofill,
+  select:-webkit-autofill {
+    -webkit-text-fill-color: var(--foreground);
+    -webkit-box-shadow: 0 0 0 1000px var(--card) inset;
+    caret-color: var(--primary);
+    transition: background-color 10000s ease-in-out 0s;
+  }
+
+  ::marker {
+    color: var(--muted-foreground);
+  }
+
+  ::placeholder {
+    color: var(--muted-foreground);
+  }
+
+  /* A widow on the last line of a paragraph is a typesetting defect the
+     browser will fix for free once asked. */
+  p,
+  li {
+    text-wrap: pretty;
+  }
+
+  /* Anything reached by a fragment or by keyboard focus stops clear of the
+     sticky header instead of underneath it. */
+  :target,
+  :focus-visible {
+    scroll-margin-block: 5rem;
   }
 
   /* Figures line up column-wise wherever numbers are compared or scanned. */
@@ -209,13 +486,92 @@
  * reliably outranks them, which is why biome flags the four lines below.
  */
 @media (prefers-reduced-motion: reduce) {
+  :root {
+    /* The properties whose transitions survive reduced motion: everything that
+       changes appearance in place, and nothing that moves. */
+    --reduced-motion-props: color, background-color, border-color, opacity, box-shadow;
+  }
+
   *,
   *::before,
   *::after {
+    /* Keep the transition, drop the movement. Restricting the property list is
+       what separates the two: colour, shadow, and opacity still ease, so hover,
+       focus, and press still read as feedback, while transforms and
+       layout-driving properties land instantly. A blanket 0.01ms would make
+       every state change a jump cut, and a colour fade is not movement. */
+    /* biome-ignore lint/complexity/noImportantStyles: must outrank Tailwind's inline transition utilities */
+    transition-property: var(--reduced-motion-props) !important;
+    /* biome-ignore lint/complexity/noImportantStyles: must outrank Tailwind's inline transition utilities */
+    transition-duration: 120ms !important;
+    /* biome-ignore lint/complexity/noImportantStyles: must outrank Tailwind's inline transition utilities */
     animation-duration: 0.01ms !important;
+    /* biome-ignore lint/complexity/noImportantStyles: must outrank Tailwind's inline transition utilities */
     animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
+    /* biome-ignore lint/complexity/noImportantStyles: must outrank Tailwind's inline transition utilities */
     scroll-behavior: auto !important;
+  }
+
+  /*
+   * Indeterminate progress is the exception, and it is not a small one.
+   *
+   * A spinner is the only thing telling a reader that work is still in flight.
+   * Stopped, it does not read as "reduced motion" — it reads as hung, which is
+   * worse than showing nothing at all. So it keeps turning, more slowly. A
+   * small glyph rotating on its own centre is not the large-area movement that
+   * reduced motion exists to suppress.
+   *
+   * The class selector outranks the universal rule above, so these win without
+   * needing to restate every longhand.
+   */
+  .animate-spin {
+    /* biome-ignore lint/complexity/noImportantStyles: must outrank the universal reduced-motion reset above */
+    animation: reduced-spin 1.6s linear infinite !important;
+  }
+
+  .animate-pulse {
+    /* biome-ignore lint/complexity/noImportantStyles: must outrank the universal reduced-motion reset above */
+    animation: reduced-pulse 2.4s ease-in-out infinite !important;
+  }
+
+  /* Same exemption, same reason: the route bar is the only thing saying a
+     request is still out. Stopped, it does not read as reduced motion — it
+     reads as a page that failed to load. It travels more slowly instead. */
+  .animate-route-progress {
+    /* biome-ignore lint/complexity/noImportantStyles: must outrank the universal reduced-motion reset above */
+    animation: route-progress 2.4s ease-in-out infinite !important;
+  }
+
+  /* Deferred content still announces itself — by fading in place rather than
+     rising, so the arrival is legible without any travel. */
+  .arrive {
+    /* biome-ignore lint/complexity/noImportantStyles: must outrank the universal reduced-motion reset above */
+    animation: arrive-fade 120ms ease-out !important;
+  }
+
+  /* `animate-ping` is deliberately absent. It marks something for attention
+     rather than reporting progress, the dot stays perfectly visible without it,
+     and an unprompted pulse is exactly the loop a reduced-motion reader asked
+     to be rid of. */
+}
+
+/* Reduced-motion counterparts, kept out of the media query so the keyframes
+   resolve wherever the rules above apply. */
+@keyframes reduced-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes reduced-pulse {
+  50% {
+    opacity: 0.65;
+  }
+}
+
+@keyframes arrive-fade {
+  from {
+    opacity: 0;
   }
 }
 
@@ -233,9 +589,228 @@
   }
 }
 
+/*
+ * The one indeterminate bar in the shell. An Inertia visit replaces the page
+ * without a browser navigation, so nothing in the chrome moves and a slow
+ * request looks like a dead click. The travelling sweep says a request is out;
+ * it cannot say how far along it is, so it never pretends to by filling.
+ */
+@keyframes route-progress {
+  0% {
+    transform: translateX(-100%) scaleX(0.4);
+  }
+  50% {
+    transform: translateX(0%) scaleX(0.6);
+  }
+  100% {
+    transform: translateX(100%) scaleX(0.4);
+  }
+}
+
+@keyframes dialog-overlay-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes dialog-overlay-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes dialog-content-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% + 8px)) scale(0.985);
+  }
+}
+
+/*
+ * The command palette is anchored near the top of the viewport rather than
+ * centred, so it rises from slightly above its resting place — the same
+ * gesture as a dialog, without the -50% vertical offset a centred surface
+ * carries in its transform.
+ */
+@keyframes palette-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -10px) scale(0.98);
+  }
+}
+
+/*
+ * An inline listbox anchored under its input — a recipient search, a payee
+ * search. It is not a centred palette and not an edge panel: it belongs to the
+ * field above it, so it rises the 4px it is offset by rather than travelling.
+ * Short, because the reader is mid-keystroke and the panel has to be readable
+ * by the time the next character lands.
+ */
+@keyframes listbox-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+/*
+ * Sheets slide from a viewport edge. Animations are bound with attribute
+ * selectors — not Tailwind `data-[state=*]:animate-*` variants — because
+ * custom utilities in `@layer utilities` do not receive generated variant
+ * classes here, so those class names were no-ops and the panel snapped open.
+ * Timing matches DESIGN.md panel travel: `--motion-slow` on `--ease-standard`.
+ */
+@keyframes sheet-overlay-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes sheet-overlay-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes sheet-in-right {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes sheet-out-right {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes sheet-in-left {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes sheet-out-left {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-100%);
+  }
+}
+
+@keyframes sheet-in-top {
+  from {
+    transform: translateY(-100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes sheet-out-top {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-100%);
+  }
+}
+
+@keyframes sheet-in-bottom {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes sheet-out-bottom {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(100%);
+  }
+}
+
+[data-slot="sheet-overlay"][data-state="open"] {
+  animation: sheet-overlay-in var(--motion-base) var(--ease-standard) both;
+}
+
+[data-slot="sheet-overlay"][data-state="closed"] {
+  animation: sheet-overlay-out var(--motion-fast) ease-in both;
+}
+
+[data-slot="sheet-content"][data-side="right"][data-state="open"] {
+  animation: sheet-in-right var(--motion-slow) var(--ease-standard) both;
+}
+
+[data-slot="sheet-content"][data-side="right"][data-state="closed"] {
+  animation: sheet-out-right var(--motion-base) ease-in both;
+}
+
+[data-slot="sheet-content"][data-side="left"][data-state="open"] {
+  animation: sheet-in-left var(--motion-slow) var(--ease-standard) both;
+}
+
+[data-slot="sheet-content"][data-side="left"][data-state="closed"] {
+  animation: sheet-out-left var(--motion-base) ease-in both;
+}
+
+[data-slot="sheet-content"][data-side="top"][data-state="open"] {
+  animation: sheet-in-top var(--motion-slow) var(--ease-standard) both;
+}
+
+[data-slot="sheet-content"][data-side="top"][data-state="closed"] {
+  animation: sheet-out-top var(--motion-base) ease-in both;
+}
+
+[data-slot="sheet-content"][data-side="bottom"][data-state="open"] {
+  animation: sheet-in-bottom var(--motion-slow) var(--ease-standard) both;
+}
+
+[data-slot="sheet-content"][data-side="bottom"][data-state="closed"] {
+  animation: sheet-out-bottom var(--motion-base) ease-in both;
+}
+
 @layer utilities {
   .arrive {
-    animation: arrive 240ms cubic-bezier(0.16, 1, 0.3, 1);
+    animation: arrive var(--motion-base) var(--ease-standard);
+  }
+
+  .animate-route-progress {
+    animation: route-progress 1.15s var(--ease-standard) infinite;
+  }
+
+  .animate-palette {
+    animation: palette-in var(--motion-base) var(--ease-standard);
+  }
+
+  .animate-listbox {
+    animation: listbox-in var(--motion-fast) var(--ease-standard);
+  }
+
+  .animate-dialog-overlay-in {
+    animation: dialog-overlay-in var(--motion-base) var(--ease-standard);
+  }
+
+  .animate-dialog-overlay-out {
+    animation: dialog-overlay-out var(--motion-fast) ease-in;
+  }
+
+  .animate-dialog-content {
+    animation: dialog-content-in var(--motion-base) var(--ease-standard);
   }
 
   .brand-text {
@@ -250,11 +825,11 @@
   /* The signature gold action — sign-in and other brand moments. */
   .brand-action {
     background: var(--brand-gold);
-    color: var(--brand-ink);
+    color: var(--brand-on-gold);
   }
 
   .brand-action:hover {
-    background: color-mix(in oklab, var(--brand-gold) 92%, var(--brand-ink));
+    background: var(--brand-gold-deep);
   }
 
   .page-shell {
@@ -264,5 +839,129 @@
   /* Gold-tinted well behind Lucide marks — see IconWell. */
   .brand-well {
     background: color-mix(in oklab, var(--brand-gold) 18%, transparent);
+  }
+
+  /* Text laid over a photograph, with no scrim, box, or gradient beneath it.
+     The legibility comes from a shadow on the glyphs themselves, so the image
+     is shown exactly as uploaded. A shadow is weaker than a scrim — a very
+     bright photograph can still crowd the headline — which is why this is
+     reserved for decorative hero art with the same words available as text
+     elsewhere on the page. */
+  .on-media-ink {
+    color: var(--on-media);
+    text-shadow:
+      0 1px 2px rgb(0 0 0 / 0.55),
+      0 2px 12px rgb(0 0 0 / 0.4);
+  }
+}
+
+/*
+ * Print.
+ *
+ * A brokerage prints: a contract, a report, a roster taken into a meeting. The
+ * chrome is navigation for a screen and is worthless on paper, so it goes, and
+ * what is left is the record itself in black on white. Panels keep their rules
+ * — the structure is the document — and lose their fills and shadows, which
+ * only cost toner.
+ */
+@media print {
+  :root {
+    --background: #fff;
+    --card: #fff;
+    --foreground: #000;
+    --card-foreground: #000;
+    --muted-foreground: #333;
+    --border: #999;
+    --border-strong: #666;
+  }
+
+  body {
+    background: #fff;
+  }
+
+  /* A row split across a page break is a row a reader has to reassemble. */
+  tr,
+  img,
+  blockquote {
+    break-inside: avoid;
+  }
+
+  thead {
+    display: table-header-group;
+  }
+
+  h1,
+  h2,
+  h3 {
+    break-after: avoid;
+  }
+
+  [data-slot="card"],
+  [data-slot="table-container"] {
+    /* biome-ignore lint/complexity/noImportantStyles: outranks the shadow utility on every panel */
+    box-shadow: none !important;
+    break-inside: avoid;
+  }
+}
+
+/*
+ * Sonner's richColors ship their own light/dark HSL palette. Remap every
+ * surface onto hub tokens so toasts match Callout / StatusBadge chips and
+ * follow the document ``.dark`` class instead of Sonner's private theme sheet.
+ * Specificity matches Sonner's ``[data-sonner-toaster][data-sonner-theme=…]``
+ * rules so the remapping wins.
+ */
+[data-sonner-toaster][data-sonner-theme="light"],
+[data-sonner-toaster][data-sonner-theme="dark"] {
+  --normal-bg: var(--card);
+  --normal-bg-hover: var(--muted);
+  --normal-border: var(--border);
+  --normal-border-hover: var(--border-strong);
+  --normal-text: var(--foreground);
+
+  --success-bg: var(--chip-success);
+  --success-border: var(--chip-success-edge);
+  --success-text: var(--success);
+
+  --info-bg: var(--chip-info);
+  --info-border: var(--chip-info-edge);
+  --info-text: var(--info);
+
+  --warning-bg: var(--chip-warning);
+  --warning-border: var(--chip-warning-edge);
+  --warning-text: var(--warning-ink);
+
+  --error-bg: var(--chip-destructive);
+  --error-border: var(--chip-destructive-edge);
+  --error-text: var(--destructive);
+}
+
+[data-sonner-toaster][data-sonner-theme="light"]
+  [data-sonner-toast][data-invert="true"],
+[data-sonner-toaster][data-sonner-theme="dark"]
+  [data-sonner-toast][data-invert="true"] {
+  --normal-bg: var(--foreground);
+  --normal-border: var(--foreground);
+  --normal-text: var(--background);
+}
+
+/*
+ * Windows High Contrast and friends replace the palette wholesale and drop
+ * background colours, which would take every border defined as a background
+ * with them. This app is mostly borders, so they are restated in system
+ * colours rather than left to disappear.
+ */
+@media (forced-colors: active) {
+  [data-slot="card"],
+  [data-slot="table-container"],
+  [data-slot="input"],
+  [data-slot="select-trigger"],
+  [data-slot="badge"] {
+    border: 1px solid CanvasText;
+  }
+
+  :focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
   }
 }

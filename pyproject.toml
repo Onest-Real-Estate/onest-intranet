@@ -23,32 +23,43 @@ dependencies = [
     "celery-types>=0.26.0",
     "django-types>=0.24.0",
     "pillow>=12.3.0",
+    "python-docx>=1.2.0",
+    "pypdf>=6.16.2",
+    "pyjwt>=2.13.0",
+    "reportlab>=5.0.1",
+    "pyhanko[opentype]>=0.36.2",
 ]
 
 [dependency-groups]
 dev = [
     "django-silk>=5.5.0",  # SQL profiling (N+1 detection); dev only, see config/settings.py
     "django-types>=0.24.0",
+    "faker>=40.36.0",
     "pytest>=8.3.0",
     "pytest-django>=4.9.0",
+    "pytest-xdist>=3.8.0",
     "ruff>=0.16.3",
     "ty>=0.0.72",
 ]
 
 [tool.pytest.ini_options]
-DJANGO_SETTINGS_MODULE = "config.settings"
+DJANGO_SETTINGS_MODULE = "config.settings_test"
 testpaths = ["apps"]
+addopts = ["-n", "auto", "--reuse-db"]
 
 [tool.ruff]
 line-length = 88
 target-version = "py313"
-exclude = ["assets", "staticfiles", "frontend", "apps/**/migrations"]
+exclude = ["assets", "staticfiles", "frontend", "apps/**/migrations", ".agents"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "SIM", "C4"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["apps", "config"]
+
+[tool.ruff.lint.per-file-ignores]
+"config/settings_test.py" = ["F405"]
 
 [tool.ty.environment]
 # Match the project's minimum Python version (project.requires-python).

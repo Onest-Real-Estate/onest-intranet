@@ -22,7 +22,6 @@ def remove_role_groups(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("user", "0004_office_and_profile_fields"),
     ]

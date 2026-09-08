@@ -1,8 +1,93 @@
 from django.urls import path
 
 from . import views
+from .quick_access import views as quick_access_views
+from .reporting import views as reporting_views
+from .search import views as search_views
 
 urlpatterns = [
     path("dashboard", views.dashboard, name="dashboard"),
+    path(
+        "dashboard/action-items",
+        views.action_items_queue,
+        name="action_items_queue",
+    ),
+    path("design-system", views.design_system, name="design_system"),
+    # Global search. The dialog polls the JSON endpoint; the page is a real
+    # linkable destination for "see all results".
+    path("search", search_views.search_page, name="search"),
+    path(
+        "search/suggestions",
+        search_views.search_suggestions,
+        name="search_suggestions",
+    ),
     path("hub/<slug:section>", views.coming_soon, name="coming_soon"),
+    path("reports", reporting_views.report_catalog, name="report_catalog"),
+    path(
+        "reports/<slug:report_key>",
+        reporting_views.report_detail,
+        name="report_detail",
+    ),
+    path(
+        "reports/<slug:report_key>/exports",
+        reporting_views.report_export_create,
+        name="report_export_create",
+    ),
+    path(
+        "reports/exports/<int:job_id>",
+        reporting_views.report_export_status,
+        name="report_export_status",
+    ),
+    path(
+        "reports/exports/<int:job_id>/download",
+        reporting_views.report_export_download,
+        name="report_export_download",
+    ),
+    # The dashboard panel's fire-and-forget click beacon. Not administrative:
+    # it answers 204 to any signed-in reader and never says what it recorded.
+    path(
+        "dashboard/quick-access/click",
+        quick_access_views.quick_access_click,
+        name="quick_access_click",
+    ),
+    # Quick Access administration. The list itself is an operations
+    # destination (below); these are the endpoints it drives.
+    path(
+        "operations/quick-access/new",
+        quick_access_views.quick_access_new,
+        name="quick_access_new",
+    ),
+    path(
+        "operations/quick-access/reorder",
+        quick_access_views.quick_access_reorder,
+        name="quick_access_reorder",
+    ),
+    path(
+        "operations/quick-access/submit",
+        quick_access_views.quick_access_create,
+        name="quick_access_create",
+    ),
+    path(
+        "operations/quick-access/<int:link_id>",
+        quick_access_views.quick_access_edit,
+        name="quick_access_edit",
+    ),
+    path(
+        "operations/quick-access/<int:link_id>/submit",
+        quick_access_views.quick_access_update,
+        name="quick_access_update",
+    ),
+    path(
+        "operations/quick-access/<int:link_id>/state",
+        quick_access_views.quick_access_state,
+        name="quick_access_state",
+    ),
+    *[
+        path(
+            destination.path,
+            views.OPERATIONS_VIEWS[destination.route_name],
+            name=destination.route_name,
+        )
+        for destination in views.OPERATIONS_DESTINATIONS
+    ],
 ]

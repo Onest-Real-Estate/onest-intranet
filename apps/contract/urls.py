@@ -1,0 +1,162 @@
+from django.urls import path
+
+from apps.contract.views.administration_views import (
+    contract_template_action,
+    contract_template_create,
+    contract_template_field_layout,
+    contract_template_preview_pdf,
+    contract_template_source_pdf,
+    contract_template_update,
+    contract_template_workspace,
+)
+from apps.contract.views.agent_contract_views import (
+    agent_contract_artifact_download,
+    agent_contract_create,
+    agent_contract_create_amendment,
+    agent_contract_create_replacement,
+    agent_contract_lifecycle,
+    agent_contract_new,
+    agent_contract_preview,
+    agent_contract_recipient_search,
+    agent_contract_signed_pdf_verify,
+    agent_contract_template_options,
+    agent_contract_update,
+    agent_contract_validate,
+    agent_contract_workspace,
+)
+from apps.contract.views.my_contract_views import (
+    my_contract,
+    my_contract_artifact_preview,
+    my_contract_signed_pdf_verify,
+)
+from apps.contract.views.signing_views import (
+    my_contract_sign,
+    my_contract_sign_complete,
+    my_contract_sign_status,
+)
+
+urlpatterns = [
+    path("my-contract", my_contract, name="my_contract"),
+    path("my-contract/sign", my_contract_sign, name="my_contract_sign"),
+    path(
+        "my-contract/sign/complete",
+        my_contract_sign_complete,
+        name="my_contract_sign_complete",
+    ),
+    path(
+        "my-contract/sign/status",
+        my_contract_sign_status,
+        name="my_contract_sign_status",
+    ),
+    path(
+        "my-contract/<uuid:public_id>/artifacts/<uuid:artifact_public_id>/preview",
+        my_contract_artifact_preview,
+        name="my_contract_artifact_preview",
+    ),
+    path(
+        "my-contract/<uuid:public_id>/signed-pdf/verify",
+        my_contract_signed_pdf_verify,
+        name="my_contract_signed_pdf_verify",
+    ),
+    path(
+        "operations/contract-templates/templates/create",
+        contract_template_create,
+        name="contract_template_create",
+    ),
+    path(
+        "operations/contract-templates/templates/<int:version_id>",
+        contract_template_workspace,
+        name="contract_template_workspace",
+    ),
+    path(
+        "operations/contract-templates/templates/<int:version_id>/save",
+        contract_template_update,
+        name="contract_template_update",
+    ),
+    path(
+        "operations/contract-templates/templates/<int:version_id>/action",
+        contract_template_action,
+        name="contract_template_action",
+    ),
+    path(
+        "operations/contract-templates/templates/<int:version_id>/field-layout",
+        contract_template_field_layout,
+        name="contract_template_field_layout",
+    ),
+    path(
+        "operations/contract-templates/templates/<int:version_id>/source.pdf",
+        contract_template_source_pdf,
+        name="contract_template_source_pdf",
+    ),
+    path(
+        "operations/contract-templates/templates/<int:version_id>/preview.pdf",
+        contract_template_preview_pdf,
+        name="contract_template_preview_pdf",
+    ),
+    path(
+        "operations/agent-contracts/new",
+        agent_contract_new,
+        name="agent_contract_new",
+    ),
+    path(
+        "operations/agent-contracts/create",
+        agent_contract_create,
+        name="agent_contract_create",
+    ),
+    path(
+        "operations/agent-contracts/recipients",
+        agent_contract_recipient_search,
+        name="agent_contract_recipient_search",
+    ),
+    path(
+        "operations/agent-contracts/template-options",
+        agent_contract_template_options,
+        name="agent_contract_template_options",
+    ),
+    path(
+        "operations/agent-contracts/<uuid:public_id>",
+        agent_contract_workspace,
+        name="agent_contract_workspace",
+    ),
+    path(
+        "operations/agent-contracts/<uuid:public_id>/save",
+        agent_contract_update,
+        name="agent_contract_update",
+    ),
+    path(
+        "operations/agent-contracts/<uuid:public_id>/amend",
+        agent_contract_create_amendment,
+        name="agent_contract_create_amendment",
+    ),
+    path(
+        "operations/agent-contracts/<uuid:public_id>/replace",
+        agent_contract_create_replacement,
+        name="agent_contract_create_replacement",
+    ),
+    path(
+        "operations/agent-contracts/<uuid:public_id>/lifecycle",
+        agent_contract_lifecycle,
+        name="agent_contract_lifecycle",
+    ),
+    path(
+        "operations/agent-contracts/<uuid:public_id>/validate",
+        agent_contract_validate,
+        name="agent_contract_validate",
+    ),
+    path(
+        "operations/agent-contracts/<uuid:public_id>/preview",
+        agent_contract_preview,
+        name="agent_contract_preview",
+    ),
+    path(
+        "operations/agent-contracts/<uuid:public_id>/artifacts/"
+        "<uuid:artifact_public_id>/download",
+        agent_contract_artifact_download,
+        name="agent_contract_artifact_download",
+    ),
+    path(
+        "operations/agent-contracts/<uuid:public_id>/signed-pdf/verify",
+        agent_contract_signed_pdf_verify,
+        name="agent_contract_signed_pdf_verify",
+    ),
+]

@@ -28,6 +28,12 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    # Registers the PostgreSQL lookups global search ranks with — notably
+    # ``__trigram_similar``, which compiles to the ``%`` operator the trigram
+    # index can answer. Harmless on SQLite: the app only attaches behaviour to
+    # PostgreSQL connections, and the search code takes its substring path
+    # there anyway. See apps/web/search/ranking.py.
+    "django.contrib.postgres",
     # Third-party
     "django_vite",
     "inertia",
@@ -43,6 +49,16 @@ INSTALLED_APPS = [
     "apps.user",
     "apps.web",
     "apps.audit",
+    "apps.notifications",
+    "apps.announcements",
+    "apps.contract",
+    "apps.operational_tasks",
+    "apps.it_support",
+    "apps.onboarding_tools",
+    "apps.feedback",
+    "apps.inventory",
+    "apps.reservations",
+    "apps.training",
 ]
 
 # Silk (SQL profiling, N+1 detection) is dev-only: its web UI lives at
@@ -56,9 +72,16 @@ MIDDLEWARE = [
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
+    "apps.audit.middleware.AuditContextMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
+    # After CSRF so its own checks are untouched, and before any view runs:
+    # Inertia posts `application/json`, which Django never parses into
+    # `request.POST`, so without this every field of every Inertia mutation
+    # arrives empty. See `apps.web.middleware.InertiaJsonPostMiddleware`.
+    "apps.web.middleware.InertiaJsonPostMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "allauth.account.middleware.AccountMiddleware",
+    "apps.web.middleware.AuthorizationPolicyMiddleware",
     # New SSO users are sent through the /onboarding flow until their profile
     # is complete (apps/user/middleware.py). Runs after auth so request.user
     # is available, before Inertia so redirects pass through cleanly.
@@ -217,6 +240,18 @@ CELERY_RESULT_BACKEND = config(
 )
 CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
 CELERY_TIMEZONE = TIME_ZONE
+# Run tasks inline instead of queueing them. Off by default, so production
+# always goes through the broker and a slow job never blocks a request.
+#
+# Set CELERY_TASK_ALWAYS_EAGER=1 in a local .env when running the app without
+# `make up`: an enqueued task with no worker to consume it never completes, and
+# an announcement's hero image then sits in PENDING for ever, which the publish
+# checklist honestly — but unhelpfully — reports as "still being processed".
+# `manage.py process_announcement_media` clears a backlog that already exists.
+CELERY_TASK_ALWAYS_EAGER = config("CELERY_TASK_ALWAYS_EAGER", default=False, cast=bool)
+# Eager tasks re-raise instead of swallowing: a local failure should be a
+# traceback, not a silently quarantined file.
+CELERY_TASK_EAGER_PROPAGATES = CELERY_TASK_ALWAYS_EAGER
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -292,6 +327,64 @@ EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD", default="")
 EMAIL_USE_TLS = config("EMAIL_USE_TLS", default=False, cast=bool)
 DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default="Onest <noreply@onest.local>")
 
+# Absolute base for links in outbound mail. Notification email carries no record
+# detail — only a link back into the hub, which re-authenticates on arrival — so
+# this must point at the hub itself and never at a storage or document host.
+SITE_BASE_URL = config("SITE_BASE_URL", default="http://localhost:8000").rstrip("/")
+
+# Hub-native agent contract e-sign (PKCS#12 org seal + ceremony TTL).
+CONTRACT_SIGNING_INTENT_TTL_SECONDS = config(
+    "CONTRACT_SIGNING_INTENT_TTL_SECONDS", default=900, cast=int
+)
+CONTRACT_SIGNING_CERT_PATH = config("CONTRACT_SIGNING_CERT_PATH", default="")
+CONTRACT_SIGNING_CERT_PASSPHRASE = config(
+    "CONTRACT_SIGNING_CERT_PASSPHRASE", default=""
+)
+# When DEBUG is true and no cert is configured, allow unsigned completion.
+CONTRACT_SIGNING_ALLOW_UNSIGNED_DEV = config(
+    "CONTRACT_SIGNING_ALLOW_UNSIGNED_DEV", default=True, cast=bool
+)
+# Azure OpenAI / OpenAI-compatible vision for field suggestions (optional).
+CONTRACT_FIELD_AI_ENDPOINT = config("CONTRACT_FIELD_AI_ENDPOINT", default="")
+CONTRACT_FIELD_AI_API_KEY = config("CONTRACT_FIELD_AI_API_KEY", default="")
+CONTRACT_FIELD_AI_DEPLOYMENT = config("CONTRACT_FIELD_AI_DEPLOYMENT", default="")
+CONTRACT_FIELD_AI_API_VERSION = config(
+    "CONTRACT_FIELD_AI_API_VERSION", default="2024-08-01-preview"
+)
+CONTRACT_FIELD_AI_MODEL = config("CONTRACT_FIELD_AI_MODEL", default="gpt-4o")
+
+# ---------------------------------------------------------------------------
+# Notification push providers (email is always on; others opt-in)
+# ---------------------------------------------------------------------------
+# Microsoft Graph / Slack stay registered but dormant until enabled *and*
+# credentialed. Producers queue every enabled channel through the shared
+# delivery ledger — swapping a provider never rewrites domain code.
+NOTIFICATION_MICROSOFT_ENABLED = config(
+    "NOTIFICATION_MICROSOFT_ENABLED", default=False, cast=bool
+)
+NOTIFICATION_MICROSOFT_CLIENT_ID = config(
+    "NOTIFICATION_MICROSOFT_CLIENT_ID", default=""
+)
+NOTIFICATION_MICROSOFT_CLIENT_SECRET = config(
+    "NOTIFICATION_MICROSOFT_CLIENT_SECRET", default=""
+)
+NOTIFICATION_MICROSOFT_TENANT = config("NOTIFICATION_MICROSOFT_TENANT", default="")
+NOTIFICATION_SLACK_ENABLED = config(
+    "NOTIFICATION_SLACK_ENABLED", default=False, cast=bool
+)
+NOTIFICATION_SLACK_BOT_TOKEN = config("NOTIFICATION_SLACK_BOT_TOKEN", default="")
+
+# Contract reminder / warning cadences (Celery beat tasks re-check state).
+CONTRACT_SIGNATURE_REMINDER_DAYS = (3, 7, 14)
+CONTRACT_EXPIRATION_WARNING_DAYS = (30, 14, 7)
+
+# Inventory return reminder / escalation cadences (beat tasks re-check state).
+INVENTORY_NOTIFICATION_POLICY_VERSION = 1
+INVENTORY_RETURN_DUE_SOON_DAYS = (1, 3)
+INVENTORY_RETURN_OVERDUE_AGENT_DAYS = (1, 3, 7)
+INVENTORY_RETURN_OVERDUE_STAFF_DAYS = (1, 3, 7)
+INVENTORY_LOST_DAMAGED_STAFF_DAYS = (1, 3)
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # ---------------------------------------------------------------------------
@@ -313,7 +406,20 @@ DJANGO_VITE = {
 # ---------------------------------------------------------------------------
 INERTIA_LAYOUT = "layout.html"
 # Bump whenever the frontend bundle changes so stale clients get a full reload.
-INERTIA_VERSION = "1"
+INERTIA_VERSION = "33"
+
+# Optional external help centre. The shell exposes it only when it is an
+# absolute, credential-free HTTPS URL; an empty or unsafe value leaves the
+# future-facing help entry point disabled.
+HUB_HELP_URL = config("HUB_HELP_URL", default="")
+
+# Quick Access click analytics. Optional, and off is a supported answer: the
+# beacon endpoint keeps returning 204 either way, so turning this off costs a
+# count and never a click. Rows carry a link's stable key and never its URL —
+# see apps/web/quick_access/analytics.py.
+QUICK_ACCESS_CLICK_ANALYTICS = config(
+    "QUICK_ACCESS_CLICK_ANALYTICS", default=True, cast=bool
+)
 
 # Inertia's HTTP client reads the XSRF-TOKEN cookie and echoes it back as the
 # X-XSRF-TOKEN header, so we align Django's CSRF cookie/header names with that.

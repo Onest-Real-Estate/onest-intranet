@@ -5,20 +5,23 @@ import type * as React from "react";
 import { cn } from "@/lib/utils";
 
 const badgeVariants = cva(
-  "inline-flex items-center justify-center rounded-full border px-2 py-0.5 text-xs font-semibold tracking-[0.02em] w-fit whitespace-nowrap shrink-0 [&>svg]:size-3 gap-1 [&>svg]:pointer-events-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive transition-[color,box-shadow] overflow-visible",
+  "inline-flex items-center justify-center rounded-md border px-2 py-0.5 text-xs font-medium w-fit whitespace-nowrap shrink-0 [&>svg]:size-3.5 gap-1.5 [&>svg]:pointer-events-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive transition-[color,box-shadow] overflow-visible",
   {
     variants: {
       variant: {
-        default:
-          "border-transparent bg-primary text-primary-foreground [a&]:hover:bg-primary/90",
+        default: "border-chip-primary-edge bg-chip-primary text-primary",
         secondary:
-          "border-transparent bg-secondary text-secondary-foreground [a&]:hover:bg-secondary/90",
+          "border-chip-neutral-edge bg-chip-neutral text-muted-foreground [a&]:hover:bg-secondary",
         destructive:
-          "border-transparent bg-destructive text-white [a&]:hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60",
+          "border-chip-destructive-edge bg-chip-destructive text-destructive",
+        // The one variant with no fill: a hairline pill for a category label
+        // that should not read as a state. The hairline is still the system's,
+        // not `currentColor` — an unset border-color draws the full-strength
+        // text colour and out-weighs every filled chip beside it.
         outline:
-          "text-foreground [a&]:hover:bg-accent [a&]:hover:text-accent-foreground",
-        success: "border-transparent bg-success/15 text-success",
-        warning: "border-transparent bg-warning/20 text-warning-ink",
+          "border-chip-neutral-edge text-foreground [a&]:hover:bg-accent [a&]:hover:text-accent-foreground",
+        success: "border-chip-success-edge bg-chip-success text-success",
+        warning: "border-chip-warning-edge bg-chip-warning text-warning-ink",
       },
     },
     defaultVariants: {

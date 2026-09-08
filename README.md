@@ -1,5 +1,7 @@
 # Onest — Django · Inertia.js · React · shadcn/ui starter
 
+[![CI](https://github.com/Onest-Real-Estate/onest-intranet/actions/workflows/ci.yml/badge.svg)](https://github.com/Onest-Real-Estate/onest-intranet/actions/workflows/ci.yml)
+
 A modern full-stack starter with a **Django** backend serving an **Inertia.js** **React**
 frontend, **Microsoft (Entra ID) SSO** via **django-allauth**, and type-safe Django
 URLs in TypeScript via **django-typescript-routes**. The UI is built with **shadcn/ui**
@@ -137,6 +139,17 @@ logout URLs are exempt.
   page is `frontend/pages/Onboarding.tsx`.
 
 ## Permissions & roles
+
+The scoped operational onboarding queue, deterministic milestone rules, source
+adapter contract, action audit behavior, and task-title retention policy are
+documented in [`docs/onboarding-operations.md`](docs/onboarding-operations.md).
+
+The reviewed route-to-permission mapping for the shared administrative navigation
+is documented in [`docs/administrative-navigation.md`](docs/administrative-navigation.md).
+The contributor contract for the configuration-driven desktop/mobile registry is
+documented in [`docs/navigation.md`](docs/navigation.md).
+The authenticated layout, page-context, failure-state, and shared-prop contract is
+documented in [`docs/application-shell.md`](docs/application-shell.md).
 
 Roles are Django **Groups** (`auth.Group`), plus Django's built-in
 `is_superuser` flag for Superadmin. Permissions are Django's `app.codename`
@@ -302,6 +315,7 @@ The compose file fails fast with a helpful message if any of these are missing:
 | `AWS_S3_URL_PROTOCOL`     | `https:`                         |                                                      |
 | `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `EMAIL_USE_TLS` | `587` / TLS on | External SMTP relay (`EMAIL_HOST` is required to send mail) |
 | `DEFAULT_FROM_EMAIL`      | `Onest <noreply@onest.local>`    |                                                      |
+| `SITE_BASE_URL`           | `http://localhost:8000`          | Absolute base for links in outbound mail. Notification email carries no record detail, only a link back into the hub — point this at the app, never at a storage host |
 | `WEB_PORT`                | `8000`                           | Host port the web service is published on            |
 | `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET`, `MICROSOFT_TENANT` | *(empty)* | Microsoft SSO — same values as local dev  |
 | `GUNICORN_WORKERS` / `GUNICORN_THREADS` | `3` / `2`              |                                                      |
@@ -327,6 +341,7 @@ EMAIL_PORT=587
 EMAIL_HOST_USER=<smtp user>
 EMAIL_HOST_PASSWORD=<smtp password>
 EMAIL_USE_TLS=1
+SITE_BASE_URL=https://app.example.com
 
 MICROSOFT_CLIENT_ID=<Application (client) ID>
 MICROSOFT_CLIENT_SECRET=<client secret>
@@ -339,8 +354,11 @@ MICROSOFT_TENANT=common
 > `AWS_S3_CUSTOM_DOMAIN` at it).
 
 > **Local development** uses a different stack: `deployment/compose.dev.yaml`
-> (via `make up`) bundles Postgres, Redis, Mailpit, MinIO, DocuSeal, and the
-> Celery worker + beat scheduler, so nothing external is needed.
+> (via `make up`) bundles Postgres, Redis, Mailpit, MinIO, and the Celery
+> worker + beat scheduler, so nothing external is needed. Agent contract
+> templates and signing are Hub-native (field placer + SignaturePad + optional
+> org PKCS#12 seal). See `docs/agent-contracts.md` and set
+> `CONTRACT_SIGNING_*` / optional `CONTRACT_FIELD_AI_*` in `.env`.
 
 ## Background tasks (Celery)
 

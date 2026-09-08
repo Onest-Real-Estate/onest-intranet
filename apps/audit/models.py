@@ -152,3 +152,119 @@ class EventDelivery(models.Model):
     @property
     def is_exhausted(self) -> bool:
         return self.attempts >= self.MAX_ATTEMPTS
+
+
+class AuditEvent(models.Model):
+    """Append-only audit trail for sensitive business and security actions."""
+
+    class ActorType(models.TextChoices):
+        USER = "user", _("User")
+        SYSTEM = "system", _("System")
+        SERVICE = "service", _("Service")
+        ANONYMOUS = "anonymous", _("Anonymous")
+
+    class Outcome(models.TextChoices):
+        SUCCESS = "success", _("Success")
+        DENIED = "denied", _("Denied")
+        FAILURE = "failure", _("Failure")
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    payload_version = models.PositiveSmallIntegerField(
+        _("payload version"), default=1, db_index=True
+    )
+    action = models.CharField(_("action"), max_length=120, db_index=True)
+
+    actor_type = models.CharField(
+        _("actor type"),
+        max_length=16,
+        choices=ActorType.choices,
+        default=ActorType.USER,
+        db_index=True,
+    )
+    actor_id = models.CharField(
+        _("actor ID"), max_length=255, blank=True, db_index=True
+    )
+    actor_label = models.CharField(_("actor label"), max_length=255, blank=True)
+    actor_snapshot = models.JSONField(_("actor snapshot"), default=dict)
+    impersonated_by = models.JSONField(_("impersonated by"), default=dict, blank=True)
+
+    target_type = models.CharField(_("target type"), max_length=120, db_index=True)
+    target_id = models.CharField(
+        _("target ID"), max_length=255, blank=True, db_index=True
+    )
+    target_label = models.CharField(_("target label"), max_length=255, blank=True)
+    target_snapshot = models.JSONField(_("target snapshot"), default=dict)
+
+    organization_id = models.CharField(
+        _("organization ID"), max_length=255, blank=True, db_index=True
+    )
+    office_id = models.CharField(
+        _("office ID"), max_length=255, blank=True, db_index=True
+    )
+    region_id = models.CharField(
+        _("region ID"), max_length=255, blank=True, db_index=True
+    )
+
+    source = models.CharField(_("source"), max_length=64, default="app", db_index=True)
+    channel = models.CharField(_("channel"), max_length=64, blank=True)
+    request_id = models.CharField(
+        _("request ID"), max_length=255, blank=True, db_index=True
+    )
+    correlation_id = models.UUIDField(_("correlation ID"), null=True, blank=True)
+    remote_addr = models.CharField(_("remote address"), max_length=128, blank=True)
+    user_agent = models.CharField(_("user agent"), max_length=512, blank=True)
+
+    outcome = models.CharField(
+        _("outcome"),
+        max_length=16,
+        choices=Outcome.choices,
+        default=Outcome.SUCCESS,
+        db_index=True,
+    )
+    reason = models.TextField(_("reason"), blank=True)
+
+    before = models.JSONField(_("before"), default=dict, blank=True)
+    after = models.JSONField(_("after"), default=dict, blank=True)
+    changes = models.JSONField(_("changes"), default=dict, blank=True)
+    metadata = models.JSONField(_("metadata"), default=dict, blank=True)
+
+    occurred_at = models.DateTimeField(
+        _("occurred at"), default=timezone.now, db_index=True
+    )
+    recorded_at = models.DateTimeField(_("recorded at"), auto_now_add=True)
+
+    class Meta:
+        ordering = ["-occurred_at", "-recorded_at"]
+        verbose_name = _("audit event")
+        verbose_name_plural = _("audit events")
+        permissions = [
+            ("can_view_audit_events", "Can view audit events"),
+            ("can_export_audit_events", "Can export audit events"),
+            (
+                "can_view_activity_timeline",
+                "Can view user-facing activity timelines",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["occurred_at"], name="audit_ae_occurred"),
+            models.Index(fields=["actor_type", "actor_id"], name="audit_ae_actor"),
+            models.Index(fields=["action", "occurred_at"], name="audit_ae_action"),
+            models.Index(fields=["target_type", "target_id"], name="audit_ae_target"),
+            models.Index(
+                fields=["organization_id", "occurred_at"], name="audit_ae_org"
+            ),
+            models.Index(fields=["office_id", "occurred_at"], name="audit_ae_office"),
+            models.Index(fields=["region_id", "occurred_at"], name="audit_ae_region"),
+            models.Index(fields=["request_id"], name="audit_ae_request"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.action} [{self.outcome}] {self.target_type}:{self.target_id}"
+
+    def save(self, *args, **kwargs):
+        if self.pk and type(self).objects.filter(pk=self.pk).exists():
+            raise RuntimeError("AuditEvent is append-only and cannot be updated.")
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise RuntimeError("AuditEvent is append-only and cannot be deleted.")

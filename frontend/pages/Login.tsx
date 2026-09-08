@@ -1,5 +1,5 @@
 import { Head, usePage } from "@inertiajs/react";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Clock3 } from "lucide-react";
 
 import { MicrosoftLogo } from "@/components/MicrosoftLogo";
 import { Button } from "@/components/ui/button";
@@ -10,8 +10,12 @@ import onestLogo from "@/images/onest.png";
 import { routes } from "@/lib/routes";
 import type { PageProps } from "@/types";
 
+interface LoginPageProps extends PageProps {
+  sessionExpired: boolean;
+}
+
 export default function Login() {
-  const { csrfToken } = usePage<PageProps>().props;
+  const { csrfToken, sessionExpired } = usePage<LoginPageProps>().props;
 
   return (
     <div className="bg-background grid min-h-svh lg:grid-cols-2">
@@ -29,7 +33,7 @@ export default function Login() {
       </aside>
 
       <main className="flex items-center justify-center px-6 py-16 sm:px-10">
-        <Card className="w-full max-w-md rounded-xl py-8 shadow-lg">
+        <Card className="w-full max-w-md rounded-(--radius-card) py-8 shadow-popover">
           <CardHeader className="items-center text-center">
             <img
               src={onestLogo}
@@ -44,13 +48,27 @@ export default function Login() {
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-6">
+            {sessionExpired ? (
+              <div
+                role="status"
+                className="bg-muted flex items-start gap-3 rounded-lg border px-3.5 py-3 text-left"
+              >
+                <Clock3 aria-hidden className="text-primary mt-0.5 size-4" />
+                <div>
+                  <p className="text-sm font-semibold">Your session expired</p>
+                  <p className="text-muted-foreground mt-0.5 text-xs leading-5">
+                    Sign in again to continue securely.
+                  </p>
+                </div>
+              </div>
+            ) : null}
             {/* Full page POST — the OAuth handshake redirects to Microsoft. */}
             <form method="post" action={routes.microsoft_login()}>
               <input type="hidden" name="csrfmiddlewaretoken" value={csrfToken} />
               <Button
                 type="submit"
                 size="lg"
-                className="brand-action h-12 w-full rounded-lg font-semibold shadow-none"
+                className="brand-action h-11 w-full rounded-md font-semibold shadow-none"
               >
                 <MicrosoftLogo className="size-5" />
                 Sign in with Microsoft

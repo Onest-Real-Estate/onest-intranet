@@ -1,27 +1,58 @@
 import { Link } from "@inertiajs/react";
-import { ArrowRight, House } from "lucide-react";
-import { IconWell } from "@/components/IconWell";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { ArrowRight } from "lucide-react";
+
+import { DataTable, type DataTableColumn } from "@/components/design-system/data-table";
+import { StatusBadge } from "@/components/design-system/status-badge";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+  PanelHeader,
+  SurfaceCard,
+  SurfaceCardContent,
+} from "@/components/design-system/surface-card";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { routes } from "@/lib/routes";
+import { presentStatus, TRANSACTION_STATUS } from "@/lib/status";
 import type { DashboardTransaction } from "@/types";
 
-function statusBadge(status: DashboardTransaction["status"]) {
-  if (status === "action_needed") {
-    return <Badge variant="warning">Action needed</Badge>;
-  }
-  return <Badge variant="success">On track</Badge>;
-}
+const columns: DataTableColumn<DashboardTransaction>[] = [
+  {
+    id: "property",
+    header: "Property",
+    cell: (row) => (
+      <div className="flex min-w-0 items-center gap-3">
+        <img
+          src={row.imageUrl}
+          alt=""
+          width={40}
+          height={40}
+          className="size-10 rounded-md object-cover"
+        />
+        <span className="min-w-0">
+          <span className="block max-w-80 truncate font-medium">{row.address}</span>
+          <span className="text-muted-foreground mt-0.5 block text-xs">
+            {row.type} · {row.stage}
+          </span>
+        </span>
+      </div>
+    ),
+  },
+  {
+    id: "closing",
+    header: "Closing",
+    cell: (row) => row.closing,
+    className: "text-muted-foreground hidden @lg:table-cell",
+    headerClassName: "hidden @lg:table-cell",
+  },
+  {
+    id: "status",
+    header: "Status",
+    cell: (row) => (
+      <StatusBadge status={presentStatus(row.status, TRANSACTION_STATUS)} />
+    ),
+    className: "hidden @2xl:table-cell",
+    headerClassName: "hidden @2xl:table-cell",
+  },
+];
 
 export function ActiveTransactions({
   transactions,
@@ -29,89 +60,50 @@ export function ActiveTransactions({
   transactions: DashboardTransaction[];
 }) {
   return (
-    <Card className="arrive">
-      <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle asChild className="flex items-center gap-2">
-          <h2>
-            <IconWell
-              icon={House}
-              tone="muted"
-              className="size-8"
-              iconClassName="size-4"
-            />
-            Active transactions
-          </h2>
-        </CardTitle>
-        <Button asChild variant="link" size="sm" className="px-0">
-          <Link href={routes.coming_soon("agent-transactions")}>
-            Manage pipeline
-            <ArrowRight className="size-4" strokeWidth={1.5} aria-hidden />
-          </Link>
-        </Button>
-      </CardHeader>
-      <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow className="[&>th]:tracking-[0.06em] [&>th]:uppercase">
-              <TableHead>Property</TableHead>
-              <TableHead className="hidden sm:table-cell">Type</TableHead>
-              <TableHead className="hidden md:table-cell">Stage</TableHead>
-              <TableHead className="hidden lg:table-cell">Closing</TableHead>
-              <TableHead>Status</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {transactions.map((row) => (
-              <TableRow key={row.id}>
-                <TableCell>
-                  <div className="flex items-center gap-3">
-                    <img
-                      src={row.imageUrl}
-                      alt=""
-                      width={40}
-                      height={40}
-                      className="size-10 rounded-md object-cover"
-                    />
-                    <span className="min-w-0">
-                      <span className="block font-medium whitespace-normal">
-                        {row.address}
-                      </span>
-                      {/* What the hidden columns carried, folded into the one
-                          column small screens keep. */}
-                      <span className="text-muted-foreground block text-xs whitespace-normal md:hidden">
-                        {row.type} · {row.stage} · closes {row.closing}
-                      </span>
-                    </span>
-                  </div>
-                </TableCell>
-                <TableCell className="hidden sm:table-cell">
-                  <Badge variant="secondary">{row.type}</Badge>
-                </TableCell>
-                <TableCell className="text-muted-foreground hidden md:table-cell">
-                  {row.stage}
-                </TableCell>
-                <TableCell className="hidden lg:table-cell">{row.closing}</TableCell>
-                <TableCell>{statusBadge(row.status)}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </CardContent>
-    </Card>
+    <SurfaceCard className="arrive gap-4 pb-0">
+      <PanelHeader
+        title="Active transactions"
+        description="Deals that need your attention next."
+        action={
+          <Button asChild variant="outline" size="sm">
+            <Link href={routes.coming_soon("agent-transactions")}>
+              Manage pipeline
+              <ArrowRight className="size-4" aria-hidden />
+            </Link>
+          </Button>
+        }
+      />
+      {/* `bare`: the card already draws the frame, so the table only needs its
+          own rules. Full-bleed so rows read to the card edge. */}
+      <SurfaceCardContent className="px-0">
+        <DataTable
+          frame="bare"
+          rows={transactions}
+          columns={columns}
+          rowKey={(row) => row.id}
+          caption="Active transaction pipeline"
+          getRowLabel={(row) => row.address}
+          emptyTitle="No active transactions"
+          emptyDescription="New transactions will appear here once they enter your pipeline."
+          className="border-t [&_td:first-child]:pl-5 [&_td:last-child]:pr-5 [&_th:first-child]:pl-5 [&_th:last-child]:pr-5 [&_tr:last-child]:border-0"
+        />
+      </SurfaceCardContent>
+    </SurfaceCard>
   );
 }
 
 export function ActiveTransactionsSkeleton() {
   return (
-    <Card>
-      <CardHeader>
-        <Skeleton className="h-5 w-48" />
-      </CardHeader>
-      <CardContent className="grid gap-3">
+    <SurfaceCard className="gap-4">
+      <PanelHeader
+        title="Active transactions"
+        description="Deals that need your attention next."
+      />
+      <SurfaceCardContent className="grid gap-3">
         {["t1", "t2", "t3", "t4"].map((id) => (
-          <Skeleton key={id} className="h-12 w-full" />
+          <Skeleton key={id} className="h-14 w-full" />
         ))}
-      </CardContent>
-    </Card>
+      </SurfaceCardContent>
+    </SurfaceCard>
   );
 }

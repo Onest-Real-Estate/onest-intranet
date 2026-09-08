@@ -1,19 +1,21 @@
 import { Head, usePage } from "@inertiajs/react";
 import {
   Building2,
-  Camera,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
   IdCard,
-  Loader2,
   MapPin,
   User2,
 } from "lucide-react";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 
 import { AuthLayout } from "@/components/AuthLayout";
-import type { OfficeGroup, StateOption } from "@/components/ProfileFormFields";
+import {
+  FileUploader,
+  FormErrorSummary,
+  type UploadedFile,
+} from "@/components/design-system";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -37,43 +39,14 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { routes } from "@/lib/routes";
-import type { PageProps } from "@/types";
+import { validateUsPhone, validateUsZip } from "@/lib/us-validation";
+import type { OnboardingPageProps, OnboardingProfileValues } from "@/types";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-interface OnboardingPageProps extends PageProps {
-  initial: {
-    firstName: string;
-    lastName: string;
-    phoneNumber: string;
-    streetAddress: string;
-    city: string;
-    state: string;
-    zipCode: string;
-    officeId: string;
-    mlsNumber: string;
-    nrdsNumber: string;
-    headshotUrl: string | null;
-  };
-  errors: Record<string, string>;
-  offices: OfficeGroup[];
-  states: StateOption[];
-}
-
-interface FormValues {
-  firstName: string;
-  lastName: string;
-  phoneNumber: string;
-  streetAddress: string;
-  city: string;
-  state: string;
-  zipCode: string;
-  officeId: string;
-  mlsNumber: string;
-  nrdsNumber: string;
-}
+type FormValues = Omit<OnboardingProfileValues, "headshotUrl">;
 
 // ---------------------------------------------------------------------------
 // Steps
@@ -101,9 +74,75 @@ function FieldError({ id, message }: { id: string; message?: string }) {
   );
 }
 
-function describedBy(field: string, errors: Record<string, string>) {
+function describedBy(field: string, errors: Record<string, string | undefined>) {
   return errors[field] ? `${field}_error` : undefined;
 }
+
+function resolveStepFromErrors(
+  errors: Record<string, string | undefined>,
+): StepId | null {
+  if (errors.first_name || errors.last_name || errors.phone_number || errors.headshot) {
+    return "personal";
+  }
+  if (errors.street_address || errors.city || errors.state || errors.zip_code) {
+    return "address";
+  }
+  if (errors.office) {
+    return "office";
+  }
+  return null;
+}
+
+function validatePersonalStep(values: FormValues): Record<string, string> {
+  const next: Record<string, string> = {};
+  if (!values.firstName.trim()) {
+    next.first_name = "Enter a first name.";
+  }
+  if (!values.lastName.trim()) {
+    next.last_name = "Enter a last name.";
+  }
+  const phoneError = validateUsPhone(values.phoneNumber);
+  if (phoneError) {
+    next.phone_number = phoneError;
+  }
+  return next;
+}
+
+function validateAddressStep(values: FormValues): Record<string, string> {
+  const next: Record<string, string> = {};
+  if (!values.streetAddress.trim()) {
+    next.street_address = "Enter a street address.";
+  }
+  if (!values.city.trim()) {
+    next.city = "Enter a city.";
+  }
+  if (!values.state) {
+    next.state = "Select a state.";
+  }
+  const zipError = validateUsZip(values.zipCode);
+  if (zipError) {
+    next.zip_code = zipError;
+  }
+  return next;
+}
+
+function validateOfficeStep(values: FormValues): Record<string, string> {
+  if (!values.officeId) {
+    return { office: "Select your office." };
+  }
+  return {};
+}
+
+const CLIENT_ERROR_FIELDS: Partial<Record<keyof FormValues, string>> = {
+  firstName: "first_name",
+  lastName: "last_name",
+  phoneNumber: "phone_number",
+  streetAddress: "street_address",
+  city: "city",
+  state: "state",
+  zipCode: "zip_code",
+  officeId: "office",
+};
 
 // ---------------------------------------------------------------------------
 // Headshot uploader
@@ -120,98 +159,58 @@ function HeadshotUploader({
   onUploaded: (url: string) => void;
   error?: string;
 }) {
-  const [preview, setPreview] = useState<string | null>(initialUrl);
-  const [uploading, setUploading] = useState(false);
-  const [uploadError, setUploadError] = useState<string | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  async function handleFile(file: File) {
-    setUploadError(null);
-    setUploading(true);
-    const fd = new FormData();
-    fd.append("headshot", file);
-    fd.append("csrfmiddlewaretoken", csrfToken);
-    try {
-      const res = await fetch(routes.headshot_upload(), {
-        method: "POST",
-        body: fd,
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        setUploadError(json.error ?? "Upload failed. Please try again.");
-      } else {
-        setPreview(json.url);
-        onUploaded(json.url);
-      }
-    } catch {
-      setUploadError("Network error. Please try again.");
-    } finally {
-      setUploading(false);
-    }
-  }
-
+  const initialFile: UploadedFile | null = initialUrl
+    ? { name: "Current profile photo", url: initialUrl, type: "image" }
+    : null;
   return (
-    <div className="flex flex-col items-center gap-4">
-      <button
-        type="button"
-        className="group relative size-32 cursor-pointer overflow-hidden rounded-full border-2 border-dashed border-muted-foreground/40 bg-muted transition hover:border-primary"
-        onClick={() => inputRef.current?.click()}
-        aria-label="Upload profile photo"
-      >
-        {preview ? (
-          <img
-            src={preview}
-            alt="Headshot preview"
-            className="size-full object-cover"
-          />
-        ) : (
-          <div className="flex size-full flex-col items-center justify-center gap-1 text-muted-foreground">
-            <Camera className="size-8" strokeWidth={1.5} aria-hidden />
-            <span className="text-xs">Add photo</span>
-          </div>
-        )}
-        {uploading && (
-          <div className="absolute inset-0 flex items-center justify-center bg-background/60">
-            <Loader2 className="size-6 animate-spin text-primary" aria-hidden />
-          </div>
-        )}
-        <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition group-hover:opacity-100">
-          <Camera className="size-6 text-white" strokeWidth={1.5} aria-hidden />
-        </div>
-      </button>
-
-      <input
-        ref={inputRef}
-        type="file"
+    <div className="grid gap-2">
+      <FileUploader
+        label="Add profile photo"
+        description="JPEG or PNG · at least 200×200 px · max 5 MB"
         accept="image/jpeg,image/png"
-        className="sr-only"
-        aria-label="Select profile photo"
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          if (file) handleFile(file);
+        maxSize={5 * 1024 * 1024}
+        value={initialFile}
+        removable={false}
+        validate={(file) =>
+          ["image/jpeg", "image/png"].includes(file.type)
+            ? null
+            : "Choose a JPEG or PNG image. The server will verify its contents."
+        }
+        upload={async (file, { signal, onProgress }) => {
+          const formData = new FormData();
+          formData.append("headshot", file);
+          formData.append("csrfmiddlewaretoken", csrfToken);
+          onProgress(20);
+          const response = await fetch(routes.headshot_upload(), {
+            method: "POST",
+            body: formData,
+            signal,
+          });
+          const payload = (await response.json()) as {
+            error?: string;
+            url?: string;
+          };
+          if (!response.ok) {
+            throw new Error(payload.error ?? "Upload failed. Please try again.");
+          }
+          if (!payload.url) {
+            throw new Error("The server did not return an uploaded file URL.");
+          }
+          onProgress(100);
+          onUploaded(payload.url);
+          return {
+            name: file.name,
+            url: payload.url,
+            size: file.size,
+            type: file.type,
+          };
         }}
       />
-
-      {(uploadError || error) && (
+      {error ? (
         <p className="text-destructive text-center text-sm" role="alert">
-          {uploadError ?? error}
+          {error}
         </p>
-      )}
-
-      {!uploading && (
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => inputRef.current?.click()}
-        >
-          {preview ? "Replace photo" : "Choose photo"}
-        </Button>
-      )}
-
-      <p className="text-muted-foreground text-center text-xs">
-        JPEG or PNG · at least 200×200 px · max 5 MB
-      </p>
+      ) : null}
     </div>
   );
 }
@@ -276,19 +275,13 @@ function StepProgress({ steps, current }: { steps: typeof STEPS; current: StepId
 // ---------------------------------------------------------------------------
 
 export default function Onboarding() {
-  const { csrfToken, initial, errors, offices, states } =
+  const { csrfToken, initial, validation, offices, states } =
     usePage<OnboardingPageProps>().props;
+  const errors = Object.fromEntries(
+    Object.entries(validation.fields).map(([field, messages]) => [field, messages[0]]),
+  ) as Record<string, string | undefined>;
 
-  const [step, setStep] = useState<StepId>(
-    // If there are server-side errors, jump to the relevant step.
-    errors.first_name || errors.last_name || errors.phone_number || errors.headshot
-      ? "personal"
-      : errors.street_address || errors.city || errors.state || errors.zip_code
-        ? "address"
-        : errors.office
-          ? "office"
-          : "personal",
-  );
+  const [step, setStep] = useState<StepId>(resolveStepFromErrors(errors) ?? "personal");
 
   const [values, setValues] = useState<FormValues>({
     firstName: initial.firstName,
@@ -304,6 +297,35 @@ export default function Onboarding() {
   });
 
   const [headshotUrl, setHeadshotUrl] = useState<string | null>(initial.headshotUrl);
+  const [clientErrors, setClientErrors] = useState<Record<string, string>>({});
+  const fieldErrors = { ...clientErrors, ...errors };
+
+  useEffect(() => {
+    const stepFromErrors = resolveStepFromErrors(errors);
+    if (stepFromErrors) {
+      setStep(stepFromErrors);
+    }
+  }, [errors]);
+
+  useEffect(() => {
+    if (Object.keys(errors).length === 0) {
+      return;
+    }
+    setValues({
+      firstName: initial.firstName,
+      lastName: initial.lastName,
+      phoneNumber: initial.phoneNumber,
+      streetAddress: initial.streetAddress,
+      city: initial.city,
+      state: initial.state,
+      zipCode: initial.zipCode,
+      officeId: initial.officeId,
+      mlsNumber: initial.mlsNumber,
+      nrdsNumber: initial.nrdsNumber,
+    });
+    setHeadshotUrl(initial.headshotUrl);
+    setClientErrors({});
+  }, [errors, initial]);
 
   // Warn before abandoning form if any field is touched.
   const [dirty, setDirty] = useState(false);
@@ -320,17 +342,45 @@ export default function Onboarding() {
   function set(field: keyof FormValues, value: string) {
     setValues((prev) => ({ ...prev, [field]: value }));
     setDirty(true);
+    const errorField = CLIENT_ERROR_FIELDS[field];
+    if (!errorField) {
+      return;
+    }
+    setClientErrors((prev) => {
+      if (!prev[errorField]) {
+        return prev;
+      }
+      const next = { ...prev };
+      delete next[errorField];
+      return next;
+    });
   }
 
   const currentIdx = STEPS.findIndex((s) => s.id === step);
 
   function goBack() {
     if (currentIdx > 0) {
+      setClientErrors({});
       setStep(STEPS[currentIdx - 1].id);
     }
   }
 
   function goNext() {
+    let stepErrors: Record<string, string> = {};
+    if (step === "personal") {
+      stepErrors = validatePersonalStep(values);
+    } else if (step === "address") {
+      stepErrors = validateAddressStep(values);
+    } else if (step === "office") {
+      stepErrors = validateOfficeStep(values);
+    }
+
+    if (Object.keys(stepErrors).length > 0) {
+      setClientErrors(stepErrors);
+      return;
+    }
+
+    setClientErrors({});
     if (currentIdx < STEPS.length - 1) {
       setStep(STEPS[currentIdx + 1].id);
     }
@@ -387,6 +437,7 @@ export default function Onboarding() {
             <input type="hidden" name="nrds_number" value={values.nrdsNumber} />
 
             <CardContent className="grid gap-6">
+              <FormErrorSummary errors={validation} />
               {/* ── Step 1: Personal ─────────────────────────────────── */}
               {step === "personal" && (
                 <div className="grid gap-6">
@@ -394,7 +445,7 @@ export default function Onboarding() {
                     initialUrl={headshotUrl}
                     csrfToken={csrfToken}
                     onUploaded={setHeadshotUrl}
-                    error={errors.headshot}
+                    error={fieldErrors.headshot}
                   />
 
                   <div className="grid gap-4 sm:grid-cols-2">
@@ -412,11 +463,14 @@ export default function Onboarding() {
                         value={values.firstName}
                         onChange={(e) => set("firstName", e.target.value)}
                         autoComplete="given-name"
-                        aria-invalid={Boolean(errors.first_name) || undefined}
-                        aria-describedby={describedBy("first_name", errors)}
+                        aria-invalid={Boolean(fieldErrors.first_name) || undefined}
+                        aria-describedby={describedBy("first_name", fieldErrors)}
                         required
                       />
-                      <FieldError id="first_name_error" message={errors.first_name} />
+                      <FieldError
+                        id="first_name_error"
+                        message={fieldErrors.first_name}
+                      />
                     </div>
                     <div className="grid gap-2">
                       <Label htmlFor="last_name_input">
@@ -432,11 +486,14 @@ export default function Onboarding() {
                         value={values.lastName}
                         onChange={(e) => set("lastName", e.target.value)}
                         autoComplete="family-name"
-                        aria-invalid={Boolean(errors.last_name) || undefined}
-                        aria-describedby={describedBy("last_name", errors)}
+                        aria-invalid={Boolean(fieldErrors.last_name) || undefined}
+                        aria-describedby={describedBy("last_name", fieldErrors)}
                         required
                       />
-                      <FieldError id="last_name_error" message={errors.last_name} />
+                      <FieldError
+                        id="last_name_error"
+                        message={fieldErrors.last_name}
+                      />
                     </div>
                   </div>
 
@@ -449,11 +506,14 @@ export default function Onboarding() {
                       onChange={(e) => set("phoneNumber", e.target.value)}
                       autoComplete="tel"
                       placeholder="(202) 555-0100"
-                      aria-invalid={Boolean(errors.phone_number) || undefined}
-                      aria-describedby={describedBy("phone_number", errors)}
+                      aria-invalid={Boolean(fieldErrors.phone_number) || undefined}
+                      aria-describedby={describedBy("phone_number", fieldErrors)}
                       required
                     />
-                    <FieldError id="phone_number_error" message={errors.phone_number} />
+                    <FieldError
+                      id="phone_number_error"
+                      message={fieldErrors.phone_number}
+                    />
                   </div>
                 </div>
               )}
@@ -468,13 +528,13 @@ export default function Onboarding() {
                       value={values.streetAddress}
                       onChange={(e) => set("streetAddress", e.target.value)}
                       autoComplete="street-address"
-                      aria-invalid={Boolean(errors.street_address) || undefined}
-                      aria-describedby={describedBy("street_address", errors)}
+                      aria-invalid={Boolean(fieldErrors.street_address) || undefined}
+                      aria-describedby={describedBy("street_address", fieldErrors)}
                       required
                     />
                     <FieldError
                       id="street_address_error"
-                      message={errors.street_address}
+                      message={fieldErrors.street_address}
                     />
                   </div>
 
@@ -486,11 +546,11 @@ export default function Onboarding() {
                         value={values.city}
                         onChange={(e) => set("city", e.target.value)}
                         autoComplete="address-level2"
-                        aria-invalid={Boolean(errors.city) || undefined}
-                        aria-describedby={describedBy("city", errors)}
+                        aria-invalid={Boolean(fieldErrors.city) || undefined}
+                        aria-describedby={describedBy("city", fieldErrors)}
                         required
                       />
-                      <FieldError id="city_error" message={errors.city} />
+                      <FieldError id="city_error" message={fieldErrors.city} />
                     </div>
                     <div className="grid gap-2 sm:col-span-2">
                       <Label htmlFor="state_trigger">State</Label>
@@ -500,8 +560,8 @@ export default function Onboarding() {
                       >
                         <SelectTrigger
                           id="state_trigger"
-                          aria-invalid={Boolean(errors.state) || undefined}
-                          aria-describedby={describedBy("state", errors)}
+                          aria-invalid={Boolean(fieldErrors.state) || undefined}
+                          aria-describedby={describedBy("state", fieldErrors)}
                         >
                           <SelectValue placeholder="State" />
                         </SelectTrigger>
@@ -513,7 +573,7 @@ export default function Onboarding() {
                           ))}
                         </SelectContent>
                       </Select>
-                      <FieldError id="state_error" message={errors.state} />
+                      <FieldError id="state_error" message={fieldErrors.state} />
                     </div>
                     <div className="grid gap-2 sm:col-span-1">
                       <Label htmlFor="zip_code_input">ZIP</Label>
@@ -523,11 +583,11 @@ export default function Onboarding() {
                         onChange={(e) => set("zipCode", e.target.value)}
                         autoComplete="postal-code"
                         placeholder="12345"
-                        aria-invalid={Boolean(errors.zip_code) || undefined}
-                        aria-describedby={describedBy("zip_code", errors)}
+                        aria-invalid={Boolean(fieldErrors.zip_code) || undefined}
+                        aria-describedby={describedBy("zip_code", fieldErrors)}
                         required
                       />
-                      <FieldError id="zip_code_error" message={errors.zip_code} />
+                      <FieldError id="zip_code_error" message={fieldErrors.zip_code} />
                     </div>
                   </div>
                 </div>
@@ -550,8 +610,8 @@ export default function Onboarding() {
                       >
                         <SelectTrigger
                           id="office_trigger"
-                          aria-invalid={Boolean(errors.office) || undefined}
-                          aria-describedby={describedBy("office", errors)}
+                          aria-invalid={Boolean(fieldErrors.office) || undefined}
+                          aria-describedby={describedBy("office", fieldErrors)}
                         >
                           <SelectValue placeholder="Select your office" />
                         </SelectTrigger>
@@ -569,7 +629,7 @@ export default function Onboarding() {
                         </SelectContent>
                       </Select>
                     )}
-                    <FieldError id="office_error" message={errors.office} />
+                    <FieldError id="office_error" message={fieldErrors.office} />
                   </div>
 
                   <Separator />

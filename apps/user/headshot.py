@@ -15,6 +15,7 @@ import uuid
 from pathlib import Path
 
 from django.core.exceptions import ValidationError
+from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 
 MAX_BYTES = 5 * 1024 * 1024  # 5 MB
@@ -72,3 +73,15 @@ def headshot_upload_path(instance, filename: str) -> str:
     """Generate a UUID-based storage path; never trusts the client filename."""
     suffix = Path(filename).suffix.lower() or ".jpg"
     return f"headshots/{uuid.uuid4().hex}{suffix}"
+
+
+def headshot_public_url(request, user) -> str | None:
+    """Absolute browser URL for the stored headshot, when one exists."""
+    if not user.headshot:
+        return None
+    if request.user.is_authenticated and request.user.pk == user.pk:
+        return request.build_absolute_uri(reverse("headshot_display"))
+    stored = user.headshot.url
+    if stored.startswith(("http://", "https://")):
+        return stored
+    return request.build_absolute_uri(stored)

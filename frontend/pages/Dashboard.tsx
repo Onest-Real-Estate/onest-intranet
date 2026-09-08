@@ -1,106 +1,230 @@
-import { Deferred, Head, usePage } from "@inertiajs/react";
-import type { ReactNode } from "react";
-import { ActionItems, ActionItemsSkeleton } from "@/components/dashboard/ActionItems";
-import {
-  ActiveTransactions,
-  ActiveTransactionsSkeleton,
-} from "@/components/dashboard/ActiveTransactions";
-import {
-  Announcements,
-  AnnouncementsSkeleton,
-} from "@/components/dashboard/Announcements";
-import { DashboardGreeting } from "@/components/dashboard/DashboardGreeting";
-import {
-  MarketSnapshot,
-  MarketSnapshotSkeleton,
-} from "@/components/dashboard/MarketSnapshot";
-import { MyDay, MyDaySkeleton } from "@/components/dashboard/MyDay";
-import { QuickApps, QuickAppsSkeleton } from "@/components/dashboard/QuickApps";
-import {
-  QuickDocuments,
-  QuickDocumentsSkeleton,
-} from "@/components/dashboard/QuickDocuments";
-import { StatCards, StatCardsSkeleton } from "@/components/dashboard/StatCards";
-import {
-  TrainingResources,
-  TrainingResourcesSkeleton,
-} from "@/components/dashboard/TrainingResources";
-import { HubLayout } from "@/components/HubLayout";
-import type { DashboardPageProps } from "@/types";
+import { Head, router, usePage } from "@inertiajs/react";
+import { useMemo, useState } from "react";
 
+import { DashboardGreeting } from "@/components/dashboard/DashboardGreeting";
+import { DashboardProfileSwitcher } from "@/components/dashboard/DashboardProfileSwitcher";
+import { DashboardScopeSelector } from "@/components/dashboard/DashboardScopeSelector";
+import { DashboardWidgetSlot } from "@/components/dashboard/DashboardWidgetSlot";
+import { HubLayout } from "@/components/HubLayout";
+import { Button } from "@/components/ui/button";
+import { useAuthorizationStaleness } from "@/hooks/use-authorization-staleness";
+import {
+  readRememberedProfile,
+  rememberProfile,
+  resolveDashboard,
+  resolveWidgets,
+} from "@/lib/dashboard/resolve";
+import type { DashboardWidgetColumn } from "@/lib/dashboard/widget-registry";
+import { routes } from "@/lib/routes";
+import type { DashboardPageProps, MetricScopeLevel } from "@/types";
+
+/**
+ * Twelfths a `wide` widget may claim, spelled out because Tailwind needs to see
+ * the class to emit it. Anything unlisted takes the full band.
+ */
+const SPAN_CLASS: Record<number, string> = {
+  4: "h-full xl:col-span-4",
+  5: "h-full xl:col-span-5",
+  6: "h-full xl:col-span-6",
+  7: "h-full xl:col-span-7",
+  8: "h-full xl:col-span-8",
+};
+
+function spanClass(span: number | undefined): string {
+  return (span && SPAN_CLASS[span]) || "h-full xl:col-span-12";
+}
+
+/**
+ * One dashboard, eleven presentations.
+ *
+ * Which widgets appear and in what order is resolved from the reader's
+ * effective roles and permissions in `lib/dashboard` — there is no per-role
+ * page component and no role conditional below. Resolution decides layout
+ * only: every widget is permission-filtered, and every provider behind it
+ * re-applies the same permissions and the reader's scope server-side.
+ */
 export default function Dashboard() {
-  const {
-    user,
-    stats,
-    quickApps,
-    announcements,
-    transactions,
-    training,
-    schedule,
-    actionItems,
-    market,
-    documents,
-  } = usePage<DashboardPageProps>().props;
+  const page = usePage<DashboardPageProps>().props;
+  const { user, greeting, shell, assignment, scope } = page;
+
+  // Null means "no remembered choice"; the reader's assigned profile wins.
+  const [chosenProfileId, setChosenProfileId] = useState<string | null>(() =>
+    readRememberedProfile(),
+  );
+  const { stale, acknowledge } = useAuthorizationStaleness(shell?.authorizationVersion);
+
+  const resolved = useMemo(
+    () => resolveDashboard(user, assignment, chosenProfileId),
+    [user, assignment, chosenProfileId],
+  );
+
+  // The scope the server says these figures cover. Absent until the scope
+  // payload ships, and never inferred client-side: guessing a breadth would
+  // relabel an office figure as a company one.
+  const serverScope = scope ?? null;
+  const scopeLevel: MetricScopeLevel | null = serverScope
+    ? (serverScope.options.find((option) => option.key === serverScope.selectedKey)
+        ?.level ?? null)
+    : null;
+
+  const widgets = useMemo(
+    () => resolveWidgets(resolved.profile, user, scopeLevel),
+    [resolved.profile, user, scopeLevel],
+  );
+
+  // No server scope means the reader has one breadth and nothing to choose;
+  // the control is absent rather than offering breadths that do not apply.
+  const scopeOptions = serverScope ? serverScope.options : [];
+  const showsScopeControl = scopeOptions.length > 0;
+  const showsProfileControl = resolved.available.length > 1;
 
   if (!user) {
     return null;
   }
 
-  // Wider than `page-shell`: the twelve-column widget grid is the point of this
-  // screen, but it still needs a ceiling so it does not sprawl on an ultrawide
-  // display.
-  return (
-    <div className="mx-auto flex w-full max-w-[1600px] flex-1 flex-col gap-10 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
-      <Head title="Dashboard" />
-      <DashboardGreeting user={user} />
+  function selectProfile(id: string) {
+    // Returning to the assigned profile clears the memory rather than pinning
+    // it, so a later reassignment is not silently overridden.
+    const next = id === resolved.assigned.id ? null : id;
+    rememberProfile(next);
+    setChosenProfileId(next);
+  }
 
-      {/* Band: where the day stands, and the tools to act on it. Figures and
-          launchers are one thought, so they sit a section apart (24px) rather
-          than a page apart. */}
-      <div className="flex flex-col gap-6">
-        <Deferred data="stats" fallback={<StatCardsSkeleton />}>
-          {stats ? <StatCards stats={stats} /> : null}
-        </Deferred>
-        <Deferred data="quickApps" fallback={<QuickAppsSkeleton />}>
-          {quickApps ? <QuickApps apps={quickApps} /> : null}
-        </Deferred>
+  function refreshAll() {
+    router.reload({ onSuccess: acknowledge });
+  }
+
+  const column = (name: DashboardWidgetColumn) =>
+    widgets.filter((widget) => widget.definition.column === name);
+
+  const wide = column("wide");
+  const main = column("main");
+  const rail = column("rail");
+
+  return (
+    <div className="flex flex-1 flex-col gap-8">
+      <Head title="Dashboard" />
+
+      {/* Orientation is one masthead: identity, the qualifiers that affect
+          every figure below, and a rule closing the block. The controls ride
+          inside the header rather than beside it, so the rule spans the page
+          and the title has something to sit on. */}
+      <div className="grid gap-4">
+        <DashboardGreeting
+          greeting={greeting}
+          user={user}
+          actions={
+            showsScopeControl || showsProfileControl ? (
+              <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center">
+                <DashboardScopeSelector
+                  options={scopeOptions}
+                  selectedKey={serverScope ? serverScope.selectedKey : null}
+                  reloadProps={widgets.map((widget) => widget.definition.prop)}
+                />
+                <DashboardProfileSwitcher
+                  profiles={resolved.available}
+                  activeId={resolved.profile.id}
+                  onSelect={selectProfile}
+                />
+              </div>
+            ) : null
+          }
+        />
+
+        {/* One announcement for a page-wide condition. Individual panels carry
+            a quiet stale mark; the action to fix it lives here, once. */}
+        {stale ? (
+          <div
+            role="status"
+            className="border-chip-warning-edge bg-chip-warning text-warning-ink flex flex-wrap items-center gap-3 rounded-lg border px-4 py-3 text-sm"
+          >
+            <span>
+              Your roles or scope changed while this page was open. Refresh to see the
+              dashboard you are entitled to now.
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              className="ms-auto"
+              onClick={refreshAll}
+            >
+              Refresh
+            </Button>
+          </div>
+        ) : null}
       </div>
 
-      {/*
-        Band: the working grid. The rail leads in source order so a phone —
-        where the columns collapse into one — opens on today's obligations
-        instead of scrolling past news to reach them; `xl:order` puts it back
-        on the right once there are two columns to read side by side.
-      */}
-      <div className="grid gap-6 xl:grid-cols-12">
-        <div className="grid gap-6 xl:order-2 xl:col-span-4">
-          <Deferred data="schedule" fallback={<MyDaySkeleton />}>
-            {schedule ? <MyDay schedule={schedule} /> : null}
-          </Deferred>
-          <Deferred data="actionItems" fallback={<ActionItemsSkeleton />}>
-            {actionItems ? <ActionItems data={actionItems} /> : null}
-          </Deferred>
-          <Deferred data="market" fallback={<MarketSnapshotSkeleton />}>
-            {market ? <MarketSnapshot market={market} /> : null}
-          </Deferred>
-          <Deferred data="documents" fallback={<QuickDocumentsSkeleton />}>
-            {documents ? <QuickDocuments documents={documents} /> : null}
-          </Deferred>
+      {/* Band: where things stand, and the tools to act on them. Figures and
+          launchers are one thought, so they sit a section apart (24px) rather
+          than a page apart. */}
+      {wide.length > 0 ? (
+        <div className="-mt-2 grid items-stretch gap-6 xl:grid-cols-12">
+          {wide.map((widget) => (
+            <div
+              key={widget.definition.id}
+              className={spanClass(widget.definition.span)}
+            >
+              <DashboardWidgetSlot resolved={widget} page={page} stale={stale} />
+            </div>
+          ))}
         </div>
-        <div className="grid gap-6 xl:order-1 xl:col-span-8">
-          <Deferred data="announcements" fallback={<AnnouncementsSkeleton />}>
-            {announcements ? <Announcements data={announcements} /> : null}
-          </Deferred>
-          <Deferred data="transactions" fallback={<ActiveTransactionsSkeleton />}>
-            {transactions ? <ActiveTransactions transactions={transactions} /> : null}
-          </Deferred>
-          <Deferred data="training" fallback={<TrainingResourcesSkeleton />}>
-            {training ? <TrainingResources training={training} /> : null}
-          </Deferred>
-        </div>
+      ) : null}
+
+      {/* Band: the role-defining workflow leads in both DOM and visual order.
+          Supporting daily and utility panels follow, so keyboard, screen-reader,
+          mobile, and desktop reading order never disagree. */}
+      <div className="grid items-start gap-6 xl:grid-cols-12">
+        {main.length > 0 ? (
+          <div
+            data-dashboard-column="main"
+            className={
+              rail.length > 0
+                ? "grid content-start gap-6 xl:col-span-8"
+                : "grid content-start gap-6 xl:col-span-12"
+            }
+          >
+            {main.map((widget) => (
+              <DashboardWidgetSlot
+                key={widget.definition.id}
+                resolved={widget}
+                page={page}
+                stale={stale}
+              />
+            ))}
+          </div>
+        ) : null}
+        {rail.length > 0 ? (
+          <div
+            data-dashboard-column="rail"
+            className={
+              main.length > 0
+                ? "grid content-start gap-6 xl:col-span-4"
+                : "grid content-start gap-6 xl:col-span-12"
+            }
+          >
+            {rail.map((widget) => (
+              <DashboardWidgetSlot
+                key={widget.definition.id}
+                resolved={widget}
+                page={page}
+                stale={stale}
+              />
+            ))}
+          </div>
+        ) : null}
       </div>
     </div>
   );
 }
 
-Dashboard.layout = (page: ReactNode) => <HubLayout>{page}</HubLayout>;
+Dashboard.layout = () =>
+  [
+    HubLayout,
+    {
+      context: {
+        title: "Dashboard",
+        breadcrumbs: [{ label: "Dashboard", href: routes.dashboard() }],
+      },
+      variant: "wide",
+    },
+  ] as const;

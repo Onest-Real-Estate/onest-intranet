@@ -8,7 +8,6 @@ name: onest-dev
 #
 # Services: web (Django) · db (PostgreSQL) · redis · mailpit · minio (S3)
 #          · celery (workers) · celery-beat (django-celery-beat scheduler)
-#          · docuseal (document signing)
 
 # Shared config for the celery worker and beat services (dev image: code
 # bind-mounted, deps in the venv volume, PostgreSQL + Redis from the stack).
@@ -33,6 +32,20 @@ x-celery-service: &celery-service
     REDIS_URL: redis://redis:6379/0
     CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/1}
     CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/2}
+    # Object storage — must match the web service exactly. Tasks read back the
+    # bytes a request wrote: announcement media is uploaded by web and then
+    # verified, stripped, and resized here. Without these the worker falls back
+    # to local-disk storage, looks for a key that only exists in MinIO, and
+    # fails every file with "The stored file could not be read".
+    USE_S3: "1"
+    AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
+    AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    AWS_STORAGE_BUCKET_NAME: onest
+    AWS_S3_ENDPOINT_URL: http://minio:9000
+    AWS_S3_CUSTOM_DOMAIN: localhost:${MINIO_S3_PORT:-9000}
+    AWS_S3_URL_PROTOCOL: "http:"
+    AWS_S3_REGION_NAME: us-east-1
+    AWS_S3_ADDRESSING_STYLE: path
     # Error tracking (Sentry SDK)
     SENTRY_DSN: ${SENTRY_DSN:-}
     SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-development}
@@ -69,6 +82,15 @@ services:
       DB_PORT: "5432"
       # Redis (cache + sessions)
       REDIS_URL: redis://redis:6379/0
+      # Celery — the *web* process is a producer: every task queued from a
+      # request (announcement media processing, notification fan-out, audit
+      # event dispatch) is enqueued here. Without these it falls back to the
+      # settings default of redis://localhost:6379/1, which inside this
+      # container is nothing at all, and `.delay()` dies on connection
+      # refused. Must match the celery service's values or the worker consumes
+      # a different queue than the one being written to.
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/1}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/2}
       # Email via Mailpit (web UI: http://localhost:8025)
       EMAIL_BACKEND: django.core.mail.backends.smtp.EmailBackend
       EMAIL_HOST: mailpit
@@ -171,21 +193,6 @@ services:
       - ..:/app
       - celery_beat_venv:/app/.venv
 
-  # DocuSeal — self-hosted document signing (e-signatures). SQLite-backed by
-  # default; data persists in the docuseal_data volume. Web UI + API:
-  # http://localhost:${DOCUSEAL_PORT:-3000} (initial account is created on
-  # first visit).
-  docuseal:
-    image: docuseal/docuseal:latest
-    restart: unless-stopped
-    environment:
-      # Used to build absolute links (e.g. in signing emails). If you change
-      # DOCUSEAL_PORT, mirror it here.
-      HOST: localhost:${DOCUSEAL_PORT:-3000}
-    volumes:
-      - docuseal_data:/data
-    ports:
-      - "${DOCUSEAL_PORT:-3000}:3000"
 
   # One-shot: waits for MinIO, creates the bucket, and makes it publicly
   # readable so browsers can fetch media URLs built from AWS_S3_CUSTOM_DOMAIN.
@@ -217,4 +224,3 @@ volumes:
   celery_venv:
   celery_beat_venv:
   minio_data:
-  docuseal_data:
