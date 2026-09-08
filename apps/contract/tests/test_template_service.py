@@ -277,6 +277,177 @@ def test_save_field_layout_seeds_prefill_merge_keys(seeded_offices):
 
 
 @pytest.mark.django_db
+def test_save_field_layout_allows_unmapped_prefill_names_on_draft(seeded_offices):
+    """Placer names like PrefillText are not hub sources until mapped later."""
+    actor = company_admin(seeded_offices)
+    template = create_template_family(
+        actor,
+        stable_key="ica-placer-names",
+        name="ICA",
+        company_wide=True,
+    )
+    version = create_draft_version(
+        actor,
+        template=template,
+        version_label="1.0.0",
+        merge_schema=[],
+    )
+    save_draft_version(
+        actor,
+        version=version,
+        expected_version=version.updated_at.isoformat(),
+        display_name="ICA",
+        description="",
+        merge_schema=[],
+        source_upload=SimpleUploadedFile(
+            "template.pdf",
+            _blank_pdf(),
+            content_type="application/pdf",
+        ),
+    )
+    version.refresh_from_db()
+    layout = [
+        {
+            "id": "prefill-text",
+            "name": "PrefillText",
+            "type": "text",
+            "role": "Prefill",
+            "page": 1,
+            "x": 10,
+            "y": 10,
+            "w": 120,
+            "h": 24,
+        },
+        {
+            "id": "sig-1",
+            "name": "AgentSignature",
+            "type": "signature",
+            "role": "Agent",
+            "page": 1,
+            "x": 10,
+            "y": 80,
+            "w": 180,
+            "h": 48,
+        },
+        {
+            "id": "date-1",
+            "name": "AgentSignedOn",
+            "type": "date",
+            "role": "Agent",
+            "page": 1,
+            "x": 10,
+            "y": 140,
+            "w": 120,
+            "h": 24,
+        },
+    ]
+    saved = save_field_layout(actor, version=version, layout=layout)
+    assert saved.extracted_placeholder_keys == ["PrefillText"]
+    assert saved.merge_schema == [
+        {
+            "key": "PrefillText",
+            "label": "PrefillText",
+            "type": "text",
+            "source": "",
+        }
+    ]
+
+
+@pytest.mark.django_db
+def test_field_layout_json_post_persists_placer_prefill_fields(seeded_offices, client):
+    """Inertia router.post sends JSON; empty Prefill sources must still save."""
+    import json
+
+    from apps.web.tests.test_permissions import inertia_page_script
+
+    actor = company_admin(seeded_offices)
+    template = create_template_family(
+        actor,
+        stable_key="ica-json-layout",
+        name="ICA",
+        company_wide=True,
+    )
+    version = create_draft_version(
+        actor,
+        template=template,
+        version_label="1.0.0",
+        merge_schema=[],
+    )
+    save_draft_version(
+        actor,
+        version=version,
+        expected_version=version.updated_at.isoformat(),
+        display_name="ICA",
+        description="",
+        merge_schema=[],
+        source_upload=SimpleUploadedFile(
+            "template.pdf",
+            _blank_pdf(),
+            content_type="application/pdf",
+        ),
+    )
+    version.refresh_from_db()
+    client.force_login(actor)
+    layout = [
+        {
+            "id": "prefill-1",
+            "name": "PrefillText",
+            "type": "text",
+            "role": "Prefill",
+            "page": 1,
+            "x": 12,
+            "y": 18,
+            "w": 140,
+            "h": 24,
+        },
+        {
+            "id": "sig-1",
+            "name": "AgentSignature",
+            "type": "signature",
+            "role": "Agent",
+            "page": 1,
+            "x": 12,
+            "y": 80,
+            "w": 180,
+            "h": 48,
+        },
+        {
+            "id": "date-1",
+            "name": "AgentSignedOn",
+            "type": "date",
+            "role": "Agent",
+            "page": 1,
+            "x": 12,
+            "y": 140,
+            "w": 120,
+            "h": 24,
+        },
+    ]
+    response = client.post(
+        reverse(
+            "contract_template_field_layout",
+            kwargs={"version_id": version.pk},
+        ),
+        data=json.dumps(
+            {
+                "fieldLayoutJson": json.dumps(layout),
+                "expectedVersion": version.updated_at.isoformat(),
+            }
+        ),
+        content_type="application/json",
+    )
+    assert response.status_code in {200, 302, 303}
+    if response.status_code == 200:
+        page = inertia_page_script(response)
+        errors = (page.get("props") or {}).get("errors") or {}
+        assert not errors.get("form") and not errors.get("fields"), errors
+    version.refresh_from_db()
+    assert version.field_layout[0]["name"] == "PrefillText"
+    assert version.extracted_placeholder_keys == ["PrefillText"]
+    assert version.merge_schema[0]["source"] == ""
+
+
+@pytest.mark.django_db
 def test_publish_activate_and_retire_are_audited(seeded_offices):
     actor = company_admin(seeded_offices)
     template = create_template_family(
