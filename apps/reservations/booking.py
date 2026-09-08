@@ -7,7 +7,7 @@ from uuid import uuid4
 from zoneinfo import ZoneInfo
 
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError, OperationalError, transaction
 from django.utils import timezone
 
 from apps.audit.service import AuditTarget, actor_from_user, log_on_commit
@@ -25,6 +25,9 @@ from apps.web.capability import evaluate_permission, require_permission
 CAPACITY_STATUSES = frozenset(
     {ReservationStatus.REQUESTED, ReservationStatus.CONFIRMED}
 )
+
+# PostgreSQL ``deadlock_detected``; see ``_save_occupancy``.
+DEADLOCK_DETECTED = "40P01"
 
 
 class ReservationConflict(ValidationError):
@@ -163,12 +166,33 @@ def _target(reservation: Reservation) -> AuditTarget:
     )
 
 
+def _is_deadlock(exc: OperationalError) -> bool:
+    """True for PostgreSQL's ``deadlock_detected`` (SQLSTATE 40P01)."""
+    return getattr(exc.__cause__, "sqlstate", None) == DEADLOCK_DETECTED
+
+
 def _save_occupancy(occupancy: Occupancy) -> None:
+    """Persist a capacity interval, mapping every lost race to one conflict.
+
+    Two shapes of loss reach here. A writer that arrives after the winner
+    committed gets ``IntegrityError`` from the exclusion constraint. Two writers
+    that are already in flight — concurrent reschedules, which lock their own
+    reservation rows rather than the shared space row — can instead wait on each
+    other while PostgreSQL checks the constraint, and the loser is aborted with
+    ``deadlock detected``. Both mean the same thing to a booker, so both become
+    ``ReservationConflict`` and a 409 rather than a 500.
+    """
     try:
         with transaction.atomic():
             occupancy.full_clean()
             occupancy.save()
     except IntegrityError as exc:
+        raise ReservationConflict(
+            {"form": ["That time was just taken. Refresh and choose another slot."]}
+        ) from exc
+    except OperationalError as exc:
+        if not _is_deadlock(exc):
+            raise
         raise ReservationConflict(
             {"form": ["That time was just taken. Refresh and choose another slot."]}
         ) from exc

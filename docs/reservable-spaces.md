@@ -124,3 +124,53 @@ Three consequences worth stating plainly:
 
 `Reservation` rows are never hard-deleted; `delete()` raises. Reference, public
 id, office snapshot, and ownership are immutable after creation.
+
+### Losing the race
+
+A writer can lose in two shapes, and `_save_occupancy` maps both to
+`ReservationConflict` so the view answers `409` with a refresh prompt and no
+detail about the competing booking:
+
+- **`IntegrityError` / `ExclusionViolation` (`23P01`)** — the winner had already
+  committed. This is what every observed race produces today, because
+  `create_reservation` and `create_availability_exception` both take
+  `select_for_update(of=("self",))` on the space row first and therefore
+  serialize, and because a rescheduling `UPDATE` is checked against rows the
+  winner has already written.
+- **`OperationalError` with `deadlock detected` (`40P01`)** — two writers were
+  inside the constraint check at once, each waiting on the other's uncommitted
+  row. Reproduced by concurrent inserts that hold no space lock; PostgreSQL
+  aborts one. No current service path reaches it, since all of them either take
+  the space lock or update an existing row, but the ledger is the shared write
+  surface and an unmapped deadlock would surface as a `500` instead of a `409`.
+
+`reschedule_reservation` is the one write path that does not lock the space row
+— it locks its own reservation and occupancy — so it is the path to re-examine
+if a new caller is added.
+
+### Two mutations worth naming
+
+**Moving a booking between rooms has no service.** `transfer_space` and
+`migrate_space_office` move a *space* between offices; nothing moves a
+reservation from one room to another. Because the invariant lives on the ledger
+and keys on `space_id`, such a move is judged against the destination room the
+moment it is written, so the guarantee is already in place for whoever adds the
+mutation. `test_postgres_scopes_a_room_move_to_the_destination_room` pins that.
+
+**Buffer-policy edits are not retroactive.** Changing a space's
+`buffer_before_minutes` / `buffer_after_minutes` affects subsequent writes only;
+occupancies already committed keep the interval they were written with, and each
+`Reservation` snapshots the buffers it was created under. This is deliberate —
+retroactively widening live rows could push the table into a state the exclusion
+constraint rejects, with no sound way to choose which booking loses.
+
+Concurrency tests live in `apps/reservations/tests/test_occupancy.py` behind the
+`postgres_only` marker and `django_db(transaction=True)`. They open a real
+connection per thread and release both at a barrier. Run them against
+PostgreSQL, where they are the only proof of the invariant:
+
+```bash
+make dockerexec cmd="uv run pytest apps/reservations -q -p xdist -n0"
+```
+
+`-n0` matters: these tests need serial execution and their own connections.
