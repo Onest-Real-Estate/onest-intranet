@@ -516,7 +516,10 @@ class ContractTemplateVersion(models.Model):
                     )
                 else:
                     keys.add(key)
-                if not source:
+                # Drafts may seed Prefill keys from the field placer with an
+                # empty source; authors map hub sources before publish.
+                # Publish still requires every source via _assert_publishable.
+                if not source and self.status != self.Status.DRAFT:
                     errors.setdefault("merge_schema", []).append(
                         str(_("Merge variable %(key)s must declare a source."))
                         % {"key": key or f"#{index + 1}"}

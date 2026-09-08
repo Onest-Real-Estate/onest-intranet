@@ -34,6 +34,7 @@ from apps.contract.services.template_service import (
     serialize_template_row,
     serialize_version_detail,
     suggest_field_layout,
+    version_token,
 )
 from apps.contract.tasks import generate_contract_template_preview
 from apps.user.models import User
@@ -366,7 +367,7 @@ def contract_template_field_layout(request: HttpRequest, version_id: int):
             errors=validation_errors(form),
         )
     expected = form.cleaned_data.get("expected_version") or ""
-    if expected and expected != version.updated_at.isoformat():
+    if expected and expected != version_token(version):
         return _render_workspace(
             request,
             version=version,
