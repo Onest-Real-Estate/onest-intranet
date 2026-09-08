@@ -2107,3 +2107,121 @@ def is_non_route_exempt_path(path: str) -> bool:
     if is_explicitly_public_path(path):
         return True
     return path.startswith("/silk/")
+
+
+# --- scoped room administration workspace ----------------------------------
+ROUTE_POLICIES["space_administration"] = AuthorizationPolicy(
+    key="space_administration",
+    access="permission_protected",
+    description=(
+        "Scoped room administration list. Rooms are filtered to the actor's "
+        "effective hierarchy before serialization; a posted office is never "
+        "trusted."
+    ),
+    methods=("GET",),
+    route_names=("space_administration",),
+    all_permissions=("reservations.view_spaces",),
+    scope_rule="reservation_office_scope",
+)
+ROUTE_POLICIES["space_administration_workspace"] = AuthorizationPolicy(
+    key="space_administration_workspace",
+    access="permission_protected",
+    description="One room's identity, policy, schedule, blocks, and bookings.",
+    methods=("GET",),
+    route_names=("space_administration_workspace",),
+    all_permissions=("reservations.view_spaces",),
+    scope_rule="reservation_office_scope",
+)
+ROUTE_POLICIES["space_administration_create"] = AuthorizationPolicy(
+    key="space_administration_create",
+    access="permission_protected",
+    description="Create a room in an office the actor administers.",
+    methods=("POST",),
+    route_names=("space_administration_create",),
+    all_permissions=("reservations.manage_spaces",),
+    scope_rule="reservation_office_scope",
+)
+ROUTE_POLICIES["space_administration_update"] = AuthorizationPolicy(
+    key="space_administration_update",
+    access="permission_protected",
+    description="Edit room identity and booking policy with a stale-edit guard.",
+    methods=("POST",),
+    route_names=("space_administration_update",),
+    all_permissions=("reservations.manage_spaces",),
+    scope_rule="reservation_office_scope",
+)
+ROUTE_POLICIES["space_administration_activation"] = AuthorizationPolicy(
+    key="space_administration_activation",
+    access="permission_protected",
+    description="Activate or deactivate a room after reviewing booking impact.",
+    methods=("POST",),
+    route_names=("space_administration_activation",),
+    all_permissions=("reservations.manage_spaces",),
+    scope_rule="reservation_office_scope",
+)
+ROUTE_POLICIES["space_administration_retire"] = AuthorizationPolicy(
+    key="space_administration_retire",
+    access="permission_protected",
+    description="Retire a room without deleting its identity or history.",
+    methods=("POST",),
+    route_names=("space_administration_retire",),
+    all_permissions=("reservations.manage_spaces",),
+    scope_rule="reservation_office_scope",
+)
+ROUTE_POLICIES["space_administration_schedule"] = AuthorizationPolicy(
+    key="space_administration_schedule",
+    access="permission_protected",
+    description="Replace a room's weekly opening hours as one atomic set.",
+    methods=("POST",),
+    route_names=("space_administration_schedule",),
+    all_permissions=("reservations.manage_space_schedules",),
+    scope_rule="reservation_office_scope",
+)
+ROUTE_POLICIES["space_administration_block_create"] = AuthorizationPolicy(
+    key="space_administration_block_create",
+    access="permission_protected",
+    description="Add a maintenance or closure block through the capacity ledger.",
+    methods=("POST",),
+    route_names=("space_administration_block_create",),
+    all_permissions=("reservations.manage_space_schedules",),
+    scope_rule="reservation_office_scope",
+)
+ROUTE_POLICIES["space_administration_block_update"] = AuthorizationPolicy(
+    key="space_administration_block_update",
+    access="permission_protected",
+    description="Move or relabel a maintenance or closure block.",
+    methods=("POST",),
+    route_names=("space_administration_block_update",),
+    all_permissions=("reservations.manage_space_schedules",),
+    scope_rule="reservation_office_scope",
+)
+ROUTE_POLICIES["space_administration_block_delete"] = AuthorizationPolicy(
+    key="space_administration_block_delete",
+    access="permission_protected",
+    description="Remove a block and release the capacity it held.",
+    methods=("POST",),
+    route_names=("space_administration_block_delete",),
+    all_permissions=("reservations.manage_space_schedules",),
+    scope_rule="reservation_office_scope",
+)
+ROUTE_POLICIES["space_administration_booking_move"] = AuthorizationPolicy(
+    key="space_administration_booking_move",
+    access="permission_protected",
+    description=(
+        "Move a booking to another room. The destination is re-scoped against "
+        "the actor's hierarchy independently of the source room."
+    ),
+    methods=("POST",),
+    route_names=("space_administration_booking_move",),
+    all_permissions=("reservations.manage_reservations",),
+    scope_rule="reservation_office_scope",
+)
+ROUTE_POLICIES["space_administration_booking_cancel"] = AuthorizationPolicy(
+    key="space_administration_booking_cancel",
+    access="permission_protected",
+    description="Cancel another user's booking with an audited reason.",
+    methods=("POST",),
+    route_names=("space_administration_booking_cancel",),
+    all_permissions=("reservations.manage_reservations",),
+    scope_rule="reservation_office_scope",
+)

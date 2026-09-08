@@ -32,6 +32,7 @@ HUB_FEATURES: dict[str, bool] = {
     # Coming Soon stub. Shared only when the actor holds the matching grant.
     "reports": False,
     "admin-tool-catalog": False,
+    "admin-rooms": False,
 }
 HUB_FEATURES["announcements"] = True
 HUB_FEATURES["office-info"] = True
@@ -44,12 +45,16 @@ HUB_FEATURES["reports"] = True
 HUB_FEATURES["admin-tool-catalog"] = True
 HUB_FEATURES["training-learning"] = True
 HUB_FEATURES["admin-training"] = True
+HUB_FEATURES["admin-rooms"] = True
 
 # Live destinations that are not Coming Soon ops stubs and are not agent
 # HUB_SECTIONS. Shared only when the actor holds the matching permission.
 STANDALONE_FEATURES: dict[str, str] = {
     "reports": "web.view_reports",
     "admin-tool-catalog": "web.manage_onboarding_tools",
+    # Scoped room administration. The nav entry is shared only with an actor who
+    # can already open the workspace, so the rail never advertises a 403.
+    "admin-rooms": "reservations.view_spaces",
 }
 
 

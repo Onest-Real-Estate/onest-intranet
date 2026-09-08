@@ -92,7 +92,7 @@ describe("navigation registry contract", () => {
     const protectedItems = HUB_NAV_REGISTRY.filter(
       (item) => item.access === "permission-protected",
     );
-    expect(protectedItems).toHaveLength(21);
+    expect(protectedItems).toHaveLength(22);
     for (const item of protectedItems) {
       expect([
         ...(item.permissions.all ?? []),
@@ -127,6 +127,7 @@ describe("navigation registry contract", () => {
       admin_office_resources: "web.view_office_resources_admin",
       onboarding_tool_catalog: "web.manage_onboarding_tools",
       report_catalog: "web.view_reports",
+      space_administration: "reservations.view_spaces",
     });
   });
 

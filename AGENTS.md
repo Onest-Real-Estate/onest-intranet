@@ -118,6 +118,9 @@ docs/operational-tasks.md  Operational tasks: lifecycle, scope, conversion seam
 docs/feedback.md   Feedback intake: diagnostic redaction, idempotency, triage
 docs/it-support.md IT help desk: lifecycle, scope, internal notes, onboarding seam
 docs/onboarding-tools.md  Agent tool catalog: location rules, guides, readiness
+docs/reservable-spaces.md  Room model, capacity ledger, overlap invariant, race semantics
+docs/room-availability.md  Agent-facing availability calendar: privacy, DST, bounded ranges
+docs/room-administration.md  Scoped room admin: permissions, impact review, stale edits
 DESIGN.md          Design tokens + visual world (values win over docs/design-system.md)
 ```
 
