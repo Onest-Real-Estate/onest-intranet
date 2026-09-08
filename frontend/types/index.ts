@@ -1,4 +1,9 @@
-import type { ListResponse, StatusTone, ValidationErrors } from "@/types/design-system";
+import type {
+  ListResponse,
+  PaginationMeta,
+  StatusTone,
+  ValidationErrors,
+} from "@/types/design-system";
 
 export interface User {
   id: number;
@@ -4256,4 +4261,148 @@ export interface ReportExportJobPayload {
   errorMessage: string | null;
   downloadReady: boolean;
   byteSize: number;
+}
+
+/* --- Scoped room administration ------------------------------------------ */
+
+export interface SpaceAdminAmenity {
+  code: string;
+  name: string;
+}
+
+export interface SpaceAdminRow {
+  publicId: string;
+  name: string;
+  officeKey: string;
+  officeName: string;
+  spaceType: string;
+  spaceTypeLabel: string;
+  capacity: number;
+  location: string;
+  status: string;
+  statusLabel: string;
+  isReservable: boolean;
+  displayOrder: number;
+  amenities: SpaceAdminAmenity[];
+}
+
+export interface SpaceAdminCapabilities {
+  canManageSpaces: boolean;
+  canManageSchedules: boolean;
+  canManageReservations: boolean;
+  canOverride: boolean;
+  canViewSensitive: boolean;
+}
+
+export interface SpaceAdminOption {
+  value: string;
+  label: string;
+  regionName?: string;
+}
+
+export interface SpaceAdminFilters {
+  q: string;
+  office: string;
+  type: string;
+  status: string;
+  capacity: string;
+  amenities: string[];
+}
+
+export interface SpaceAdministrationPageProps extends PageProps {
+  spaces: SpaceAdminRow[];
+  pagination: PaginationMeta;
+  filters: SpaceAdminFilters;
+  filterOptions: {
+    offices: SpaceAdminOption[];
+    spaceTypes: SpaceAdminOption[];
+    statuses: SpaceAdminOption[];
+    amenities: SpaceAdminOption[];
+  };
+  capabilities: SpaceAdminCapabilities;
+  errors: ValidationErrors;
+}
+
+export interface SpaceBookingPolicy {
+  minimumDurationMinutes: number;
+  maximumDurationMinutes: number;
+  bookingHorizonDays: number;
+  minimumNoticeMinutes: number;
+  bufferBeforeMinutes: number;
+  bufferAfterMinutes: number;
+  cancellationCutoffMinutes: number;
+  requiresApproval: boolean;
+  isReservable: boolean;
+}
+
+export interface SpaceAdminDetail extends SpaceAdminRow {
+  description: string;
+  accessInstructions: string;
+  updatedAt: string;
+  retiredAt: string | null;
+  policy: SpaceBookingPolicy;
+}
+
+export interface SpaceScheduleInterval {
+  weekday: number;
+  startsAt: string;
+  endsAt: string;
+}
+
+export interface SpaceAdminBlock {
+  publicId: string;
+  kind: string;
+  kindLabel: string;
+  startsAt: string;
+  endsAt: string;
+  reason: string;
+  visibility: string;
+}
+
+export interface SpaceAdminBooking {
+  publicId: string;
+  reference: string;
+  ownerName: string;
+  startsAt: string;
+  endsAt: string;
+  status: string;
+  statusLabel: string;
+  attendeeCount: number | null;
+}
+
+export interface SpaceImpactBooking {
+  reference: string;
+  publicId: string;
+  ownerName: string;
+  startsAt: string;
+  endsAt: string;
+  reason: string;
+}
+
+export interface SpaceImpactReport {
+  total: number;
+  bookings: SpaceImpactBooking[];
+}
+
+export interface SpaceAdminMoveTarget {
+  value: string;
+  label: string;
+  capacity: number;
+}
+
+export interface SpaceAdministrationWorkspacePageProps extends PageProps {
+  space: SpaceAdminDetail;
+  schedule: SpaceScheduleInterval[];
+  blocks: SpaceAdminBlock[];
+  upcomingBookings: SpaceAdminBooking[];
+  moveTargets: SpaceAdminMoveTarget[];
+  options: {
+    spaceTypes: SpaceAdminOption[];
+    blockKinds: SpaceAdminOption[];
+    visibilities: SpaceAdminOption[];
+  };
+  capabilities: SpaceAdminCapabilities;
+  impact: SpaceImpactReport | null;
+  errors: ValidationErrors;
+  links: { indexHref: string };
 }

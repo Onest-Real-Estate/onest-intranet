@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 
 import pytest
+from django import forms
 from django.http import HttpResponse
 from django.test import RequestFactory
 
@@ -61,7 +62,35 @@ def test_a_boolean_reads_as_the_checkbox_it_replaces():
     `FormData` serializer both send. `"True"` would fail every one of them."""
     seen = read(post_json({"internal": True, "pinned": False}))
     assert seen["post"]["internal"] == "1"
-    assert seen["post"]["pinned"] == "0"
+    assert seen["post"]["pinned"] == "false"
+
+
+def test_a_false_boolean_survives_a_django_boolean_field():
+    """The regression that `"0"` caused, stated at the layer that broke.
+
+    ``CheckboxInput.value_from_datadict`` maps only the literals ``"true"`` and
+    ``"false"``; anything else falls through to ``bool(value)``, and ``"0"`` is
+    a non-empty string. Every ``forms.BooleanField`` in the project therefore
+    read an unchecked box as checked when the visit was JSON-encoded — which is
+    every Inertia visit without a file.
+    """
+
+    class Toggles(forms.Form):
+        internal = forms.BooleanField(required=False)
+        pinned = forms.BooleanField(required=False)
+
+    seen = read(post_json({"internal": True, "pinned": False}))
+    form = Toggles(seen["post"])
+
+    assert form.is_valid()
+    assert form.cleaned_data["internal"] is True
+    assert form.cleaned_data["pinned"] is False
+
+
+def test_a_false_boolean_still_fails_a_string_equality_check():
+    """Views that compare the raw string must keep reading False as not-set."""
+    seen = read(post_json({"pinned": False}))
+    assert (seen["post"]["pinned"] == "1") is False
 
 
 def test_null_reads_as_the_empty_field_a_browser_sends():

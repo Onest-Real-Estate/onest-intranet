@@ -721,6 +721,55 @@ registry.register(
 )
 
 registry.register(
+    name="reservations.space.updated",
+    version=1,
+    required_payload_keys={"target_type", "target_id"},
+    description="A space's identity or booking policy was edited within scope.",
+)
+
+registry.register(
+    name="reservations.space.activation_changed",
+    version=1,
+    required_payload_keys={"target_type", "target_id"},
+    description="A space was deactivated or reactivated after an impact review.",
+)
+
+registry.register(
+    name="reservations.space.schedule_replaced",
+    version=1,
+    required_payload_keys={"target_type", "target_id"},
+    description="A space's weekly opening hours were replaced as one atomic set.",
+)
+
+registry.register(
+    name="reservations.space.availability_block_updated",
+    version=1,
+    required_payload_keys={"target_type", "target_id"},
+    description="A maintenance or closure block was moved or relabelled.",
+)
+
+registry.register(
+    name="reservations.space.availability_block_removed",
+    version=1,
+    required_payload_keys={"target_type", "target_id"},
+    description="A maintenance or closure block was removed and its time released.",
+)
+
+registry.register(
+    name="reservations.booking.moved",
+    version=1,
+    required_payload_keys={"target_type", "target_id"},
+    description="An administrator moved a booking to another room in the office.",
+)
+
+registry.register(
+    name="reservations.booking.cancelled_by_admin",
+    version=1,
+    required_payload_keys={"target_type", "target_id"},
+    description="An administrator cancelled another user's booking with a reason.",
+)
+
+registry.register(
     name="reservations.booking.created",
     version=1,
     required_payload_keys={"target_type", "target_id"},

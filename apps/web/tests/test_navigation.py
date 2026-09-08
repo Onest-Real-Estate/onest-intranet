@@ -49,7 +49,7 @@ def test_every_hub_section_declares_its_availability():
         | set(OPERATIONS_FEATURES)
         # Live destinations that are neither an agent section nor an operations
         # Coming Soon stub.
-        | {"reports", "admin-tool-catalog"}
+        | {"reports", "admin-tool-catalog", "admin-rooms"}
     )
 
 
@@ -74,6 +74,7 @@ def test_only_the_live_destinations_are_enabled():
             "admin-feedback": True,
             "admin-it-support": True,
             "admin-training": True,
+            "admin-rooms": True,
         }.items()
         if enabled
     }
@@ -94,6 +95,7 @@ def test_only_the_live_destinations_are_enabled():
     assert HUB_FEATURES["reports"] is True
     assert HUB_FEATURES["admin-tool-catalog"] is True
     assert HUB_FEATURES["admin-it-support"] is True
+    assert HUB_FEATURES["admin-rooms"] is True
 
 
 def test_feature_states_are_a_copy_callers_cannot_corrupt():

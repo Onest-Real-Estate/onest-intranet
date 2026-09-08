@@ -10,6 +10,7 @@ from apps.audit.service import (
     log_on_commit,
     snapshot_model,
 )
+from apps.reservations.administration import _guard_no_protected_overlap
 from apps.reservations.guards import allow_office_transfer
 from apps.reservations.models import (
     Space,
@@ -206,6 +207,10 @@ def create_availability_exception(
         office=locked.owner_office,
     )
     exception = SpaceAvailabilityException(space=locked, created_by=actor, **fields)
+    # A block may not land on time a booking already holds. The exclusion
+    # constraint would refuse this too, but only on PostgreSQL and only as an
+    # ``IntegrityError``; this gives a specific message on every backend.
+    _guard_no_protected_overlap(locked, exception.starts_at, exception.ends_at)
     # The ledger row is derived from the validated interval, so ``save()`` mints
     # it; validating the not-yet-assigned relation here would always fail.
     exception.full_clean(exclude={"occupancy"})

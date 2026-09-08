@@ -50,8 +50,13 @@ class InertiaJsonPostMiddleware:
     Values are coerced to what an equivalent HTML form would have submitted, so
     a view written against a form post reads the same thing either way:
 
-    * ``True`` / ``False`` become ``"1"`` / ``"0"`` — the convention Inertia's
-      own ``FormData`` serializer uses, and what ``== "1"`` checks expect;
+    * ``True`` becomes ``"1"`` — the convention Inertia's own ``FormData``
+      serializer uses, and what ``== "1"`` checks expect. ``False`` becomes
+      ``"false"``, **not** ``"0"``: Django's ``CheckboxInput`` maps only the
+      literals ``"true"`` and ``"false"``, so ``"0"`` falls through to
+      ``bool("0")`` and every ``forms.BooleanField`` read an unchecked box as
+      checked. ``"false"`` keeps ``== "1"`` false for callers that test the
+      string themselves, so both styles of view now agree;
     * ``None`` becomes ``""``, the empty field a browser sends;
     * a list becomes repeated values, readable with ``getlist``;
     * a nested object is re-encoded as JSON, because a ``QueryDict`` holds
@@ -116,7 +121,9 @@ class InertiaJsonPostMiddleware:
     @staticmethod
     def _scalar(value) -> str:
         if isinstance(value, bool):
-            return "1" if value else "0"
+            # "false", not "0" — see the class docstring; ``CheckboxInput``
+            # coerces any other non-empty string to True.
+            return "1" if value else "false"
         if value is None:
             return ""
         if isinstance(value, str):
