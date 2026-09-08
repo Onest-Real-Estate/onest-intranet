@@ -193,6 +193,32 @@ describe("RoomAvailability", () => {
     expect(screen.getByRole("link", { name: "Open profile" })).toBeVisible();
   });
 
+  it("announces an invalid filter without dropping the calendar", () => {
+    pageProps.errors = {
+      fields: { date: ["Availability starts today or later."] },
+      form: [],
+    };
+    render(<RoomAvailability />);
+
+    expect(screen.getByRole("alert")).toHaveTextContent(/check the date or filters/i);
+    expect(screen.getByRole("heading", { name: "Blue conference room" })).toBeVisible();
+  });
+
+  it("shows a closed day with no selectable slots", () => {
+    const day = pageProps.calendar?.spaces[0].days[0];
+    if (day) {
+      day.isClosed = true;
+      day.openIntervals = [];
+      day.availableIntervals = [];
+      day.busyIntervals = [];
+      day.candidateSlots = [];
+    }
+    render(<RoomAvailability />);
+
+    expect(screen.getByText("Closed")).toBeVisible();
+    expect(screen.queryByRole("link", { name: /AM|PM/ })).not.toBeInTheDocument();
+  });
+
   it("has no automated accessibility violations in the day view", async () => {
     const { container } = render(<RoomAvailability />);
     expect(await axe(container)).toHaveNoViolations();

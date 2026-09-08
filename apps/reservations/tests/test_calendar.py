@@ -214,3 +214,75 @@ def test_calendar_query_count_does_not_scale_per_space(seeded):
             now=NOW,
         )
     assert len(captured) <= 22
+
+
+def test_closed_days_expose_no_open_intervals_or_candidate_slots(seeded):
+    viewer = _viewer()
+    _room()
+
+    payload = build_calendar(
+        user=viewer,
+        filters=CalendarFilters(view=CalendarView.WEEK, start_date=MONDAY),
+        now=NOW,
+    )
+    days = payload["calendar"]["spaces"][0]["days"]
+
+    assert [day["isClosed"] for day in days] == [False, *([True] * 6)]
+    for day in days[1:]:
+        assert day["openIntervals"] == []
+        assert day["availableIntervals"] == []
+        assert day["candidateSlots"] == []
+
+
+def test_local_midnight_keeps_each_block_on_a_single_local_day(seeded):
+    viewer = _viewer()
+    room = _room()
+    SpaceAvailabilityException.objects.create(
+        space=room,
+        kind=ExceptionKind.CLOSURE,
+        starts_at=datetime(2026, 3, 3, 4, tzinfo=UTC),
+        ends_at=datetime(2026, 3, 3, 5, tzinfo=UTC),
+        reason="Monday late-night deep clean",
+        visibility=ExceptionVisibility.PUBLIC,
+    )
+    SpaceAvailabilityException.objects.create(
+        space=room,
+        kind=ExceptionKind.CLOSURE,
+        starts_at=datetime(2026, 3, 3, 5, tzinfo=UTC),
+        ends_at=datetime(2026, 3, 3, 6, tzinfo=UTC),
+        reason="Tuesday overnight network cutover",
+        visibility=ExceptionVisibility.PUBLIC,
+    )
+
+    payload = build_calendar(
+        user=viewer,
+        filters=CalendarFilters(view=CalendarView.WEEK, start_date=MONDAY),
+        now=NOW,
+    )
+    days = payload["calendar"]["spaces"][0]["days"]
+
+    assert [item["label"] for item in days[0]["busyIntervals"]] == [
+        "Monday late-night deep clean"
+    ]
+    assert [item["label"] for item in days[1]["busyIntervals"]] == [
+        "Tuesday overnight network cutover"
+    ]
+
+
+def test_calendar_keeps_the_whole_fall_back_hour_in_the_office_timezone(seeded):
+    viewer = _viewer()
+    room = make_space(name="Fall back room")
+    make_weekly_hours(room, weekday=6, starts_at=time(1), ends_at=time(3))
+
+    payload = build_calendar(
+        user=viewer,
+        filters=CalendarFilters(view=CalendarView.DAY, start_date=date(2026, 11, 1)),
+        now=datetime(2026, 10, 31, 15, tzinfo=UTC),
+    )
+
+    assert payload["calendar"]["spaces"][0]["days"][0]["openIntervals"] == [
+        {
+            "startsAt": "2026-11-01T05:00:00+00:00",
+            "endsAt": "2026-11-01T08:00:00+00:00",
+        }
+    ]

@@ -2,13 +2,29 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+import threading
+from datetime import UTC, datetime, time, timedelta
+from zoneinfo import ZoneInfo
 
 import pytest
 from django.core.exceptions import ValidationError
-from django.db import IntegrityError, connection, transaction
+from django.db import (
+    IntegrityError,
+    OperationalError,
+    connection,
+    connections,
+    transaction,
+)
 
+from apps.reservations.booking import (
+    ReservationConflict,
+    _is_deadlock,
+    _save_occupancy,
+    create_reservation,
+    reschedule_reservation,
+)
 from apps.reservations.models import Occupancy, Reservation, SpaceAvailabilityException
+from apps.reservations.operations import OCCUPANCY_NO_OVERLAP
 from apps.reservations.taxonomy import (
     ExceptionKind,
     OccupancySource,
@@ -16,15 +32,20 @@ from apps.reservations.taxonomy import (
     ReservationStatus,
 )
 from apps.reservations.tests.factories import (
+    assign_role,
     make_occupancy,
     make_reservation,
     make_space,
+    make_weekly_hours,
+    office,
     person,
 )
+from apps.user.roles import ScopeType
 
 NINE = datetime(2026, 3, 2, 14, tzinfo=UTC)
 TEN = NINE + timedelta(hours=1)
 ELEVEN = NINE + timedelta(hours=2)
+TWELVE = NINE + timedelta(hours=3)
 
 
 def test_occupancy_requires_an_aware_forward_interval(seeded):
@@ -364,3 +385,409 @@ def test_postgres_frees_the_slot_when_a_reservation_is_released(seeded):
         ).count()
         == 1
     )
+
+
+# --- Concurrency: the invariant under two genuinely simultaneous writers -----
+
+
+def _seed_reference_data() -> None:
+    """Seed inside a transactional test, where the ``seeded`` fixture cannot run."""
+    from apps.user.office_seed import seed_offices
+    from apps.user.roles import seed_brokerage_roles, seed_role_groups
+
+    seed_role_groups()
+    seed_brokerage_roles()
+    seed_offices()
+
+
+def _booker(email: str) -> object:
+    user = person(email, "fairfax-va")
+    assign_role(user, "realtor", ScopeType.OFFICE, office("fairfax-va"))
+    return user
+
+
+def _bookable_room(**fields):
+    room = make_space(minimum_notice_minutes=0, **fields)
+    make_weekly_hours(room, weekday=0, starts_at=time(9), ends_at=time(17))
+    return room
+
+
+def _run_concurrently(work, arguments: list[tuple]) -> list[str]:
+    """Run ``work`` on separate connections, released together by a barrier.
+
+    Each thread owns its connection, so both transactions are really in flight
+    and the loser is decided by PostgreSQL rather than by Python ordering.
+    """
+    barrier = threading.Barrier(len(arguments), timeout=15)
+    outcomes: list[str] = []
+    guard = threading.Lock()
+
+    def attempt(args: tuple) -> None:
+        try:
+            with transaction.atomic():
+                barrier.wait()
+                work(*args)
+            result = "committed"
+        except (ReservationConflict, IntegrityError):
+            result = "conflict"
+        except OperationalError as exc:
+            # A writer that skipped the space lock can lose to a deadlock
+            # instead; the service layer maps this to a conflict.
+            result = "deadlock" if _is_deadlock(exc) else "error"
+        finally:
+            connections.close_all()
+        with guard:
+            outcomes.append(result)
+
+    threads = [threading.Thread(target=attempt, args=(args,)) for args in arguments]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=30)
+    assert not any(thread.is_alive() for thread in threads), "a worker deadlocked"
+    return sorted(outcomes)
+
+
+@postgres_only
+@pytest.mark.django_db(transaction=True)
+def test_concurrent_bookings_of_one_slot_commit_exactly_once():
+    _seed_reference_data()
+    room = _bookable_room()
+    first = _booker("first@example.com")
+    second = _booker("second@example.com")
+
+    def book(actor, key):
+        create_reservation(
+            actor=actor,
+            space=room,
+            starts_at=NINE,
+            ends_at=TEN,
+            purpose="Buyer consultation",
+            submission_key=key,
+            now=NINE - timedelta(hours=1),
+        )
+
+    outcomes = _run_concurrently(book, [(first, "race-a"), (second, "race-b")])
+
+    assert outcomes == ["committed", "conflict"]
+    assert Reservation.objects.filter(space=room).count() == 1
+    assert Occupancy.objects.consuming().filter(space=room).count() == 1
+
+
+@postgres_only
+@pytest.mark.django_db(transaction=True)
+def test_concurrent_back_to_back_bookings_both_commit():
+    _seed_reference_data()
+    room = _bookable_room()
+    first = _booker("first@example.com")
+    second = _booker("second@example.com")
+
+    def book(actor, starts_at, ends_at, key):
+        create_reservation(
+            actor=actor,
+            space=room,
+            starts_at=starts_at,
+            ends_at=ends_at,
+            purpose="Buyer consultation",
+            submission_key=key,
+            now=NINE - timedelta(hours=1),
+        )
+
+    # Half-open [start, end): the shared 10:00 boundary is not an overlap.
+    outcomes = _run_concurrently(
+        book,
+        [(first, NINE, TEN, "btb-a"), (second, TEN, ELEVEN, "btb-b")],
+    )
+
+    assert outcomes == ["committed", "committed"]
+    assert Occupancy.objects.consuming().filter(space=room).count() == 2
+
+
+@postgres_only
+@pytest.mark.django_db(transaction=True)
+def test_a_buffered_booking_blocks_a_neighbour_that_looks_adjacent():
+    _seed_reference_data()
+    room = _bookable_room(buffer_after_minutes=15)
+    first = _booker("first@example.com")
+    second = _booker("second@example.com")
+
+    def book(actor, starts_at, ends_at, key):
+        create_reservation(
+            actor=actor,
+            space=room,
+            starts_at=starts_at,
+            ends_at=ends_at,
+            purpose="Buyer consultation",
+            submission_key=key,
+            now=NINE - timedelta(hours=1),
+        )
+
+    # 09:00-10:00 protects through 10:15, so a 10:00 start is not free.
+    outcomes = _run_concurrently(
+        book,
+        [(first, NINE, TEN, "buf-a"), (second, TEN, ELEVEN, "buf-b")],
+    )
+
+    assert outcomes == ["committed", "conflict"]
+    assert Occupancy.objects.consuming().filter(space=room).count() == 1
+
+
+@postgres_only
+@pytest.mark.django_db(transaction=True)
+def test_the_constraint_still_decides_a_race_that_skips_the_space_lock():
+    """The database is the authority even when a writer takes no space lock.
+
+    Both service write paths lock the space row first, so they serialize. This
+    inserts straight into the ledger to prove the exclusion constraint — not the
+    lock discipline — is what makes the invariant race-proof.
+    """
+    _seed_reference_data()
+    room = make_space()
+
+    def insert(starts_at, ends_at, source):
+        Occupancy.objects.create(
+            space=room, starts_at=starts_at, ends_at=ends_at, source=source
+        )
+
+    outcomes = _run_concurrently(
+        insert,
+        [
+            (NINE, ELEVEN, OccupancySource.RESERVATION),
+            (TEN, ELEVEN, OccupancySource.EXCEPTION),
+        ],
+    )
+
+    # One writer commits; the other loses to the constraint or to the deadlock
+    # PostgreSQL raises when both are mid-check. Never two rows.
+    assert outcomes.count("committed") <= 1
+    assert "error" not in outcomes
+    assert Occupancy.objects.consuming().filter(space=room).count() <= 1
+
+
+@postgres_only
+@pytest.mark.django_db(transaction=True)
+def test_concurrent_reschedules_onto_one_slot_commit_exactly_once():
+    """Reschedules lock their own rows, so this is the path that can deadlock."""
+    _seed_reference_data()
+    room = _bookable_room()
+    first_owner = _booker("first@example.com")
+    second_owner = _booker("second@example.com")
+    first = make_reservation(
+        space=room, owner=first_owner, starts_at=NINE, ends_at=TEN, reference="RSV-A"
+    )
+    second = make_reservation(
+        space=room,
+        owner=second_owner,
+        starts_at=ELEVEN,
+        ends_at=ELEVEN + timedelta(hours=1),
+        reference="RSV-B",
+    )
+    target_start = TEN
+    target_end = ELEVEN
+
+    def move(actor, reservation):
+        reschedule_reservation(
+            actor=actor,
+            reservation=reservation,
+            starts_at=target_start,
+            ends_at=target_end,
+            now=NINE - timedelta(hours=1),
+        )
+
+    outcomes = _run_concurrently(move, [(first_owner, first), (second_owner, second)])
+
+    assert outcomes == ["committed", "conflict"]
+    assert (
+        Occupancy.objects.overlapping(
+            space_id=room.pk, starts_at=target_start, ends_at=target_end
+        ).count()
+        == 1
+    )
+
+
+def test_a_deadlock_maps_to_the_same_conflict_as_an_exclusion_violation(
+    seeded, monkeypatch
+):
+    """Both database refusals must reach the caller as one domain conflict."""
+
+    class Deadlock(Exception):
+        sqlstate = "40P01"
+
+    def explode(*args, **kwargs):
+        raise OperationalError("deadlock detected") from Deadlock()
+
+    monkeypatch.setattr(Occupancy, "save", explode)
+    occupancy = Occupancy(
+        space=make_space(),
+        starts_at=NINE,
+        ends_at=TEN,
+        source=OccupancySource.RESERVATION,
+    )
+
+    with pytest.raises(ReservationConflict) as caught:
+        _save_occupancy(occupancy)
+
+    assert "no longer available" in str(caught.value) or "just taken" in str(
+        caught.value
+    )
+
+
+def test_an_unrelated_database_error_is_not_disguised_as_a_conflict(
+    seeded, monkeypatch
+):
+    class Timeout(Exception):
+        sqlstate = "57014"
+
+    def explode(*args, **kwargs):
+        raise OperationalError("statement timeout") from Timeout()
+
+    monkeypatch.setattr(Occupancy, "save", explode)
+    occupancy = Occupancy(
+        space=make_space(),
+        starts_at=NINE,
+        ends_at=TEN,
+        source=OccupancySource.RESERVATION,
+    )
+
+    with pytest.raises(OperationalError):
+        _save_occupancy(occupancy)
+
+
+# --- Overlap shapes, DST, room identity, and the supporting indexes ---------
+
+
+@postgres_only
+def test_postgres_refuses_a_contained_and_a_containing_interval(seeded):
+    space = make_space()
+    make_occupancy(space, starts_at=NINE, ends_at=TWELVE)
+
+    # Fully inside the committed interval.
+    with pytest.raises(IntegrityError), transaction.atomic():
+        make_occupancy(space, starts_at=TEN, ends_at=ELEVEN)
+
+    assert Occupancy.objects.consuming().filter(space=space).count() == 1
+
+
+@postgres_only
+def test_postgres_refuses_an_interval_that_swallows_a_committed_one(seeded):
+    space = make_space()
+    make_occupancy(space, starts_at=TEN, ends_at=ELEVEN)
+
+    # Strictly contains the committed interval on both sides.
+    with pytest.raises(IntegrityError), transaction.atomic():
+        make_occupancy(space, starts_at=NINE, ends_at=TWELVE)
+
+    assert Occupancy.objects.consuming().filter(space=space).count() == 1
+
+
+@postgres_only
+def test_postgres_separates_repeated_wall_times_across_a_fall_back_fold(seeded):
+    """01:00 happens twice on 2026-11-01 in New York; they are distinct instants."""
+    space = make_space()
+    zone = ZoneInfo("America/New_York")
+    # Resolve to instants before doing any arithmetic: adding a timedelta to an
+    # aware local datetime is wall-clock arithmetic and silently drops ``fold``.
+    first_one = datetime(2026, 11, 1, 1, fold=0, tzinfo=zone).astimezone(UTC)
+    second_one = datetime(2026, 11, 1, 1, fold=1, tzinfo=zone).astimezone(UTC)
+    assert second_one - first_one == timedelta(hours=1)
+
+    make_occupancy(
+        space, starts_at=first_one, ends_at=first_one + timedelta(minutes=30)
+    )
+    # Same wall clock, one hour later in real time: not an overlap.
+    make_occupancy(
+        space, starts_at=second_one, ends_at=second_one + timedelta(minutes=30)
+    )
+
+    assert Occupancy.objects.consuming().filter(space=space).count() == 2
+
+    # The hour between them is still protected against a genuine overlap.
+    with pytest.raises(IntegrityError), transaction.atomic():
+        make_occupancy(
+            space,
+            starts_at=first_one + timedelta(minutes=15),
+            ends_at=second_one + timedelta(minutes=15),
+        )
+
+
+@postgres_only
+def test_postgres_scopes_a_room_move_to_the_destination_room(seeded):
+    """Moving a ledger row between rooms is judged against the destination.
+
+    No service moves a booking between rooms today; the invariant is enforced at
+    the ledger, so it governs such a move whenever one is added.
+    """
+    origin = make_space()
+    destination = make_space(name="Green meeting room")
+    moving = make_occupancy(origin, starts_at=NINE, ends_at=ELEVEN)
+    make_occupancy(destination, starts_at=NINE, ends_at=ELEVEN)
+
+    moving.space = destination
+    with pytest.raises(IntegrityError), transaction.atomic():
+        moving.save(update_fields=["space"])
+
+    assert Occupancy.objects.consuming().filter(space=destination).count() == 1
+
+
+def test_widening_a_buffer_policy_does_not_rewrite_committed_intervals(seeded):
+    """Buffer edits apply to new writes; committed rows keep their own interval.
+
+    Stated as a test because the alternative — retroactively widening live
+    occupancies — could put the table into a state the constraint rejects.
+    """
+    space = make_space(buffer_after_minutes=0)
+    owner = person("agent@example.com", "fairfax-va")
+    reservation = make_reservation(
+        space=space, owner=owner, starts_at=NINE, ends_at=TEN
+    )
+
+    space.buffer_after_minutes = 30
+    space.save(update_fields=["buffer_after_minutes"])
+
+    reservation.refresh_from_db()
+    assert reservation.occupancy.ends_at == TEN
+    assert reservation.buffer_after_minutes == 0
+
+
+@postgres_only
+def test_the_ledger_carries_the_indexes_the_overlap_checks_rely_on(seeded):
+    """Both the calendar lookup index and the constraint's GiST index exist."""
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT indexname, indexdef
+            FROM pg_indexes
+            WHERE tablename = %s
+            """,
+            [Occupancy._meta.db_table],
+        )
+        indexes = dict(cursor.fetchall())
+
+    assert "rsv_occupancy_calendar_idx" in indexes
+    constraint_index = indexes.get(OCCUPANCY_NO_OVERLAP)
+    assert constraint_index is not None, "the exclusion constraint has no index"
+    assert "gist" in constraint_index.lower()
+    assert "tstzrange" in constraint_index.lower()
+    assert "consumes_capacity" in constraint_index.lower()
+
+
+@postgres_only
+def test_the_overlap_lookup_can_be_served_by_the_calendar_index(seeded):
+    """The planner can use the index for the overlap shape the service runs.
+
+    Test tables are small enough that a sequential scan is genuinely cheaper, so
+    ``enable_seqscan`` is disabled to ask the narrower question: is the index
+    usable for this predicate at all, or is its column order wrong?
+    """
+    space = make_space()
+    make_occupancy(space, starts_at=NINE, ends_at=TEN)
+    query, params = Occupancy.objects.overlapping(
+        space_id=space.pk, starts_at=NINE, ends_at=ELEVEN
+    ).query.sql_with_params()
+
+    with connection.cursor() as cursor:
+        cursor.execute("SET LOCAL enable_seqscan = off")
+        cursor.execute(f"EXPLAIN {query}", params)
+        plan = "\n".join(row[0] for row in cursor.fetchall())
+
+    assert "rsv_occupancy_calendar_idx" in plan, plan
