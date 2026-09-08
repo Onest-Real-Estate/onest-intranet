@@ -1,4 +1,7 @@
 const URLS = {
+    'room_reservation_create': () => `/rooms/reservations`,
+    'room_reservation_new': () => `/rooms/reservations/new`,
+    'room_availability': () => `/rooms`,
     'activity_timeline': (record_type: string, record_id: string) => `/activity/${record_type}/${record_id}`,
     'training_media_remove': (media_id: number) => `/operations/training/media/${media_id}/remove`,
     'training_media_replace': (media_id: number) => `/operations/training/media/${media_id}/replace`,

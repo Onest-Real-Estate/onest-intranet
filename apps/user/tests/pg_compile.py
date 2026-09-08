@@ -12,11 +12,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from django.db.models import QuerySet
+from django.db.models import Model, QuerySet
 
 
-def compile_for_postgresql(queryset: QuerySet[Any], monkeypatch: Any) -> str:
-    """Return the SQL PostgreSQL would run for ``queryset``."""
+def postgresql_backend() -> Any:
+    """A PostgreSQL ``DatabaseWrapper`` that never opens a socket."""
     from django.db.backends.postgresql.base import DatabaseWrapper
 
     # django-stubs types settings_dict too narrowly for a literal like this.
@@ -35,10 +35,22 @@ def compile_for_postgresql(queryset: QuerySet[Any], monkeypatch: Any) -> str:
         "TIME_ZONE": None,
         "TEST": {},
     }
-    postgres = DatabaseWrapper(settings_dict, alias="pg_compile_only")
+    return DatabaseWrapper(settings_dict, alias="pg_compile_only")
+
+
+def compile_for_postgresql(queryset: QuerySet[Any], monkeypatch: Any) -> str:
+    """Return the SQL PostgreSQL would run for ``queryset``."""
+    postgres = postgresql_backend()
     # The compiler refuses to emit FOR UPDATE outside a transaction, and
     # answering that question is the one thing here that would need a socket.
     monkeypatch.setattr(postgres, "get_autocommit", lambda: False)
 
     sql, _params = queryset.query.get_compiler(connection=postgres).as_sql()
     return sql
+
+
+def compile_constraint_for_postgresql(constraint: Any, model: type[Model]) -> str:
+    """Return the DDL PostgreSQL would run to add ``constraint`` to ``model``."""
+    postgres = postgresql_backend()
+    with postgres.schema_editor(collect_sql=True, atomic=False) as editor:
+        return str(constraint.create_sql(model, editor))

@@ -124,6 +124,9 @@ _OPS_ALL = (
     "reservations.manage_spaces",
     "reservations.manage_space_schedules",
     "reservations.view_space_sensitive",
+    "reservations.book_spaces",
+    "reservations.manage_reservations",
+    "reservations.override_reservations",
     "web.manage_announcements",
     "web.publish_announcements",
     "web.pin_announcements",
@@ -177,6 +180,9 @@ _OPS_REGIONAL = (
     "reservations.manage_spaces",
     "reservations.manage_space_schedules",
     "reservations.view_space_sensitive",
+    "reservations.book_spaces",
+    "reservations.manage_reservations",
+    "reservations.override_reservations",
     "web.manage_announcements",
     "web.publish_announcements",
     "web.pin_announcements",
@@ -218,6 +224,9 @@ _OPS_BRANCH = (
     "reservations.manage_spaces",
     "reservations.manage_space_schedules",
     "reservations.view_space_sensitive",
+    "reservations.book_spaces",
+    "reservations.manage_reservations",
+    "reservations.override_reservations",
     "web.manage_announcements",
     "web.publish_announcements",
     "web.manage_training",
@@ -240,6 +249,7 @@ _OPS_BRANCH = (
     "web.export_reports",
 )
 _OPS_TC = (
+    "reservations.book_spaces",
     "web.view_users",
     "web.view_transactions",
     "web.view_agent_contracts",
@@ -259,6 +269,8 @@ _OPS_OFFICE_ADMIN = (
     "reservations.manage_spaces",
     "reservations.manage_space_schedules",
     "reservations.view_space_sensitive",
+    "reservations.book_spaces",
+    "reservations.manage_reservations",
     # Authoring only. Regional and branch administrators write the notice; the
     # publish grant sits with their manager.
     "web.manage_announcements",
@@ -271,6 +283,7 @@ _OPS_OFFICE_ADMIN = (
     "web.export_reports",
 )
 _OPS_REALTOR = (
+    "reservations.book_spaces",
     "web.view_own_transactions",
     "web.view_own_tasks",
     "web.view_own_commission",
@@ -425,6 +438,7 @@ ROLE_DEFINITIONS: tuple[RoleDefinition, ...] = (
         priority=10,
         valid_scope_types=(ScopeType.COMPANY,),
         default_permissions=(
+            "reservations.book_spaces",
             "web.manage_announcements",
             "web.publish_announcements",
             "web.pin_announcements",
@@ -446,6 +460,7 @@ ROLE_DEFINITIONS: tuple[RoleDefinition, ...] = (
         priority=11,
         valid_scope_types=(ScopeType.COMPANY,),
         default_permissions=(
+            "reservations.book_spaces",
             "web.view_transactions",
             "web.view_users",
             "web.view_agent_contracts",
@@ -466,6 +481,7 @@ ROLE_DEFINITIONS: tuple[RoleDefinition, ...] = (
         priority=12,
         valid_scope_types=(ScopeType.COMPANY,),
         default_permissions=(
+            "reservations.book_spaces",
             "web.view_compliance",
             "web.view_users",
             "web.view_agent_contracts",
@@ -491,6 +507,7 @@ ROLE_DEFINITIONS: tuple[RoleDefinition, ...] = (
         priority=13,
         valid_scope_types=(ScopeType.COMPANY,),
         default_permissions=(
+            "reservations.book_spaces",
             "web.view_it_support",
             "web.view_feedback",
             "web.triage_feedback",

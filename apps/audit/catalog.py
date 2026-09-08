@@ -719,3 +719,38 @@ registry.register(
     required_payload_keys={"target_type", "target_id"},
     description="A holiday, maintenance, closure, or administrative hold was added.",
 )
+
+registry.register(
+    name="reservations.booking.created",
+    version=1,
+    required_payload_keys={"target_type", "target_id"},
+    description="A room reservation was created after authoritative validation.",
+)
+
+registry.register(
+    name="reservations.booking.cancelled",
+    version=1,
+    required_payload_keys={"target_type", "target_id"},
+    description="A room reservation was cancelled and its capacity released.",
+)
+
+registry.register(
+    name="reservations.booking.rescheduled",
+    version=1,
+    required_payload_keys={"target_type", "target_id"},
+    description="A room reservation moved atomically to a newly validated interval.",
+)
+
+registry.register(
+    name="reservations.booking.approved",
+    version=1,
+    required_payload_keys={"target_type", "target_id"},
+    description="A pending room reservation was approved within office scope.",
+)
+
+registry.register(
+    name="reservations.booking.denied",
+    version=1,
+    required_payload_keys={"target_type", "target_id"},
+    description="A pending room reservation was denied and its capacity released.",
+)

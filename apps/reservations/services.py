@@ -86,11 +86,7 @@ def create_space(*, actor: User, owner_office: Office, **fields) -> Space:
 
 @transaction.atomic
 def retire_space(*, actor: User, space: Space, reason: str) -> Space:
-    locked = (
-        Space.objects.select_for_update(of=("self",))
-        .select_related("owner_office")
-        .get(pk=space.pk)
-    )
+    locked = Space.objects.select_for_update(of=("self",)).get(pk=space.pk)
     require_permission(actor, SpacePermission.MANAGE, office=locked.owner_office)
     if locked.is_retired:
         raise ValidationError("This space is already retired.")
@@ -171,11 +167,7 @@ def _transfer_locked(
 def transfer_space(
     *, actor: User, space: Space, to_office: Office, reason: str
 ) -> SpaceOfficeTransfer:
-    locked = (
-        Space.objects.select_for_update(of=("self",))
-        .select_related("owner_office")
-        .get(pk=space.pk)
-    )
+    locked = Space.objects.select_for_update(of=("self",)).get(pk=space.pk)
     return _transfer_locked(
         actor=actor,
         locked=locked,
@@ -190,11 +182,7 @@ def migrate_space_office(
     *, actor: User, space: Space, to_office: Office, reason: str
 ) -> SpaceOfficeTransfer:
     """Explicit history-preserving operation for a space that has bookings."""
-    locked = (
-        Space.objects.select_for_update(of=("self",))
-        .select_related("owner_office")
-        .get(pk=space.pk)
-    )
+    locked = Space.objects.select_for_update(of=("self",)).get(pk=space.pk)
     return _transfer_locked(
         actor=actor,
         locked=locked,
@@ -211,18 +199,16 @@ def create_availability_exception(
     space: Space,
     **fields,
 ) -> SpaceAvailabilityException:
-    locked = (
-        Space.objects.select_for_update(of=("self",))
-        .select_related("owner_office")
-        .get(pk=space.pk)
-    )
+    locked = Space.objects.select_for_update(of=("self",)).get(pk=space.pk)
     require_permission(
         actor,
         SpacePermission.MANAGE_SCHEDULE,
         office=locked.owner_office,
     )
     exception = SpaceAvailabilityException(space=locked, created_by=actor, **fields)
-    exception.full_clean()
+    # The ledger row is derived from the validated interval, so ``save()`` mints
+    # it; validating the not-yet-assigned relation here would always fail.
+    exception.full_clean(exclude={"occupancy"})
     exception.save()
     log_on_commit(
         "reservations.space.availability_blocked",

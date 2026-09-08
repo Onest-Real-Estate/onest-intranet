@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from django.db import models
+from django.db import models, transaction
 from django.db.models import Q
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
@@ -16,7 +17,9 @@ from apps.reservations.taxonomy import (
     AmenityCategory,
     ExceptionKind,
     ExceptionVisibility,
+    OccupancySource,
     RecurrencePolicy,
+    ReservationStatus,
     SpaceStatus,
     SpaceType,
     Weekday,
@@ -528,6 +531,270 @@ class WeeklyAvailability(models.Model):
             )
 
 
+class OccupancyQuerySet(models.QuerySet["Occupancy"]):
+    def consuming(self) -> OccupancyQuerySet:
+        return self.filter(consumes_capacity=True)
+
+    def overlapping(
+        self, *, space_id: int, starts_at: datetime, ends_at: datetime
+    ) -> OccupancyQuerySet:
+        return self.consuming().filter(
+            space_id=space_id,
+            starts_at__lt=ends_at,
+            ends_at__gt=starts_at,
+        )
+
+
+class Occupancy(models.Model):
+    """Unified half-open capacity interval for bookings and admin blocks.
+
+    PostgreSQL adds the race-proof exclusion constraint in migration 0003.
+    Keeping every capacity consumer in this table makes reservation/block races
+    subject to the same invariant.
+    """
+
+    public_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
+    space = models.ForeignKey(
+        Space, on_delete=models.PROTECT, related_name="occupancies"
+    )
+    starts_at = models.DateTimeField()
+    ends_at = models.DateTimeField()
+    source = models.CharField(max_length=16, choices=OccupancySource.choices)
+    consumes_capacity = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    if TYPE_CHECKING:
+        space_id: int
+        reservation_record: Reservation
+        exception_record: SpaceAvailabilityException
+
+    objects = OccupancyQuerySet.as_manager()
+
+    class Meta:
+        ordering = ["starts_at", "ends_at", "pk"]
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(ends_at__gt=models.F("starts_at")),
+                name="rsv_occupancy_ends_after_start",
+            )
+        ]
+        indexes = [
+            models.Index(
+                fields=["space", "consumes_capacity", "starts_at", "ends_at"],
+                name="rsv_occupancy_calendar_idx",
+            )
+        ]
+
+    def clean(self) -> None:
+        super().clean()
+        errors: dict[str, object] = {}
+        if not timezone.is_aware(self.starts_at):
+            errors["starts_at"] = _("Start time must include a timezone.")
+        if not timezone.is_aware(self.ends_at):
+            errors["ends_at"] = _("End time must include a timezone.")
+        if not errors and self.ends_at <= self.starts_at:
+            errors["ends_at"] = _("End time must be after start time.")
+        if errors:
+            raise ValidationError(errors)
+
+
+class ReservationQuerySet(models.QuerySet["Reservation"]):
+    def capacity_consuming(self) -> ReservationQuerySet:
+        return self.filter(occupancy__consumes_capacity=True)
+
+    def for_owner(self, user) -> ReservationQuerySet:
+        if getattr(user, "is_anonymous", False):
+            return self.none()
+        return self.filter(owner=user)
+
+    def overlapping(
+        self, *, space_id: int, starts_at: datetime, ends_at: datetime
+    ) -> ReservationQuerySet:
+        return self.capacity_consuming().filter(
+            space_id=space_id,
+            occupancy__starts_at__lt=ends_at,
+            occupancy__ends_at__gt=starts_at,
+        )
+
+
+class Reservation(models.Model):
+    """Audited room booking whose capacity is represented by ``Occupancy``."""
+
+    public_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
+    reference = models.CharField(max_length=24, unique=True)
+    occupancy = models.OneToOneField(
+        Occupancy,
+        on_delete=models.PROTECT,
+        related_name="reservation_record",
+    )
+    space = models.ForeignKey(
+        Space, on_delete=models.PROTECT, related_name="reservations"
+    )
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="space_reservations",
+    )
+    office = models.ForeignKey(
+        Office,
+        on_delete=models.PROTECT,
+        related_name="space_reservations",
+        help_text=_("Owning office snapshot at reservation creation."),
+    )
+    office_name = models.CharField(max_length=200)
+    space_name = models.CharField(max_length=200)
+    starts_at = models.DateTimeField()
+    ends_at = models.DateTimeField()
+    buffer_before_minutes = models.PositiveIntegerField(default=0)
+    buffer_after_minutes = models.PositiveIntegerField(default=0)
+    purpose = models.CharField(max_length=240)
+    attendee_count = models.PositiveSmallIntegerField(null=True, blank=True)
+    related_record_type = models.CharField(max_length=64, blank=True)
+    related_record_id = models.CharField(max_length=64, blank=True)
+    status = models.CharField(
+        max_length=16,
+        choices=ReservationStatus.choices,
+        default=ReservationStatus.CONFIRMED,
+    )
+    instructions_snapshot = models.TextField(blank=True)
+    submission_key = models.CharField(max_length=64, unique=True, editable=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="space_reservations_created",
+    )
+    approved_at = models.DateTimeField(null=True, blank=True)
+    approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="space_reservations_approved",
+    )
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+    cancelled_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="space_reservations_cancelled",
+    )
+    cancel_reason = models.CharField(max_length=240, blank=True)
+
+    if TYPE_CHECKING:
+        occupancy_id: int
+        space_id: int
+        owner_id: int
+        office_id: int
+        created_by_id: int | None
+        approved_by_id: int | None
+        cancelled_by_id: int | None
+
+    objects = ReservationQuerySet.as_manager()
+
+    class Meta:
+        ordering = ["-starts_at", "-pk"]
+        permissions = (
+            ("book_spaces", _("Can book active spaces at the assigned office")),
+            ("manage_reservations", _("Can manage reservations within scope")),
+            (
+                "override_reservations",
+                _("Can override reservation policy with an audited reason"),
+            ),
+        )
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(ends_at__gt=models.F("starts_at")),
+                name="rsv_booking_ends_after_start",
+            ),
+            models.CheckConstraint(
+                condition=~Q(reference=""), name="rsv_booking_requires_reference"
+            ),
+            models.CheckConstraint(
+                condition=~Q(purpose=""), name="rsv_booking_requires_purpose"
+            ),
+            models.CheckConstraint(
+                condition=Q(attendee_count__isnull=True) | Q(attendee_count__gte=1),
+                name="rsv_booking_attendees_positive",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    Q(status=ReservationStatus.CANCELLED, cancelled_at__isnull=False)
+                    | (
+                        ~Q(status=ReservationStatus.CANCELLED)
+                        & Q(cancelled_at__isnull=True)
+                    )
+                ),
+                name="rsv_booking_cancelled_at_matches",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["space", "status", "starts_at"],
+                name="rsv_booking_space_state_time",
+            ),
+            models.Index(fields=["owner", "-starts_at"], name="rsv_booking_owner_time"),
+            models.Index(
+                fields=["office", "status", "starts_at"],
+                name="rsv_booking_office_state_time",
+            ),
+        ]
+
+    def clean(self) -> None:
+        super().clean()
+        errors: dict[str, object] = {}
+        self.reference = self.reference.strip().upper()
+        self.purpose = self.purpose.strip()
+        self.related_record_type = self.related_record_type.strip()
+        self.related_record_id = self.related_record_id.strip()
+        if not timezone.is_aware(self.starts_at):
+            errors["starts_at"] = _("Start time must include a timezone.")
+        if not timezone.is_aware(self.ends_at):
+            errors["ends_at"] = _("End time must include a timezone.")
+        if not errors and self.ends_at <= self.starts_at:
+            errors["ends_at"] = _("End time must be after start time.")
+        if not self.reference:
+            errors["reference"] = _("A stable reference is required.")
+        if not self.purpose:
+            errors["purpose"] = _("A business purpose is required.")
+        if self.attendee_count is not None and self.attendee_count < 1:
+            errors["attendee_count"] = _("Attendee count must be positive.")
+        if self.space_id and self.office_id != self.space.owner_office_id:
+            errors["office"] = _("Reservation office must match the space office.")
+        if self.status == ReservationStatus.CANCELLED:
+            if self.cancelled_at is None:
+                errors["cancelled_at"] = _(
+                    "Cancelled reservations require a cancellation timestamp."
+                )
+        elif self.cancelled_at is not None:
+            errors["cancelled_at"] = _(
+                "Only cancelled reservations may have a cancellation timestamp."
+            )
+        if self.pk:
+            original = (
+                type(self)
+                .objects.filter(pk=self.pk)
+                .values("public_id", "reference", "office_id", "space_id", "owner_id")
+                .first()
+            )
+            if original and original["public_id"] != self.public_id:
+                errors["public_id"] = _("Stable identity cannot be changed.")
+            if original and original["reference"] != self.reference:
+                errors["reference"] = _("Reservation reference cannot be changed.")
+            if original and original["office_id"] != self.office_id:
+                errors["office"] = _("Reservation office snapshot cannot be changed.")
+            if original and original["owner_id"] != self.owner_id:
+                errors["owner"] = _("Reservation ownership cannot be changed.")
+        if errors:
+            raise ValidationError(errors)
+
+    def delete(self, using=None, keep_parents=False):
+        raise ValidationError(_("Reservations are retained for audit history."))
+
+
 class SpaceAvailabilityException(models.Model):
     public_id = models.UUIDField(
         _("public id"), default=uuid.uuid4, editable=False, unique=True
@@ -537,6 +804,11 @@ class SpaceAvailabilityException(models.Model):
         on_delete=models.PROTECT,
         related_name="availability_exceptions",
         verbose_name=_("space"),
+    )
+    occupancy = models.OneToOneField(
+        Occupancy,
+        on_delete=models.PROTECT,
+        related_name="exception_record",
     )
     kind = models.CharField(_("kind"), max_length=20, choices=ExceptionKind.choices)
     starts_at = models.DateTimeField(_("starts at"))
@@ -557,6 +829,10 @@ class SpaceAvailabilityException(models.Model):
         related_name="reservation_space_exceptions_created",
         verbose_name=_("created by"),
     )
+
+    if TYPE_CHECKING:
+        space_id: int
+        occupancy_id: int | None
 
     class Meta:
         ordering = ["starts_at", "ends_at", "pk"]
@@ -596,6 +872,40 @@ class SpaceAvailabilityException(models.Model):
             errors["reason"] = _("A reason is required.")
         if errors:
             raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        """Keep direct ORM fixtures on the unified capacity ledger.
+
+        Application writes still use ``create_availability_exception`` so
+        authorization and audit events remain explicit.
+        """
+        with transaction.atomic():
+            if not getattr(self, "occupancy_id", None):
+                occupancy = Occupancy(
+                    space=self.space,
+                    starts_at=self.starts_at,
+                    ends_at=self.ends_at,
+                    source=OccupancySource.EXCEPTION,
+                )
+                occupancy.full_clean()
+                occupancy.save()
+                self.occupancy = occupancy
+            else:
+                occupancy = self.occupancy
+                occupancy.space = self.space
+                occupancy.starts_at = self.starts_at
+                occupancy.ends_at = self.ends_at
+                occupancy.consumes_capacity = True
+                occupancy.full_clean()
+                occupancy.save(
+                    update_fields=[
+                        "space",
+                        "starts_at",
+                        "ends_at",
+                        "consumes_capacity",
+                    ]
+                )
+            return super().save(*args, **kwargs)
 
 
 class SpaceOfficeTransfer(models.Model):

@@ -92,7 +92,7 @@ describe("navigation registry contract", () => {
     const protectedItems = HUB_NAV_REGISTRY.filter(
       (item) => item.access === "permission-protected",
     );
-    expect(protectedItems).toHaveLength(20);
+    expect(protectedItems).toHaveLength(21);
     for (const item of protectedItems) {
       expect([
         ...(item.permissions.all ?? []),

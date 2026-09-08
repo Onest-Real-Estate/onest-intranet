@@ -332,10 +332,21 @@ Responsive behavior is **container-driven, not viewport-driven**. A table in a
 container width below which they stop fitting, and below 576px of table the rows
 become cards that show every column. Forms are one column by default.
 
+Resource-by-time matrices keep the resource identity as a sticky leading
+ledger while date or time columns move beneath the reader. Those columns widen
+at container thresholds instead of compressing their labels and controls. When
+the same dataset has a list form, it repeats every resource, date, interval,
+state, and action; changing presentation must not reduce what the user can know
+or do.
+
 ### Named Rules
 
 **The Container Rule.** Anything whose fit depends on the space it actually
 occupies asks a container query. A viewport breakpoint in a panel is a bug.
+
+**The Ledger Anchor Rule.** In a wide schedule or matrix, keep the identifying
+column visible while the time axis scrolls. A compact alternate preserves
+content and action parity; it is not a summary.
 
 ## Elevation & Depth
 
@@ -450,6 +461,10 @@ from the palette and the radius, not from decoration.
   header row, 1px horizontal rules, and vertical rules between cells so a wide
   row stays readable across the screen. Numbers right-align and run tabular.
   Row hover is a muted wash (`--muted` at 40%).
+- **Schedule matrix:** the leading resource header stays sticky on the card
+  surface while date columns scroll horizontally. Resource and date widths step
+  up with their container; the semantic list form preserves the same labels,
+  availability states, intervals, and booking actions.
 
 ### Navigation
 
@@ -536,6 +551,8 @@ from an edge, all on `--ease-standard`.
   strip, not four bordered cards.
 - **Do** ask a container query for anything whose fit depends on the space it
   actually occupies.
+- **Do** keep identity anchored in a scrolling schedule and preserve full
+  information and action parity in its compact list form.
 - **Do** use the semantic tokens in `frontend/css/app.css`; both themes switch
   together through them.
 

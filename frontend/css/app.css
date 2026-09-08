@@ -21,6 +21,13 @@
      purpose: the backdrop is an uploaded image, not a themed surface, so
      flipping this to dark in light mode would put dark text on a dark photo. */
   --on-media: #ffffff;
+  /* The signature a signer draws is rasterised and sealed into a legal PDF.
+     It is not a themed surface either — it is ink on paper that leaves the
+     app — so both values are stated once and are identical in the dark block.
+     A signature that followed the theme would be white-on-white in the
+     document a court reads. */
+  --signature-ink: #101014;
+  --signature-paper: #ffffff;
   --brand-ink: #0d0d0d;
 
   /* Shape. 8px is the professional-density step: sharp enough that a card
@@ -161,6 +168,13 @@
      purpose: the backdrop is an uploaded image, not a themed surface, so
      flipping this to dark in light mode would put dark text on a dark photo. */
   --on-media: #ffffff;
+  /* The signature a signer draws is rasterised and sealed into a legal PDF.
+     It is not a themed surface either — it is ink on paper that leaves the
+     app — so both values are stated once and are identical in the dark block.
+     A signature that followed the theme would be white-on-white in the
+     document a court reads. */
+  --signature-ink: #101014;
+  --signature-paper: #ffffff;
   --brand-ink: #fff8eb;
 
   /* The dark canvas is neutral for the same reason the light one is: a warm
@@ -626,6 +640,20 @@
 }
 
 /*
+ * An inline listbox anchored under its input — a recipient search, a payee
+ * search. It is not a centred palette and not an edge panel: it belongs to the
+ * field above it, so it rises the 4px it is offset by rather than travelling.
+ * Short, because the reader is mid-keystroke and the panel has to be readable
+ * by the time the next character lands.
+ */
+@keyframes listbox-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+/*
  * Sheets slide from a viewport edge. Animations are bound with attribute
  * selectors — not Tailwind `data-[state=*]:animate-*` variants — because
  * custom utilities in `@layer utilities` do not receive generated variant
@@ -767,6 +795,10 @@
 
   .animate-palette {
     animation: palette-in var(--motion-base) var(--ease-standard);
+  }
+
+  .animate-listbox {
+    animation: listbox-in var(--motion-fast) var(--ease-standard);
   }
 
   .animate-dialog-overlay-in {

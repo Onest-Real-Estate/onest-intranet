@@ -3260,6 +3260,8 @@ export interface ContractTemplateRow {
   name: string;
   description: string;
   status: string;
+  statusLabel: string;
+  statusTone: string;
   jurisdictionStateCodes: string[];
   companyWide: boolean;
   effectiveFrom: string;
@@ -3290,6 +3292,8 @@ export interface ContractTemplateVersionDetail {
   displayName: string;
   description: string;
   status: string;
+  statusLabel: string;
+  statusTone: string;
   sourceFormat: string;
   sourceMediaType: string;
   sourceChecksum: string;
@@ -4022,6 +4026,110 @@ export interface InventoryReservationNewPageProps extends PageProps {
     dashboardHref: string;
   };
   errors: ValidationErrors;
+}
+
+export type RoomCalendarView = "day" | "week" | "list";
+
+export interface RoomCalendarInterval {
+  startsAt: string;
+  endsAt: string;
+}
+
+export interface RoomCalendarBusyInterval extends RoomCalendarInterval {
+  kind: string;
+  label: string;
+  isMine: boolean;
+}
+
+export interface RoomCalendarSlot extends RoomCalendarInterval {
+  bookingHref: string;
+}
+
+export interface RoomCalendarDay {
+  date: string;
+  isClosed: boolean;
+  openIntervals: RoomCalendarInterval[];
+  busyIntervals: RoomCalendarBusyInterval[];
+  availableIntervals: RoomCalendarInterval[];
+  candidateSlots: RoomCalendarSlot[];
+}
+
+export interface RoomCalendarSpace {
+  publicId: string;
+  name: string;
+  type: string;
+  typeLabel: string;
+  capacity: number;
+  location: string;
+  amenities: { code: string; name: string }[];
+  rules: {
+    minimumDurationMinutes: number;
+    maximumDurationMinutes: number;
+    minimumNoticeMinutes: number;
+    bookingHorizonDays: number;
+    bufferBeforeMinutes: number;
+    bufferAfterMinutes: number;
+    requiresApproval: boolean;
+  };
+  days: RoomCalendarDay[];
+}
+
+export interface RoomAvailabilityPageProps extends PageProps {
+  calendar: {
+    view: RoomCalendarView;
+    startDate: string;
+    days: { date: string }[];
+    spaces: RoomCalendarSpace[];
+    generatedAt: string;
+    timezone: string;
+    isTruncated: boolean;
+    advisory: string;
+  } | null;
+  office: { key: string; name: string; timezone: string } | null;
+  officeOptions: { key: string; name: string; regionName: string }[];
+  filterOptions: {
+    spaceTypes: FilterOption[];
+    amenities: FilterOption[];
+    rooms: FilterOption[];
+  };
+  filters: {
+    date: string;
+    view: RoomCalendarView;
+    office: string;
+    type: string;
+    capacity: string;
+    amenities: string[];
+    space: string;
+  };
+  capabilities: { canBook: boolean; canChangeOffice: boolean };
+  empty: {
+    kind: "no-office" | "no-results";
+    title: string;
+    description: string;
+  } | null;
+  errors: ValidationErrors;
+}
+
+export interface RoomReservationNewPageProps extends PageProps {
+  space: {
+    publicId: string;
+    name: string;
+    typeLabel: string;
+    capacity: number;
+    location: string;
+    requiresApproval: boolean;
+    minimumDurationMinutes: number;
+    maximumDurationMinutes: number;
+  } | null;
+  draft: {
+    startsAt: string;
+    endsAt: string;
+    purpose: string;
+    attendeeCount: string;
+  };
+  office: { name: string; timezone: string } | null;
+  errors: ValidationErrors;
+  links: { calendarHref: string };
 }
 
 export interface InventoryReservationTimelineEntry {

@@ -37,6 +37,7 @@ HUB_FEATURES["announcements"] = True
 HUB_FEATURES["office-info"] = True
 HUB_FEATURES["office-resources"] = True
 HUB_FEATURES["office-inventory"] = True
+HUB_FEATURES["room-availability"] = True
 HUB_FEATURES["my-contract"] = True
 HUB_FEATURES["my-tools"] = True
 HUB_FEATURES["reports"] = True

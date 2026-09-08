@@ -10,6 +10,8 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 
 from apps.reservations.models import (
     Amenity,
+    Occupancy,
+    Reservation,
     Space,
     SpaceAvailabilityException,
     SpacePhoto,
@@ -19,6 +21,7 @@ from apps.reservations.taxonomy import (
     AmenityCategory,
     ExceptionKind,
     RecurrencePolicy,
+    ReservationPermission,
     SpacePermission,
     SpaceType,
     Weekday,
@@ -232,9 +235,18 @@ def test_schema_declares_calendar_indexes_and_permissions():
         index.name for index in SpaceAvailabilityException._meta.indexes
     }
     permissions = {code for code, _ in Space._meta.permissions}
+    booking_permissions = {code for code, _ in Reservation._meta.permissions}
+    occupancy_indexes = {index.name for index in Occupancy._meta.indexes}
+    booking_indexes = {index.name for index in Reservation._meta.indexes}
 
     assert "rsv_space_office_state_type" in index_names
     assert "rsv_exception_space_time" in exception_indexes
+    assert "rsv_occupancy_calendar_idx" in occupancy_indexes
+    assert "rsv_booking_space_state_time" in booking_indexes
+    assert "rsv_booking_owner_time" in booking_indexes
     assert permissions == {
         permission.value.rsplit(".", 1)[1] for permission in SpacePermission
+    }
+    assert booking_permissions == {
+        permission.value.rsplit(".", 1)[1] for permission in ReservationPermission
     }

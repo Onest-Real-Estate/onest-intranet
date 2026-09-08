@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -227,7 +227,7 @@ describe("MyContract", () => {
     expect(screen.queryByRole("heading", { name: "Mentor" })).not.toBeInTheDocument();
   });
 
-  it("offers a disabled sign control only when signable and signing is not ready", () => {
+  it("explains on the page why signing is unavailable, rather than in a tooltip", () => {
     pageProps = {
       ...pageProps,
       state: "awaiting_signature",
@@ -251,8 +251,13 @@ describe("MyContract", () => {
       },
     };
     render(<MyContract />);
-    const sign = screen.getByRole("button", { name: /Sign contract/i });
-    expect(sign).toHaveAttribute("aria-disabled");
+
+    // A tooltip on a disabled button is unreachable by touch and by keyboard,
+    // so the reason is stated in the open and the dead control is gone.
+    expect(screen.getByText(/signing is temporarily unavailable/i)).toBeVisible();
+    expect(
+      screen.queryByRole("button", { name: /Sign contract/i }),
+    ).not.toBeInTheDocument();
   });
 
   it("links to the signing ceremony when signable and ready", () => {
@@ -340,5 +345,68 @@ describe("MyContract", () => {
     };
     render(<MyContract />);
     expect(screen.getByText(/could not be generated/i)).toBeInTheDocument();
+  });
+
+  it("shows the agreement's progress in the agent's own terms", () => {
+    render(<MyContract />);
+
+    const steps = within(
+      screen.getByRole("list", { name: /agreement progress/i }),
+    ).getAllByRole("listitem");
+    // The brokerage-internal `draft` and `ready_for_review` stages are not the
+    // agent's business; these four are what they can act on or wait for.
+    expect(steps).toHaveLength(4);
+    // "Active" also appears in the header status badge, so read the labels off
+    // the timeline itself.
+    for (const [index, label] of [
+      "Sent to you",
+      "Opened",
+      "Signed",
+      "Active",
+    ].entries()) {
+      expect(within(steps[index]).getByText(label)).toBeVisible();
+    }
+  });
+
+  it("stops the progress where a replaced agreement actually stopped", () => {
+    pageProps = {
+      ...pageProps,
+      state: "superseded",
+      contract: {
+        ...activeContract,
+        status: "superseded",
+        statusLabel: "Superseded",
+        statusTone: "neutral",
+        signedAt: null,
+        activatedAt: null,
+        supersededAt: "2026-02-01T12:00:00Z",
+      },
+    };
+    render(<MyContract />);
+
+    const steps = within(
+      screen.getByRole("list", { name: /agreement progress/i }),
+    ).getAllByRole("listitem");
+    // Sent, Opened, Replaced — not the Signed and Active steps it never reached.
+    expect(steps).toHaveLength(3);
+    expect(screen.getByText("Replaced")).toBeVisible();
+    expect(screen.queryByText("Active")).toBeNull();
+  });
+
+  it("keeps the contract id available without ranking it as a headline fact", () => {
+    render(<MyContract />);
+
+    expect(screen.getByText("Contract id")).toBeVisible();
+    expect(screen.getByText(activeContract.publicId)).toBeVisible();
+  });
+
+  it("says an open-ended agreement has no end date", () => {
+    pageProps = {
+      ...pageProps,
+      contract: { ...activeContract, expiresOn: null },
+    };
+    render(<MyContract />);
+
+    expect(screen.getByText("No end date")).toBeVisible();
   });
 });

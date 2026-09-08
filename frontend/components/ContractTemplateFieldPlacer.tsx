@@ -681,7 +681,7 @@ function PdfPageCanvas({
               key={field.id}
               type="button"
               className={cn(
-                "absolute z-20 flex items-stretch overflow-hidden rounded-sm border text-left text-[10px] leading-tight shadow-sm",
+                "absolute z-20 flex items-stretch overflow-hidden rounded-sm border text-left text-micro leading-tight shadow-sm",
                 field.role === "Agent"
                   ? "border-primary bg-primary/15 text-foreground"
                   : "border-accent-foreground/30 bg-accent/50 text-foreground",

@@ -156,7 +156,7 @@ describe("AgentContractWorkspace", () => {
   it("requires confirmation before issue", async () => {
     const user = userEvent.setup();
     render(<AgentContractWorkspace />);
-    await user.click(screen.getByRole("button", { name: /issue \/ send/i }));
+    await user.click(screen.getByRole("button", { name: /issue and send/i }));
     expect(
       screen.getByRole("heading", { name: /issue this contract/i }),
     ).toBeInTheDocument();
@@ -419,7 +419,7 @@ it("hides mentor payee when basis is none", async () => {
   });
   const user = userEvent.setup();
   render(<AgentContractWorkspace />);
-  expect(screen.queryByLabelText(/mentor payee/i)).not.toBeInTheDocument();
+  expect(screen.queryByText("Mentor payee")).not.toBeInTheDocument();
   expect(screen.queryByText(/sid@example.com/i)).not.toBeInTheDocument();
 
   await user.click(screen.getByRole("combobox", { name: /mentor basis/i }));
@@ -427,7 +427,9 @@ it("hides mentor payee when basis is none", async () => {
     await screen.findByRole("option", { name: /agent side before fees/i }),
   );
   // Amount already present from props — payee appears once basis is chosen.
-  expect(screen.getByLabelText(/mentor payee/i)).toBeInTheDocument();
+  // The payee is already set, so it renders as a record rather than a field.
+  expect(screen.getByText("Mentor payee")).toBeVisible();
+  expect(screen.getByText("Sid")).toBeVisible();
 });
 
 it("hides referral payee until basis and an amount are set", async () => {
