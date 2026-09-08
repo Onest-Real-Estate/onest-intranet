@@ -241,14 +241,14 @@ export function RoomCalendarGrid({
       aria-label={caption}
       className="border-border bg-card @container overflow-hidden rounded-lg border"
     >
-      {/* Focusable so a keyboard user can scroll to the columns that overflow;
-          without it the days past the fold are unreachable without a pointer. */}
-      <div
-        className="focus-visible:ring-ring overflow-x-auto focus-visible:ring-[3px] focus-visible:outline-none"
-        tabIndex={0}
-        role="group"
-        aria-label={`${caption}, scrollable`}
-      >
+      {/* No tabIndex here on purpose. Tabbing to a slot link inside an
+          off-screen column scrolls it into view on its own, so the bookable
+          content already reaches the keyboard. A column carrying only
+          read-only blocks has no focus stop, and the list view — which renders
+          every room, day, and interval — is its equivalent path. Giving a plain
+          scroller a tab stop would add a focus position that announces nothing
+          and does nothing. */}
+      <div className="overflow-x-auto">
         <div className="min-w-[42rem]">
           <div
             className="border-border grid border-b"
