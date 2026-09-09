@@ -59,7 +59,11 @@ def collect_inventory_events(context: EventSourceContext) -> list[AgendaEvent]:
                 location=reservation.office_name
                 or reservation.storage_location_snapshot,
                 priority=EventPriority.NORMAL,
-                context=f"{reservation.reference} · {reservation.status_label}",
+                # The status is real information here — checked out and
+                # overdue change what the reader must do. The reference code is
+                # not: it is for a support conversation, and on a six-row card
+                # it displaces the line that says what the item is for.
+                context=reservation.status_label,
                 cta_label="Open reservation",
                 cta_href=reverse(
                     "inventory_reservation_detail",

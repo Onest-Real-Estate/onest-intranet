@@ -46,6 +46,7 @@ HUB_FEATURES["admin-tool-catalog"] = True
 HUB_FEATURES["training-learning"] = True
 HUB_FEATURES["admin-training"] = True
 HUB_FEATURES["admin-rooms"] = True
+HUB_FEATURES["my-reservations"] = True
 
 # Live destinations that are not Coming Soon ops stubs and are not agent
 # HUB_SECTIONS. Shared only when the actor holds the matching permission.

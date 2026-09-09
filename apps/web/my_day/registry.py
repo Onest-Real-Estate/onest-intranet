@@ -50,6 +50,12 @@ def _unbuilt(key: str) -> EventSourceDefinition:
     return EventSourceDefinition(key=key, collector=None, available=False)
 
 
+def _collect_room_events(context: EventSourceContext) -> list[AgendaEvent]:
+    from apps.reservations.agenda import collect_room_events
+
+    return collect_room_events(context)
+
+
 def _collect_inventory_events(context: EventSourceContext) -> list[AgendaEvent]:
     # Imported lazily so loading the My Day registry does not pull the inventory
     # app graph during unrelated startup paths.
@@ -64,13 +70,17 @@ EVENT_SOURCE_DEFINITIONS: tuple[EventSourceDefinition, ...] = (
     ),
     # Registered, deliberately dark. Each becomes available in the change that
     # ships its module — training sessions and required-training deadlines;
-    # client consultations, closings, and internal meetings; room bookings
-    # (P1-056/P1-059). Inventory pickup/return windows are live below.
+    # client consultations, closings, and internal meetings. Room bookings
+    # and inventory pickup/return windows are live below.
     _unbuilt(EventSource.TRAINING),
     _unbuilt(EventSource.CONSULTATION),
     _unbuilt(EventSource.CLOSING),
     _unbuilt(EventSource.MEETING),
-    _unbuilt(EventSource.ROOM_BOOKING),
+    EventSourceDefinition(
+        key=EventSource.ROOM_BOOKING,
+        collector=_collect_room_events,
+        available=True,
+    ),
     EventSourceDefinition(
         key=EventSource.INVENTORY,
         collector=_collect_inventory_events,

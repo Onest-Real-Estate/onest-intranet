@@ -1,6 +1,7 @@
 from django.urls import path
 
 from . import views
+from .my_reservations import views as my_reservations_views
 from .quick_access import views as quick_access_views
 from .reporting import views as reporting_views
 from .search import views as search_views
@@ -20,6 +21,24 @@ urlpatterns = [
         "search/suggestions",
         search_views.search_suggestions,
         name="search_suggestions",
+    ),
+    # Ahead of the ``hub/<slug:section>`` stub below on purpose: this is the
+    # live destination that replaces the my-reservations placeholder, and the
+    # slug pattern would otherwise swallow it.
+    path(
+        "hub/my-reservations",
+        my_reservations_views.my_reservations,
+        name="my_reservations",
+    ),
+    path(
+        "hub/my-reservations/<uuid:public_id>",
+        my_reservations_views.my_reservation_detail,
+        name="my_reservation_detail",
+    ),
+    path(
+        "hub/my-reservations/<uuid:public_id>/cancel",
+        my_reservations_views.my_reservation_cancel,
+        name="my_reservation_cancel",
     ),
     path("hub/<slug:section>", views.coming_soon, name="coming_soon"),
     path("reports", reporting_views.report_catalog, name="report_catalog"),

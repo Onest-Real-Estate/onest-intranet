@@ -93,24 +93,45 @@ class Agenda:
         return len(self.overdue) + len(self.today) + len(self.upcoming)
 
     def capped(self, limit: int) -> Agenda:
-        """Trim to ``limit`` rows across the buckets, overdue first.
+        """Trim to ``limit`` rows, giving every non-empty bucket a place.
 
-        Overdue and today are filled before upcoming, so a cap can drop a
-        distant appointment but never a missed one — the opposite would hide
-        exactly the row the reader most needs.
+        Priority still runs overdue → today → upcoming, so a cap drops a distant
+        appointment before a missed one. But priority alone is not enough: filling
+        greedily from the top lets a long backlog take the entire budget, and a
+        card called "My day" that shows six overdue items from last month and
+        nothing from today has failed at the one thing it is for.
+
+        So each non-empty bucket is guaranteed one row while the budget allows,
+        and only the remainder is distributed in priority order. Nothing is
+        hidden silently either way — the header reports "shown of total".
         """
         if limit <= 0 or self.total <= limit:
             return self
-        remaining = limit
-        kept: dict[str, list[AgendaEvent]] = {}
-        for name, rows in (
+        buckets: tuple[tuple[str, list[AgendaEvent]], ...] = (
             ("overdue", self.overdue),
             ("today", self.today),
             ("upcoming", self.upcoming),
-        ):
-            kept[name] = rows[:remaining]
-            remaining -= len(kept[name])
-        return Agenda(**kept)
+        )
+        allocation = dict.fromkeys((name for name, _ in buckets), 0)
+        remaining = limit
+
+        # A seat each, in priority order, so no bucket disappears entirely.
+        for name, rows in buckets:
+            if remaining == 0:
+                break
+            if rows:
+                allocation[name] = 1
+                remaining -= 1
+
+        # Then the remainder, still overdue-first.
+        for name, rows in buckets:
+            if remaining == 0:
+                break
+            extra = min(len(rows) - allocation[name], remaining)
+            allocation[name] += extra
+            remaining -= extra
+
+        return Agenda(**{name: rows[: allocation[name]] for name, rows in buckets})
 
 
 def build_agenda(events: list[AgendaEvent], *, now: datetime, tz: tzinfo) -> Agenda:

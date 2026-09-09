@@ -2225,3 +2225,38 @@ ROUTE_POLICIES["space_administration_booking_cancel"] = AuthorizationPolicy(
     all_permissions=("reservations.manage_reservations",),
     scope_rule="reservation_office_scope",
 )
+
+
+# --- unified self-service reservations -------------------------------------
+ROUTE_POLICIES["my_reservations"] = AuthorizationPolicy(
+    key="my_reservations",
+    access="authenticated",
+    description=(
+        "Unified self-service reservation feed. Scoped to the signed-in user "
+        "with no owner selector on the route, so there is nothing to tamper "
+        "with; each source applies its own self-only queryset."
+    ),
+    methods=("GET",),
+    route_names=("my_reservations",),
+    scope_rule="self_only",
+)
+ROUTE_POLICIES["my_reservation_detail"] = AuthorizationPolicy(
+    key="my_reservation_detail",
+    access="authenticated",
+    description="One of the reader's own reservations, resolved self-only.",
+    methods=("GET",),
+    route_names=("my_reservation_detail",),
+    scope_rule="self_only",
+)
+ROUTE_POLICIES["my_reservation_cancel"] = AuthorizationPolicy(
+    key="my_reservation_cancel",
+    access="authenticated",
+    description=(
+        "Cancel one of the reader's own reservations. The unified layer only "
+        "routes; the owning domain service re-checks permission, cutoff, and "
+        "lifecycle before anything changes."
+    ),
+    methods=("POST",),
+    route_names=("my_reservation_cancel",),
+    scope_rule="self_only",
+)
