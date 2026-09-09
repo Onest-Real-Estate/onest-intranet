@@ -75,6 +75,7 @@ def test_only_the_live_destinations_are_enabled():
             "admin-it-support": True,
             "admin-training": True,
             "admin-rooms": True,
+            "my-reservations": True,
         }.items()
         if enabled
     }
@@ -96,6 +97,7 @@ def test_only_the_live_destinations_are_enabled():
     assert HUB_FEATURES["admin-tool-catalog"] is True
     assert HUB_FEATURES["admin-it-support"] is True
     assert HUB_FEATURES["admin-rooms"] is True
+    assert HUB_FEATURES["my-reservations"] is True
 
 
 def test_feature_states_are_a_copy_callers_cannot_corrupt():
@@ -118,6 +120,7 @@ def test_unauthorized_administrative_feature_keys_are_not_shared(client):
         "office-resources": True,
         "office-inventory": True,
         "room-availability": True,
+        "my-reservations": True,
         "my-contract": True,
         "my-tools": True,
         "training-learning": True,
@@ -217,6 +220,7 @@ def test_shared_props_carry_feature_state_and_office(client):
         "office-resources": True,
         "office-inventory": True,
         "room-availability": True,
+        "my-reservations": True,
         "my-contract": True,
         "my-tools": True,
         "training-learning": True,

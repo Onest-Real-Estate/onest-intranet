@@ -121,6 +121,7 @@ docs/onboarding-tools.md  Agent tool catalog: location rules, guides, readiness
 docs/reservable-spaces.md  Room model, capacity ledger, overlap invariant, race semantics
 docs/room-availability.md  Agent-facing availability calendar: privacy, DST, bounded ranges
 docs/room-administration.md  Scoped room admin: permissions, impact review, stale edits
+docs/my-reservations.md  Unified self-service reservations: contract, buckets, isolation
 DESIGN.md          Design tokens + visual world (values win over docs/design-system.md)
 ```
 

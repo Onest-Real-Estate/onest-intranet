@@ -4406,3 +4406,67 @@ export interface SpaceAdministrationWorkspacePageProps extends PageProps {
   errors: ValidationErrors;
   links: { indexHref: string };
 }
+
+/* --- Unified self-service reservations ----------------------------------- */
+
+export type ReservationSourceKey = "room" | "inventory";
+
+export type ReservationTab = "upcoming" | "past" | "cancelled" | "calendar";
+
+export interface MyReservationAction {
+  key: string;
+  label: string;
+  href: string;
+  method: "get" | "post";
+  destructive: boolean;
+  /** Domain state the mutation expects, so a stale tab cannot act blindly. */
+  expectedStatus: string;
+}
+
+export interface MyReservationSummary {
+  sourceId: string;
+  source: ReservationSourceKey;
+  sourceLabel: string;
+  publicId: string;
+  reference: string;
+  title: string;
+  subtitle: string;
+  officeName: string;
+  timezone: string;
+  startsAt: string;
+  endsAt: string;
+  /** Inventory windows are date-shaped and carry `localDate` instead of a clock. */
+  allDay: boolean;
+  localDate: string | null;
+  displayStatus: string;
+  displayStatusLabel: string;
+  tone: StatusTone;
+  /** The owning domain's own code and words, never flattened away. */
+  sourceStatus: string;
+  statusLabel: string;
+  purpose: string;
+  quantity: number | null;
+  instructions: string;
+  contact: string;
+  detailHref: string;
+  actions: MyReservationAction[];
+}
+
+export interface MyReservationsPageProps extends PageProps {
+  reservations: MyReservationSummary[];
+  counts: Record<string, number>;
+  filters: { tab: ReservationTab; source: string; status: string };
+  filterOptions: {
+    sources: { value: string; label: string }[];
+    statuses: { value: string; label: string }[];
+  };
+  /** Present only when a source failed; names it rather than counting it. */
+  degraded: { failedSources: string[] } | null;
+  errors: ValidationErrors;
+}
+
+export interface MyReservationDetailPageProps extends PageProps {
+  reservation: MyReservationSummary;
+  links: { indexHref: string };
+  errors: ValidationErrors;
+}
