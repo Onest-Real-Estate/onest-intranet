@@ -15,6 +15,10 @@ from django.utils.translation import gettext_lazy as _
 class ContractStatus(models.TextChoices):
     DRAFT = "draft", _("Draft")
     READY_FOR_REVIEW = "ready_for_review", _("Ready for review")
+    AWAITING_COMPANY_SIGNATURE = (
+        "awaiting_company_signature",
+        _("Awaiting company signature"),
+    )
     SENT = "sent", _("Sent to agent")
     VIEWED = "viewed", _("Viewed")
     SIGNED = "signed", _("Signed")
@@ -33,6 +37,7 @@ PIPELINE_STATUSES = frozenset(
     {
         ContractStatus.DRAFT,
         ContractStatus.READY_FOR_REVIEW,
+        ContractStatus.AWAITING_COMPANY_SIGNATURE,
         ContractStatus.SENT,
         ContractStatus.VIEWED,
         ContractStatus.SIGNED,
@@ -53,6 +58,7 @@ TERMINAL_STATUSES = frozenset(
 STATUS_TONES: dict[str, str] = {
     ContractStatus.DRAFT: "neutral",
     ContractStatus.READY_FOR_REVIEW: "warning",
+    ContractStatus.AWAITING_COMPANY_SIGNATURE: "warning",
     ContractStatus.SENT: "info",
     ContractStatus.VIEWED: "info",
     ContractStatus.SIGNED: "info",

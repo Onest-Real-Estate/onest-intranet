@@ -26,7 +26,25 @@ from apps.contract.models import (
 )
 from apps.contract.services import create_draft_contract
 from apps.contract.statuses import ContractStatus
-from apps.contract.tests.conftest import agent, branch_admin, company_admin
+from apps.contract.tests.conftest import (
+    agent,
+    branch_admin,
+    company_admin,
+    issue_awaiting_company,
+    release_to_agent,
+)
+
+_POST_ISSUE_ACTIONS = frozenset(
+    {
+        "mark_viewed",
+        "mark_signed",
+        "activate",
+        "mark_generation_error",
+        "supersede",
+        "terminate",
+        "expire",
+    }
+)
 
 
 def _published_template(*, key="ica-v1") -> ContractTemplateVersion:
@@ -65,11 +83,31 @@ def _ready_contract(admin, recipient, **kwargs):
     )
 
 
-def _advance(admin, contract, *actions, confirmed=True):
+def _expand_actions(actions: tuple[str, ...]) -> list[str]:
+    """Insert company countersign when later steps assume the agent was released."""
+    expanded = list(actions)
+    if "issue" not in expanded or "mark_company_signed" in expanded:
+        return expanded
+    issue_at = expanded.index("issue")
+    later = expanded[issue_at + 1 :]
+    if any(action in _POST_ISSUE_ACTIONS for action in later):
+        expanded.insert(issue_at + 1, "mark_company_signed")
+    return expanded
+
+
+def _advance(admin, contract, *actions, confirmed=True, company_signatory=None):
     current = contract
-    for action in actions:
+    signatory = company_signatory or admin
+    for action in _expand_actions(actions):
+        if action == "issue":
+            current = issue_awaiting_company(
+                admin, current, company_signatory=signatory
+            )
+            continue
+        if action == "mark_company_signed":
+            current = release_to_agent(signatory, current)
+            continue
         needs_confirm = action in {
-            "issue",
             "activate",
             "supersede",
             "terminate",
@@ -89,9 +127,16 @@ def test_happy_path_draft_to_active(seeded_offices):
     admin = company_admin(seeded_offices)
     recipient = agent(seeded_offices)
     ready = _ready_contract(admin, recipient)
-    issued = _advance(admin, ready, "issue")
+    awaiting = _advance(admin, ready, "issue")
+    assert awaiting.status == ContractStatus.AWAITING_COMPANY_SIGNATURE
+    assert awaiting.company_signatory_id == admin.pk
+    assert awaiting.party_snapshot.get("companySignatory", {}).get("userId") == admin.pk
+    assert awaiting.sent_at is None
+
+    issued = _advance(admin, awaiting, "mark_company_signed")
     assert issued.status == ContractStatus.SENT
     assert issued.sent_at is not None
+    assert issued.company_signed_at is not None
     assert issued.party_snapshot
     assert issued.terms_snapshot
 
@@ -103,7 +148,7 @@ def test_happy_path_draft_to_active(seeded_offices):
 
 
 @pytest.mark.django_db
-def test_issue_requires_confirmation_and_published_template(seeded_offices):
+def test_issue_requires_confirmation_signatory_and_published_template(seeded_offices):
     admin = company_admin(seeded_offices)
     recipient = agent(seeded_offices)
     ready = _ready_contract(admin, recipient)
@@ -114,6 +159,16 @@ def test_issue_requires_confirmation_and_published_template(seeded_offices):
             action="issue",
             expected_version=contract_version(ready),
             confirmed=False,
+            company_signatory=admin,
+        )
+
+    with pytest.raises(TransitionRefused):
+        transition(
+            actor=admin,
+            contract=ready,
+            action="issue",
+            expected_version=contract_version(ready),
+            confirmed=True,
         )
 
     draft = create_draft_contract(admin, recipient=recipient, effective_on=date.today())
@@ -130,6 +185,7 @@ def test_issue_requires_confirmation_and_published_template(seeded_offices):
             action="issue",
             expected_version=contract_version(ready_no_template),
             confirmed=True,
+            company_signatory=admin,
         )
 
 
@@ -162,6 +218,7 @@ def test_idempotent_issue_no_duplicate_events(
     with (
         patch("apps.audit.tasks.dispatch_event.delay"),
         patch("apps.contract.tasks.generate_contract_pdf.delay") as pdf_delay,
+        patch("apps.contract.lifecycle._queue_company_signatory_invite"),
         django_capture_on_commit_callbacks(execute=True),
     ):
         first = transition(
@@ -170,22 +227,29 @@ def test_idempotent_issue_no_duplicate_events(
             action="issue",
             expected_version=contract_version(ready),
             confirmed=True,
+            company_signatory=admin,
             idempotency_key="issue-1",
         )
         audits = AuditEvent.objects.filter(action="contract.issued").count()
-        domains = DomainEvent.objects.filter(name="contract.issued").count()
+        domains = DomainEvent.objects.filter(
+            name="contract.awaiting_company_signature"
+        ).count()
         second = transition(
             actor=admin,
             contract=first,
             action="issue",
             expected_version=contract_version(first),
             confirmed=True,
+            company_signatory=admin,
             idempotency_key="issue-1",
         )
     assert first.pk == second.pk
-    assert second.status == ContractStatus.SENT
+    assert second.status == ContractStatus.AWAITING_COMPANY_SIGNATURE
     assert AuditEvent.objects.filter(action="contract.issued").count() == audits
-    assert DomainEvent.objects.filter(name="contract.issued").count() == domains
+    assert (
+        DomainEvent.objects.filter(name="contract.awaiting_company_signature").count()
+        == domains
+    )
     assert pdf_delay.call_count == 1
 
 
@@ -246,9 +310,10 @@ def test_permission_and_scope_matrix(seeded_offices):
             action="issue",
             expected_version=contract_version(ready),
             confirmed=True,
+            company_signatory=company,
         )
 
-    issued = _advance(branch, ready, "issue")
+    issued = _advance(branch, ready, "issue", "mark_company_signed")
     viewed = transition(
         actor=local,
         contract=issued,
@@ -323,14 +388,24 @@ def test_reopen_and_generation_error_retry(
     )
     with (
         patch("apps.contract.tasks.generate_contract_pdf.delay") as pdf_delay,
+        patch("apps.contract.lifecycle._queue_company_signatory_invite"),
+        patch("apps.contract.lifecycle._queue_agent_status_email"),
         django_capture_on_commit_callbacks(execute=True),
     ):
-        issued = _advance(admin, ready2, "issue")
+        awaiting = transition(
+            actor=admin,
+            contract=ready2,
+            action="issue",
+            expected_version=contract_version(ready2),
+            confirmed=True,
+            company_signatory=admin,
+        )
+        assert awaiting.status == ContractStatus.AWAITING_COMPANY_SIGNATURE
         errored = transition(
             actor=None,
-            contract=issued,
+            contract=awaiting,
             action="mark_generation_error",
-            expected_version=contract_version(issued),
+            expected_version=contract_version(awaiting),
         )
         retried = transition(
             actor=admin,
@@ -338,7 +413,7 @@ def test_reopen_and_generation_error_retry(
             action="retry_generation",
             expected_version=contract_version(errored),
         )
-    assert retried.status == ContractStatus.SENT
+    assert retried.status == ContractStatus.AWAITING_COMPANY_SIGNATURE
     assert pdf_delay.call_count == 2
 
 

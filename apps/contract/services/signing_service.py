@@ -25,7 +25,14 @@ from django.utils.translation import gettext as _
 
 from apps.audit.models import AuditEvent
 from apps.audit.service import AuditTarget, actor_from_user, log_event
-from apps.contract.field_layout import FieldType, agent_fields, normalize_field_layout
+from apps.contract.field_layout import (
+    COMPANY_ROLE,
+    SIGNER_ROLE,
+    FieldType,
+    agent_fields,
+    company_fields,
+    normalize_field_layout,
+)
 from apps.contract.lifecycle import (
     StaleContractVersion,
     TransitionRefused,
@@ -123,26 +130,24 @@ def _expire_stale_intents(contract: AgentContract, *, now) -> None:
     ).update(status=ContractSigningIntent.Status.EXPIRED)
 
 
-def _cancel_pending_intents(contract: AgentContract) -> None:
-    ContractSigningIntent.objects.filter(
+def _cancel_pending_intents(
+    contract: AgentContract,
+    *,
+    signer_role: str | None = None,
+) -> None:
+    qs = ContractSigningIntent.objects.filter(
         contract=contract,
         status=ContractSigningIntent.Status.PENDING,
-    ).update(status=ContractSigningIntent.Status.CANCELLED)
-
-
-def _review_pdf_url(contract: AgentContract, artifact: ContractArtifact) -> str:
-    return reverse(
-        "my_contract_artifact_preview",
-        kwargs={
-            "public_id": contract.public_id,
-            "artifact_public_id": artifact.public_id,
-        },
     )
+    if signer_role:
+        qs = qs.filter(signer_role=signer_role)
+    qs.update(status=ContractSigningIntent.Status.CANCELLED)
 
 
-def _agent_field_payload(contract: AgentContract) -> list[dict[str, Any]]:
+def _role_field_payload(contract: AgentContract, *, role: str) -> list[dict[str, Any]]:
     version = contract.template_version
     layout = normalize_field_layout(version.field_layout or []) if version else []
+    items = company_fields(layout) if role == COMPANY_ROLE else agent_fields(layout)
     return [
         {
             "id": item["id"],
@@ -155,8 +160,29 @@ def _agent_field_payload(contract: AgentContract) -> list[dict[str, Any]]:
             "w": item["w"],
             "h": item["h"],
         }
-        for item in agent_fields(layout)
+        for item in items
     ]
+
+
+def _agent_field_payload(contract: AgentContract) -> list[dict[str, Any]]:
+    return _role_field_payload(contract, role=SIGNER_ROLE)
+
+
+def _review_pdf_url(contract: AgentContract, artifact: ContractArtifact) -> str:
+    return reverse(
+        "my_contract_artifact_preview",
+        kwargs={
+            "public_id": contract.public_id,
+            "artifact_public_id": artifact.public_id,
+        },
+    )
+
+
+def _company_review_pdf_url(contract: AgentContract, artifact: ContractArtifact) -> str:
+    return reverse(
+        "agent_contract_artifact_download",
+        kwargs={"public_id": contract.public_id},
+    )
 
 
 def ceremony_page_payload(
@@ -306,7 +332,7 @@ def start_signing(
 
     now = timezone.now()
     _expire_stale_intents(contract, now=now)
-    _cancel_pending_intents(contract)
+    _cancel_pending_intents(contract, signer_role=SIGNER_ROLE)
 
     pdf_bytes = _read_artifact_bytes(artifact)
     live_checksum = checksum_of(pdf_bytes)
@@ -357,6 +383,7 @@ def start_signing(
     intent = ContractSigningIntent(
         contract=contract,
         actor=actor,
+        signer_role=ContractSigningIntent.SignerRole.AGENT,
         contract_version=expected_version,
         artifact=artifact,
         artifact_checksum=artifact.checksum.lower(),
@@ -436,7 +463,10 @@ def signing_status_payload(
             "finalizationStatus": None,
         }
 
-    signature = ContractSignature.objects.filter(contract=contract).first()
+    signature = ContractSignature.objects.filter(
+        contract=contract,
+        signer_role=ContractSignature.SignerRole.AGENT,
+    ).first()
     final_ready = bool(
         signature is not None
         and signature.finalization_status == ContractSignature.FinalizationStatus.READY
@@ -498,7 +528,10 @@ def complete_signing(
         .get(pk=intent.contract_id)
     )
 
-    existing = ContractSignature.objects.filter(contract_id=locked.pk).first()
+    existing = ContractSignature.objects.filter(
+        contract_id=locked.pk,
+        signer_role=ContractSignature.SignerRole.AGENT,
+    ).first()
     if existing is not None:
         if (
             existing.finalization_status != ContractSignature.FinalizationStatus.READY
@@ -524,6 +557,9 @@ def complete_signing(
         intent.status = ContractSigningIntent.Status.EXPIRED
         intent.save(update_fields=["status"])
         raise TransitionRefused(str(_("Signing intent expired. Start again.")))
+
+    if intent.signer_role != ContractSigningIntent.SignerRole.AGENT:
+        raise PermissionDenied(_("This signing intent is not for the agent ceremony."))
 
     if locked.status not in {ContractStatus.SENT, ContractStatus.VIEWED}:
         raise TransitionRefused(str(_("Contract is not in a signable state.")))
@@ -569,6 +605,16 @@ def complete_signing(
         decode_data_url_image(initials_data_url) if initials_data_url else b""
     )
 
+    # Company ceremony must already be on file before the agent can finalize.
+    company_sig = ContractSignature.objects.filter(
+        contract_id=locked.pk,
+        signer_role=ContractSignature.SignerRole.COMPANY,
+    ).first()
+    if company_sig is None:
+        raise TransitionRefused(
+            str(_("Company signature is required before the agent can sign."))
+        )
+
     expected = contract_version(locked)
     appearance_digest = appearance_checksum(signature_png)
 
@@ -576,6 +622,7 @@ def complete_signing(
         contract=locked,
         intent=intent,
         signer=intent.actor,
+        signer_role=ContractSignature.SignerRole.AGENT,
         artifact=None,
         signed_at=now,
         disclosure_version=intent.disclosure_version,
@@ -642,4 +689,449 @@ def complete_signing(
         "signed": True,
         "signaturePublicId": str(signature.public_id),
         "finalArtifactReady": False,
+    }
+
+
+def company_ceremony_page_payload(
+    actor: User, *, contract_public_id: UUID
+) -> dict[str, Any]:
+    """Inertia props for the named company signatory ceremony."""
+    contract = (
+        AgentContract.objects.select_related(
+            "template_version",
+            "generated_pdf",
+            "recipient",
+            "company_signatory",
+            "office",
+        )
+        .filter(public_id=contract_public_id)
+        .first()
+    )
+    if contract is None:
+        raise PermissionDenied(_("Contract is not available."))
+    if actor.pk != contract.company_signatory_id and not getattr(
+        actor, "is_superuser", False
+    ):
+        raise PermissionDenied(
+            _("Only the named company signatory can open this page.")
+        )
+
+    ready = signing_is_ready()
+    can_sign = (
+        contract.status == ContractStatus.AWAITING_COMPANY_SIGNATURE
+        and bool(contract.generated_pdf_id)
+        and ready
+    )
+    recovery = None
+    if not ready:
+        recovery = {
+            "code": "signing_unavailable",
+            "message": str(
+                _("Electronic signing is temporarily unavailable. Try again later.")
+            ),
+        }
+    elif contract.status != ContractStatus.AWAITING_COMPANY_SIGNATURE:
+        recovery = {
+            "code": "not_signable",
+            "message": str(
+                _("This agreement is not awaiting a company signature right now.")
+            ),
+        }
+    elif not contract.generated_pdf_id:
+        recovery = {
+            "code": "pdf_pending",
+            "message": str(_("The review PDF is still generating. Try again shortly.")),
+        }
+
+    artifact = contract.generated_pdf
+    return {
+        "canSign": can_sign,
+        "signingReady": ready,
+        "recovery": recovery,
+        "disclosure": disclosure_payload(),
+        "signerRole": COMPANY_ROLE,
+        "contract": {
+            "publicId": str(contract.public_id),
+            "versionNumber": contract.version_number,
+            "status": contract.status,
+            "statusLabel": status_label(contract.status),
+            "effectiveOn": contract.effective_on.isoformat(),
+            "expectedVersion": contract_version(contract),
+            "artifactChecksum": artifact.checksum if artifact else "",
+            "partyDisplayName": _party_display_name(contract, contract.recipient),
+            "recipientName": contract.recipient.preferred_display_name(),
+            "signerEmail": actor.email,
+            "workspaceUrl": reverse(
+                "agent_contract_workspace", kwargs={"public_id": contract.public_id}
+            ),
+        },
+        "ceremony": None,
+        "errors": {"fields": {}, "form": []},
+    }
+
+
+@transaction.atomic
+def start_company_signing(
+    actor: User,
+    *,
+    contract_public_id: UUID,
+    expected_version: str,
+    consent_accepted: bool,
+    disclosure_version: str,
+    request_meta: RequestMeta,
+) -> dict[str, Any]:
+    """Create a Company-role signing intent for the named officer."""
+    if not signing_is_ready():
+        raise SigningCeremonyError(
+            {
+                "form": [
+                    str(
+                        _(
+                            "Electronic signing is temporarily unavailable. "
+                            "Try again later."
+                        )
+                    )
+                ]
+            }
+        )
+    if not consent_accepted:
+        raise SigningCeremonyError(
+            {
+                "consentAccepted": str(
+                    _("You must acknowledge the disclosure to continue.")
+                )
+            }
+        )
+    if disclosure_version != DISCLOSURE_VERSION:
+        raise SigningCeremonyError(
+            {
+                "form": [
+                    str(
+                        _(
+                            "The disclosure text changed. Refresh this page and "
+                            "acknowledge the current disclosure."
+                        )
+                    )
+                ]
+            }
+        )
+    if not (request_meta.session_key or "").strip():
+        raise SigningCeremonyError(
+            {"form": [str(_("Your session is missing. Sign in again and retry."))]}
+        )
+
+    contract = (
+        AgentContract.objects.select_for_update(of=("self",))
+        .select_related("template_version", "generated_pdf", "recipient", "office")
+        .filter(public_id=contract_public_id)
+        .first()
+    )
+    if contract is None:
+        raise PermissionDenied(_("Contract is not available for signing."))
+    if actor.pk != contract.company_signatory_id:
+        raise PermissionDenied(_("Only the named company signatory can sign."))
+
+    if contract_version(contract) != (expected_version or ""):
+        raise StaleContractVersion()
+    if contract.status != ContractStatus.AWAITING_COMPANY_SIGNATURE:
+        raise SigningCeremonyError(
+            {"form": [str(_("This agreement is not awaiting a company signature."))]}
+        )
+
+    existing = ContractSignature.objects.filter(
+        contract_id=contract.pk,
+        signer_role=ContractSignature.SignerRole.COMPANY,
+    ).first()
+    if existing is not None:
+        raise SigningCeremonyError(
+            {"form": [str(_("Company signature is already recorded."))]}
+        )
+
+    artifact = (
+        ContractArtifact.objects.filter(pk=contract.generated_pdf_id).first()
+        if contract.generated_pdf_id
+        else None
+    )
+    if artifact is None:
+        raise SigningCeremonyError(
+            {"form": [str(_("The review PDF is not ready yet. Try again shortly."))]}
+        )
+
+    now = timezone.now()
+    _expire_stale_intents(contract, now=now)
+    _cancel_pending_intents(contract, signer_role=COMPANY_ROLE)
+
+    pdf_bytes = _read_artifact_bytes(artifact)
+    live_checksum = checksum_of(pdf_bytes)
+    if live_checksum != artifact.checksum.lower():
+        raise SigningCeremonyError(
+            {
+                "form": [
+                    str(
+                        _(
+                            "The agreement PDF changed since it was issued. "
+                            "Contact operations before signing."
+                        )
+                    )
+                ]
+            }
+        )
+
+    fields = _role_field_payload(contract, role=COMPANY_ROLE)
+    if not any(f["type"] == FieldType.SIGNATURE for f in fields):
+        raise SigningCeremonyError(
+            {
+                "form": [
+                    str(
+                        _(
+                            "This agreement is missing a Company signature field. "
+                            "Contact operations."
+                        )
+                    )
+                ]
+            }
+        )
+    if not any(f["type"] == FieldType.DATE for f in fields):
+        raise SigningCeremonyError(
+            {
+                "form": [
+                    str(
+                        _(
+                            "This agreement is missing a Company date field. "
+                            "Contact operations."
+                        )
+                    )
+                ]
+            }
+        )
+
+    ttl = max(60, int(getattr(settings, "CONTRACT_SIGNING_INTENT_TTL_SECONDS", 900)))
+    expires_at = now + timedelta(seconds=ttl)
+    intent = ContractSigningIntent(
+        contract=contract,
+        actor=actor,
+        signer_role=ContractSigningIntent.SignerRole.COMPANY,
+        contract_version=expected_version,
+        artifact=artifact,
+        artifact_checksum=artifact.checksum.lower(),
+        session_key_hash=hash_session_key(request_meta.session_key),
+        request_ip_hash=hash_ip(request_meta.ip_address),
+        request_ua_hash=hash_user_agent(request_meta.user_agent),
+        disclosure_version=DISCLOSURE_VERSION,
+        consent_accepted_at=now,
+        status=ContractSigningIntent.Status.PENDING,
+        expires_at=expires_at,
+    )
+    intent.full_clean()
+    intent.save()
+
+    log_event(
+        "contract.company_signing_intent.created",
+        actor=actor_from_user(actor),
+        target=AuditTarget(
+            target_type="contract.AgentContract",
+            target_id=str(contract.public_id),
+            target_label=actor.email,
+            target_snapshot={
+                "intent_id": str(intent.public_id),
+                "disclosure_version": DISCLOSURE_VERSION,
+                "signer_role": COMPANY_ROLE,
+            },
+        ),
+        outcome=AuditEvent.Outcome.SUCCESS,
+        source="service",
+        channel="contract",
+        office_id=getattr(contract.office, "stable_key", "") or "",
+    )
+
+    return {
+        **company_ceremony_page_payload(actor, contract_public_id=contract.public_id),
+        "ceremony": {
+            "intentPublicId": str(intent.public_id),
+            "expiresAt": expires_at.isoformat(),
+            "reviewPdfUrl": reverse(
+                "agent_contract_company_sign_preview",
+                kwargs={"public_id": contract.public_id},
+            ),
+            "agentFields": fields,
+        },
+        "errors": {"fields": {}, "form": []},
+    }
+
+
+@transaction.atomic
+def complete_company_signing(
+    actor: User,
+    *,
+    intent_public_id: UUID,
+    signature_data_url: str,
+    signed_date: str,
+    initials_data_url: str = "",
+    text_values: dict[str, str] | None = None,
+    request_meta: RequestMeta,
+) -> dict[str, Any]:
+    """Record Company signature and release the contract to the agent (`sent`)."""
+    require_signing_cert_or_raise()
+
+    intent = (
+        ContractSigningIntent.objects.select_related(
+            "contract",
+            "contract__template_version",
+            "actor",
+            "artifact",
+        )
+        .filter(public_id=intent_public_id, actor=actor)
+        .first()
+    )
+    if intent is None:
+        raise PermissionDenied(_("Signing intent is not available."))
+    if intent.signer_role != ContractSigningIntent.SignerRole.COMPANY:
+        raise PermissionDenied(_("This signing intent is not for company signing."))
+
+    locked = (
+        AgentContract.objects.select_for_update(of=("self",))
+        .select_related("template_version", "generated_pdf", "office")
+        .get(pk=intent.contract_id)
+    )
+
+    existing = ContractSignature.objects.filter(
+        contract_id=locked.pk,
+        signer_role=ContractSignature.SignerRole.COMPANY,
+    ).first()
+    if existing is not None:
+        return {
+            "ok": True,
+            "idempotent": True,
+            "signaturePublicId": str(existing.public_id),
+            "companySigned": True,
+            "status": locked.status,
+        }
+
+    now = timezone.now()
+    if intent.status != ContractSigningIntent.Status.PENDING:
+        raise TransitionRefused(str(_("Signing intent is no longer pending.")))
+    if intent.expires_at <= now:
+        intent.status = ContractSigningIntent.Status.EXPIRED
+        intent.save(update_fields=["status"])
+        raise TransitionRefused(str(_("Signing intent expired. Start again.")))
+
+    if locked.status != ContractStatus.AWAITING_COMPANY_SIGNATURE:
+        raise TransitionRefused(str(_("Contract is not awaiting company signature.")))
+    if locked.company_signatory_id != intent.actor_id:
+        raise PermissionDenied(_("Signing intent signatory mismatch."))
+    if intent.session_key_hash != hash_session_key(request_meta.session_key):
+        raise PermissionDenied(
+            _("Signing session does not match this browser session.")
+        )
+
+    artifact = (
+        ContractArtifact.objects.filter(pk=locked.generated_pdf_id).first()
+        if locked.generated_pdf_id
+        else None
+    )
+    if (
+        artifact is None
+        or artifact.checksum.lower() != intent.artifact_checksum.lower()
+    ):
+        raise TransitionRefused(
+            str(_("Agreement PDF checksum no longer matches the signing intent."))
+        )
+
+    review_bytes = _read_artifact_bytes(artifact)
+    if checksum_of(review_bytes) != intent.artifact_checksum.lower():
+        raise TransitionRefused(
+            str(_("Agreement PDF checksum no longer matches the signing intent."))
+        )
+
+    date_value = (signed_date or "").strip()
+    if not date_value:
+        raise SigningCeremonyError(
+            {"signedDate": str(_("Enter the signature date on the agreement."))}
+        )
+
+    signature_png = decode_data_url_image(signature_data_url)
+    if len(signature_png) < 32:
+        raise SigningCeremonyError(
+            {"signature": str(_("Draw or type your signature before submitting."))}
+        )
+    initials_png = (
+        decode_data_url_image(initials_data_url) if initials_data_url else b""
+    )
+
+    expected = contract_version(locked)
+    appearance_digest = appearance_checksum(signature_png)
+
+    signature = ContractSignature(
+        contract=locked,
+        intent=intent,
+        signer=intent.actor,
+        signer_role=ContractSignature.SignerRole.COMPANY,
+        artifact=None,
+        signed_at=now,
+        disclosure_version=intent.disclosure_version,
+        signature_method=ContractSignature.Method.HUB_EMBEDDED,
+        appearance_checksum=appearance_digest,
+        source_checksum=intent.artifact_checksum.lower(),
+        signed_date_value=date_value,
+        agent_text_values=dict(text_values or {}),
+        # Company row does not drive final PDF; agent ceremony triggers it.
+        finalization_status=ContractSignature.FinalizationStatus.READY,
+        request_ip_hash=intent.request_ip_hash,
+        request_ua_hash=intent.request_ua_hash,
+    )
+    signature.appearance_file.save(
+        f"appearance-{signature.public_id}.png",
+        ContentFile(signature_png),
+        save=False,
+    )
+    if initials_png:
+        signature.initials_file.save(
+            f"initials-{signature.public_id}.png",
+            ContentFile(initials_png),
+            save=False,
+        )
+    signature.full_clean()
+    signature.save()
+
+    intent.status = ContractSigningIntent.Status.CONSUMED
+    intent.consumed_at = now
+    intent.save(update_fields=["status", "consumed_at"])
+
+    transition(
+        actor=intent.actor,
+        contract=locked,
+        action="mark_company_signed",
+        expected_version=expected,
+    )
+
+    log_event(
+        "contract.company_signature.created",
+        actor=actor_from_user(intent.actor),
+        target=AuditTarget(
+            target_type="contract.AgentContract",
+            target_id=str(locked.public_id),
+            target_label=intent.actor.email,
+            target_snapshot={
+                "signature_id": str(signature.public_id),
+                "intent_id": str(intent.public_id),
+                "disclosure_version": intent.disclosure_version,
+                "method": signature.signature_method,
+                "signer_role": COMPANY_ROLE,
+            },
+        ),
+        outcome=AuditEvent.Outcome.SUCCESS,
+        source="service",
+        channel="contract",
+        office_id=getattr(locked.office, "stable_key", "") or "",
+    )
+
+    locked.refresh_from_db()
+    return {
+        "ok": True,
+        "companySigned": True,
+        "signaturePublicId": str(signature.public_id),
+        "status": locked.status,
+        "workspaceUrl": reverse(
+            "agent_contract_workspace", kwargs={"public_id": locked.public_id}
+        ),
     }

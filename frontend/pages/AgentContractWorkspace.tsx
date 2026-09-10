@@ -103,13 +103,20 @@ export default function AgentContractWorkspace() {
     errors,
     agreementPreview,
     generatedPdfUrl,
+    generatedPdfPreviewUrl = null,
     familyHistory = [],
     termComparison = null,
+    companySignatoryOptions = [],
     csrfToken,
   } = usePage<AgentContractWorkspacePageProps>().props;
   const commission = contract.commission as Record<string, unknown> | undefined;
   const [confirmAction, setConfirmAction] = useState<ConfirmLifecycleAction | null>(
     null,
+  );
+  const [companySignatoryId, setCompanySignatoryId] = useState(() =>
+    String(
+      (contract as { companySignatoryId?: number | null }).companySignatoryId ?? "",
+    ),
   );
   const [idempotencyKey] = useState(() => crypto.randomUUID());
   const canEdit = capabilities.canManage && contract.status === "draft";
@@ -177,6 +184,9 @@ export default function AgentContractWorkspace() {
         expected_version: expectedVersion,
         confirmed: confirmed ? "1" : "",
         idempotency_key: idempotencyKey,
+        ...(action === "issue" && companySignatoryId
+          ? { company_signatory_id: companySignatoryId }
+          : {}),
       }),
       { preserveScroll: true },
     );
@@ -217,6 +227,27 @@ export default function AgentContractWorkspace() {
             <Callout tone="neutral" title="This version is read-only">
               Issued and historical versions are immutable. Create an amendment or
               replacement draft to change terms.
+            </Callout>
+          ) : null}
+          {contract.status === "awaiting_company_signature" ? (
+            <Callout tone="warning" title="Awaiting company signature">
+              {typeof contract.companySignatoryName === "string" &&
+              contract.companySignatoryName
+                ? contract.companySignatoryName
+                : "The named officer"}{" "}
+              must sign for the company before this agreement is released to the agent.
+              {typeof contract.companySignUrl === "string" &&
+              contract.companySignUrl ? (
+                <>
+                  {" "}
+                  <Link
+                    href={contract.companySignUrl}
+                    className="text-primary underline"
+                  >
+                    Open company signing
+                  </Link>
+                </>
+              ) : null}
             </Callout>
           ) : null}
           <form
@@ -649,15 +680,55 @@ export default function AgentContractWorkspace() {
             ) : null}
           </form>
 
-          {agreementPreview?.status === "ready" && agreementPreview.mergeValues ? (
+          {agreementPreview?.status === "ready" ? (
             <SurfaceCard>
               <PanelHeader
                 title="Agreement preview"
-                description="The values that will be merged into the PDF when this contract is issued."
+                description={
+                  generatedPdfPreviewUrl
+                    ? "The issued review PDF with Prefill values applied. Signature fields stay blank until the ceremony."
+                    : "Merge values for the agreement. The review PDF appears here once generation finishes."
+                }
                 divided
               />
-              <SurfaceCardContent>
-                <MergeValuePreview values={agreementPreview.mergeValues} />
+              <SurfaceCardContent className="grid gap-4">
+                {generatedPdfPreviewUrl ? (
+                  <section
+                    className="border-border bg-muted/30 relative min-h-[28rem] overflow-hidden rounded-lg border"
+                    aria-label="Agreement PDF preview"
+                  >
+                    <object
+                      data={`${generatedPdfPreviewUrl}#view=FitH`}
+                      type="application/pdf"
+                      className="h-[min(70vh,40rem)] w-full"
+                      aria-label="Agreement PDF"
+                    >
+                      <div className="grid gap-3 p-6">
+                        <p className="text-muted-foreground text-sm">
+                          Embedded preview is not supported in this browser. Download
+                          the PDF instead.
+                        </p>
+                        {generatedPdfUrl ? (
+                          <Button type="button" variant="outline" size="sm" asChild>
+                            <a href={generatedPdfUrl} download>
+                              <Download className="size-4" aria-hidden />
+                              Download review PDF
+                            </a>
+                          </Button>
+                        ) : null}
+                      </div>
+                    </object>
+                  </section>
+                ) : contract.status === "awaiting_company_signature" ||
+                  contract.status === "sent" ? (
+                  <Callout tone="info" title="Review PDF is generating">
+                    Generation runs in the background after issue. Refresh in a moment,
+                    or open company signing once the PDF is ready.
+                  </Callout>
+                ) : null}
+                {agreementPreview.mergeValues ? (
+                  <MergeValuePreview values={agreementPreview.mergeValues} />
+                ) : null}
               </SurfaceCardContent>
             </SurfaceCard>
           ) : null}
@@ -681,7 +752,9 @@ export default function AgentContractWorkspace() {
                   Check the template version and the party and office snapshots, then
                   retry.
                 </Callout>
-              ) : contract.status === "sent" && !generatedPdfUrl ? (
+              ) : (contract.status === "sent" ||
+                  contract.status === "awaiting_company_signature") &&
+                !generatedPdfUrl ? (
                 <Callout tone="info" title="Review PDF is generating">
                   The download appears here once the agreement PDF is stored.
                 </Callout>
@@ -706,6 +779,23 @@ export default function AgentContractWorkspace() {
                     <a href={generatedPdfUrl} download>
                       <Download className="size-4" aria-hidden />
                       Download review PDF
+                    </a>
+                  </Button>
+                ) : null}
+                {generatedPdfPreviewUrl ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full justify-start"
+                    asChild
+                  >
+                    <a
+                      href={generatedPdfPreviewUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <FileText className="size-4" aria-hidden />
+                      Open review PDF
                     </a>
                   </Button>
                 ) : null}
@@ -863,11 +953,40 @@ export default function AgentContractWorkspace() {
             ]}
             confirmLabel={confirmCopy.confirmLabel}
             onConfirm={() => {
+              if (confirmAction === "issue" && !companySignatoryId) {
+                return;
+              }
               const action = confirmAction;
               setConfirmAction(null);
               postLifecycle(action, true);
             }}
-          />
+          >
+            {confirmAction === "issue" ? (
+              <div className="grid gap-2">
+                <Label htmlFor="company-signatory">Company signatory</Label>
+                <Select
+                  value={companySignatoryId || undefined}
+                  onValueChange={setCompanySignatoryId}
+                >
+                  <SelectTrigger id="company-signatory">
+                    <SelectValue placeholder="Choose the officer who signs first" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {companySignatoryOptions.map((option) => (
+                      <SelectItem key={option.id} value={String(option.id)}>
+                        {option.name} · {option.email}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {!companySignatoryId ? (
+                  <p className="text-destructive text-xs">
+                    Choose a company signatory before issuing.
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+          </AccessChangeDialog>
         ) : null}
       </div>
     </PermissionRequired>

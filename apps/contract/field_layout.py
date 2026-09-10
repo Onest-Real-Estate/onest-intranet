@@ -13,6 +13,7 @@ FIELD_NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.]{0,79}$")
 
 PREFILL_ROLE = "Prefill"
 SIGNER_ROLE = "Agent"
+COMPANY_ROLE = "Company"
 
 
 class FieldType(StrEnum):
@@ -23,8 +24,32 @@ class FieldType(StrEnum):
     CHECKBOX = "checkbox"
 
 
+class SignerRole(StrEnum):
+    """Human ceremony roles that leave ink on the PDF (not Prefill)."""
+
+    AGENT = SIGNER_ROLE
+    COMPANY = COMPANY_ROLE
+
+
 ALLOWED_FIELD_TYPES = frozenset(member.value for member in FieldType)
-ALLOWED_ROLES = frozenset({PREFILL_ROLE, SIGNER_ROLE})
+ALLOWED_ROLES = frozenset({PREFILL_ROLE, SIGNER_ROLE, COMPANY_ROLE})
+HUMAN_SIGNER_ROLES = frozenset({SIGNER_ROLE, COMPANY_ROLE})
+
+# Hub stamps Prefill values from merge sources at generation time. Signature /
+# initials have no merge source — they are captured on a signing pad.
+PREFILL_FIELD_TYPES = frozenset(
+    {
+        FieldType.TEXT,
+        FieldType.DATE,
+        FieldType.CHECKBOX,
+    }
+)
+SIGNING_ONLY_FIELD_TYPES = frozenset(
+    {
+        FieldType.SIGNATURE,
+        FieldType.INITIALS,
+    }
+)
 
 
 def new_field_id() -> str:
@@ -79,7 +104,22 @@ def _normalize_field(item: dict[str, Any], *, index: int) -> dict[str, Any]:
     role = str(item.get("role") or "").strip()
     if role not in ALLOWED_ROLES:
         raise ValidationError(
-            {"field_layout": [f"Field {name} must use role Prefill or Agent."]}
+            {
+                "field_layout": [
+                    f"Field {name} must use role Prefill, Agent, or Company."
+                ]
+            }
+        )
+
+    if role == PREFILL_ROLE and field_type in SIGNING_ONLY_FIELD_TYPES:
+        raise ValidationError(
+            {
+                "field_layout": [
+                    f"Field {name} is a {field_type} box — use the Agent or "
+                    "Company role. Signatures and initials are drawn at signing, "
+                    "not prefilled from hub data."
+                ]
+            }
         )
 
     try:
@@ -132,19 +172,21 @@ def _normalize_field(item: dict[str, Any], *, index: int) -> dict[str, Any]:
 
 
 def prefill_field_names(layout: list[dict[str, Any]]) -> list[str]:
+    """Prefill names that need hub merge mapping (excludes signing-only types)."""
     return [
         str(item["name"])
         for item in layout
-        if str(item.get("role")) == PREFILL_ROLE and str(item.get("name") or "").strip()
+        if str(item.get("role")) == PREFILL_ROLE
+        and str(item.get("type") or "") in PREFILL_FIELD_TYPES
+        and str(item.get("name") or "").strip()
     ]
 
 
-def has_required_agent_fields(layout: list[dict[str, Any]]) -> bool:
-    """Publish requires at least one Agent signature and one Agent date."""
+def _has_signature_and_date(layout: list[dict[str, Any]], *, role: str) -> bool:
     has_signature = False
     has_date = False
     for item in layout:
-        if str(item.get("role")) != SIGNER_ROLE:
+        if str(item.get("role")) != role:
             continue
         field_type = str(item.get("type") or "")
         if field_type == FieldType.SIGNATURE:
@@ -152,6 +194,16 @@ def has_required_agent_fields(layout: list[dict[str, Any]]) -> bool:
         elif field_type == FieldType.DATE:
             has_date = True
     return has_signature and has_date
+
+
+def has_required_agent_fields(layout: list[dict[str, Any]]) -> bool:
+    """Publish requires at least one Agent signature and one Agent date."""
+    return _has_signature_and_date(layout, role=SIGNER_ROLE)
+
+
+def has_required_company_fields(layout: list[dict[str, Any]]) -> bool:
+    """Publish requires at least one Company signature and one Company date."""
+    return _has_signature_and_date(layout, role=COMPANY_ROLE)
 
 
 def assert_publishable_layout(layout: list[dict[str, Any]]) -> None:
@@ -167,7 +219,23 @@ def assert_publishable_layout(layout: list[dict[str, Any]]) -> None:
                 ]
             }
         )
+    if not has_required_company_fields(layout):
+        raise ValidationError(
+            {
+                "field_layout": [
+                    "Add Company signature and Company date fields before publishing."
+                ]
+            }
+        )
 
 
 def agent_fields(layout: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [item for item in layout if str(item.get("role")) == SIGNER_ROLE]
+
+
+def company_fields(layout: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [item for item in layout if str(item.get("role")) == COMPANY_ROLE]
+
+
+def fields_for_role(layout: list[dict[str, Any]], *, role: str) -> list[dict[str, Any]]:
+    return [item for item in layout if str(item.get("role")) == role]

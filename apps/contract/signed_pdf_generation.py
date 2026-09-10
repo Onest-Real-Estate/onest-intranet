@@ -25,11 +25,11 @@ from apps.contract.certificate_of_completion import (
     CERTIFICATE_MARKER,
     build_certificate_of_completion,
 )
-from apps.contract.field_layout import normalize_field_layout
+from apps.contract.field_layout import COMPANY_ROLE, SIGNER_ROLE, normalize_field_layout
 from apps.contract.models import AgentContract, ContractArtifact, ContractSignature
 from apps.contract.pdf_signing import (
     seal_pdf_with_org_cert,
-    stamp_agent_signatures,
+    stamp_signer_fields,
 )
 from apps.contract.template_security import checksum_of
 
@@ -157,13 +157,14 @@ def certificate_facts_for_signature(
         )
 
     doc_id = document_identifier(contract)
-    return {
+    facts: dict[str, Any] = {
         "contractPublicId": str(contract.public_id),
         "versionNumber": contract.version_number,
         "documentIdentifier": doc_id,
         "verificationIdentifier": str(signature.public_id),
         "partyDisplayName": party_name,
         "signerEmail": signer.email,
+        "signerRole": signature.signer_role,
         "signedAt": signature.signed_at.isoformat(),
         "consentAcceptedAt": (
             signature.intent.consent_accepted_at.isoformat()
@@ -185,10 +186,27 @@ def certificate_facts_for_signature(
         "sealCertFingerprint": signature.seal_cert_fingerprint,
         "rendererVersion": RENDERER_VERSION,
     }
+    company = (
+        ContractSignature.objects.select_related("signer", "intent")
+        .filter(
+            contract_id=contract.pk,
+            signer_role=ContractSignature.SignerRole.COMPANY,
+        )
+        .first()
+    )
+    if company is not None:
+        facts["companySignerEmail"] = company.signer.email
+        facts["companySignedAt"] = company.signed_at.isoformat()
+        facts["companySignaturePublicId"] = str(company.public_id)
+        facts["companyDisclosureVersion"] = company.disclosure_version
+    return facts
 
 
 def render_final_signed_pdf(signature: ContractSignature) -> FinalSignedPdf:
-    """Stamp + certificate + seal from the durable signature and source PDF."""
+    """Stamp + certificate + seal from durable signatures and source PDF."""
+    if signature.signer_role != ContractSignature.SignerRole.AGENT:
+        raise SignedPdfGenerationError("agent_signature_required", retryable=False)
+
     contract = signature.contract
     if not signature.source_checksum:
         raise SignedPdfGenerationError("missing_source_checksum", retryable=False)
@@ -211,6 +229,27 @@ def render_final_signed_pdf(signature: ContractSignature) -> FinalSignedPdf:
     if source.checksum.lower() != signature.source_checksum.lower():
         raise SignedPdfGenerationError("source_checksum_mismatch", retryable=False)
 
+    company = (
+        ContractSignature.objects.select_related("intent")
+        .filter(
+            contract_id=contract.pk,
+            signer_role=ContractSignature.SignerRole.COMPANY,
+        )
+        .first()
+    )
+    if company is None:
+        raise SignedPdfGenerationError("missing_company_signature", retryable=False)
+    if not company.appearance_file:
+        raise SignedPdfGenerationError("missing_company_appearance", retryable=False)
+    company_png = _read_file_bytes(company.appearance_file)
+    if checksum_of(company_png) != (company.appearance_checksum or "").lower():
+        raise SignedPdfGenerationError(
+            "company_appearance_checksum_mismatch", retryable=False
+        )
+    company_initials = b""
+    if company.initials_file:
+        company_initials = _read_file_bytes(company.initials_file)
+
     if not signature.appearance_file:
         raise SignedPdfGenerationError("missing_appearance", retryable=False)
     appearance_png = _read_file_bytes(signature.appearance_file)
@@ -223,9 +262,19 @@ def render_final_signed_pdf(signature: ContractSignature) -> FinalSignedPdf:
 
     version = contract.template_version
     layout = normalize_field_layout(version.field_layout or []) if version else []
-    stamped = stamp_agent_signatures(
+    stamped = stamp_signer_fields(
         review_bytes,
         layout=layout,
+        role=COMPANY_ROLE,
+        signature_png=company_png,
+        signed_date=company.signed_date_value or "",
+        initials_png=company_initials,
+        text_values=dict(company.agent_text_values or {}),
+    )
+    stamped = stamp_signer_fields(
+        stamped,
+        layout=layout,
+        role=SIGNER_ROLE,
         signature_png=appearance_png,
         signed_date=signature.signed_date_value or "",
         initials_png=initials_png,

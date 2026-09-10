@@ -84,7 +84,7 @@ def stream_contract_artifact(
     return response
 
 
-def generated_pdf_download_url(contract: AgentContract) -> str | None:
+def _generated_pdf_url(contract: AgentContract, *, route_name: str) -> str | None:
     from django.urls import reverse
 
     if not contract.generated_pdf_id:
@@ -93,9 +93,18 @@ def generated_pdf_download_url(contract: AgentContract) -> str | None:
     if artifact is None:
         return None
     return reverse(
-        "agent_contract_artifact_download",
+        route_name,
         kwargs={
             "public_id": contract.public_id,
             "artifact_public_id": artifact.public_id,
         },
     )
+
+
+def generated_pdf_download_url(contract: AgentContract) -> str | None:
+    return _generated_pdf_url(contract, route_name="agent_contract_artifact_download")
+
+
+def generated_pdf_preview_url(contract: AgentContract) -> str | None:
+    """Inline stream URL for same-origin iframe / new-tab preview."""
+    return _generated_pdf_url(contract, route_name="agent_contract_artifact_preview")

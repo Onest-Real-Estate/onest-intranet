@@ -210,8 +210,31 @@ def _load_staff_ids(envelope: EventEnvelope) -> list[int]:
     return operational_staff_ids(contract)
 
 
+def contract_awaiting_company_signature(
+    envelope: EventEnvelope,
+) -> list[NotificationRequest]:
+    """Tell the named company officer a contract needs their signature."""
+    signatory_id = _int_or_none(envelope.payload.get("company_signatory_id"))
+    if signatory_id is None:
+        return []
+    return _staff_contract_notices(
+        envelope,
+        title="An agent contract needs your company signature",
+        action_key="open_company_contract_sign",
+        priority=NotificationPriority.HIGH,
+        is_mandatory=True,
+        staff_ids=[signatory_id],
+    )
+
+
 def contract_pdf_ready(envelope: EventEnvelope) -> list[NotificationRequest]:
-    """Tell the recipient agent their review PDF is ready."""
+    """Tell the recipient agent their review PDF is ready.
+
+    PDF may generate while the contract still awaits company signature; the
+    agent invite is deferred until status is ``sent``.
+    """
+    if str(envelope.payload.get("status") or "") != "sent":
+        return []
     return _agent_contract_change(
         envelope,
         title="Your agent contract is ready to sign",
@@ -480,6 +503,7 @@ EventBuilder = Callable[[EventEnvelope], list[NotificationRequest]]
 EVENT_PRODUCERS: dict[str, EventBuilder] = {
     "user.onboarding.owner_assigned": onboarding_owner_assigned,
     "user.account.state_changed": account_reactivated,
+    "contract.awaiting_company_signature": contract_awaiting_company_signature,
     "contract.pdf_ready": contract_pdf_ready,
     "contract.issued": contract_issued,
     "contract.viewed": contract_viewed,

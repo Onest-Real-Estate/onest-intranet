@@ -274,9 +274,10 @@ def models_order_priority():
         When(status=ContractStatus.SIGNED, then=Value(1)),
         When(status=ContractStatus.VIEWED, then=Value(2)),
         When(status=ContractStatus.SENT, then=Value(3)),
-        When(status=ContractStatus.READY_FOR_REVIEW, then=Value(4)),
-        When(status=ContractStatus.GENERATION_ERROR, then=Value(5)),
-        When(status=ContractStatus.DRAFT, then=Value(6)),
+        When(status=ContractStatus.AWAITING_COMPANY_SIGNATURE, then=Value(4)),
+        When(status=ContractStatus.READY_FOR_REVIEW, then=Value(5)),
+        When(status=ContractStatus.GENERATION_ERROR, then=Value(6)),
+        When(status=ContractStatus.DRAFT, then=Value(7)),
         default=Value(7),
         output_field=IntegerField(),
     )
@@ -324,8 +325,21 @@ def serialize_contract(viewer: User, contract: AgentContract) -> dict[str, Any]:
         "officeSnapshot": contract.office_snapshot,
         "viewedAt": _dt(contract.viewed_at),
         "sentAt": _dt(contract.sent_at),
+        "companySignedAt": _dt(contract.company_signed_at),
         "signedAt": _dt(contract.signed_at),
         "activatedAt": _dt(contract.activated_at),
+        "companySignatoryId": contract.company_signatory_id,
+        "companySignatoryName": (
+            contract.company_signatory.preferred_display_name()
+            if contract.company_signatory_id and contract.company_signatory
+            else ""
+        ),
+        "companySignUrl": (
+            f"/operations/agent-contracts/{contract.public_id}/company-sign"
+            if contract.status == ContractStatus.AWAITING_COMPANY_SIGNATURE
+            and contract.company_signatory_id
+            else None
+        ),
         "supersededAt": _dt(contract.superseded_at),
         "expiredAt": _dt(contract.expired_at),
         "terminatedAt": _dt(contract.terminated_at),

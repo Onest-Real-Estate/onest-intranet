@@ -107,6 +107,13 @@ def _parse_suggestions(
                 if ftype in {FieldType.SIGNATURE, FieldType.DATE, FieldType.INITIALS}
                 else PREFILL_ROLE
             )
+        # Signature/initials are never Prefill — no hub source can stamp them.
+        if role == PREFILL_ROLE and ftype in {
+            FieldType.SIGNATURE,
+            FieldType.INITIALS,
+        }:
+            role = SIGNER_ROLE
+        # Prefer Company only when the model explicitly said so; leave Agent as-is.
         try:
             # Accept normalized 0-1 coords or PDF points.
             x = float(item.get("x"))
@@ -196,7 +203,8 @@ def suggest_fields_for_pdf(
             "You help place DocuSign-style form fields on an agent ICA PDF. "
             'Return JSON only: {"fields":[{"name","type","role","x","y","w","h"}]}. '
             "type is one of text,signature,date,initials,checkbox. "
-            "role is Prefill (brokerage-filled commercial data) or Agent (signer). "
+            "role is Prefill (brokerage-filled commercial text/date/checkbox) or "
+            "Agent (signer). Signature and initials MUST use role Agent. "
             "Coordinates are PDF points with origin at the top-left of the page. "
             f"Page size is {page_width:.1f} x {page_height:.1f} points. "
             "Prefer Agent signature and Agent date near signature lines."

@@ -11,11 +11,11 @@ transition service are documented below. Agent-facing **My Contract** and
 
 | Model | Role |
 | --- | --- |
-| `ContractTemplate` / `ContractTemplateVersion` | Originating template family and version (`PROTECT`). Hub `field_layout` drives Prefill fill and Agent signature placement. Legacy DocuSeal id columns may still exist on historical rows. |
-| `AgentContract` | One agreement version for one recipient at one owning office. |
+| `ContractTemplate` / `ContractTemplateVersion` | Originating template family and version (`PROTECT`). Hub `field_layout` drives Prefill fill plus **Company** and **Agent** signature/date placement. Legacy DocuSeal id columns may still exist on historical rows. |
+| `AgentContract` | One agreement version for one recipient at one owning office. Named `company_signatory` (required at issue) and `company_signed_at` gate agent release. |
 | `ContractArtifact` | Protected file (generated/signed PDF, certificate of completion, addendum) with SHA-256 checksum. |
-| `ContractSigningIntent` | Short-lived recipient ceremony binding (checksum, session, disclosure version). |
-| `ContractSignature` | Immutable electronic signature record; async final signed PDF + CoC. |
+| `ContractSigningIntent` | Short-lived ceremony binding (checksum, session, disclosure version) with `signer_role` (`Agent` \| `Company`). |
+| `ContractSignature` | Immutable electronic signature per `(contract, signer_role)`; agent ceremony triggers async final signed PDF + CoC. |
 
 `AgentContract.public_id` (UUID) is the client-facing identity. The integer PK
 is internal. Family history uses shared `family_id` + monotonic
@@ -52,7 +52,8 @@ supersession.
 
 Stable machine codes in `apps.contract.statuses.ContractStatus`:
 
-`draft` → `ready_for_review` → `sent` → `viewed` → `signed` → `active`
+`draft` → `ready_for_review` → `awaiting_company_signature` → `sent` →
+`viewed` → `signed` → `active`
 
 Terminal / alternate: `superseded`, `expired`, `terminated`,
 `generation_error`.
@@ -65,32 +66,40 @@ timestamps read-only.
 | --- | --- | --- | --- |
 | `submit_for_review` | draft | ready_for_review | Validates terms; refreshes `terms_snapshot` |
 | `reopen` | ready_for_review | draft | |
-| `issue` | ready_for_review | sent | Requires `confirmed=True`; re-validates sources; freezes snapshots; queues PDF stub |
+| `issue` | ready_for_review | awaiting_company_signature | Requires `confirmed=True` + named `company_signatory`; freezes snapshots (incl. `companySignatory`); queues PDF; emails / notifies the officer |
+| `mark_company_signed` | awaiting_company_signature | sent | Named officer only (via company ceremony); sets `company_signed_at` / `sent_at`; invites the agent |
 | `mark_viewed` | sent | viewed | Recipient or manage |
-| `mark_signed` | sent / viewed | signed | |
+| `mark_signed` | sent / viewed | signed | Agent ceremony or manager record |
 | `activate` | signed | active | Supersedes prior active for same recipient |
 | `supersede` / `terminate` / `expire` | (see service) | terminal | High-impact actions need confirmation where configured |
-| `mark_generation_error` / `retry_generation` | sent ↔ generation_error | | Retry re-queues PDF generation |
+| `mark_generation_error` / `retry_generation` | awaiting_company_signature or sent ↔ generation_error | | Retry resumes at awaiting-company or sent based on `company_signed_at` |
 
 Concurrency uses `select_for_update(of=("self",))` plus an `expected_version`
 token from `updated_at`. Already-at-target retries are no-ops (no duplicate
 audit or domain events). Scheduled expiry: Celery task
 `apps.contract.tasks.expire_due_contracts` (safe to re-run).
 
+**Company countersign (company-first).** After issue, only the named
+`company_signatory` may complete `/operations/agent-contracts/<uuid>/company-sign`.
+Publishable templates require ≥1 Company signature+date and ≥1 Agent
+signature+date; Prefill never carries signature/initials. PDF generation may
+run while awaiting company signature; the agent signing invite and
+`contract.pdf_ready` agent notification wait until status is `sent`. Final
+signed PDF stamps Company then Agent appearances, appends a CoC that lists both
+signers, then applies the org PKCS#12 seal.
+
 PDF generation after issue runs through Celery
 (`generate_contract_pdf` → `apps.contract.pdf_generation`): frozen snapshots and
 the template `field_layout` fill Prefill regions onto the blank PDF with pypdf /
-reportlab. The filled PDF becomes the review `ContractArtifact`, Hub sends the
-signing-invite email to the recipient, and `contract.pdf_ready` is emitted once
-after commit (in-app notification + preference-aware email). Lifecycle status
-changes that affect the agent (`issue`, `mark_signed`, `activate`, `supersede`,
-`terminate`, `expire`) each send a transactional email and a matching in-app
-notification via the domain event producers. Additional contract notification
-events:
+reportlab. The filled PDF becomes the review `ContractArtifact`. After company
+signing releases the contract to `sent`, Hub sends the signing-invite email to
+the recipient (and emits `contract.pdf_ready` for the agent only when status is
+already `sent`). Lifecycle emails / notifications:
 
 | Event | Recipients | Mandatory |
 | --- | --- | --- |
-| `contract.issued` / `pdf_ready` / lifecycle | Agent | Yes |
+| `contract.awaiting_company_signature` | Named company signatory | Yes |
+| `contract.issued` / `pdf_ready` (status `sent`) / lifecycle | Agent | Yes |
 | `contract.viewed` | Operational staff (creator + scoped managers) | No |
 | `contract.signed` | Agent + staff | Agent yes / staff no |
 | `contract.generation_error` | Operational staff | Yes |

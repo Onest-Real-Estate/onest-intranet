@@ -199,6 +199,23 @@ describe("PersonCombobox", () => {
     expect(await screen.findByText(/search could not run/i)).toBeVisible();
   });
 
+  it("portals the listbox outside overflow-hidden ancestors", async () => {
+    const user = userEvent.setup();
+    const { container } = render(
+      <div className="overflow-hidden" style={{ height: 48 }}>
+        <Harness />
+      </div>,
+    );
+
+    await user.type(screen.getByLabelText("Agent"), "sa");
+    const list = await screen.findByRole("listbox");
+    const clipped = container.querySelector(".overflow-hidden");
+
+    expect(clipped).not.toBeNull();
+    expect(clipped?.contains(list)).toBe(false);
+    expect(list.closest('[data-slot="popover-content"]')).not.toBeNull();
+  });
+
   it("drops a stale response so a slow query cannot overwrite a fast one", async () => {
     const aborted: boolean[] = [];
     vi.stubGlobal(

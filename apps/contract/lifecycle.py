@@ -61,6 +61,7 @@ TRANSITIONS: tuple[str, ...] = (
     "submit_for_review",
     "reopen",
     "issue",
+    "mark_company_signed",
     "mark_viewed",
     "mark_signed",
     "activate",
@@ -83,7 +84,8 @@ SYSTEM_ACTIONS: frozenset[str] = frozenset({"expire", "mark_generation_error"})
 _TARGET_STATUS: dict[str, str] = {
     "submit_for_review": ContractStatus.READY_FOR_REVIEW,
     "reopen": ContractStatus.DRAFT,
-    "issue": ContractStatus.SENT,
+    "issue": ContractStatus.AWAITING_COMPANY_SIGNATURE,
+    "mark_company_signed": ContractStatus.SENT,
     "mark_viewed": ContractStatus.VIEWED,
     "mark_signed": ContractStatus.SIGNED,
     "activate": ContractStatus.ACTIVE,
@@ -91,13 +93,14 @@ _TARGET_STATUS: dict[str, str] = {
     "terminate": ContractStatus.TERMINATED,
     "expire": ContractStatus.EXPIRED,
     "mark_generation_error": ContractStatus.GENERATION_ERROR,
-    "retry_generation": ContractStatus.SENT,
+    "retry_generation": ContractStatus.AWAITING_COMPANY_SIGNATURE,
 }
 
 _AUDIT_ACTION: dict[str, str] = {
     "submit_for_review": "contract.submitted_for_review",
     "reopen": "contract.reopened",
     "issue": "contract.issued",
+    "mark_company_signed": "contract.company_signed",
     "mark_viewed": "contract.viewed",
     "mark_signed": "contract.signed",
     "activate": "contract.activated",
@@ -109,7 +112,8 @@ _AUDIT_ACTION: dict[str, str] = {
 }
 
 _DOMAIN_EVENT: dict[str, str] = {
-    "issue": "contract.issued",
+    "issue": "contract.awaiting_company_signature",
+    "mark_company_signed": "contract.issued",
     "mark_viewed": "contract.viewed",
     "mark_signed": "contract.signed",
     "activate": "contract.activated",
@@ -212,6 +216,16 @@ def _ensure_manage(actor: User | None) -> None:
 def _authorize(actor: User | None, contract: AgentContract, action: str) -> None:
     if action in SYSTEM_ACTIONS and actor is None:
         return
+    if action == "mark_company_signed":
+        if actor is None:
+            raise PermissionDenied(_("Authentication required."))
+        if getattr(actor, "is_superuser", False):
+            return
+        if contract.company_signatory_id and actor.pk == contract.company_signatory_id:
+            return
+        raise PermissionDenied(
+            _("Only the named company signatory can complete company signing.")
+        )
     if action in {"mark_viewed", "mark_signed"}:
         if actor is None:
             raise PermissionDenied(_("Authentication required."))
@@ -231,6 +245,11 @@ def _snapshot_row(contract: AgentContract) -> dict:
     return {
         "status": contract.status,
         "sent_at": contract.sent_at.isoformat() if contract.sent_at else None,
+        "company_signed_at": (
+            contract.company_signed_at.isoformat()
+            if contract.company_signed_at
+            else None
+        ),
         "viewed_at": contract.viewed_at.isoformat() if contract.viewed_at else None,
         "signed_at": contract.signed_at.isoformat() if contract.signed_at else None,
         "activated_at": (
@@ -246,6 +265,7 @@ def _snapshot_row(contract: AgentContract) -> dict:
             contract.terminated_at.isoformat() if contract.terminated_at else None
         ),
         "calculation_rule_version": contract.calculation_rule_version,
+        "company_signatory_id": contract.company_signatory_id,
     }
 
 
@@ -277,7 +297,15 @@ def _validate_issuance_sources(contract: AgentContract) -> None:
 
 
 def _refresh_issuance_snapshots(contract: AgentContract) -> None:
-    contract.party_snapshot = party_snapshot(contract.recipient)
+    snap = party_snapshot(contract.recipient)
+    signatory = contract.company_signatory
+    if signatory is not None:
+        snap["companySignatory"] = {
+            "userId": signatory.pk,
+            "email": signatory.email,
+            "displayName": signatory.preferred_display_name(),
+        }
+    contract.party_snapshot = snap
     contract.office_snapshot = office_snapshot(contract.office)
     contract.terms_snapshot = terms_snapshot_from_contract(contract)
     contract.calculation_rule_version = (
@@ -317,9 +345,37 @@ def _apply_transition(
             raise TransitionRefused(
                 str(_("Only a ready-for-review contract can be issued."))
             )
+        if not locked.company_signatory_id:
+            raise TransitionRefused(
+                str(_("Choose a company signatory before issuing."))
+            )
+        if locked.company_signatory_id == locked.recipient_id:
+            raise TransitionRefused(
+                str(_("The company signatory cannot be the recipient agent."))
+            )
+        signatory = locked.company_signatory
+        if signatory is None or not signatory.is_active:
+            raise TransitionRefused(str(_("Company signatory account is inactive.")))
         _validate_issuance_sources(locked)
         locked.full_clean()
         _refresh_issuance_snapshots(locked)
+        # Party snapshot includes company signatory for audit; sent_at waits
+        # until the company ceremony completes and the agent is released.
+    elif action == "mark_company_signed":
+        if locked.status != ContractStatus.AWAITING_COMPANY_SIGNATURE:
+            raise TransitionRefused(
+                str(
+                    _(
+                        "Only a contract awaiting company signature can be "
+                        "released to the agent."
+                    )
+                )
+            )
+        if not locked.generated_pdf_id:
+            raise TransitionRefused(
+                str(_("Wait for the review PDF before company signing completes."))
+            )
+        locked.company_signed_at = now
         locked.sent_at = now
     elif action == "mark_viewed":
         if locked.status != ContractStatus.SENT:
@@ -353,15 +409,28 @@ def _apply_transition(
             raise TransitionRefused(str(_("Only an active contract can expire.")))
         locked.expired_at = now
     elif action == "mark_generation_error":
-        if locked.status != ContractStatus.SENT:
+        if locked.status not in {
+            ContractStatus.SENT,
+            ContractStatus.AWAITING_COMPANY_SIGNATURE,
+        }:
             raise TransitionRefused(
-                str(_("Only a sent contract can enter generation error."))
+                str(
+                    _(
+                        "Only an issued contract awaiting PDF can enter "
+                        "generation error."
+                    )
+                )
             )
     elif action == "retry_generation":
         if locked.status != ContractStatus.GENERATION_ERROR:
             raise TransitionRefused(
                 str(_("Only a generation-error contract can retry generation."))
             )
+        # Resume at the pre-error gate: company ceremony or agent delivery.
+        if locked.company_signed_at:
+            target = ContractStatus.SENT
+        else:
+            target = ContractStatus.AWAITING_COMPANY_SIGNATURE
     else:
         raise TransitionRefused(str(_("That is not a contract action.")))
 
@@ -446,6 +515,15 @@ def _emit_domain(
             "signer_id": str(contract.recipient_id),
             "signed_at": (contract.signed_at or now).isoformat(),
         }
+    elif name == "contract.awaiting_company_signature" or name == "contract.issued":
+        payload = {
+            "contract_id": str(contract.public_id),
+            "office_id": str(contract.office_id),
+            "agent_id": str(contract.recipient_id),
+            "company_signatory_id": str(contract.company_signatory_id or ""),
+            "status": contract.status,
+            "occurred_at": now.isoformat(),
+        }
     publish_event(
         name,
         actor_id=str(actor.pk) if actor is not None else "system",
@@ -462,6 +540,7 @@ def transition(
     expected_version: str,
     confirmed: bool = False,
     idempotency_key: str = "",
+    company_signatory: User | None = None,
     now=None,
 ) -> AgentContract:
     """One explicit lifecycle move. Authorize, then lock and apply."""
@@ -477,6 +556,7 @@ def transition(
         expected_version=expected_version,
         confirmed=confirmed,
         idempotency_key=idempotency_key,
+        company_signatory=company_signatory,
         now=now,
     )
 
@@ -490,12 +570,16 @@ def _transition(
     expected_version: str,
     confirmed: bool,
     idempotency_key: str,
+    company_signatory: User | None = None,
     now=None,
 ) -> AgentContract:
     moment = now or timezone.now()
     locked = _lock(contract.pk)
     _authorize(actor, locked, action)
     _assert_fresh(locked, expected_version)
+
+    if action == "issue" and company_signatory is not None:
+        locked.company_signatory = company_signatory
 
     target = _TARGET_STATUS[action]
     if locked.status == target:
@@ -526,6 +610,12 @@ def _transition(
     if action in {"issue", "retry_generation"}:
         _queue_pdf_generation(locked.pk)
 
+    if action == "issue":
+        _queue_company_signatory_invite(locked.pk)
+
+    if action == "mark_company_signed":
+        _queue_agent_release_invite(locked.pk)
+
     if action in AGENT_EMAIL_ACTIONS:
         _queue_agent_status_email(locked.pk, action=action)
 
@@ -539,6 +629,52 @@ def _transition(
         _queue_suppress_stale_reminders(locked.pk)
 
     return locked
+
+
+def _queue_agent_release_invite(contract_pk: int) -> None:
+    """After company signs, invite the agent if the review PDF is already ready."""
+
+    def _run() -> None:
+        from apps.contract.emails import send_signing_invite_email
+
+        refreshed = AgentContract.objects.filter(pk=contract_pk).first()
+        if refreshed is None or refreshed.status != ContractStatus.SENT:
+            return
+        if not refreshed.generated_pdf_id:
+            return
+        try:
+            send_signing_invite_email(refreshed)
+        except Exception:  # noqa: BLE001
+            logger.exception(
+                "agent signing invite after company sign failed id=%s", contract_pk
+            )
+
+    transaction.on_commit(_run)
+
+
+def _queue_company_signatory_invite(contract_pk: int) -> None:
+    """Notify the named officer that company signing is required."""
+
+    def _run() -> None:
+        from apps.contract.emails import send_company_signatory_invite_email
+
+        refreshed = (
+            AgentContract.objects.select_related("company_signatory", "recipient")
+            .filter(pk=contract_pk)
+            .first()
+        )
+        if refreshed is None:
+            return
+        if refreshed.status != ContractStatus.AWAITING_COMPANY_SIGNATURE:
+            return
+        try:
+            send_company_signatory_invite_email(refreshed)
+        except Exception:  # noqa: BLE001
+            logger.exception(
+                "company signatory invite after issue failed id=%s", contract_pk
+            )
+
+    transaction.on_commit(_run)
 
 
 def _queue_suppress_stale_reminders(contract_pk: int) -> None:

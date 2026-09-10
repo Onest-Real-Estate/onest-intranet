@@ -45,6 +45,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { routes } from "@/lib/routes";
+import { hasValidationErrors } from "@/lib/validation";
 import type { ContractTemplateWorkspacePageProps } from "@/types";
 
 const ACCESS = {
@@ -94,6 +95,32 @@ function normalizeLayout(
   }));
 }
 
+function hasRequiredAgentFields(layout: TemplateFieldLayoutItem[]): boolean {
+  let hasSignature = false;
+  let hasDate = false;
+  for (const field of layout) {
+    if (field.role !== "Agent") continue;
+    if (field.type === "signature") hasSignature = true;
+    if (field.type === "date") hasDate = true;
+  }
+  return hasSignature && hasDate;
+}
+
+function layoutFingerprint(layout: TemplateFieldLayoutItem[]): string {
+  return JSON.stringify(
+    layout.map((field) => ({
+      name: field.name,
+      type: field.type,
+      role: field.role,
+      page: field.page,
+      x: Math.round(field.x * 1000) / 1000,
+      y: Math.round(field.y * 1000) / 1000,
+      w: Math.round(field.w * 1000) / 1000,
+      h: Math.round(field.h * 1000) / 1000,
+    })),
+  );
+}
+
 export default function ContractTemplateWorkspace() {
   const { versionDetail, capabilities, errors, posted, csrfToken } =
     usePage<ContractTemplateWorkspacePageProps>().props;
@@ -139,22 +166,38 @@ export default function ContractTemplateWorkspace() {
   const canEdit = Boolean(capabilities.canManage && isDraft);
 
   const [savingFields, setSavingFields] = useState(false);
+  const [previewing, setPreviewing] = useState(false);
+
+  const serverLayoutFingerprint = useMemo(
+    () => layoutFingerprint(normalizeLayout(versionDetail.fieldLayout ?? [])),
+    [versionDetail.fieldLayout],
+  );
+  const clientLayoutFingerprint = useMemo(
+    () => layoutFingerprint(fieldLayout),
+    [fieldLayout],
+  );
+  const fieldLayoutDirty = clientLayoutFingerprint !== serverLayoutFingerprint;
+  const missingAgentFields = !hasRequiredAgentFields(fieldLayout);
 
   function postAction(
     action: "preview" | "suggest_fields" | "publish" | "activate" | "retire",
   ) {
     if (action === "suggest_fields") setSuggesting(true);
+    if (action === "preview") setPreviewing(true);
     router.post(
       routes.contract_template_action(versionDetail.id),
       { action },
       {
         preserveScroll: true,
-        onFinish: () => setSuggesting(false),
+        onFinish: () => {
+          setSuggesting(false);
+          setPreviewing(false);
+        },
       },
     );
   }
 
-  function saveFieldLayout() {
+  function saveFieldLayout(options?: { onSuccess?: () => void }) {
     setSavingFields(true);
     router.post(
       routes.contract_template_field_layout(versionDetail.id),
@@ -164,9 +207,51 @@ export default function ContractTemplateWorkspace() {
       },
       {
         preserveScroll: true,
+        onSuccess: options?.onSuccess,
         onFinish: () => setSavingFields(false),
       },
     );
+  }
+
+  function generatePreview() {
+    if (!versionDetail.sourcePdfUrl || fieldLayout.length === 0) return;
+    // Preview reads the server layout — persist placer changes first so Agent
+    // signature/date boxes do not look “placed” while the draft still fails.
+    if (canEdit && fieldLayoutDirty) {
+      setPreviewing(true);
+      setSavingFields(true);
+      router.post(
+        routes.contract_template_field_layout(versionDetail.id),
+        {
+          fieldLayoutJson: JSON.stringify(fieldLayout),
+          expectedVersion: versionDetail.version,
+        },
+        {
+          preserveScroll: true,
+          onSuccess: (page) => {
+            const nextErrors = (
+              page.props as unknown as ContractTemplateWorkspacePageProps
+            ).errors;
+            if (hasValidationErrors(nextErrors)) {
+              setPreviewing(false);
+              return;
+            }
+            router.post(
+              routes.contract_template_action(versionDetail.id),
+              { action: "preview" },
+              {
+                preserveScroll: true,
+                onFinish: () => setPreviewing(false),
+              },
+            );
+          },
+          onError: () => setPreviewing(false),
+          onFinish: () => setSavingFields(false),
+        },
+      );
+      return;
+    }
+    postAction("preview");
   }
 
   useEffect(() => {
@@ -223,11 +308,18 @@ export default function ContractTemplateWorkspace() {
               <Button
                 type="button"
                 variant={isDraft ? "default" : "outline"}
-                onClick={() => postAction("preview")}
-                disabled={!versionDetail.sourcePdfUrl || fieldLayout.length === 0}
+                onClick={() => generatePreview()}
+                disabled={
+                  !versionDetail.sourcePdfUrl ||
+                  fieldLayout.length === 0 ||
+                  savingFields ||
+                  previewing
+                }
               >
                 <Eye className="size-4" aria-hidden />
-                Generate preview
+                {previewing || (savingFields && fieldLayoutDirty)
+                  ? "Generating…"
+                  : "Generate preview"}
               </Button>
               {capabilities.canApprove && isDraft ? (
                 <Button
@@ -516,9 +608,23 @@ export default function ContractTemplateWorkspace() {
                   value={fieldLayout}
                   onChange={setFieldLayout}
                   readOnly={!canEdit}
-                  onSave={canEdit ? saveFieldLayout : undefined}
+                  onSave={canEdit ? () => saveFieldLayout() : undefined}
                   saving={savingFields}
                 />
+                {canEdit && missingAgentFields ? (
+                  <Callout tone="warning" title="Agent fields required">
+                    Switch the signer role to Agent, place at least one Signature and
+                    one Date field, then Save fields (or Generate preview, which saves
+                    first). Prefill cannot stamp a signature — delete any Prefill
+                    Signature/Initials boxes.
+                  </Callout>
+                ) : null}
+                {canEdit && fieldLayoutDirty && !missingAgentFields ? (
+                  <Callout tone="info" title="Unsaved field placement">
+                    Field boxes changed in the placer. Click Save fields, or Generate
+                    preview to save and build the synthetic PDF.
+                  </Callout>
+                ) : null}
               </>
             )}
           </SurfaceCardContent>

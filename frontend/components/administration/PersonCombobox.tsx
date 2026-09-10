@@ -4,6 +4,7 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import type { AgentContractRecipientResult } from "@/types";
 
@@ -172,6 +173,7 @@ export function PersonCombobox({
   const [active, setActive] = useState(0);
   const abortRef = useRef<AbortController | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const anchorRef = useRef<HTMLDivElement>(null);
 
   const searchable = term.trim().length >= MIN_QUERY;
   const activeId = open && results.length > 0 ? `${listId}-${active}` : undefined;
@@ -298,133 +300,148 @@ export function PersonCombobox({
       ) : (
         <>
           <Label htmlFor={id}>{label}</Label>
-          <div className="relative">
-            <Search
-              className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2"
-              aria-hidden
-            />
-            <Input
-              id={id}
-              role="combobox"
-              aria-expanded={showPanel}
-              aria-controls={listId}
-              aria-activedescendant={activeId}
-              aria-autocomplete="list"
-              aria-describedby={description ? describedId : undefined}
-              aria-invalid={invalid || undefined}
-              aria-required={required || undefined}
-              autoComplete="off"
-              autoCorrect="off"
-              autoCapitalize="off"
-              spellCheck={false}
-              data-1p-ignore
-              data-lpignore="true"
-              data-form-type="other"
-              disabled={disabled}
-              className="pl-9"
-              value={term}
-              placeholder={placeholder}
-              onChange={(event) => {
-                setTerm(event.target.value);
-                setOpen(true);
-              }}
-              onFocus={() => setOpen(true)}
-              onBlur={(event) => {
-                // Let a click on a row land before the panel closes.
-                if (event.relatedTarget instanceof Node) {
-                  if (listRef.current?.contains(event.relatedTarget)) return;
-                }
-                setOpen(false);
-              }}
-              onKeyDown={onKeyDown}
-            />
-            {loading && showPanel ? (
-              <Loader2
-                className="text-muted-foreground absolute top-1/2 right-3 size-4 -translate-y-1/2 animate-spin"
-                aria-hidden
-              />
-            ) : null}
-
-            {showPanel ? (
-              <div className="animate-listbox border-border bg-popover shadow-popover absolute top-[calc(100%+0.25rem)] right-0 left-0 z-30 overflow-hidden rounded-lg border">
-                {!searchable ? (
-                  <Note icon={Search}>
-                    {`Type at least ${MIN_QUERY} characters to search.`}
-                  </Note>
-                ) : failed ? (
-                  <Note icon={TriangleAlert} tone="destructive">
-                    Search could not run. Check your connection and try again.
-                  </Note>
-                ) : loading && results.length === 0 ? (
-                  <div className="grid gap-1 p-1" aria-hidden>
-                    {[0, 1, 2].map((row) => (
-                      <div
-                        key={row}
-                        className="bg-muted h-12 animate-pulse rounded-md"
-                      />
-                    ))}
-                  </div>
-                ) : results.length === 0 ? (
-                  <Note icon={Search}>
-                    Nobody in your scope matches “{term.trim()}”.
-                  </Note>
-                ) : (
-                  <div
-                    ref={listRef}
-                    id={listId}
-                    role="listbox"
-                    aria-label={label}
-                    className="max-h-64 overflow-y-auto p-1"
-                  >
-                    {results.map((person, index) => (
-                      // ARIA 1.2 combobox: options are pointed at with
-                      // `aria-activedescendant` and must NOT be focusable, so the
-                      // caret stays in the input while the arrows move a highlight.
-                      // biome-ignore lint/a11y/useFocusableInteractive: roving selection, not focus
-                      <div
-                        key={person.id}
-                        id={`${listId}-${index}`}
-                        role="option"
-                        aria-selected={index === active}
-                        className={cn(
-                          "flex scroll-m-1 cursor-pointer items-center gap-3 rounded-md px-2.5 py-2 transition-colors",
-                          index === active ? "bg-accent" : "bg-transparent",
-                        )}
-                        onMouseEnter={() => setActive(index)}
-                        onMouseDown={(event) => {
-                          // Choose on mousedown so the input's blur cannot close
-                          // the panel out from under the click.
-                          event.preventDefault();
-                          choose(person);
-                        }}
-                      >
-                        <span
-                          className="bg-muted text-muted-foreground grid size-8 shrink-0 place-items-center rounded-md text-xs font-semibold"
-                          aria-hidden
-                        >
-                          {initials(person.name)}
-                        </span>
-                        <span className="grid min-w-0 flex-1 gap-0.5">
-                          <span className="truncate text-sm font-medium">
-                            <Highlight text={person.name} term={term} />
-                          </span>
-                          <span className="text-muted-foreground truncate text-xs">
-                            <Highlight text={person.email} term={term} />
-                          </span>
-                        </span>
-                        {person.officeName ? (
-                          <span className="text-muted-foreground hidden shrink-0 items-center gap-1 text-xs sm:flex">
-                            <Building2 className="size-3.5" aria-hidden />
-                            {person.officeName}
-                          </span>
-                        ) : null}
-                      </div>
-                    ))}
-                  </div>
-                )}
+          {/*
+            Portal the panel: SurfaceCard (and other rounded shells) use
+            overflow-hidden, which clips an absolutely positioned listbox to a
+            sliver. Radix Popover escapes that the same way SelectContent does.
+          */}
+          <Popover
+            open={showPanel}
+            onOpenChange={(next) => {
+              if (!next) setOpen(false);
+            }}
+            modal={false}
+          >
+            <PopoverAnchor asChild>
+              <div ref={anchorRef} className="relative">
+                <Search
+                  className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2"
+                  aria-hidden
+                />
+                <Input
+                  id={id}
+                  role="combobox"
+                  aria-expanded={showPanel}
+                  aria-controls={listId}
+                  aria-activedescendant={activeId}
+                  aria-autocomplete="list"
+                  aria-describedby={description ? describedId : undefined}
+                  aria-invalid={invalid || undefined}
+                  aria-required={required || undefined}
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
+                  data-1p-ignore
+                  data-lpignore="true"
+                  data-form-type="other"
+                  disabled={disabled}
+                  className="pl-9"
+                  value={term}
+                  placeholder={placeholder}
+                  onChange={(event) => {
+                    setTerm(event.target.value);
+                    setOpen(true);
+                  }}
+                  onFocus={() => setOpen(true)}
+                  onKeyDown={onKeyDown}
+                />
+                {loading && showPanel ? (
+                  <Loader2
+                    className="text-muted-foreground absolute top-1/2 right-3 size-4 -translate-y-1/2 animate-spin"
+                    aria-hidden
+                  />
+                ) : null}
               </div>
-            ) : null}
-          </div>
+            </PopoverAnchor>
+            <PopoverContent
+              align="start"
+              sideOffset={4}
+              className="w-[var(--radix-popover-trigger-width)] overflow-hidden p-0"
+              onOpenAutoFocus={(event) => event.preventDefault()}
+              onCloseAutoFocus={(event) => event.preventDefault()}
+              onInteractOutside={(event) => {
+                // The input is the anchor, outside the content. Keep the panel
+                // open while the caret stays in the field.
+                if (
+                  event.target instanceof Node &&
+                  anchorRef.current?.contains(event.target)
+                ) {
+                  event.preventDefault();
+                }
+              }}
+            >
+              {!searchable ? (
+                <Note icon={Search}>
+                  {`Type at least ${MIN_QUERY} characters to search.`}
+                </Note>
+              ) : failed ? (
+                <Note icon={TriangleAlert} tone="destructive">
+                  Search could not run. Check your connection and try again.
+                </Note>
+              ) : loading && results.length === 0 ? (
+                <div className="grid gap-1 p-1" aria-hidden>
+                  {[0, 1, 2].map((row) => (
+                    <div key={row} className="bg-muted h-12 animate-pulse rounded-md" />
+                  ))}
+                </div>
+              ) : results.length === 0 ? (
+                <Note icon={Search}>Nobody in your scope matches “{term.trim()}”.</Note>
+              ) : (
+                <div
+                  ref={listRef}
+                  id={listId}
+                  role="listbox"
+                  aria-label={label}
+                  className="max-h-64 overflow-y-auto p-1"
+                >
+                  {results.map((person, index) => (
+                    // ARIA 1.2 combobox: options are pointed at with
+                    // `aria-activedescendant` and must NOT be focusable, so the
+                    // caret stays in the input while the arrows move a highlight.
+                    // biome-ignore lint/a11y/useFocusableInteractive: roving selection, not focus
+                    <div
+                      key={person.id}
+                      id={`${listId}-${index}`}
+                      role="option"
+                      aria-selected={index === active}
+                      className={cn(
+                        "flex scroll-m-1 cursor-pointer items-center gap-3 rounded-md px-2.5 py-2 transition-colors",
+                        index === active ? "bg-accent" : "bg-transparent",
+                      )}
+                      onMouseEnter={() => setActive(index)}
+                      onMouseDown={(event) => {
+                        // Choose on mousedown so focus stays in the input.
+                        event.preventDefault();
+                        choose(person);
+                      }}
+                    >
+                      <span
+                        className="bg-muted text-muted-foreground grid size-8 shrink-0 place-items-center rounded-md text-xs font-semibold"
+                        aria-hidden
+                      >
+                        {initials(person.name)}
+                      </span>
+                      <span className="grid min-w-0 flex-1 gap-0.5">
+                        <span className="truncate text-sm font-medium">
+                          <Highlight text={person.name} term={term} />
+                        </span>
+                        <span className="text-muted-foreground truncate text-xs">
+                          <Highlight text={person.email} term={term} />
+                        </span>
+                      </span>
+                      {person.officeName ? (
+                        <span className="text-muted-foreground hidden shrink-0 items-center gap-1 text-xs sm:flex">
+                          <Building2 className="size-3.5" aria-hidden />
+                          {person.officeName}
+                        </span>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </PopoverContent>
+          </Popover>
         </>
       )}
 
