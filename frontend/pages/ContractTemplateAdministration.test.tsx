@@ -34,15 +34,62 @@ vi.mock("@/components/ContractTemplateFieldPlacer", () => ({
   ContractTemplateFieldPlacer: ({
     pdfUrl,
     value,
+    onChange,
     onSave,
   }: {
     pdfUrl: string;
     value: Array<{ name: string }>;
+    onChange?: (
+      next: Array<{
+        id: string;
+        name: string;
+        type: string;
+        role: string;
+        page: number;
+        x: number;
+        y: number;
+        w: number;
+        h: number;
+      }>,
+    ) => void;
     onSave?: () => void;
   }) => (
     <div data-testid="hub-field-placer">
       <span>{pdfUrl}</span>
       <span>{value.map((item) => item.name).join(",")}</span>
+      {onChange ? (
+        <button
+          type="button"
+          onClick={() =>
+            onChange([
+              {
+                id: "agent-sig",
+                name: "AgentSignature",
+                type: "signature",
+                role: "Agent",
+                page: 1,
+                x: 20,
+                y: 20,
+                w: 180,
+                h: 48,
+              },
+              {
+                id: "agent-date",
+                name: "AgentSignedOn",
+                type: "date",
+                role: "Agent",
+                page: 1,
+                x: 20,
+                y: 80,
+                w: 120,
+                h: 24,
+              },
+            ])
+          }
+        >
+          Place agent fields
+        </button>
+      ) : null}
       {onSave ? (
         <button type="button" onClick={onSave}>
           Save fields
@@ -424,6 +471,112 @@ describe("ContractTemplateWorkspace", () => {
       expect.objectContaining({
         fieldLayoutJson: expect.stringContaining("AgentSignature"),
       }),
+      expect.any(Object),
+    );
+  });
+
+  it("saves dirty field layout before generating a preview", async () => {
+    const user = userEvent.setup();
+    postMock.mockImplementation((_url, _data, options) => {
+      options?.onSuccess?.({
+        props: { errors: { fields: {}, form: [] } },
+      });
+      options?.onFinish?.();
+    });
+    vi.mocked(usePage).mockReturnValue({
+      props: {
+        csrfToken: "token",
+        user: {
+          id: 1,
+          email: "admin@example.com",
+          permissions: [
+            "contract.manage_contract_templates",
+            "contract.approve_contract_templates",
+          ],
+        },
+        capabilities: { canManage: true, canApprove: true },
+        errors: { fields: {}, form: [] },
+        posted: null,
+        versionDetail: {
+          id: 9,
+          publicId: "ver-1",
+          templatePublicId: "tpl-1",
+          versionLabel: "1.0.0",
+          displayName: "ICA Standard",
+          description: "Draft",
+          status: "draft",
+          sourceFormat: "pdf",
+          sourceMediaType: "application/pdf",
+          sourceChecksum: "a".repeat(64),
+          sourcePdfUrl: "/operations/contract-templates/templates/9/source.pdf",
+          fieldLayout: [
+            {
+              id: "f1",
+              name: "PrefillSignature",
+              type: "signature",
+              role: "Prefill",
+              page: 1,
+              x: 10,
+              y: 10,
+              w: 100,
+              h: 40,
+            },
+          ],
+          fieldAiConfigured: false,
+          mergeSourceOptions: ["party.legalFirstName"],
+          placeholderKeys: ["PrefillSignature"],
+          mergeSchema: [
+            {
+              key: "PrefillSignature",
+              label: "PrefillSignature",
+              type: "text",
+              source: "",
+            },
+          ],
+          mergeSchemaJson: "[]",
+          previewChecksum: "",
+          previewGeneratedAt: null,
+          previewUrl: null,
+          validationErrors: [],
+          publishedAt: null,
+          retiredAt: null,
+          contractsUsingVersion: 0,
+          version: "2026-08-24T12:00:00+00:00",
+          template: {
+            publicId: "tpl-1",
+            stableKey: "ica-standard",
+            name: "ICA Standard",
+            description: "Main agreement",
+            status: "draft",
+            jurisdictionStateCodes: ["VA"],
+            companyWide: false,
+            effectiveFrom: "",
+            effectiveUntil: "",
+            activeVersionPk: null,
+            activeVersionId: null,
+            workspaceVersionPk: 9,
+          },
+        },
+      },
+    } as never);
+
+    render(<ContractTemplateWorkspace />);
+    await user.click(screen.getByRole("button", { name: /place agent fields/i }));
+    await user.click(screen.getByRole("button", { name: /generate preview/i }));
+
+    const urls = postMock.mock.calls.map((call) => call[0]);
+    expect(urls).toContain("/operations/contract-templates/templates/9/field-layout");
+    expect(urls).toContain("/operations/contract-templates/templates/9/action");
+    expect(postMock).toHaveBeenCalledWith(
+      "/operations/contract-templates/templates/9/field-layout",
+      expect.objectContaining({
+        fieldLayoutJson: expect.stringContaining("AgentSignature"),
+      }),
+      expect.any(Object),
+    );
+    expect(postMock).toHaveBeenCalledWith(
+      "/operations/contract-templates/templates/9/action",
+      { action: "preview" },
       expect.any(Object),
     );
   });

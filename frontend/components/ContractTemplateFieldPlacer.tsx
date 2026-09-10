@@ -27,7 +27,7 @@ GlobalWorkerOptions.workerSrc = pdfWorker;
 
 export type TemplateFieldType = "text" | "signature" | "date" | "initials" | "checkbox";
 
-export type TemplateFieldRole = "Prefill" | "Agent";
+export type TemplateFieldRole = "Prefill" | "Agent" | "Company";
 
 export type TemplateFieldLayoutItem = {
   id: string;
@@ -46,13 +46,47 @@ const PALETTE: Array<{
   label: string;
   icon: typeof Type;
   hint: string;
+  roles: TemplateFieldRole[];
 }> = [
-  { type: "signature", label: "Signature", icon: Signature, hint: "Draw / type sign" },
-  { type: "initials", label: "Initials", icon: PenLine, hint: "Short mark" },
-  { type: "date", label: "Date", icon: Calendar, hint: "Signed-on date" },
-  { type: "text", label: "Text", icon: Type, hint: "Fillable text" },
-  { type: "checkbox", label: "Checkbox", icon: CheckSquare, hint: "Yes / no" },
+  {
+    type: "signature",
+    label: "Signature",
+    icon: Signature,
+    hint: "Drawn at signing",
+    roles: ["Agent", "Company"],
+  },
+  {
+    type: "initials",
+    label: "Initials",
+    icon: PenLine,
+    hint: "Drawn at signing",
+    roles: ["Agent", "Company"],
+  },
+  {
+    type: "date",
+    label: "Date",
+    icon: Calendar,
+    hint: "Signed-on or commercial date",
+    roles: ["Prefill", "Agent", "Company"],
+  },
+  {
+    type: "text",
+    label: "Text",
+    icon: Type,
+    hint: "Fillable text",
+    roles: ["Prefill", "Agent", "Company"],
+  },
+  {
+    type: "checkbox",
+    label: "Checkbox",
+    icon: CheckSquare,
+    hint: "Yes / no",
+    roles: ["Prefill", "Agent", "Company"],
+  },
 ];
+
+const SIGNING_ONLY_TYPES = new Set<TemplateFieldType>(["signature", "initials"]);
+const HUMAN_SIGNER_ROLES = new Set<TemplateFieldRole>(["Agent", "Company"]);
 
 const DEFAULT_SIZE: Record<TemplateFieldType, { w: number; h: number }> = {
   text: { w: 180, h: 28 },
@@ -97,8 +131,13 @@ function defaultName(type: TemplateFieldType, role: TemplateFieldRole): string {
     if (type === "date") return "AgentSignedOn";
     if (type === "initials") return "AgentInitials";
   }
+  if (role === "Company") {
+    if (type === "signature") return "CompanySignature";
+    if (type === "date") return "CompanySignedOn";
+    if (type === "initials") return "CompanyInitials";
+  }
   const label = type[0]?.toUpperCase() + type.slice(1);
-  return role === "Prefill" ? `Prefill${label}` : `Agent${label}`;
+  return role === "Prefill" ? `Prefill${label}` : `${role}${label}`;
 }
 
 export function ContractTemplateFieldPlacer({
@@ -127,6 +166,15 @@ export function ContractTemplateFieldPlacer({
     startY: number;
     orig: TemplateFieldLayoutItem;
   } | null>(null);
+
+  function setPlaceRoleSafe(role: TemplateFieldRole) {
+    setPlaceRole(role);
+    setArmedType((current) => {
+      if (!current) return current;
+      const meta = PALETTE.find((item) => item.type === current);
+      return meta?.roles.includes(role) ? current : null;
+    });
+  }
 
   useEffect(() => {
     const node = viewerRef.current;
@@ -211,6 +259,8 @@ export function ContractTemplateFieldPlacer({
     pdfY: number,
   ) {
     if (readOnly) return;
+    const resolvedRole: TemplateFieldRole =
+      SIGNING_ONLY_TYPES.has(type) && !HUMAN_SIGNER_ROLES.has(role) ? "Agent" : role;
     const size = DEFAULT_SIZE[type];
     const pageSize = pageSizes[page - 1];
     if (!pageSize) return;
@@ -220,9 +270,9 @@ export function ContractTemplateFieldPlacer({
     const y = Math.max(0, Math.min(pdfY - h / 2, pageSize.height - h));
     const next: TemplateFieldLayoutItem = {
       id: newId(),
-      name: uniqueName(defaultName(type, role), value),
+      name: uniqueName(defaultName(type, resolvedRole), value),
       type,
-      role,
+      role: resolvedRole,
       page,
       x: Math.round(x * 1000) / 1000,
       y: Math.round(y * 1000) / 1000,
@@ -307,36 +357,33 @@ export function ContractTemplateFieldPlacer({
           <p className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
             Signer role
           </p>
-          <div className="bg-background grid grid-cols-2 gap-1 rounded-md border p-1">
-            {(["Prefill", "Agent"] as const).map((role) => (
+          <div className="bg-background grid grid-cols-3 gap-1 rounded-md border p-1">
+            {(["Prefill", "Company", "Agent"] as const).map((role) => (
               <Button
                 key={role}
                 type="button"
                 size="sm"
                 variant={placeRole === role ? "default" : "ghost"}
                 disabled={readOnly}
-                onClick={() => setPlaceRole(role)}
+                onClick={() => setPlaceRoleSafe(role)}
               >
                 {role}
               </Button>
             ))}
           </div>
           <p className="text-muted-foreground text-xs">
-            Prefill = commercial text the Hub fills when generating a contract. Agent =
-            signature, date, and initials at signing.
+            Prefill = commercial text the Hub fills. Company = named officer signs
+            first. Agent = recipient signs second. Org seal still finalizes the PDF.
           </p>
         </div>
 
         <div className="border-border bg-background/80 grid gap-2 rounded-md border p-3">
-          <p className="text-foreground text-xs font-semibold">Prefill workflow</p>
+          <p className="text-foreground text-xs font-semibold">Signing workflow</p>
           <ol className="text-muted-foreground list-decimal space-y-1 pl-4 text-xs leading-5">
-            <li>Select Prefill, place Text fields on the PDF.</li>
-            <li>Save fields.</li>
-            <li>
-              In Draft workspace, map each Prefill name to a hub source, then Save
-              draft.
-            </li>
-            <li>Generate preview to see sample filled values.</li>
+            <li>Select Prefill, place Text (or Date / Checkbox) fields.</li>
+            <li>Select Company, place Signature and Date for the officer.</li>
+            <li>Select Agent, place Signature and Date for the recipient.</li>
+            <li>Save fields, map Prefill sources, then preview and publish.</li>
           </ol>
         </div>
 
@@ -345,7 +392,7 @@ export function ContractTemplateFieldPlacer({
             Fields
           </p>
           <div className="grid gap-2">
-            {PALETTE.map((item) => {
+            {PALETTE.filter((item) => item.roles.includes(placeRole)).map((item) => {
               const Icon = item.icon;
               const armed = armedType === item.type;
               return (
@@ -382,6 +429,9 @@ export function ContractTemplateFieldPlacer({
           </div>
           <p className="text-muted-foreground text-xs">
             Drag onto the page, or click a field then click the PDF.
+            {placeRole === "Prefill"
+              ? " Signature and initials appear only under Agent."
+              : null}
           </p>
         </div>
 
@@ -464,17 +514,25 @@ export function ContractTemplateFieldPlacer({
               <Select
                 value={selected.role}
                 disabled={readOnly}
-                onValueChange={(next) =>
-                  updateField(selected.id, {
-                    role: next as TemplateFieldRole,
-                  })
-                }
+                onValueChange={(next) => {
+                  const role = next as TemplateFieldRole;
+                  if (role === "Prefill" && SIGNING_ONLY_TYPES.has(selected.type)) {
+                    return;
+                  }
+                  updateField(selected.id, { role });
+                }}
               >
                 <SelectTrigger id={`${labelId}-role`}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Prefill">Prefill</SelectItem>
+                  <SelectItem
+                    value="Prefill"
+                    disabled={SIGNING_ONLY_TYPES.has(selected.type)}
+                  >
+                    Prefill
+                  </SelectItem>
+                  <SelectItem value="Company">Company</SelectItem>
                   <SelectItem value="Agent">Agent</SelectItem>
                 </SelectContent>
               </Select>
@@ -482,12 +540,24 @@ export function ContractTemplateFieldPlacer({
             <p className="text-muted-foreground text-xs">
               Page {selected.page} · {Math.round(selected.w)}×{Math.round(selected.h)}
             </p>
-            {selected.role === "Prefill" ? (
+            {SIGNING_ONLY_TYPES.has(selected.type) ? (
+              <p className="text-muted-foreground text-xs leading-5">
+                Left blank until that party signs. Company signs first (named officer);
+                Agent signs second on My Contract. Org seal finalizes.
+              </p>
+            ) : null}
+            {selected.role === "Prefill" && !SIGNING_ONLY_TYPES.has(selected.type) ? (
               <p className="text-muted-foreground text-xs leading-5">
                 Map <strong className="text-foreground">{selected.name}</strong> in
-                Draft workspace → Merge field mapping (for example{" "}
+                Draft workspace → Prefill mapping (for example{" "}
                 <code className="text-foreground">party.legalFirstName</code>), then
                 Save draft. Preview uses sample hub data.
+              </p>
+            ) : null}
+            {selected.role === "Prefill" && SIGNING_ONLY_TYPES.has(selected.type) ? (
+              <p className="text-destructive text-xs leading-5">
+                Switch this field to Agent (or delete it). Prefill cannot stamp a
+                signature or initials.
               </p>
             ) : null}
             {!readOnly ? (
@@ -592,6 +662,7 @@ function PdfPageCanvas({
 
   useEffect(() => {
     let cancelled = false;
+    let renderTask: { cancel: () => void; promise: Promise<void> } | null = null;
     setRenderError(null);
     void (async () => {
       try {
@@ -606,7 +677,12 @@ function PdfPageCanvas({
         canvas.height = Math.floor(viewport.height);
         canvas.style.width = `${displayWidth}px`;
         canvas.style.height = `${displayHeight}px`;
-        await page.render({ canvasContext: context, viewport }).promise;
+        renderTask = page.render({ canvasContext: context, viewport });
+        if (cancelled) {
+          renderTask.cancel();
+          return;
+        }
+        await renderTask.promise;
       } catch {
         if (!cancelled) {
           setRenderError("Could not render this page.");
@@ -615,6 +691,7 @@ function PdfPageCanvas({
     })();
     return () => {
       cancelled = true;
+      renderTask?.cancel();
     };
   }, [doc, pageNumber, scale, displayWidth, displayHeight]);
 
@@ -684,7 +761,9 @@ function PdfPageCanvas({
                 "absolute z-20 flex items-stretch overflow-hidden rounded-sm border text-left text-micro leading-tight shadow-sm",
                 field.role === "Agent"
                   ? "border-primary bg-primary/15 text-foreground"
-                  : "border-accent-foreground/30 bg-accent/50 text-foreground",
+                  : field.role === "Company"
+                    ? "border-chart-2 bg-chart-2/15 text-foreground"
+                    : "border-accent-foreground/30 bg-accent/50 text-foreground",
                 selected ? "ring-ring z-30 ring-2" : null,
               )}
               style={{

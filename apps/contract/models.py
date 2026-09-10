@@ -37,6 +37,7 @@ from apps.user.storage import private_storage
 #: artifact *pointers* may still change.
 FROZEN_CONTRACT_STATUSES = frozenset(
     {
+        ContractStatus.AWAITING_COMPANY_SIGNATURE,
         ContractStatus.SENT,
         ContractStatus.VIEWED,
         ContractStatus.SIGNED,
@@ -588,6 +589,7 @@ class AgentContractQuerySet(models.QuerySet["AgentContract"]):
             "template_version",
             "template_version__template",
             "created_by",
+            "company_signatory",
             "mentor_payee",
             "mentor_payee__office",
             "referral_payee",
@@ -669,6 +671,18 @@ class AgentContract(models.Model):
         verbose_name=_("created by"),
         related_name="agent_contracts_created",
         on_delete=models.PROTECT,
+    )
+    company_signatory = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        verbose_name=_("company signatory"),
+        related_name="company_signatory_contracts",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        help_text=_(
+            "Named officer who must complete the Company ceremony before the "
+            "agent can sign. Required at issue."
+        ),
     )
     status = models.CharField(
         _("status"),
@@ -815,6 +829,12 @@ class AgentContract(models.Model):
     # --- Lifecycle timestamps --------------------------------------------
     viewed_at = models.DateTimeField(_("viewed at"), null=True, blank=True)
     sent_at = models.DateTimeField(_("sent at"), null=True, blank=True)
+    company_signed_at = models.DateTimeField(
+        _("company signed at"),
+        null=True,
+        blank=True,
+        help_text=_("When the named company signatory completed their ceremony."),
+    )
     signed_at = models.DateTimeField(_("signed at"), null=True, blank=True)
     activated_at = models.DateTimeField(_("activated at"), null=True, blank=True)
     superseded_at = models.DateTimeField(_("superseded at"), null=True, blank=True)
@@ -829,6 +849,7 @@ class AgentContract(models.Model):
         recipient_id: int
         office_id: int
         created_by_id: int
+        company_signatory_id: int | None
         template_version_id: int | None
         mentor_payee_id: int | None
         referral_payee_id: int | None
@@ -998,6 +1019,10 @@ class AgentContract(models.Model):
                 fields=["family_id", "version_number"],
                 name="contract_family_version_idx",
             ),
+            models.Index(
+                fields=["company_signatory", "status"],
+                name="contract_company_signature",
+            ),
         ]
 
     def __str__(self) -> str:
@@ -1038,6 +1063,7 @@ class AgentContract(models.Model):
             "referral_notes",
             "special_arrangements",
             "addenda_references",
+            "company_signatory_id",
             "party_snapshot",
             "office_snapshot",
             "terms_snapshot",
@@ -1531,10 +1557,11 @@ class CommissionCalculation(models.Model):
 
 
 class ContractSigningIntent(models.Model):
-    """Short-lived, single-use recipient signing ceremony binding.
+    """Short-lived, single-use signing ceremony binding.
 
-    Bound to the authenticated recipient, contract row version, generated PDF
-    checksum, and session. Completion is Hub-authoritative (not a vendor webhook).
+    Bound to the authenticated signer (agent recipient or named company
+    signatory), contract row version, generated PDF checksum, and session.
+    Completion is Hub-authoritative (not a vendor webhook).
     """
 
     class Status(models.TextChoices):
@@ -1542,6 +1569,10 @@ class ContractSigningIntent(models.Model):
         CONSUMED = "consumed", _("Consumed")
         EXPIRED = "expired", _("Expired")
         CANCELLED = "cancelled", _("Cancelled")
+
+    class SignerRole(models.TextChoices):
+        AGENT = "Agent", _("Agent")
+        COMPANY = "Company", _("Company")
 
     public_id = models.UUIDField(
         _("public id"), default=uuid.uuid4, unique=True, editable=False
@@ -1557,6 +1588,13 @@ class ContractSigningIntent(models.Model):
         verbose_name=_("actor"),
         related_name="contract_signing_intents",
         on_delete=models.PROTECT,
+    )
+    signer_role = models.CharField(
+        _("signer role"),
+        max_length=16,
+        choices=SignerRole.choices,
+        default=SignerRole.AGENT,
+        db_index=True,
     )
     contract_version = models.CharField(_("contract version token"), max_length=64)
     artifact = models.ForeignKey(
@@ -1631,11 +1669,12 @@ class ContractSigningIntent(models.Model):
 
 
 class ContractSignature(models.Model):
-    """Durable recipient electronic signature for one contract version.
+    """Durable electronic signature for one signer role on one contract version.
 
-    Ceremony facts (signer, disclosure, appearance, source checksum) are
+    Ceremony facts (signer, role, disclosure, appearance, source checksum) are
     immutable after create. Final signed-PDF attachment and finalization
-    status may update once through the signed-PDF generation pipeline.
+    status may update once through the signed-PDF generation pipeline (typically
+    on the Agent signature row after both human ceremonies complete).
     """
 
     class Method(models.TextChoices):
@@ -1647,14 +1686,25 @@ class ContractSignature(models.Model):
         READY = "ready", _("Ready")
         FAILED = "failed", _("Failed")
 
+    class SignerRole(models.TextChoices):
+        AGENT = "Agent", _("Agent")
+        COMPANY = "Company", _("Company")
+
     public_id = models.UUIDField(
         _("public id"), default=uuid.uuid4, unique=True, editable=False
     )
-    contract = models.OneToOneField(
+    contract = models.ForeignKey(
         AgentContract,
         verbose_name=_("contract"),
-        related_name="signature_record",
+        related_name="signature_records",
         on_delete=models.PROTECT,
+    )
+    signer_role = models.CharField(
+        _("signer role"),
+        max_length=16,
+        choices=SignerRole.choices,
+        default=SignerRole.AGENT,
+        db_index=True,
     )
     intent = models.OneToOneField(
         ContractSigningIntent,
@@ -1671,7 +1721,7 @@ class ContractSignature(models.Model):
     artifact = models.ForeignKey(
         ContractArtifact,
         verbose_name=_("signed artifact"),
-        related_name="signature_records",
+        related_name="finalized_signature_records",
         on_delete=models.PROTECT,
         null=True,
         blank=True,
@@ -1703,7 +1753,9 @@ class ContractSignature(models.Model):
         max_length=64,
         blank=True,
         default="",
-        help_text=_("Date text stamped onto Agent date fields during finalization."),
+        help_text=_(
+            "Date text stamped onto this role's date fields during finalization."
+        ),
     )
     appearance_file = models.FileField(
         _("signature appearance"),
@@ -1712,7 +1764,7 @@ class ContractSignature(models.Model):
         upload_to=_signature_appearance_upload_to,
         blank=True,
         default="",
-        help_text=_("Protected PNG/JPEG used to stamp Agent signature fields."),
+        help_text=_("Protected PNG/JPEG used to stamp this role's signature fields."),
     )
     initials_file = models.FileField(
         _("initials appearance"),
@@ -1723,10 +1775,10 @@ class ContractSignature(models.Model):
         default="",
     )
     agent_text_values = models.JSONField(
-        _("agent text values"),
+        _("signer text values"),
         default=dict,
         blank=True,
-        help_text=_("Optional Agent text/checkbox values applied during finalization."),
+        help_text=_("Optional text/checkbox values applied during finalization."),
     )
     finalization_status = models.CharField(
         _("finalization status"),
@@ -1817,12 +1869,19 @@ class ContractSignature(models.Model):
         ordering = ["-signed_at", "-pk"]
         verbose_name = _("contract signature")
         verbose_name_plural = _("contract signatures")
+        constraints = [
+            models.UniqueConstraint(
+                fields=["contract", "signer_role"],
+                name="contract_one_signature_per_role",
+            ),
+        ]
 
     #: Ceremony facts never change after the durable signature row is created.
     _CEREMONY_IMMUTABLE_FIELDS = (
         "contract_id",
         "intent_id",
         "signer_id",
+        "signer_role",
         "source_checksum",
         "signed_date_value",
         "agent_text_values",

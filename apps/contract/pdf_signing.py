@@ -193,22 +193,23 @@ def decode_data_url_image(raw: str) -> bytes:
         raise ValidationError({"signature": ["Invalid signature image."]}) from exc
 
 
-def stamp_agent_signatures(
+def stamp_signer_fields(
     review_pdf: bytes,
     *,
     layout: list[dict[str, Any]],
+    role: str,
     signature_png: bytes,
     signed_date: str,
     initials_png: bytes = b"",
     text_values: dict[str, str] | None = None,
 ) -> bytes:
-    """Apply Agent signature / date / initials / text onto the review PDF."""
+    """Apply one human signer role's appearance onto the review PDF."""
     fields = normalize_field_layout(layout)
     text_values = text_values or {}
     reader = PdfReader(io.BytesIO(review_pdf))
     by_page: dict[int, list[dict[str, Any]]] = {}
     for field in fields:
-        if field["role"] != SIGNER_ROLE:
+        if field["role"] != role:
             continue
         by_page.setdefault(int(field["page"]) - 1, []).append(field)
 
@@ -299,6 +300,27 @@ def stamp_agent_signatures(
     if not overlays:
         return review_pdf
     return _merge_overlays(review_pdf, overlays)
+
+
+def stamp_agent_signatures(
+    review_pdf: bytes,
+    *,
+    layout: list[dict[str, Any]],
+    signature_png: bytes,
+    signed_date: str,
+    initials_png: bytes = b"",
+    text_values: dict[str, str] | None = None,
+) -> bytes:
+    """Apply Agent signature / date / initials / text onto the review PDF."""
+    return stamp_signer_fields(
+        review_pdf,
+        layout=layout,
+        role=SIGNER_ROLE,
+        signature_png=signature_png,
+        signed_date=signed_date,
+        initials_png=initials_png,
+        text_values=text_values,
+    )
 
 
 def signing_cert_configured() -> bool:

@@ -19,7 +19,10 @@ from django.utils.translation import gettext_lazy as _
 
 from apps.audit.models import AuditEvent
 from apps.audit.service import AuditTarget, actor_from_user, log_event
-from apps.contract.artifact_delivery import generated_pdf_download_url
+from apps.contract.artifact_delivery import (
+    generated_pdf_download_url,
+    generated_pdf_preview_url,
+)
 from apps.contract.calculations import summarize_terms_for_display
 from apps.contract.lifecycle import (
     StaleContractVersion,
@@ -553,6 +556,7 @@ def issue_contract(
     *,
     expected_version: str,
     confirmed: bool,
+    company_signatory: User | None = None,
     idempotency_key: str = "",
 ) -> AgentContract:
     """Issue via lifecycle after re-checking template applicability."""
@@ -564,12 +568,29 @@ def issue_contract(
         office=contract.office,
         effective_on=contract.effective_on,
     )
+    if company_signatory is None:
+        raise ValidationError(
+            {"company_signatory": [_("Choose a company signatory before issuing.")]}
+        )
+    if not company_signatory.is_active:
+        raise ValidationError(
+            {"company_signatory": [_("Choose an active company signatory.")]}
+        )
+    if company_signatory.pk == contract.recipient_id:
+        raise ValidationError(
+            {
+                "company_signatory": [
+                    _("The company signatory cannot be the recipient agent.")
+                ]
+            }
+        )
     return transition(
         actor=actor,
         contract=contract,
         action="issue",
         expected_version=expected_version,
         confirmed=confirmed,
+        company_signatory=company_signatory,
         idempotency_key=idempotency_key,
     )
 
@@ -597,6 +618,20 @@ def workspace_payload(actor: User, contract: AgentContract) -> dict[str, Any]:
             commercial = commercial_preview(actor, contract)
         except ValidationError:
             commercial = {"summaryLines": [], "breakdown": None, "units": {}}
+    signatory_qs = (
+        directory_queryset(actor)
+        .filter(is_active=True)
+        .exclude(pk=contract.recipient_id)
+        .order_by("last_name", "first_name", "email")[:100]
+    )
+    company_signatory_options = [
+        {
+            "id": user.pk,
+            "name": user.preferred_display_name(),
+            "email": user.email,
+        }
+        for user in signatory_qs
+    ]
     return {
         "contract": payload,
         "expectedVersion": contract_version(contract),
@@ -609,6 +644,10 @@ def workspace_payload(actor: User, contract: AgentContract) -> dict[str, Any]:
         "generatedPdfUrl": generated_pdf_download_url(contract)
         if contract.generated_pdf_id
         else None,
+        "generatedPdfPreviewUrl": generated_pdf_preview_url(contract)
+        if contract.generated_pdf_id
+        else None,
+        "companySignatoryOptions": company_signatory_options,
         "recipient": {
             "id": recipient.pk,
             "name": recipient.preferred_display_name(),

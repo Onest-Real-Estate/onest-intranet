@@ -145,6 +145,7 @@ def test_issue_idempotent_and_queues_pdf(
             expected_version=contract_version(ready),
             confirmed=True,
             idempotency_key="k1",
+            company_signatory=admin,
         )
         second = issue_contract(
             admin,
@@ -152,9 +153,11 @@ def test_issue_idempotent_and_queues_pdf(
             expected_version=contract_version(first),
             confirmed=True,
             idempotency_key="k1",
+            company_signatory=admin,
         )
-    assert first.status == ContractStatus.SENT
-    assert second.status == ContractStatus.SENT
+    assert first.status == ContractStatus.AWAITING_COMPANY_SIGNATURE
+    assert second.status == ContractStatus.AWAITING_COMPANY_SIGNATURE
+    assert first.company_signatory_id == admin.pk
     assert pdf_delay.call_count == 1
 
 
@@ -183,6 +186,7 @@ def test_stale_agent_blocks_issue(seeded_offices):
             ready,
             expected_version=contract_version(ready),
             confirmed=True,
+            company_signatory=admin,
         )
 
 

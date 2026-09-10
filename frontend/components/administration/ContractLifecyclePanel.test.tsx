@@ -103,10 +103,10 @@ describe("ContractLifecyclePanel", () => {
     });
 
     const steps = screen.getAllByRole("listitem");
-    // Draft, Ready for review, Sent, Viewed, Signed, Active.
-    expect(steps).toHaveLength(6);
-    expect(steps[4]).toHaveAttribute("aria-current", "step");
-    expect(steps[3]).not.toHaveAttribute("aria-current");
+    // Draft, Ready, Awaiting company, Sent, Viewed, Signed, Active.
+    expect(steps).toHaveLength(7);
+    expect(steps[5]).toHaveAttribute("aria-current", "step");
+    expect(steps[4]).not.toHaveAttribute("aria-current");
   });
 
   it("stops the pipeline where a terminated contract actually left it", () => {
@@ -122,14 +122,14 @@ describe("ContractLifecyclePanel", () => {
     });
 
     const steps = screen.getAllByRole("listitem");
-    // Draft, Ready for review, Sent, then Terminated — not the unreached
-    // Viewed / Signed / Active steps it will never take.
-    expect(steps).toHaveLength(4);
-    expect(within(steps[3]).getByText("Terminated")).toBeVisible();
+    // Draft, Ready, Awaiting company, Sent, then Terminated — not the
+    // unreached Viewed / Signed / Active steps it will never take.
+    expect(steps).toHaveLength(5);
+    expect(within(steps[4]).getByText("Terminated")).toBeVisible();
     expect(screen.queryByText("Active")).toBeNull();
   });
 
-  it("places a generation failure after the contract was sent", () => {
+  it("places a generation failure after issue, before company signing", () => {
     renderPanel({
       status: "generation_error",
       statusLabel: "Generation error",
@@ -138,7 +138,7 @@ describe("ContractLifecyclePanel", () => {
     });
 
     const steps = screen.getAllByRole("listitem");
-    expect(within(steps[2]).getByText("Sent to agent")).toBeVisible();
+    expect(within(steps[2]).getByText("Awaiting company signature")).toBeVisible();
     expect(within(steps[3]).getByText("Generation error")).toBeVisible();
   });
 

@@ -37,6 +37,7 @@ MEDIA_TYPE_PDF = "application/pdf"
 
 _ALLOWED_STATUSES = frozenset(
     {
+        ContractStatus.AWAITING_COMPANY_SIGNATURE,
         ContractStatus.SENT,
         ContractStatus.GENERATION_ERROR,
     }
@@ -289,8 +290,10 @@ def _emit_pdf_ready(contract: AgentContract, artifact: ContractArtifact) -> None
             "contract_id": str(contract.public_id),
             "office_id": str(contract.office_id),
             "agent_id": str(contract.recipient_id),
+            "company_signatory_id": str(contract.company_signatory_id or ""),
             "artifact_id": str(artifact.public_id),
             "checksum": artifact.checksum,
+            "status": contract.status,
             "occurred_at": now.isoformat(),
         },
     )
@@ -319,6 +322,9 @@ def _emit_pdf_ready(contract: AgentContract, artifact: ContractArtifact) -> None
         channel="contract",
         office_id=getattr(contract.office, "stable_key", "") or "",
     )
+    # Agent invite only after company ceremony releases the contract to `sent`.
+    if contract.status != ContractStatus.SENT:
+        return
     try:
         send_signing_invite_email(contract)
     except Exception:  # noqa: BLE001
@@ -385,7 +391,11 @@ def attach_generated_pdf(
     if locked.status == ContractStatus.GENERATION_ERROR:
         from apps.contract.lifecycle import allow_status_write
 
-        locked.status = ContractStatus.SENT
+        locked.status = (
+            ContractStatus.SENT
+            if locked.company_signed_at
+            else ContractStatus.AWAITING_COMPANY_SIGNATURE
+        )
         update_fields.append("status")
         with allow_status_write():
             locked.save(update_fields=update_fields)
@@ -410,7 +420,10 @@ def mark_generation_failed(contract_id: int, *, code: str) -> None:
     contract = AgentContract.objects.filter(pk=contract_id).first()
     if contract is None:
         return
-    if contract.status != ContractStatus.SENT:
+    if contract.status not in {
+        ContractStatus.SENT,
+        ContractStatus.AWAITING_COMPANY_SIGNATURE,
+    }:
         return
     try:
         transition(

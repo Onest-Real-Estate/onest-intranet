@@ -31,7 +31,12 @@ from apps.contract.services import create_draft_contract
 from apps.contract.statuses import ContractStatus
 from apps.contract.tasks import cleanup_orphan_contract_artifacts, generate_contract_pdf
 from apps.contract.template_security import checksum_of
-from apps.contract.tests.conftest import agent, company_admin, office
+from apps.contract.tests.conftest import (
+    agent,
+    company_admin,
+    issue_awaiting_company,
+    office,
+)
 
 assert RENDERER_VERSION == SIGN_RENDERER
 
@@ -56,6 +61,28 @@ def _hub_layout() -> list[dict]:
             "y": 120,
             "w": 140,
             "h": 18,
+        },
+        {
+            "id": "fc1",
+            "name": "CompanySignature",
+            "type": "signature",
+            "role": "Company",
+            "page": 1,
+            "x": 72,
+            "y": 500,
+            "w": 200,
+            "h": 48,
+        },
+        {
+            "id": "fc2",
+            "name": "CompanyDate",
+            "type": "date",
+            "role": "Company",
+            "page": 1,
+            "x": 300,
+            "y": 500,
+            "w": 100,
+            "h": 24,
         },
         {
             "id": "b",
@@ -146,15 +173,9 @@ def _issued_contract(seeded_offices):
             expected_version=contract_version(contract),
         )
         contract.refresh_from_db()
-        transition(
-            actor=admin,
-            contract=contract,
-            action="issue",
-            expected_version=contract_version(contract),
-            confirmed=True,
-        )
-        contract.refresh_from_db()
-    return contract
+        awaiting = issue_awaiting_company(admin, contract, company_signatory=admin)
+    assert awaiting.status == ContractStatus.AWAITING_COMPANY_SIGNATURE
+    return awaiting
 
 
 @pytest.mark.django_db
@@ -180,7 +201,7 @@ def test_generate_and_store_is_idempotent(
 ):
     settings.MEDIA_ROOT = tmp_path
     contract = _issued_contract(seeded_offices)
-    with patch("apps.contract.emails.send_signing_invite_email"):
+    with patch("apps.contract.emails.send_signing_invite_email") as invite:
         with django_capture_on_commit_callbacks(execute=True):
             first = generate_and_store(contract.pk)
         second = generate_and_store(contract.pk)
@@ -188,6 +209,7 @@ def test_generate_and_store_is_idempotent(
     assert second == "ready_idempotent"
     contract.refresh_from_db()
     assert contract.generated_pdf_id
+    assert contract.status == ContractStatus.AWAITING_COMPANY_SIGNATURE
     assert (
         ContractArtifact.objects.filter(
             contract=contract, kind=ContractArtifact.Kind.GENERATED_PDF
@@ -195,15 +217,18 @@ def test_generate_and_store_is_idempotent(
         == 1
     )
     assert DomainEvent.objects.filter(name="contract.pdf_ready").count() == 1
+    # Agent invite waits until company countersign releases to `sent`.
+    invite.assert_not_called()
 
 
 @pytest.mark.django_db
 def test_task_duplicate_delivery_idempotent(seeded_offices, settings, tmp_path):
     settings.MEDIA_ROOT = tmp_path
     contract = _issued_contract(seeded_offices)
-    with patch("apps.contract.emails.send_signing_invite_email"):
+    with patch("apps.contract.emails.send_signing_invite_email") as invite:
         assert generate_contract_pdf(contract.pk) == "ready"
         assert generate_contract_pdf(contract.pk) == "ready_idempotent"
+    invite.assert_not_called()
 
 
 @pytest.mark.django_db

@@ -83,10 +83,10 @@ export const LIFECYCLE_ACTIONS: Record<LifecycleActionCode, LifecycleActionSpec>
     hint: "Locks the draft for a reviewer without sending it to the agent.",
   },
   issue: {
-    label: "Issue and send",
+    label: "Issue for company signature",
     intent: "advance",
     icon: Send,
-    hint: "Freezes the terms and queues the agreement PDF.",
+    hint: "Freezes terms, queues the PDF, and waits for the named company officer to sign.",
   },
   mark_viewed: {
     label: "Mark as viewed",
@@ -163,10 +163,10 @@ export const CONFIRM_LIFECYCLE: Record<ConfirmLifecycleAction, LifecycleConfirmC
   issue: {
     title: "Issue this contract?",
     description:
-      "Freezes party, office, terms, template version, and calculation rule version, then queues PDF generation and marks the contract sent.",
+      "Freezes party, office, terms, template version, and calculation rule version, then queues PDF generation and waits for the named company officer to sign before releasing the agreement to the agent.",
     confirmLabel: "Confirm issue",
-    toLabel: "Sent to agent",
-    impact: "Agent can review the issued agreement after PDF generation.",
+    toLabel: "Awaiting company signature",
+    impact: "The named company signatory must sign before the agent can.",
   },
   activate: {
     title: "Activate this contract?",
@@ -215,6 +215,7 @@ export function needsConfirmation(
 /** Timestamp keys on the serialized contract, in pipeline order. */
 type StampKey =
   | "createdAt"
+  | "companySignedAt"
   | "sentAt"
   | "viewedAt"
   | "signedAt"
@@ -233,6 +234,11 @@ interface PipelineStep {
 const PIPELINE: PipelineStep[] = [
   { code: "draft", label: "Draft", stamp: "createdAt" },
   { code: "ready_for_review", label: "Ready for review", stamp: null },
+  {
+    code: "awaiting_company_signature",
+    label: "Awaiting company signature",
+    stamp: "companySignedAt",
+  },
   { code: "sent", label: "Sent to agent", stamp: "sentAt" },
   { code: "viewed", label: "Viewed", stamp: "viewedAt" },
   { code: "signed", label: "Signed", stamp: "signedAt" },
@@ -274,8 +280,8 @@ export function lifecycleSteps(
   const directIndex = PIPELINE.findIndex((step) => step.code === status);
   const terminal = TERMINAL[status];
   const errored = status === "generation_error";
-  // Generation failure happens on the way out of `issue`, so the agreement has
-  // reached `sent` even though the PDF never arrived.
+  // Generation failure happens after issue, while waiting on company signature
+  // (or after company signing, while still `sent`). Index 2 is that gate.
   const currentIndex = errored
     ? Math.max(stampedIndex, 2)
     : directIndex >= 0

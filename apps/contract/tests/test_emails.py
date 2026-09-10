@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from datetime import date
-from unittest.mock import patch
 from uuid import uuid4
 
 import pytest
@@ -20,9 +19,10 @@ from apps.contract.lifecycle import contract_version, transition
 from apps.contract.models import ContractTemplate, ContractTemplateVersion
 from apps.contract.services import create_draft_contract
 from apps.contract.statuses import ContractStatus
-from apps.contract.tests.conftest import agent, company_admin
+from apps.contract.tests.conftest import agent, company_admin, issue_sent_to_agent
 from apps.notifications.producers import (
     EVENT_PRODUCERS,
+    contract_awaiting_company_signature,
     contract_pdf_ready,
     contract_signed,
     notifications_for_event,
@@ -63,17 +63,7 @@ def _issued(seeded_offices, recipient, *, admin=None):
         action="submit_for_review",
         expected_version=contract_version(draft),
     )
-    with (
-        patch("apps.contract.lifecycle._queue_pdf_generation"),
-        patch("apps.contract.lifecycle._queue_agent_status_email"),
-    ):
-        return transition(
-            actor=admin,
-            contract=ready,
-            action="issue",
-            expected_version=contract_version(ready),
-            confirmed=True,
-        )
+    return issue_sent_to_agent(admin, ready, company_signatory=admin)
 
 
 def _envelope(name: str, payload: dict) -> EventEnvelope:
@@ -123,7 +113,7 @@ def test_signed_confirmation_email_content(seeded_offices, settings):
 @pytest.mark.parametrize(
     ("action", "needle"),
     [
-        ("issue", "issued"),
+        ("mark_company_signed", "issued"),
         ("mark_signed", "signed"),
         ("activate", "active"),
         ("supersede", "superseded"),
@@ -211,6 +201,7 @@ def test_contract_pdf_ready_producer_points_at_sign():
             "agent_id": "7",
             "artifact_id": "bbbbbbbb-bbbb-cccc-dddd-eeeeeeeeeeee",
             "checksum": "a" * 64,
+            "status": "sent",
             "occurred_at": "2026-08-30T00:00:00+00:00",
         },
     )
@@ -218,6 +209,40 @@ def test_contract_pdf_ready_producer_points_at_sign():
     assert request.recipient_id == 7
     assert request.action_key == "open_my_contract_sign"
     assert "ready to sign" in request.title.lower()
+
+
+def test_contract_pdf_ready_skips_agent_until_sent():
+    envelope = _envelope(
+        "contract.pdf_ready",
+        {
+            "contract_id": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+            "office_id": "1",
+            "agent_id": "7",
+            "artifact_id": "bbbbbbbb-bbbb-cccc-dddd-eeeeeeeeeeee",
+            "checksum": "a" * 64,
+            "status": "awaiting_company_signature",
+            "occurred_at": "2026-08-30T00:00:00+00:00",
+        },
+    )
+    assert contract_pdf_ready(envelope) == []
+
+
+def test_awaiting_company_signature_producer_targets_signatory():
+    envelope = _envelope(
+        "contract.awaiting_company_signature",
+        {
+            "contract_id": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+            "office_id": "1",
+            "agent_id": "9",
+            "company_signatory_id": "11",
+            "status": "awaiting_company_signature",
+            "occurred_at": "2026-08-30T00:00:00+00:00",
+        },
+    )
+    [request] = contract_awaiting_company_signature(envelope)
+    assert request.recipient_id == 11
+    assert request.action_key == "open_company_contract_sign"
+    assert request.is_mandatory is True
 
 
 @pytest.mark.parametrize(

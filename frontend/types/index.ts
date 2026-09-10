@@ -3489,11 +3489,14 @@ export interface AgentContractWorkspacePageProps extends PageProps {
     versionNumber?: number;
     commission?: Record<string, unknown>;
     internalNotes?: string;
+    companySignatoryName?: string;
+    companySignUrl?: string | null;
   };
   expectedVersion: string;
   capabilities: AgentContractCapabilities;
   allowedActions: string[];
   generatedPdfUrl?: string | null;
+  generatedPdfPreviewUrl?: string | null;
   recipient: AgentContractRecipientResult & { agentStatus?: string };
   office: Record<string, unknown>;
   templateOptions: AgentContractTemplateOption[];
@@ -3503,6 +3506,7 @@ export interface AgentContractWorkspacePageProps extends PageProps {
   familyHistory?: AgentContractFamilyHistoryRow[];
   termComparison?: AgentContractTermComparison | null;
   governingTerms?: Record<string, unknown> | null;
+  companySignatoryOptions?: Array<{ id: number; name: string; email: string }>;
   errors: ValidationErrors;
   agreementPreview: AgentContractAgreementPreview | null;
 }
@@ -3692,6 +3696,22 @@ export interface MyContractSignPageProps extends PageProps {
   recovery: SigningCeremonyRecovery | null;
   disclosure: SigningDisclosure;
   contract: SigningCeremonyContract | null;
+  ceremony: SigningCeremonyEmbed | null;
+  errors: { fields: Record<string, string[]>; form: string[] };
+}
+
+export interface CompanyContractSignPageProps extends PageProps {
+  canSign: boolean;
+  signingReady: boolean;
+  recovery: SigningCeremonyRecovery | null;
+  disclosure: SigningDisclosure;
+  signerRole: "Company";
+  contract:
+    | (SigningCeremonyContract & {
+        recipientName?: string;
+        workspaceUrl?: string;
+      })
+    | null;
   ceremony: SigningCeremonyEmbed | null;
   errors: { fields: Record<string, string[]>; form: string[] };
 }

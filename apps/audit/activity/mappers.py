@@ -173,6 +173,7 @@ CONTRACT_MAPPER = DomainMapper(
     action_labels={
         "contract.created": "Contract created",
         "contract.issued": "Contract issued",
+        "contract.company_signed": "Company signature recorded",
         "contract.signed": "Contract signed",
         "contract.activated": "Contract activated",
         "contract.superseded": "Contract superseded",

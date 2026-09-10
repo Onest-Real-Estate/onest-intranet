@@ -11,6 +11,7 @@ from apps.contract.views.administration_views import (
 )
 from apps.contract.views.agent_contract_views import (
     agent_contract_artifact_download,
+    agent_contract_artifact_preview,
     agent_contract_create,
     agent_contract_create_amendment,
     agent_contract_create_replacement,
@@ -23,6 +24,11 @@ from apps.contract.views.agent_contract_views import (
     agent_contract_update,
     agent_contract_validate,
     agent_contract_workspace,
+)
+from apps.contract.views.company_signing_views import (
+    agent_contract_company_sign,
+    agent_contract_company_sign_complete,
+    agent_contract_company_sign_preview,
 )
 from apps.contract.views.my_contract_views import (
     my_contract,
@@ -119,6 +125,21 @@ urlpatterns = [
         name="agent_contract_workspace",
     ),
     path(
+        "operations/agent-contracts/<uuid:public_id>/company-sign",
+        agent_contract_company_sign,
+        name="agent_contract_company_sign",
+    ),
+    path(
+        "operations/agent-contracts/<uuid:public_id>/company-sign/complete",
+        agent_contract_company_sign_complete,
+        name="agent_contract_company_sign_complete",
+    ),
+    path(
+        "operations/agent-contracts/<uuid:public_id>/company-sign/preview.pdf",
+        agent_contract_company_sign_preview,
+        name="agent_contract_company_sign_preview",
+    ),
+    path(
         "operations/agent-contracts/<uuid:public_id>/save",
         agent_contract_update,
         name="agent_contract_update",
@@ -153,6 +174,12 @@ urlpatterns = [
         "<uuid:artifact_public_id>/download",
         agent_contract_artifact_download,
         name="agent_contract_artifact_download",
+    ),
+    path(
+        "operations/agent-contracts/<uuid:public_id>/artifacts/"
+        "<uuid:artifact_public_id>/preview",
+        agent_contract_artifact_preview,
+        name="agent_contract_artifact_preview",
     ),
     path(
         "operations/agent-contracts/<uuid:public_id>/signed-pdf/verify",

@@ -1739,6 +1739,17 @@ ROUTE_POLICIES["agent_contract_artifact_download"] = AuthorizationPolicy(
     route_names=("agent_contract_artifact_download",),
     scope_rule="assigned_or_self",
 )
+ROUTE_POLICIES["agent_contract_artifact_preview"] = AuthorizationPolicy(
+    key="agent_contract_artifact_preview",
+    access="authenticated",
+    description=(
+        "Inline (iframe-safe) stream of a protected contract PDF after the "
+        "same access checks as download. Used by the ops preview surface."
+    ),
+    methods=("GET",),
+    route_names=("agent_contract_artifact_preview",),
+    scope_rule="assigned_or_self",
+)
 ROUTE_POLICIES["agent_contract_signed_pdf_verify"] = AuthorizationPolicy(
     key="agent_contract_signed_pdf_verify",
     access="authenticated",
@@ -1749,6 +1760,22 @@ ROUTE_POLICIES["agent_contract_signed_pdf_verify"] = AuthorizationPolicy(
     methods=("GET",),
     route_names=("agent_contract_signed_pdf_verify",),
     scope_rule="assigned_or_self",
+)
+ROUTE_POLICIES["agent_contract_company_sign"] = AuthorizationPolicy(
+    key="agent_contract_company_sign",
+    access="authenticated",
+    description=(
+        "Named company signatory ceremony for an agent contract. The view "
+        "re-checks company_signatory identity; managers without that "
+        "assignment cannot complete the pad."
+    ),
+    methods=("GET", "POST"),
+    route_names=(
+        "agent_contract_company_sign",
+        "agent_contract_company_sign_complete",
+        "agent_contract_company_sign_preview",
+    ),
+    scope_rule="self_only",
 )
 ROUTE_POLICIES["my_contract"] = AuthorizationPolicy(
     key="my_contract",

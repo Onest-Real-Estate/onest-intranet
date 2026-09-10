@@ -86,6 +86,23 @@ registry.register(
 )
 
 registry.register(
+    name="contract.awaiting_company_signature",
+    version=1,
+    required_payload_keys={
+        "contract_id",
+        "office_id",
+        "agent_id",
+        "company_signatory_id",
+        "status",
+        "occurred_at",
+    },
+    description=(
+        "Emitted when a ready contract is issued and waits for the named "
+        "company officer to complete the Company ceremony."
+    ),
+)
+
+registry.register(
     name="contract.issued",
     version=1,
     required_payload_keys={
@@ -95,7 +112,10 @@ registry.register(
         "status",
         "occurred_at",
     },
-    description="Emitted when a ready contract is issued/sent to the agent.",
+    description=(
+        "Emitted when company signing completes and the agreement is released "
+        "to the agent (`sent`)."
+    ),
 )
 
 registry.register(
