@@ -242,32 +242,41 @@ class InertiaShareMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
-        share(
-            request,
-            user=lambda: self.serialize_user(request),
-            csrfToken=lambda: get_token(request),
-            requestId=lambda: getattr(request, "audit_request_id", ""),
-            # Nav feature state and office context — see web.navigation.
-            features=lambda: hub_feature_states(
-                request.user,
-                permissions=(
-                    self.access_context(request).permissions
-                    if self.access_context(request) is not None
-                    else None
+        shared = {
+            "user": lambda: self.serialize_user(request),
+            "csrfToken": lambda: get_token(request),
+            "requestId": lambda: getattr(request, "audit_request_id", ""),
+            "shell": lambda: self.shell_context(request),
+        }
+        if getattr(request, "_onboarding_strict_gate", False):
+            shared.update(
+                features={},
+                primaryOffice=None,
+                notifications=None,
+            )
+        else:
+            shared.update(
+                # Nav feature state and office context — see web.navigation.
+                features=lambda: hub_feature_states(
+                    request.user,
+                    permissions=(
+                        self.access_context(request).permissions
+                        if self.access_context(request) is not None
+                        else None
+                    ),
                 ),
-            ),
-            primaryOffice=lambda: primary_office_payload(request.user),
-            # Quick Create. Filtered to what the actor may actually start —
-            # unavailable actions are absent from the payload, not hidden in
-            # the client. See apps/web/quick_actions.py.
-            quickCreate=lambda: quick_create_payload(
-                request.user, access=self.access_context(request)
-            ),
-            # Header badge counts — the reader's own unread total, never
-            # an office aggregate. See apps/notifications/shell.py.
-            notifications=lambda: notification_shell_payload(request.user),
-            shell=lambda: self.shell_context(request),
-            # One-shot toast payload; popped so a refresh does not repeat it.
-            flash=lambda: pop_flash(request),
-        )
+                primaryOffice=lambda: primary_office_payload(request.user),
+                # Quick Create. Filtered to what the actor may actually start —
+                # unavailable actions are absent from the payload, not hidden in
+                # the client. See apps/web/quick_actions.py.
+                quickCreate=lambda: quick_create_payload(
+                    request.user, access=self.access_context(request)
+                ),
+                # Header badge counts — the reader's own unread total, never
+                # an office aggregate. See apps/notifications/shell.py.
+                notifications=lambda: notification_shell_payload(request.user),
+                # One-shot toast payload; popped so a refresh does not repeat it.
+                flash=lambda: pop_flash(request),
+            )
+        share(request, **shared)
         return self.get_response(request)

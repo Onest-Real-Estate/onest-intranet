@@ -1726,10 +1726,14 @@ ROUTE_POLICIES: dict[str, AuthorizationPolicy] = {
     "dashboard": AuthorizationPolicy(
         key="dashboard",
         access="authenticated",
-        description="Render the hub dashboard and deferred widgets.",
+        description=(
+            "Render the hub shell for incomplete agents and deferred widgets "
+            "only after required setup is complete."
+        ),
         methods=("GET",),
         route_names=("dashboard",),
         scope_rule="self_only",
+        allow_incomplete_profile=True,
     ),
     "action_items_queue": AuthorizationPolicy(
         key="action_items_queue",

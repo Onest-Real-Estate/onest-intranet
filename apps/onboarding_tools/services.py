@@ -29,8 +29,10 @@ from apps.onboarding_tools.models import (
     COMPLETE_STATES,
     AgentToolStatus,
     OnboardingTool,
+    Provisioning,
     ToolState,
 )
+from apps.user.models import Office
 
 #: Managing somebody else's checklist is the existing onboarding grant. There is
 #: deliberately no new permission: the people who run onboarding are the people
@@ -114,6 +116,99 @@ def readiness_for(agent) -> Readiness:
     """
     rows = [item for item in checklist_for(agent) if item.tool.is_required]
     return Readiness(ready=sum(1 for item in rows if item.is_complete), total=len(rows))
+
+
+def bulk_agent_onboarding_states(users):
+    """Resolve every applicable tool for many agents in four bounded queries."""
+    from apps.user.services.onboarding_state import (
+        JourneyToolState,
+        MilestoneStatus,
+        ToolInvitationStatus,
+        ToolOnboardingState,
+        ToolSourceStatus,
+    )
+
+    if not users:
+        return {}
+    tools = list(
+        OnboardingTool.objects.live()
+        .prefetch_related("office_audiences")
+        .order_by("group", "sort_order", "name")
+    )
+    parent_by_id = dict(Office.objects.values_list("pk", "parent_id"))
+    statuses = {
+        (row.agent_id, row.tool_id): row
+        for row in AgentToolStatus.objects.filter(
+            agent_id__in=[user.pk for user in users],
+            tool_id__in=[tool.pk for tool in tools],
+        ).only("agent_id", "tool_id", "state", "updated_at")
+    }
+    state_labels = dict(ToolState.choices)
+    provisioning_labels = dict(Provisioning.choices)
+
+    def office_chain(office_id):
+        chain = set()
+        current = office_id
+        while current and current not in chain:
+            chain.add(current)
+            current = parent_by_id.get(current)
+        return chain
+
+    result = {}
+    for user in users:
+        chain = office_chain(user.office_id)
+        items = []
+        for tool in tools:
+            audiences = list(tool.office_audiences.all())
+            applies = tool.company_wide or any(
+                audience.office_id == user.office_id
+                or (audience.include_descendants and audience.office_id in chain)
+                for audience in audiences
+            )
+            if not applies:
+                continue
+            row = statuses.get((user.pk, tool.pk))
+            state = ToolState(row.state if row else ToolState.NOT_STARTED)
+            if state in COMPLETE_STATES:
+                status = MilestoneStatus.COMPLETE
+            elif state == ToolState.BLOCKED:
+                status = MilestoneStatus.BLOCKED
+            else:
+                status = MilestoneStatus.PENDING
+            if tool.provisioning == Provisioning.SELF_SERVE:
+                invitation = ToolInvitationStatus.NOT_APPLICABLE
+                invitation_label = "Not applicable"
+            else:
+                # The catalog/status source does not yet prove that a vendor
+                # invitation was sent. Issue #192 can replace this adapter
+                # result without changing the journey contract.
+                invitation = ToolInvitationStatus.UNAVAILABLE
+                invitation_label = "Not available"
+            items.append(
+                JourneyToolState(
+                    key=tool.slug,
+                    label=tool.name,
+                    description=tool.description,
+                    provisioning=tool.provisioning,
+                    provisioning_label=str(
+                        provisioning_labels.get(tool.provisioning, tool.provisioning)
+                    ),
+                    self_service=tool.is_self_serve,
+                    required=tool.is_required,
+                    state=str(state),
+                    state_label=str(state_labels.get(state, state)),
+                    status=status,
+                    invitation_status=invitation,
+                    invitation_label=invitation_label,
+                    complete=state in COMPLETE_STATES,
+                    updated_at=row.updated_at if row else None,
+                )
+            )
+        result[user.pk] = ToolOnboardingState(
+            source_status=ToolSourceStatus.AVAILABLE,
+            items=tuple(items),
+        )
+    return result
 
 
 def can_manage(actor, agent) -> bool:
