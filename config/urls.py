@@ -6,6 +6,8 @@ urlpatterns: list[URLPattern | URLResolver] = [
     path("admin/", admin.site.urls),
     path("accounts/", include("allauth.urls")),
     path("", include("apps.user.urls")),
+    # Inventory hub routes must beat ``hub/<slug>`` in web.urls (coming_soon).
+    path("", include("apps.inventory.urls")),
     path("", include("apps.web.urls")),
     path("", include("apps.contract.urls")),
     path("", include("apps.notifications.urls")),
@@ -14,9 +16,9 @@ urlpatterns: list[URLPattern | URLResolver] = [
     path("", include("apps.feedback.urls")),
     path("", include("apps.it_support.urls")),
     path("", include("apps.onboarding_tools.urls")),
-    path("", include("apps.inventory.urls")),
     path("", include("apps.training.urls")),
     path("", include("apps.marketing.urls")),
+    path("", include("apps.compliance.urls")),
     path("", include("apps.audit.urls")),
     path("", include("apps.reservations.urls")),
 ]

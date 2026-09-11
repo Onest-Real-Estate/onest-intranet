@@ -57,6 +57,17 @@ class OperationsPermission(models.Model):
             ),
             ("manage_documents", _("Can manage documents")),
             ("view_compliance", _("Can view scoped compliance items")),
+            ("manage_policies", _("Can manage policies")),
+            ("approve_policies", _("Can approve policies")),
+            ("publish_policies", _("Can publish and retire policies")),
+            (
+                "view_policy_acknowledgements",
+                _("Can view scoped policy acknowledgements"),
+            ),
+            (
+                "waive_policy_acknowledgements",
+                _("Can waive policy acknowledgements"),
+            ),
             ("view_feedback", _("Can view scoped feedback")),
             # Submitting needs no grant: everybody may report a problem with
             # the tool they are told to use. These three are the triage half.

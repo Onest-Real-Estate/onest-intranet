@@ -16,6 +16,7 @@ from dataclasses import dataclass
 
 from django.urls import reverse
 
+from apps.compliance.action_items import collect_compliance_actions
 from apps.inventory.action_items import collect_inventory_actions
 from apps.operational_tasks.action_items import collect_task_actions
 from apps.web.action_items.contract import ActionItem, ActionSourceContext
@@ -44,10 +45,9 @@ ACTION_SOURCE_DEFINITIONS: tuple[ActionSourceDefinition, ...] = (
     ActionSourceDefinition(key="profile", collector=collect_profile_actions),
     ActionSourceDefinition(key="operational_tasks", collector=collect_task_actions),
     ActionSourceDefinition(key="inventory", collector=collect_inventory_actions),
+    ActionSourceDefinition(key="compliance", collector=collect_compliance_actions),
     # Remaining domains register here as their models ship (contracts,
-    # transactions, documents/checklists, training, leads, commissions,
-    # compliance corrections). Until then they stay out of
-    # the tuple so the queue never fabricates their work.
+    # transactions, documents/checklists, training, leads, commissions).
 )
 
 

@@ -625,6 +625,69 @@ PERMISSION_DEFINITIONS: tuple[PermissionDefinition, ...] = (
         sensitive=True,
     ),
     PermissionDefinition(
+        codename="web.manage_policies",
+        name="Can manage policies",
+        domain="governance",
+        action="manage",
+        description=(
+            "Draft, edit, target audiences, upload files, submit for review, "
+            "and create new policy versions within effective scope."
+        ),
+        default_roles=(*_BROKERAGE_ADMINS, COMPLIANCE),
+        risk="medium",
+    ),
+    PermissionDefinition(
+        codename="web.approve_policies",
+        name="Can approve policies",
+        domain="governance",
+        action="approve",
+        description=(
+            "Move an in-review policy version to approved. Separate from "
+            "drafting and from publication."
+        ),
+        default_roles=(*_BROKERAGE_ADMINS, COMPLIANCE),
+        risk="high",
+        sensitive=True,
+    ),
+    PermissionDefinition(
+        codename="web.publish_policies",
+        name="Can publish and retire policies",
+        domain="governance",
+        action="approve",
+        description=(
+            "Publish, supersede, or retire approved policy versions within "
+            "effective scope."
+        ),
+        default_roles=(*_BROKERAGE_ADMINS, COMPLIANCE),
+        risk="high",
+        sensitive=True,
+    ),
+    PermissionDefinition(
+        codename="web.view_policy_acknowledgements",
+        name="Can view scoped policy acknowledgements",
+        domain="governance",
+        action="view",
+        description=(
+            "Read acknowledgement completion and overdue reports for policies in scope."
+        ),
+        default_roles=(*_BROKERAGE_ADMINS, COMPLIANCE),
+        risk="medium",
+        sensitive=True,
+    ),
+    PermissionDefinition(
+        codename="web.waive_policy_acknowledgements",
+        name="Can waive policy acknowledgements",
+        domain="governance",
+        action="manage",
+        description=(
+            "Grant a reasoned waiver for a required policy acknowledgement "
+            "within effective scope. Evidence rows are never deleted."
+        ),
+        default_roles=(*_BROKERAGE_ADMINS, COMPLIANCE),
+        risk="high",
+        sensitive=True,
+    ),
+    PermissionDefinition(
         codename="web.view_feedback",
         name="Can view scoped feedback",
         domain="governance",

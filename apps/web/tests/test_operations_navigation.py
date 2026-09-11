@@ -136,6 +136,8 @@ def test_registry_has_exact_destinations_order_routes_and_permissions():
                 "admin_feedback",
                 "admin_it_support",
                 "admin_inventory",
+                "admin_reservations",
+                "admin_compliance",
             }
         )
 
@@ -234,7 +236,7 @@ def test_brokerage_admin_can_reach_every_registered_destination(client):
             reverse(destination.route_name),
             HTTP_X_INERTIA="true",
         )
-        assert response.status_code == 200
+        assert response.status_code == 200, destination.route_name
         props = inertia_props(response)
         if destination.route_name == "admin_users":
             assert "users" in props
@@ -267,6 +269,11 @@ def test_brokerage_admin_can_reach_every_registered_destination(client):
             assert "items" in props
             assert "filterOptions" in props
             assert "capabilities" in props
+            continue
+        if destination.route_name == "admin_reservations":
+            assert "reservations" in props
+            assert "filterOptions" in props
+            assert "can" in props
             continue
         if destination.route_name == "admin_announcements":
             assert "announcements" in props
@@ -309,6 +316,14 @@ def test_brokerage_admin_can_reach_every_registered_destination(client):
             assert "options" in props
             assert "offices" in props
             continue
+        if destination.route_name == "admin_compliance":
+            assert "policies" in props
+            assert "filterOptions" in props
+            assert "capabilities" in props
+            continue
+        assert "title" in props, (
+            f"{destination.route_name} missing title; keys={sorted(props)}"
+        )
         assert props["title"] == destination.label
         assert props["administrative"] is True
         assert props["scope"] == {
@@ -393,11 +408,15 @@ def test_permission_revocation_takes_effect_on_the_next_nested_visit(client):
             "admin_users",
         ),
         (
+            # Compliance has a real workspace now, so the specialty persona is
+            # checked against a destination that still renders the placeholder.
+            # Its scoped workspace access is covered by
+            # ``apps/compliance/tests/``.
             "compliance",
             AGENT,
             ScopeType.OFFICE,
-            "web.view_compliance",
-            "admin_compliance",
+            "web.view_platform_tasks",
+            "admin_platform_tasks",
         ),
         (
             "accountant",
@@ -418,15 +437,15 @@ def test_permission_revocation_takes_effect_on_the_next_nested_visit(client):
             "admin_documents",
         ),
         (
-            # IT Support has a real queue now, so the specialty persona is
-            # checked against a destination that still renders the placeholder.
-            # Its scoped queue access is covered by
+            # IT Support and Reservations both have real workspaces now, so the
+            # specialty persona is checked against a destination that still
+            # renders the placeholder. Scoped queue access is covered by
             # ``apps/it_support/tests/test_scope.py``.
             "it-support",
             AGENT,
             ScopeType.OFFICE,
-            "web.view_reservations",
-            "admin_reservations",
+            "web.manage_documents",
+            "admin_documents",
         ),
     ],
 )

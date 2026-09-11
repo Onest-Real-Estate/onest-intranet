@@ -918,3 +918,88 @@ registry.register(
     required_payload_keys={"target_type", "target_id"},
     description="A pending room reservation was denied and its capacity released.",
 )
+
+# ---------------------------------------------------------------------------
+# compliance / policy domain  (publisher: apps.compliance.administration)
+# ---------------------------------------------------------------------------
+
+registry.register(
+    name="policy.submitted",
+    version=1,
+    required_payload_keys={
+        "policy_id",
+        "owner_office_id",
+        "scope_level",
+        "status",
+        "version_number",
+        "version_family",
+        "occurred_at",
+    },
+    description="A policy draft was submitted for review.",
+)
+
+registry.register(
+    name="policy.approved",
+    version=1,
+    required_payload_keys={
+        "policy_id",
+        "owner_office_id",
+        "scope_level",
+        "status",
+        "version_number",
+        "version_family",
+        "occurred_at",
+    },
+    description="A policy in review was approved and may now be published.",
+)
+
+registry.register(
+    name="policy.published",
+    version=1,
+    required_payload_keys={
+        "policy_id",
+        "owner_office_id",
+        "scope_level",
+        "status",
+        "version_number",
+        "version_family",
+        "occurred_at",
+    },
+    description=(
+        "A policy became published. Consumers holding derived library state "
+        "should re-evaluate visibility from this moment."
+    ),
+)
+
+registry.register(
+    name="policy.superseded",
+    version=1,
+    required_payload_keys={
+        "policy_id",
+        "owner_office_id",
+        "scope_level",
+        "status",
+        "version_number",
+        "version_family",
+        "occurred_at",
+    },
+    description=(
+        "A published policy was superseded by a newer family sibling. "
+        "It is no longer the current library version."
+    ),
+)
+
+registry.register(
+    name="policy.retired",
+    version=1,
+    required_payload_keys={
+        "policy_id",
+        "owner_office_id",
+        "scope_level",
+        "status",
+        "version_number",
+        "version_family",
+        "occurred_at",
+    },
+    description="A published policy was retired and left the consumer library.",
+)

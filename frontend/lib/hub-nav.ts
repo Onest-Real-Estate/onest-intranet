@@ -354,14 +354,14 @@ export const HUB_NAV_REGISTRY: HubNavItem[] = [
   {
     key: "policies-compliance",
     label: "Policies & compliance",
-    route: route("coming_soon", routes.coming_soon("policies-compliance")),
+    route: route("policies_compliance", routes.policies_compliance()),
     icon: Shield,
     group: "tools",
     order: 40,
     access: "authenticated",
     permissions: {},
     feature: "policies-compliance",
-    activeMatch: active(routes.coming_soon("policies-compliance")),
+    activeMatch: active(routes.policies_compliance()),
   },
   {
     key: "office-info",
