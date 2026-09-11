@@ -4809,3 +4809,217 @@ export interface MarketingMediaManagerPageProps extends PageProps {
   capabilities: MarketingCapabilities;
   validation: ValidationErrors;
 }
+
+/* -------------------------------------------------------------------------- */
+/* Policies & compliance                                                      */
+/* -------------------------------------------------------------------------- */
+
+export interface CompliancePresentationBadge {
+  code: string;
+  label: string;
+  tone: string;
+  known: boolean;
+}
+
+export interface ComplianceScope {
+  level: string;
+  label: string;
+  officeName: string;
+}
+
+export interface ComplianceFileItem {
+  id: number;
+  role: string;
+  displayName: string;
+  mediaType: string;
+  byteSize: number;
+  url: string;
+  isReadable: boolean;
+  processingState?: string;
+  processingNote?: string;
+  isActive?: boolean;
+  checksum?: string;
+  sortOrder?: number;
+}
+
+export interface ComplianceLibraryRow {
+  id: number;
+  title: string;
+  summary: string;
+  status: CompliancePresentationBadge;
+  category: CompliancePresentationBadge | null;
+  scope: ComplianceScope;
+  jurisdictionStateCodes: string[];
+  versionNumber: number;
+  versionLabel: string;
+  isMandatory: boolean;
+  publishedAt: string | null;
+  detailUrl: string;
+  acknowledged: boolean;
+  required: boolean;
+  dueAt: string | null;
+  canAcknowledge: boolean;
+}
+
+export interface CompliancePolicyDetail extends ComplianceLibraryRow {
+  body: string;
+  documents: ComplianceFileItem[];
+  contentChecksum: string;
+  acknowledgementDisclosure: string;
+  disclosureVersion: number;
+  effectiveAt: string | null;
+  expiresAt: string | null;
+  waived: boolean;
+  acknowledgedAt: string | null;
+}
+
+export interface ComplianceLibraryFilters {
+  category: string;
+  jurisdiction: string;
+  q: string;
+  rejected: string[];
+  [key: string]: string | string[];
+}
+
+export interface PoliciesCompliancePageProps extends PageProps {
+  library: ListResponse<ComplianceLibraryRow, ComplianceLibraryFilters>;
+  filterOptions: {
+    categories: FilterOption[];
+  };
+  errors: ValidationErrors;
+}
+
+export interface PolicyDetailPageProps extends PageProps {
+  policy: CompliancePolicyDetail;
+  errors: ValidationErrors;
+}
+
+export interface ComplianceCapabilities {
+  canAuthor: boolean;
+  canApprove: boolean;
+  canPublish: boolean;
+}
+
+export interface ComplianceAdminRow {
+  id: number;
+  title: string;
+  summary: string;
+  status: CompliancePresentationBadge;
+  statusCode: string;
+  category: CompliancePresentationBadge | null;
+  versionNumber: number;
+  versionLabel: string;
+  ownerOffice: { id: number; name: string };
+  scopeLevel: string;
+  audience: AnnouncementAudienceEntry[];
+  jurisdictionStateCodes: string[];
+  isMandatory: boolean;
+  effectiveAt: string | null;
+  expiresAt: string | null;
+  publishedAt: string | null;
+  updatedAt: string | null;
+  updatedBy: string;
+  createdBy: string;
+  /** Opaque concurrency token. Sent back on every write; a mismatch is a 409. */
+  version: string;
+}
+
+export interface ComplianceValidationItem {
+  field: string;
+  message: string;
+}
+
+export interface ComplianceValidation {
+  isPublishable: boolean;
+  items: ComplianceValidationItem[];
+}
+
+export interface ComplianceHistoryEntry {
+  id: string;
+  action: string;
+  label: string;
+  tone: StatusTone;
+  actor: string;
+  occurredAt: string;
+}
+
+export interface ComplianceAdminFiles {
+  documents: ComplianceFileItem[];
+  sources: ComplianceFileItem[];
+}
+
+export interface ComplianceAdminDetail extends ComplianceAdminRow {
+  body: string;
+  categoryCode: string;
+  displayOrder: number;
+  ownerUserId: number | null;
+  acknowledgementDisclosure: string;
+  disclosureVersion: number;
+  reacknowledgeOnSupersede: boolean;
+  contentChecksum: string;
+  validation: ComplianceValidation;
+  history: ComplianceHistoryEntry[];
+  files: ComplianceAdminFiles;
+  versionFamily: string;
+  capabilities: ComplianceCapabilities | null;
+}
+
+export interface ComplianceWorkspaceFilters {
+  q: string;
+  status: string;
+  category: string;
+  office: string;
+  [key: string]: string | string[];
+}
+
+export interface ComplianceAdministrationPageProps extends PageProps {
+  policies: ListResponse<ComplianceAdminRow, ComplianceWorkspaceFilters>;
+  filterOptions: {
+    categories: FilterOption[];
+    statuses: FilterOption[];
+    offices: AnnouncementOfficeOption[];
+  };
+  createOptions: {
+    offices: AnnouncementOfficeOption[];
+    categories: FilterOption[];
+    audience: AnnouncementAudienceOptions;
+  };
+  capabilities: ComplianceCapabilities;
+  errors: ValidationErrors;
+}
+
+export interface ComplianceMediaLimits {
+  document: { extensions: string[]; maxBytes: number; maxCount: number };
+  source: { extensions: string[]; maxBytes: number; maxCount: number };
+}
+
+export interface ComplianceWorkspacePageProps extends PageProps {
+  policy: ComplianceAdminDetail | null;
+  officeOptions: AnnouncementOfficeOption[];
+  categoryOptions: FilterOption[];
+  audienceOptions: AnnouncementAudienceOptions;
+  capabilities: ComplianceCapabilities;
+  mediaLimits: ComplianceMediaLimits;
+  errors: ValidationErrors;
+}
+
+export interface ComplianceAckReportRow {
+  userId: number;
+  userName: string;
+  email: string;
+  officeName: string;
+  policyId: number;
+  policyTitle: string;
+  status: "pending" | "acknowledged" | "waived" | "overdue" | string;
+  dueAt: string | null;
+  acknowledgedAt: string | null;
+}
+
+export interface ComplianceAckReportPageProps extends PageProps {
+  report: {
+    items: ComplianceAckReportRow[];
+    totalItems: number;
+  };
+  capabilities: ComplianceCapabilities;
+  errors: ValidationErrors;
+}

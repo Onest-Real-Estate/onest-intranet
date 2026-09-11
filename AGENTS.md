@@ -116,6 +116,7 @@ docs/announcements.md  Announcements: taxonomy, audience union semantics, media 
 docs/training.md   Training library + admin: audience, versioning, media, lifecycle
 docs/training.md   Training library: audience visibility, media, progress, admin
 docs/marketing-resources.md  Marketing library + admin: audience, versioning, source/export
+docs/compliance.md  Policies & compliance: audience, jurisdiction, lifecycle, acknowledgements
 docs/operational-tasks.md  Operational tasks: lifecycle, scope, conversion seam
 docs/feedback.md   Feedback intake: diagnostic redaction, idempotency, triage
 docs/it-support.md IT help desk: lifecycle, scope, internal notes, onboarding seam

@@ -134,7 +134,7 @@ def collect_events(context: EventSourceContext) -> tuple[list[AgendaEvent], bool
 
 def _calendar_destination() -> tuple[str, str]:
     """Where "View full calendar" / My Reservations goes from My Day."""
-    return "View my reservations", reverse("inventory_reservations_mine")
+    return "View my reservations", reverse("my_reservations")
 
 
 def build_day(

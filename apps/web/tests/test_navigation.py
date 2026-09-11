@@ -69,6 +69,7 @@ def test_only_the_live_destinations_are_enabled():
             "my-tools": True,
             "training-learning": True,
             "marketing-resources": True,
+            "policies-compliance": True,
             "reports": True,
             "admin-tool-catalog": True,
             "admin-operational-tasks": True,
@@ -76,6 +77,7 @@ def test_only_the_live_destinations_are_enabled():
             "admin-it-support": True,
             "admin-training": True,
             "admin-marketing-resources": True,
+            "admin-compliance": True,
             "admin-rooms": True,
             "my-reservations": True,
             "agent-directory": True,
@@ -97,9 +99,11 @@ def test_only_the_live_destinations_are_enabled():
     assert HUB_FEATURES["my-tools"] is True
     assert HUB_FEATURES["training-learning"] is True
     assert HUB_FEATURES["marketing-resources"] is True
+    assert HUB_FEATURES["policies-compliance"] is True
     assert HUB_FEATURES["reports"] is True
     assert HUB_FEATURES["admin-tool-catalog"] is True
     assert HUB_FEATURES["admin-it-support"] is True
+    assert HUB_FEATURES["admin-compliance"] is True
     assert HUB_FEATURES["admin-rooms"] is True
     assert HUB_FEATURES["my-reservations"] is True
     assert HUB_FEATURES["agent-directory"] is True
@@ -130,6 +134,7 @@ def test_unauthorized_administrative_feature_keys_are_not_shared(client):
         "my-tools": True,
         "training-learning": True,
         "marketing-resources": True,
+        "policies-compliance": True,
         "agent-directory": True,
     }
     assert not any(key.startswith("admin-") for key in props["features"])
@@ -232,6 +237,7 @@ def test_shared_props_carry_feature_state_and_office(client):
         "my-tools": True,
         "training-learning": True,
         "marketing-resources": True,
+        "policies-compliance": True,
         "agent-directory": True,
     }
     assert props["primaryOffice"] == {

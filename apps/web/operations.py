@@ -282,12 +282,14 @@ OPERATIONS_FEATURES["admin-office-resources"] = True
 OPERATIONS_FEATURES["admin-announcements"] = True
 OPERATIONS_FEATURES["admin-training"] = True
 OPERATIONS_FEATURES["admin-marketing-resources"] = True
+OPERATIONS_FEATURES["admin-compliance"] = True
 OPERATIONS_FEATURES["admin-contract-templates"] = True
 OPERATIONS_FEATURES["admin-operational-tasks"] = True
 OPERATIONS_FEATURES["admin-feedback"] = True
 OPERATIONS_FEATURES["admin-it-support"] = True
 OPERATIONS_FEATURES["admin-agent-contracts"] = True
 OPERATIONS_FEATURES["admin-inventory"] = True
+OPERATIONS_FEATURES["admin-reservations"] = True
 
 _OPS_SURFACE_PERMISSIONS = frozenset(
     destination.permission for destination in OPERATIONS_DESTINATIONS
