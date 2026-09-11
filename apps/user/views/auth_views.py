@@ -34,6 +34,23 @@ from ..services.profile import (
 )
 from ..services.role_assignments import sync_default_agent_assignment
 
+
+def _onboarding_page_props(user: User, *, request=None, **kwargs):
+    payload = profile_page_props(user, request=request, **kwargs)
+    from apps.user.services.onboarding_state import (
+        agent_journey_payload,
+        journey_applies_to,
+        journey_for_user,
+    )
+
+    if journey_applies_to(user):
+        journey = getattr(request, "_onboarding_journey", None)
+        if journey is None:
+            journey = journey_for_user(user)
+        payload["onboardingJourney"] = agent_journey_payload(journey)
+    return payload
+
+
 __all__ = [
     "login_page",
     "logout",
@@ -189,7 +206,7 @@ def onboarding(request: HttpRequest):
     user = cast(User, request.user)
     if user.profile_completed:
         return redirect("dashboard")
-    return profile_page_props(user, request=request)
+    return _onboarding_page_props(user, request=request)
 
 
 @enforce_policy("onboarding_submit")
@@ -214,67 +231,82 @@ def onboarding_submit(request: HttpRequest):
         return _render_profile_form(
             request,
             component="Onboarding",
-            props_builder=profile_page_props,
+            props_builder=_onboarding_page_props,
             form=form,
             status=422,
         )
 
-    with transaction.atomic():
-        from apps.audit.service import actor_from_user, log_model_change
-        from apps.user.services.hierarchy import sync_primary_membership
+    from apps.user.services.onboarding_operations import (
+        StaleJourneyVersion,
+        complete_required_setup,
+    )
 
-        before_user = User.objects.get(pk=user.pk)
-        saved_user = form.save(commit=False)
-        saved_user.profile_completed = True
-        saved_user.profile_completed_at = timezone.now()
-        saved_user.save()
-        sync_primary_membership(
-            saved_user,
-            actor=saved_user,
-            business_reason="Office set during onboarding.",
-        )
-        sync_default_agent_assignment(
-            saved_user,
-            actor=saved_user,
-            business_reason="Office set during onboarding.",
-        )
-        log_model_change(
-            "user.onboarding.completed",
-            actor=actor_from_user(user),
-            instance=saved_user,
-            before_instance=before_user,
-            snapshot_fields=[
-                "first_name",
-                "last_name",
-                "display_name",
-                "phone_number",
-                "street_address",
-                "city",
-                "state",
-                "zip_code",
-                "office",
-                "profile_completed",
-                "profile_completed_at",
-                "onboarding_version",
-            ],
-            metadata={"path": request.path},
-        )
-        try:
-            from apps.audit.events import publish
+    try:
+        with transaction.atomic():
+            from apps.audit.service import actor_from_user, log_model_change
+            from apps.user.services.hierarchy import sync_primary_membership
 
-            publish(
-                "user.onboarded",
-                actor_id=str(saved_user.pk),
-                subject=f"user:{saved_user.pk}",
-                payload={
-                    "user_id": saved_user.pk,
-                    "email": saved_user.email,
-                    "office_id": saved_user.office_id,
-                },
+            before_user = User.objects.get(pk=user.pk)
+            saved_user = form.save(commit=False)
+            saved_user.profile_completed = True
+            saved_user.profile_completed_at = timezone.now()
+            saved_user.save()
+            sync_primary_membership(
+                saved_user,
+                actor=saved_user,
+                business_reason="Office set during onboarding.",
             )
-        except ImportError:
-            # audit app not yet merged into this branch.
-            pass
+            sync_default_agent_assignment(
+                saved_user,
+                actor=saved_user,
+                business_reason="Office set during onboarding.",
+            )
+            complete_required_setup(
+                user=saved_user,
+                expected_version=request.POST.get("expected_version") or None,
+            )
+            log_model_change(
+                "user.onboarding.completed",
+                actor=actor_from_user(user),
+                instance=saved_user,
+                before_instance=before_user,
+                snapshot_fields=[
+                    "first_name",
+                    "last_name",
+                    "display_name",
+                    "state",
+                    "office",
+                    "profile_completed",
+                    "profile_completed_at",
+                    "onboarding_version",
+                ],
+                metadata={"path": request.path},
+            )
+            try:
+                from apps.audit.events import publish
+
+                publish(
+                    "user.onboarded",
+                    version=2,
+                    actor_id=str(saved_user.pk),
+                    subject=f"user:{saved_user.pk}",
+                    payload={
+                        "user_id": saved_user.pk,
+                        "office_id": saved_user.office_id,
+                    },
+                )
+            except ImportError:
+                # audit app not yet merged into this branch.
+                pass
+    except StaleJourneyVersion:
+        form.add_error(None, StaleJourneyVersion.message)
+        return _render_profile_form(
+            request,
+            component="Onboarding",
+            props_builder=_onboarding_page_props,
+            form=form,
+            status=409,
+        )
 
     return redirect("dashboard")
 

@@ -1177,9 +1177,88 @@ export interface DashboardAssignment {
   scopeProfileId: string | null;
 }
 
+export type AgentJourneyProfileState = "not_started" | "in_progress" | "complete";
+export type AgentJourneyOfficeState = "not_selected" | "selected" | "confirmed";
+export type AgentJourneyOfficeHandoffState =
+  | "pending"
+  | "notified"
+  | "notification_failed";
+export type AgentJourneyContractState =
+  | "generated"
+  | "sent"
+  | "signed"
+  | "active"
+  | "blocked"
+  | "unavailable";
+export type AgentJourneyToolSourceState = "available" | "unavailable";
+export type AgentJourneyToolStatus = "complete" | "pending" | "blocked" | "unavailable";
+export type AgentJourneyInvitationState =
+  | "not_applicable"
+  | "pending"
+  | "sent"
+  | "unavailable";
+export type AgentJourneyStep = "profile" | "office" | "activation" | "complete";
+export type AgentJourneyAction =
+  | "complete_profile"
+  | "confirm_office"
+  | "set_up_tool"
+  | "wait_for_office"
+  | "wait_for_activation"
+  | "none";
+
+export interface AgentJourneyState<T extends string> {
+  state: T;
+  label: string;
+  updatedAt: string | null;
+}
+
+export interface AgentJourneyTool {
+  key: string;
+  label: string;
+  description: string;
+  provisioning: "self_serve" | "onest" | "both";
+  provisioningLabel: string;
+  selfService: boolean;
+  required: boolean;
+  state: string;
+  stateLabel: string;
+  status: AgentJourneyToolStatus;
+  statusLabel: string;
+  invitationState: AgentJourneyInvitationState;
+  invitationLabel: string;
+  complete: boolean;
+  updatedAt: string | null;
+}
+
+/** Versioned server composition; clients display it and never infer progress. */
+export interface AgentOnboardingJourney {
+  schemaVersion: 1;
+  profile: AgentJourneyState<AgentJourneyProfileState>;
+  office: AgentJourneyState<AgentJourneyOfficeState>;
+  officeHandoff: AgentJourneyState<AgentJourneyOfficeHandoffState>;
+  contract: AgentJourneyState<AgentJourneyContractState>;
+  toolsSource: AgentJourneyToolSourceState;
+  tools: AgentJourneyTool[];
+  requiredSetupComplete: boolean;
+  activationComplete: boolean;
+  strictGateActive: boolean;
+  currentStep: { code: AgentJourneyStep; label: string };
+  nextAction: {
+    code: AgentJourneyAction;
+    label: string;
+    href: string | null;
+    method: "get" | null;
+  };
+  version: string;
+  updatedAt: string;
+  blockers: { key: string; message: string }[];
+}
+
 /** Dashboard page props. Deferred widgets are undefined until Inertia loads them. */
 export interface DashboardPageProps extends PageProps {
   greeting: DashboardGreeting;
+  /** Present only for ordinary users with an effective Agent role. */
+  onboardingJourney?: AgentOnboardingJourney;
   /** Absent until the assignment model ships; resolution falls back to roles. */
   assignment?: DashboardAssignment;
   scope?: DashboardScope;
@@ -1357,6 +1436,8 @@ export interface OnboardingPageProps extends PageProps {
   validation: ValidationErrors;
   offices: OfficeGroup[];
   states: StateOption[];
+  /** Present for the Agent journey; omitted by the explicit non-Agent policy. */
+  onboardingJourney?: AgentOnboardingJourney;
 }
 
 export interface ProfilePageProps extends PageProps {
@@ -1814,6 +1895,12 @@ export interface OnboardingSummary {
   version: string;
   lastChangedAt: string | null;
   lastChangedBy: string | null;
+  requiredSetupComplete?: boolean;
+  activationComplete?: boolean;
+  currentStep?: AgentJourneyStep;
+  journeyVersion?: string;
+  journeyUpdatedAt?: string;
+  journey?: AgentOnboardingJourney;
 }
 
 export interface OnboardingMilestone {

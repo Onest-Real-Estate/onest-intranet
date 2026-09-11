@@ -1,3 +1,5 @@
+from typing import cast
+
 from django import forms
 from django.contrib import admin, messages
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
@@ -24,6 +26,7 @@ from .models import (
     UserRoleAssignment,
     UserRoleAssignmentMigrationConflict,
 )
+from .services.onboarding_operations import reset_required_setup
 from .services.role_assignments import (
     create_role_assignment,
     revoke_role_assignment,
@@ -687,35 +690,14 @@ class UserAdmin(DjangoUserAdmin):
             scoped_queryset=scoped_queryset,
             policy_key="user_admin_reset_onboarding",
         )
-        actor = actor_from_user(request.user)
-        before_by_pk = {
-            user.pk: User.objects.get(pk=user.pk) for user in scoped_queryset
-        }
-        count = scoped_queryset.update(
-            profile_completed=False,
-            profile_completed_at=None,
-        )
-        # Increment version so the reset is distinguishable from the original.
-        for user in scoped_queryset:
-            user.onboarding_version = (user.onboarding_version or 0) + 1
-            user.save(update_fields=["onboarding_version"])
-            log_model_change(
-                "user.onboarding.reset",
-                actor=actor,
-                instance=user,
-                before_instance=before_by_pk[user.pk],
-                snapshot_fields=[
-                    "profile_completed",
-                    "profile_completed_at",
-                    "onboarding_version",
-                    "office",
-                ],
-                metadata={"admin": True},
-            )
+        users = list(scoped_queryset)
+        for user in users:
+            reset_required_setup(actor=cast(User, request.user), user=user)
+        count = len(users)
         self.message_user(
             request,
             f"Reset onboarding for {count} user(s). "
-            "They will be redirected to /onboarding on next login.",
+            "They will return to required setup on the dashboard next login.",
             messages.SUCCESS,
         )
 

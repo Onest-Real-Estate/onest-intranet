@@ -16,6 +16,11 @@ from apps.it_support.views import it_support_queue
 from apps.marketing.administration_views import marketing_administration_index
 from apps.operational_tasks.views import tasks_index
 from apps.training.administration_views import training_administration_index
+from apps.user.services.onboarding_state import (
+    agent_journey_payload,
+    journey_applies_to,
+    journey_for_user,
+)
 from apps.user.services.role_assignments import get_effective_access
 from apps.user.views.directory_views import user_directory
 from apps.user.views.office_administration_views import office_administration_index
@@ -49,10 +54,21 @@ def dashboard(request):
     computed server-side so the salutation and the date agree with the day
     boundaries every provider uses.
     """
-    return {
-        "greeting": greeting_payload(request.user),
-        **deferred_widget_props(request.user),
-    }
+    payload = {"greeting": greeting_payload(request.user)}
+    access = getattr(request, "_inertia_access_context", None)
+    if access is None:
+        access = get_effective_access(request.user)
+        request._inertia_access_context = access
+    if journey_applies_to(request.user, access=access):
+        journey = getattr(request, "_onboarding_journey", None)
+        if journey is None:
+            journey = journey_for_user(request.user)
+            request._onboarding_journey = journey
+        payload["onboardingJourney"] = agent_journey_payload(journey)
+        if not journey.required_setup_complete:
+            request._onboarding_strict_gate = True
+            return payload
+    return {**payload, **deferred_widget_props(request.user)}
 
 
 @enforce_policy("action_items_queue")

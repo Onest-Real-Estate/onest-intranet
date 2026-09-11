@@ -35,6 +35,18 @@ registry.register(
     ),
 )
 
+# Version 2 removes email from the durable event payload. Version 1 remains
+# registered so already-queued events continue to validate and dispatch.
+registry.register(
+    name="user.onboarded",
+    version=2,
+    required_payload_keys={"user_id", "office_id"},
+    description=(
+        "Emitted once when required onboarding profile and office setup is "
+        "completed, without profile contact data."
+    ),
+)
+
 registry.register(
     name="user.account.state_changed",
     version=1,
@@ -51,6 +63,23 @@ registry.register(
     version=1,
     required_payload_keys={"user_id", "owner_id"},
     description="Operational onboarding ownership changed for a user.",
+)
+
+registry.register(
+    name="user.onboarding.required_setup_completed",
+    version=1,
+    required_payload_keys={"user_id", "onboarding_version"},
+    description=(
+        "The agent completed the profile and office checkpoint that releases "
+        "the strict dashboard gate."
+    ),
+)
+
+registry.register(
+    name="user.onboarding.office_handoff_changed",
+    version=1,
+    required_payload_keys={"user_id", "from", "to"},
+    description="An administrator recorded the office handoff delivery outcome.",
 )
 
 registry.register(

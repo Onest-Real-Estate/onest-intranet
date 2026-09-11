@@ -207,6 +207,7 @@ def bulk_agent_onboarding_states(users: list[User]):
 
 def _onboarding_state_for_contract(contract: AgentContract | None):
     from apps.user.services.onboarding_state import (
+        ContractJourneyStatus,
         ContractOnboardingState,
         MilestoneStatus,
         SourceMilestone,
@@ -258,8 +259,24 @@ def _onboarding_state_for_contract(contract: AgentContract | None):
         overall = MilestoneStatus.COMPLETE
     else:
         overall = MilestoneStatus.PENDING
+    if blocked:
+        journey_status = ContractJourneyStatus.BLOCKED
+    elif active_done:
+        journey_status = ContractJourneyStatus.ACTIVE
+    elif signed_done:
+        journey_status = ContractJourneyStatus.SIGNED
+    elif contract is not None and contract.status in {
+        ContractStatus.SENT,
+        ContractStatus.VIEWED,
+    }:
+        journey_status = ContractJourneyStatus.SENT
+    elif generated_done:
+        journey_status = ContractJourneyStatus.GENERATED
+    else:
+        journey_status = ContractJourneyStatus.UNAVAILABLE
     return ContractOnboardingState(
         status=overall,
+        journey_status=journey_status,
         generated=generated,
         signed=signed,
         active=active,

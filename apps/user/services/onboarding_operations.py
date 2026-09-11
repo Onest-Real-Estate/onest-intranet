@@ -21,6 +21,7 @@ from apps.user.models import (
 from apps.user.roles import ADMIN, BRANCH_MANAGER, REGION_MANAGER, ScopeType
 from apps.user.services.agent_administration import administered_user_queryset
 from apps.user.services.onboarding_state import MANAGE_PERMISSION
+from apps.user.services.onboarding_state import journey_version as journey_version_token
 from apps.user.services.role_assignments import has_effective_permission
 
 
@@ -35,11 +36,29 @@ class SourceActionUnavailable(ValidationError):
     pass
 
 
+class StaleJourneyVersion(Exception):
+    message = "Your onboarding changed in another session. Reload before continuing."
+
+
+HANDOFF_TRANSITIONS = {
+    UserOnboardingCase.OfficeHandoffState.PENDING: frozenset(
+        {
+            UserOnboardingCase.OfficeHandoffState.NOTIFIED,
+            UserOnboardingCase.OfficeHandoffState.NOTIFICATION_FAILED,
+        }
+    ),
+    UserOnboardingCase.OfficeHandoffState.NOTIFICATION_FAILED: frozenset(
+        {UserOnboardingCase.OfficeHandoffState.NOTIFIED}
+    ),
+    UserOnboardingCase.OfficeHandoffState.NOTIFIED: frozenset(),
+}
+
+
 def _target(actor: User, user: User) -> AuditTarget:
     return AuditTarget(
         target_type=UserOnboardingCase._meta.label_lower,
         target_id=str(user.pk),
-        target_label=user.email,
+        target_label=f"User {user.pk}",
     )
 
 
@@ -119,6 +138,169 @@ def _publish(name: str, actor: User, user: User, payload: dict) -> None:
         actor_id=str(actor.pk),
         subject=f"user:{user.pk}",
         payload={"user_id": user.pk, **payload},
+    )
+
+
+@transaction.atomic
+def complete_required_setup(
+    *,
+    user: User,
+    expected_version: str | None = None,
+) -> bool:
+    """Release the strict gate once profile and office are durably complete."""
+    locked_user = User.objects.select_for_update().get(pk=user.pk)
+    case = (
+        UserOnboardingCase.objects.select_for_update(of=("self",))
+        .filter(user=locked_user)
+        .first()
+    )
+    if (
+        locked_user.profile_completed
+        and case
+        and case.office_confirmed_at
+        and case.required_setup_completed_at
+    ):
+        return False
+    if expected_version is not None and expected_version != journey_version_token(
+        locked_user, case
+    ):
+        raise StaleJourneyVersion()
+    if not locked_user.profile_completed:
+        raise ValidationError({"profile": "Complete the required profile details."})
+    if locked_user.office_id is None:
+        raise ValidationError({"office": "Choose an office before continuing."})
+
+    now = timezone.now()
+    if case is None:
+        case = UserOnboardingCase(user=locked_user)
+    case.office_confirmed_at = case.office_confirmed_at or now
+    case.required_setup_completed_at = case.required_setup_completed_at or now
+    case.updated_by = locked_user
+    case.save()
+    log_event(
+        "user.onboarding.required_setup_completed",
+        actor=actor_from_user(locked_user),
+        target=_target(locked_user, locked_user),
+        after={
+            "onboarding_version": locked_user.onboarding_version,
+            "office_id": locked_user.office_id,
+        },
+        office_id=locked_user.office.stable_key if locked_user.office else "",
+        channel="onboarding",
+    )
+    transaction.on_commit(
+        lambda: _publish(
+            "user.onboarding.required_setup_completed",
+            locked_user,
+            locked_user,
+            {"onboarding_version": locked_user.onboarding_version},
+        )
+    )
+    return True
+
+
+@transaction.atomic
+def transition_office_handoff(
+    *,
+    actor: User,
+    user: User,
+    state: str,
+    expected_version: str,
+) -> bool:
+    """Move the office handoff through its closed, audited transition table."""
+    ensure_manage_authority(actor, user)
+    try:
+        next_state = UserOnboardingCase.OfficeHandoffState(state)
+    except ValueError as exc:
+        raise ValidationError({"state": "Choose an approved handoff state."}) from exc
+    locked_user = User.objects.select_for_update().get(pk=user.pk)
+    case = (
+        UserOnboardingCase.objects.select_for_update(of=("self",))
+        .filter(user=locked_user)
+        .first()
+    )
+    current = UserOnboardingCase.OfficeHandoffState(
+        case.office_handoff_state
+        if case
+        else UserOnboardingCase.OfficeHandoffState.PENDING
+    )
+    if current == next_state:
+        return False
+    if expected_version != journey_version_token(locked_user, case):
+        raise StaleJourneyVersion()
+    if next_state not in HANDOFF_TRANSITIONS[current]:
+        raise ValidationError(
+            {"state": "That office handoff transition is not allowed."}
+        )
+    now = timezone.now()
+    if case is None:
+        case = UserOnboardingCase(user=locked_user)
+    case.office_handoff_state = next_state
+    case.office_handoff_updated_at = now
+    case.updated_by = actor
+    case.save()
+    log_event(
+        "user.onboarding.office_handoff_changed",
+        actor=actor_from_user(actor),
+        target=_target(actor, locked_user),
+        before={"state": str(current)},
+        after={"state": str(next_state)},
+        office_id=locked_user.office.stable_key if locked_user.office else "",
+        channel="onboarding_workspace",
+    )
+    transaction.on_commit(
+        lambda: _publish(
+            "user.onboarding.office_handoff_changed",
+            actor,
+            locked_user,
+            {"from": str(current), "to": str(next_state)},
+        )
+    )
+    return True
+
+
+@transaction.atomic
+def reset_required_setup(*, actor: User, user: User) -> None:
+    """Start a new required-setup cycle without erasing downstream history."""
+    if not actor.is_staff and not actor.is_superuser:
+        raise PermissionDenied("Only authorized staff may reset onboarding.")
+    locked_user = User.objects.select_for_update().get(pk=user.pk)
+    previous_version = locked_user.onboarding_version
+    locked_user.profile_completed = False
+    locked_user.profile_completed_at = None
+    locked_user.onboarding_version = previous_version + 1
+    locked_user.save(
+        update_fields=[
+            "profile_completed",
+            "profile_completed_at",
+            "onboarding_version",
+        ]
+    )
+    case = (
+        UserOnboardingCase.objects.select_for_update(of=("self",))
+        .filter(user=locked_user)
+        .first()
+    )
+    if case:
+        case.office_confirmed_at = None
+        case.required_setup_completed_at = None
+        case.updated_by = actor
+        case.save(
+            update_fields=[
+                "office_confirmed_at",
+                "required_setup_completed_at",
+                "updated_by",
+                "updated_at",
+            ]
+        )
+    log_event(
+        "user.onboarding.reset",
+        actor=actor_from_user(actor),
+        target=_target(actor, locked_user),
+        before={"onboarding_version": previous_version},
+        after={"onboarding_version": locked_user.onboarding_version},
+        office_id=locked_user.office.stable_key if locked_user.office else "",
+        channel="admin",
     )
 
 

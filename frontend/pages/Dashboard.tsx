@@ -1,4 +1,4 @@
-import { Head, router, usePage } from "@inertiajs/react";
+import { Head, Link, router, usePage } from "@inertiajs/react";
 import { useMemo, useState } from "react";
 
 import { DashboardGreeting } from "@/components/dashboard/DashboardGreeting";
@@ -6,6 +6,7 @@ import { DashboardProfileSwitcher } from "@/components/dashboard/DashboardProfil
 import { DashboardScopeSelector } from "@/components/dashboard/DashboardScopeSelector";
 import { DashboardWidgetSlot } from "@/components/dashboard/DashboardWidgetSlot";
 import { PendingModules } from "@/components/dashboard/PendingModules";
+import { Callout } from "@/components/design-system/callout";
 import { HubLayout } from "@/components/HubLayout";
 import { Button } from "@/components/ui/button";
 import { useAuthorizationStaleness } from "@/hooks/use-authorization-staleness";
@@ -36,7 +37,7 @@ import type { DashboardPageProps, MetricScopeLevel } from "@/types";
  */
 export default function Dashboard() {
   const page = usePage<DashboardPageProps>().props;
-  const { user, greeting, shell, assignment, scope } = page;
+  const { user, greeting, shell, assignment, scope, onboardingJourney } = page;
 
   // Null means "no remembered choice"; the reader's assigned profile wins.
   const [chosenProfileId, setChosenProfileId] = useState<string | null>(() =>
@@ -87,6 +88,31 @@ export default function Dashboard() {
 
   if (!user) {
     return null;
+  }
+
+  if (onboardingJourney?.strictGateActive) {
+    const action = onboardingJourney.nextAction;
+    return (
+      <div className="flex flex-1 flex-col gap-8">
+        <Head title="Welcome to ONEST HUB" />
+        <DashboardGreeting greeting={greeting} user={user} />
+        <Callout
+          tone="info"
+          title={`${onboardingJourney.currentStep.label} setup is required`}
+          action={
+            action.href ? (
+              <Button asChild size="sm">
+                <Link href={action.href}>{action.label}</Link>
+              </Button>
+            ) : null
+          }
+        >
+          Finish your required profile and office setup to unlock the dashboard. Your
+          progress is saved, so you can safely return later or continue in another
+          browser.
+        </Callout>
+      </div>
+    );
   }
 
   function selectProfile(id: string) {

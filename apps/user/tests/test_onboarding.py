@@ -3,10 +3,13 @@ import json
 import re
 
 import pytest
+from django.contrib.auth.models import Group
 from django.urls import reverse
 from PIL import Image
 
 from apps.user.models import Office, User
+from apps.user.roles import AGENT, role_group_name
+from apps.user.services.onboarding_state import journey_for_user
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -25,6 +28,12 @@ def inertia_page_script(response):
 
 def assignable_office():
     return Office.objects.get(slug="charlottesville-va")
+
+
+def make_agent(user):
+    group, _created = Group.objects.get_or_create(name=role_group_name(AGENT))
+    user.groups.add(group)
+    return user
 
 
 def valid_profile_post(**overrides):
@@ -116,6 +125,46 @@ def test_onboarding_submit_saves_details_and_completes(client):
     assert user.office == assignable_office()
     assert user.profile_completed is True
     assert user.profile_completed_at is not None
+
+
+@pytest.mark.django_db
+def test_onboarding_submit_accepts_inertia_json_and_journey_version(client):
+    user = make_agent(User.objects.create_user(email="json-agent@example.com"))
+    version = journey_for_user(user).version
+    client.force_login(user)
+
+    response = client.post(
+        reverse("onboarding_submit"),
+        json.dumps(valid_profile_post(expected_version=version)),
+        content_type="application/json",
+        HTTP_X_INERTIA="true",
+    )
+
+    assert response.status_code == 302
+    user.refresh_from_db()
+    assert user.profile_completed is True
+    assert user.onboarding_case.required_setup_completed_at is not None
+
+
+@pytest.mark.django_db
+def test_onboarding_submit_rejects_stale_journey_version_without_writes(client):
+    user = make_agent(User.objects.create_user(email="stale-agent@example.com"))
+    client.force_login(user)
+
+    response = client.post(
+        reverse("onboarding_submit"),
+        valid_profile_post(expected_version="0:stale"),
+        HTTP_X_INERTIA="true",
+    )
+
+    assert response.status_code == 409
+    assert (
+        "changed in another session"
+        in json.loads(response.content)["props"]["validation"]["form"][0]
+    )
+    user.refresh_from_db()
+    assert user.profile_completed is False
+    assert user.office is None
 
 
 @pytest.mark.django_db
@@ -443,21 +492,55 @@ def test_headshot_upload_rejects_non_image(client, settings, tmp_path):
 
 
 @pytest.mark.django_db
-def test_incomplete_profile_redirected_to_onboarding(client):
-    user = User.objects.create_user(email="bob@example.com")
+def test_incomplete_agent_loads_dashboard_shell_with_strict_gate(client):
+    user = make_agent(
+        User.objects.create_user(
+            email="bob@example.com",
+            phone_number="2025550199",
+            street_address="41 Private Lane",
+        )
+    )
     client.force_login(user)
     response = client.get(reverse("dashboard"))
-    assert response.status_code == 302
-    assert response.url == reverse("onboarding")
+    assert response.status_code == 200
+    props = inertia_page_script(response)["props"]
+    assert props["onboardingJourney"]["strictGateActive"] is True
+    assert props["onboardingJourney"]["currentStep"]["code"] == "profile"
+    assert props["features"] == {}
+    assert props["primaryOffice"] is None
+    assert props["notifications"] is None
+    protected_widget_keys = {
+        "metrics",
+        "quickApps",
+        "announcements",
+        "transactions",
+        "training",
+        "schedule",
+        "actionItems",
+        "agentOnboarding",
+        "contractsAwaitingSignature",
+    }
+    assert protected_widget_keys.isdisjoint(props)
+    serialized = json.dumps(props)
+    assert "2025550199" not in serialized
+    assert "41 Private Lane" not in serialized
 
 
 @pytest.mark.django_db
 def test_incomplete_profile_cannot_open_profile_page(client):
-    user = User.objects.create_user(email="bob@example.com")
+    user = make_agent(User.objects.create_user(email="bob@example.com"))
     client.force_login(user)
     response = client.get(reverse("profile"))
     assert response.status_code == 302
-    assert response.url == reverse("onboarding")
+    assert response.url == reverse("dashboard")
+
+
+@pytest.mark.django_db
+def test_incomplete_non_agent_is_not_forced_into_agent_journey(client):
+    user = User.objects.create_user(email="operations@example.com")
+    client.force_login(user)
+    response = client.get(reverse("profile"))
+    assert response.status_code == 200
 
 
 @pytest.mark.django_db

@@ -100,18 +100,34 @@ def test_dashboard_shares_user(client):
 
 
 @pytest.mark.django_db
-def test_shell_computes_effective_access_once_per_request(client):
-    user = User.objects.create_user(email="alice@example.com", profile_completed=True)
+@pytest.mark.parametrize("incomplete_agent", [False, True])
+def test_shell_computes_effective_access_once_per_request(client, incomplete_agent):
+    user = User.objects.create_user(
+        email="alice@example.com", profile_completed=not incomplete_agent
+    )
+    if incomplete_agent:
+        group, _created = Group.objects.get_or_create(name=role_group_name(AGENT))
+        user.groups.add(group)
     client.force_login(user)
 
-    with patch(
-        "apps.web.middleware.get_effective_access",
-        wraps=get_effective_access,
-    ) as effective_access:
+    # The onboarding gate, the dashboard view, and the shared-props middleware
+    # each import the helper; whichever runs first caches it on the request.
+    with (
+        patch(
+            "apps.user.middleware.get_effective_access", wraps=get_effective_access
+        ) as gate_access,
+        patch(
+            "apps.web.views.get_effective_access", wraps=get_effective_access
+        ) as view_access,
+        patch(
+            "apps.web.middleware.get_effective_access", wraps=get_effective_access
+        ) as shell_access,
+    ):
         response = client.get(reverse("dashboard"), HTTP_X_INERTIA="true")
 
     assert response.status_code == 200
-    assert effective_access.call_count == 1
+    calls = gate_access.call_count + view_access.call_count + shell_access.call_count
+    assert calls == 1
 
 
 @pytest.mark.django_db

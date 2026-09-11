@@ -1471,6 +1471,11 @@ class UserOnboardingCase(models.Model):
     owning domains so an operations user cannot check them off by hand.
     """
 
+    class OfficeHandoffState(models.TextChoices):
+        PENDING = "pending", _("Pending")
+        NOTIFIED = "notified", _("Notified")
+        NOTIFICATION_FAILED = "notification_failed", _("Notification failed")
+
     user = models.OneToOneField(
         User,
         verbose_name=_("user"),
@@ -1490,6 +1495,33 @@ class UserOnboardingCase(models.Model):
         verbose_name=_("updated by"),
         related_name="updated_onboarding_cases",
         on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+    )
+    office_confirmed_at = models.DateTimeField(
+        _("office confirmed at"),
+        null=True,
+        blank=True,
+        help_text=_(
+            "When the agent confirmed the selected office for this onboarding cycle."
+        ),
+    )
+    required_setup_completed_at = models.DateTimeField(
+        _("required setup completed at"),
+        null=True,
+        blank=True,
+        help_text=_(
+            "Compatibility checkpoint releasing the strict profile and office gate."
+        ),
+    )
+    office_handoff_state = models.CharField(
+        _("office handoff state"),
+        max_length=24,
+        choices=OfficeHandoffState.choices,
+        default=OfficeHandoffState.PENDING,
+    )
+    office_handoff_updated_at = models.DateTimeField(
+        _("office handoff updated at"),
         null=True,
         blank=True,
     )

@@ -1,4 +1,4 @@
-import { Head, usePage } from "@inertiajs/react";
+import { Form, Head, usePage } from "@inertiajs/react";
 import {
   Building2,
   CheckCircle2,
@@ -275,7 +275,7 @@ function StepProgress({ steps, current }: { steps: typeof STEPS; current: StepId
 // ---------------------------------------------------------------------------
 
 export default function Onboarding() {
-  const { csrfToken, initial, validation, offices, states } =
+  const { csrfToken, initial, validation, offices, states, onboardingJourney } =
     usePage<OnboardingPageProps>().props;
   const errors = Object.fromEntries(
     Object.entries(validation.fields).map(([field, messages]) => [field, messages[0]]),
@@ -415,14 +415,22 @@ export default function Onboarding() {
             </CardDescription>
           </CardHeader>
 
-          <form
+          <Form
             id="onboarding-form"
             method="post"
             action={routes.onboarding_submit()}
             encType="multipart/form-data"
-            onSubmit={() => setDirty(false)}
+            onStart={() => setDirty(false)}
+            disableWhileProcessing
           >
             <input type="hidden" name="csrfmiddlewaretoken" value={csrfToken} />
+            {onboardingJourney ? (
+              <input
+                type="hidden"
+                name="expected_version"
+                value={onboardingJourney.version}
+              />
+            ) : null}
 
             {/* Hidden inputs for all fields — always submitted regardless of step */}
             <input type="hidden" name="first_name" value={values.firstName} />
@@ -739,7 +747,7 @@ export default function Onboarding() {
                 </Button>
               )}
             </CardFooter>
-          </form>
+          </Form>
         </Card>
       </div>
     </div>
