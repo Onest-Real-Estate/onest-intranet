@@ -565,6 +565,40 @@ ROUTE_POLICIES: dict[str, AuthorizationPolicy] = {
         route_names=("office_inventory_photo",),
         scope_rule="self_only",
     ),
+    "agent_directory": AuthorizationPolicy(
+        key="agent_directory",
+        access="authenticated",
+        description=(
+            "Company-wide peer Agent Directory. Visibility and field "
+            "allowlisting are enforced in the service layer; inactive and "
+            "non-engaged people never appear in search, counts, or filters."
+        ),
+        methods=("GET",),
+        route_names=("agent_directory",),
+        scope_rule="self_only",
+    ),
+    "agent_directory_detail": AuthorizationPolicy(
+        key="agent_directory_detail",
+        access="authenticated",
+        description=(
+            "One directory-visible person. Out-of-policy ids are 404 so "
+            "direct URLs cannot confirm hidden accounts."
+        ),
+        methods=("GET",),
+        route_names=("agent_directory_detail",),
+        scope_rule="self_only",
+    ),
+    "agent_directory_headshot": AuthorizationPolicy(
+        key="agent_directory_headshot",
+        access="authenticated",
+        description=(
+            "Stream a directory-visible headshot after re-checking "
+            "visibility. Never returns a permanent public media URL."
+        ),
+        methods=("GET",),
+        route_names=("agent_directory_headshot",),
+        scope_rule="self_only",
+    ),
     "room_availability": AuthorizationPolicy(
         key="room_availability",
         access="permission_protected",
@@ -1238,6 +1272,316 @@ ROUTE_POLICIES: dict[str, AuthorizationPolicy] = {
         all_permissions=("web.manage_training",),
         scope_rule="office_tree_scope",
     ),
+    "marketing_library": AuthorizationPolicy(
+        key="marketing_library",
+        access="authenticated",
+        description=(
+            "Marketing resources library for the signed-in user. Audience is "
+            "resolved server-side; filters can only narrow the visible set."
+        ),
+        methods=("GET",),
+        route_names=("marketing_resources",),
+        scope_rule="publication_scope",
+    ),
+    "marketing_detail": AuthorizationPolicy(
+        key="marketing_detail",
+        access="authenticated",
+        description=(
+            "One marketing asset by id. Authorized by the same audience "
+            "predicate as the library; superseded versions redirect to current."
+        ),
+        methods=("GET",),
+        route_names=("marketing_resource_detail",),
+        scope_rule="publication_scope",
+    ),
+    "marketing_export": AuthorizationPolicy(
+        key="marketing_export",
+        access="authenticated",
+        description=(
+            "Stream one approved marketing export from protected storage after "
+            "re-checking audience visibility."
+        ),
+        methods=("GET",),
+        route_names=("marketing_resource_export",),
+        scope_rule="publication_scope",
+    ),
+    "marketing_preview": AuthorizationPolicy(
+        key="marketing_preview",
+        access="authenticated",
+        description=(
+            "Stream a marketing preview or derivative after re-checking "
+            "audience visibility."
+        ),
+        methods=("GET",),
+        route_names=("marketing_resource_preview",),
+        scope_rule="publication_scope",
+    ),
+    "marketing_source": AuthorizationPolicy(
+        key="marketing_source",
+        access="permission_protected",
+        description=(
+            "Stream an editable marketing source file. Requires the source "
+            "download grant and manage scope on the owning office."
+        ),
+        methods=("GET",),
+        route_names=("marketing_resource_source",),
+        all_permissions=("web.download_marketing_sources",),
+        scope_rule="publication_scope",
+    ),
+    "marketing_new": AuthorizationPolicy(
+        key="marketing_new",
+        access="permission_protected",
+        description="Open an empty marketing asset workspace within the actor's grant.",
+        methods=("GET",),
+        route_names=("marketing_new",),
+        all_permissions=("web.manage_marketing_resources",),
+        scope_rule="publication_scope",
+    ),
+    "marketing_edit": AuthorizationPolicy(
+        key="marketing_edit",
+        access="permission_protected",
+        description=(
+            "Open one marketing asset in the workspace. Loaded through the "
+            "actor's scoped queryset, so an out-of-scope id is a 404."
+        ),
+        methods=("GET",),
+        route_names=("marketing_edit",),
+        all_permissions=("web.manage_marketing_resources",),
+        scope_rule="publication_scope",
+    ),
+    "marketing_create": AuthorizationPolicy(
+        key="marketing_create",
+        access="permission_protected",
+        description="Create one marketing draft. Publication is a separate action.",
+        methods=("POST",),
+        route_names=("marketing_create",),
+        all_permissions=("web.manage_marketing_resources",),
+        scope_rule="publication_scope",
+    ),
+    "marketing_update": AuthorizationPolicy(
+        key="marketing_update",
+        access="permission_protected",
+        description=(
+            "Save marketing copy, window, applicability, and audience. "
+            "Guarded by an update-timestamp token."
+        ),
+        methods=("POST",),
+        route_names=("marketing_update",),
+        all_permissions=("web.manage_marketing_resources",),
+        scope_rule="publication_scope",
+    ),
+    "marketing_lifecycle": AuthorizationPolicy(
+        key="marketing_lifecycle",
+        access="permission_protected",
+        description=(
+            "Publish, schedule, unpublish, archive, or restore one marketing "
+            "asset. Re-authorizes audience selectors before go-live."
+        ),
+        methods=("POST",),
+        route_names=("marketing_lifecycle",),
+        all_permissions=("web.publish_marketing_resources",),
+        scope_rule="publication_scope",
+    ),
+    "marketing_duplicate_version": AuthorizationPolicy(
+        key="marketing_duplicate_version",
+        access="permission_protected",
+        description=(
+            "Fork a new draft version of a published or archived marketing "
+            "asset so superseded exports stay available for audit."
+        ),
+        methods=("POST",),
+        route_names=("marketing_duplicate_version",),
+        all_permissions=("web.manage_marketing_resources",),
+        scope_rule="publication_scope",
+    ),
+    "marketing_recipient_search": AuthorizationPolicy(
+        key="marketing_recipient_search",
+        access="permission_protected",
+        description=(
+            "Typeahead for individual marketing recipients, bounded by the "
+            "actor's administered users."
+        ),
+        methods=("GET",),
+        route_names=("marketing_recipient_search",),
+        all_permissions=("web.manage_marketing_resources",),
+        scope_rule="delegated_user_scope",
+        auth_behavior="json",
+    ),
+    "marketing_media_manager": AuthorizationPolicy(
+        key="marketing_media_manager",
+        access="permission_protected",
+        description="Manage one marketing asset's export and source files.",
+        methods=("GET",),
+        route_names=("marketing_media_manager",),
+        all_permissions=("web.manage_marketing_resources",),
+        scope_rule="publication_scope",
+    ),
+    "marketing_media_upload": AuthorizationPolicy(
+        key="marketing_media_upload",
+        access="permission_protected",
+        description="Upload an export or source file to a draft marketing asset.",
+        methods=("POST",),
+        route_names=("marketing_media_upload",),
+        all_permissions=("web.manage_marketing_resources",),
+        scope_rule="publication_scope",
+        auth_behavior="json",
+    ),
+    "marketing_media_replace": AuthorizationPolicy(
+        key="marketing_media_replace",
+        access="permission_protected",
+        description="Replace one stored marketing file on a draft.",
+        methods=("POST",),
+        route_names=("marketing_media_replace",),
+        all_permissions=("web.manage_marketing_resources",),
+        scope_rule="publication_scope",
+        auth_behavior="json",
+    ),
+    "marketing_media_remove": AuthorizationPolicy(
+        key="marketing_media_remove",
+        access="permission_protected",
+        description="Remove one marketing file from a draft.",
+        methods=("POST",),
+        route_names=("marketing_media_remove",),
+        all_permissions=("web.manage_marketing_resources",),
+        scope_rule="publication_scope",
+    ),
+    "marketing_media_reorder": AuthorizationPolicy(
+        key="marketing_media_reorder",
+        access="permission_protected",
+        description="Set the display order of one marketing asset's export files.",
+        methods=("POST",),
+        route_names=("marketing_media_reorder",),
+        all_permissions=("web.manage_marketing_resources",),
+        scope_rule="publication_scope",
+    ),
+    "policies_compliance": AuthorizationPolicy(
+        key="policies_compliance",
+        access="authenticated",
+        description=(
+            "Policy library for the signed-in user. Audience and jurisdiction "
+            "are resolved server-side; filters can only narrow the visible set."
+        ),
+        methods=("GET",),
+        route_names=("policies_compliance",),
+        scope_rule="self_only",
+    ),
+    "policy_detail": AuthorizationPolicy(
+        key="policy_detail",
+        access="authenticated",
+        description="Policy detail for an audience-visible published version.",
+        methods=("GET",),
+        route_names=("policy_detail",),
+        scope_rule="self_only",
+    ),
+    "policy_acknowledge": AuthorizationPolicy(
+        key="policy_acknowledge",
+        access="authenticated",
+        description="Acknowledge one audience-visible published policy version.",
+        methods=("POST",),
+        route_names=("policy_acknowledge",),
+        scope_rule="self_only",
+    ),
+    "policy_document_file": AuthorizationPolicy(
+        key="policy_document_file",
+        access="authenticated",
+        description="Stream one ready policy document after audience re-check.",
+        methods=("GET",),
+        route_names=("policy_document_file",),
+        scope_rule="self_only",
+    ),
+    "policy_admin_new": AuthorizationPolicy(
+        key="policy_admin_new",
+        access="permission_protected",
+        description="Blank compliance policy workspace.",
+        methods=("GET",),
+        route_names=("policy_admin_new",),
+        all_permissions=("web.manage_policies",),
+        scope_rule="publication_scope",
+    ),
+    "policy_admin_edit": AuthorizationPolicy(
+        key="policy_admin_edit",
+        access="permission_protected",
+        description="Edit one scoped policy draft or review row.",
+        methods=("GET",),
+        route_names=("policy_admin_edit",),
+        all_permissions=("web.manage_policies",),
+        scope_rule="publication_scope",
+    ),
+    "policy_admin_create": AuthorizationPolicy(
+        key="policy_admin_create",
+        access="permission_protected",
+        description="Create a new policy draft in scope.",
+        methods=("POST",),
+        route_names=("policy_admin_create",),
+        all_permissions=("web.manage_policies",),
+        scope_rule="publication_scope",
+    ),
+    "policy_admin_update": AuthorizationPolicy(
+        key="policy_admin_update",
+        access="permission_protected",
+        description="Save one mutable policy draft in scope.",
+        methods=("POST",),
+        route_names=("policy_admin_update",),
+        all_permissions=("web.manage_policies",),
+        scope_rule="publication_scope",
+    ),
+    "policy_admin_lifecycle": AuthorizationPolicy(
+        key="policy_admin_lifecycle",
+        access="permission_protected",
+        description=(
+            "Submit, approve, publish, retire, or return a policy. "
+            "Approve and publish grants are re-checked in the service layer."
+        ),
+        methods=("POST",),
+        route_names=("policy_admin_lifecycle",),
+        all_permissions=("web.manage_policies",),
+        scope_rule="publication_scope",
+    ),
+    "policy_admin_duplicate": AuthorizationPolicy(
+        key="policy_admin_duplicate",
+        access="permission_protected",
+        description="Draft the next version of a policy family.",
+        methods=("POST",),
+        route_names=("policy_admin_duplicate",),
+        all_permissions=("web.manage_policies",),
+        scope_rule="publication_scope",
+    ),
+    "policy_admin_file_upload": AuthorizationPolicy(
+        key="policy_admin_file_upload",
+        access="permission_protected",
+        description="Upload a document or source file onto a mutable policy.",
+        methods=("POST",),
+        route_names=("policy_admin_file_upload",),
+        all_permissions=("web.manage_policies",),
+        scope_rule="publication_scope",
+    ),
+    "policy_admin_file_remove": AuthorizationPolicy(
+        key="policy_admin_file_remove",
+        access="permission_protected",
+        description="Remove one policy file from a mutable policy.",
+        methods=("POST",),
+        route_names=("policy_admin_file_remove",),
+        all_permissions=("web.manage_policies",),
+        scope_rule="publication_scope",
+    ),
+    "policy_ack_report": AuthorizationPolicy(
+        key="policy_ack_report",
+        access="permission_protected",
+        description="Scoped acknowledgement status report for mandatory policies.",
+        methods=("GET",),
+        route_names=("policy_ack_report",),
+        any_permissions=("web.view_compliance", "web.manage_policies"),
+        scope_rule="publication_scope",
+    ),
+    "policy_ack_waive": AuthorizationPolicy(
+        key="policy_ack_waive",
+        access="permission_protected",
+        description="Waive one person's acknowledgement requirement in scope.",
+        methods=("POST",),
+        route_names=("policy_ack_waive",),
+        all_permissions=("web.manage_policies",),
+        scope_rule="publication_scope",
+    ),
     "office_resource_download": AuthorizationPolicy(
         key="office_resource_download",
         access="authenticated",
@@ -1739,6 +2083,17 @@ ROUTE_POLICIES["agent_contract_artifact_download"] = AuthorizationPolicy(
     route_names=("agent_contract_artifact_download",),
     scope_rule="assigned_or_self",
 )
+ROUTE_POLICIES["agent_contract_artifact_preview"] = AuthorizationPolicy(
+    key="agent_contract_artifact_preview",
+    access="authenticated",
+    description=(
+        "Inline (iframe-safe) stream of a protected contract PDF after the "
+        "same access checks as download. Used by the ops preview surface."
+    ),
+    methods=("GET",),
+    route_names=("agent_contract_artifact_preview",),
+    scope_rule="assigned_or_self",
+)
 ROUTE_POLICIES["agent_contract_signed_pdf_verify"] = AuthorizationPolicy(
     key="agent_contract_signed_pdf_verify",
     access="authenticated",
@@ -1749,6 +2104,22 @@ ROUTE_POLICIES["agent_contract_signed_pdf_verify"] = AuthorizationPolicy(
     methods=("GET",),
     route_names=("agent_contract_signed_pdf_verify",),
     scope_rule="assigned_or_self",
+)
+ROUTE_POLICIES["agent_contract_company_sign"] = AuthorizationPolicy(
+    key="agent_contract_company_sign",
+    access="authenticated",
+    description=(
+        "Named company signatory ceremony for an agent contract. The view "
+        "re-checks company_signatory identity; managers without that "
+        "assignment cannot complete the pad."
+    ),
+    methods=("GET", "POST"),
+    route_names=(
+        "agent_contract_company_sign",
+        "agent_contract_company_sign_complete",
+        "agent_contract_company_sign_preview",
+    ),
+    scope_rule="self_only",
 )
 ROUTE_POLICIES["my_contract"] = AuthorizationPolicy(
     key="my_contract",

@@ -24,13 +24,15 @@ from apps.contract.notification_schedule import (
 )
 from apps.contract.services import create_draft_contract
 from apps.contract.statuses import ContractStatus
-from apps.contract.tests.conftest import agent, company_admin
+from apps.contract.tests.conftest import agent, company_admin, issue_sent_to_agent
 from apps.notifications.contract import NotificationPriority
 from apps.notifications.models import Notification
 from apps.notifications.producers import (
     EVENT_PRODUCERS,
+    contract_awaiting_company_signature,
     contract_expiration_warning,
     contract_generation_error,
+    contract_pdf_ready,
     contract_signature_reminder,
     contract_viewed,
     notifications_for_event,
@@ -72,17 +74,7 @@ def _issued(seeded_offices, recipient, *, admin=None):
         action="submit_for_review",
         expected_version=contract_version(draft),
     )
-    with (
-        patch("apps.contract.lifecycle._queue_pdf_generation"),
-        patch("apps.contract.lifecycle._queue_agent_status_email"),
-    ):
-        return transition(
-            actor=admin,
-            contract=ready,
-            action="issue",
-            expected_version=contract_version(ready),
-            confirmed=True,
-        )
+    return issue_sent_to_agent(admin, ready, company_signatory=admin)
 
 
 def _envelope(name: str, payload: dict) -> EventEnvelope:
@@ -107,10 +99,59 @@ def _envelope(name: str, payload: dict) -> EventEnvelope:
         "contract.generation_error",
         "contract.signature_reminder",
         "contract.expiration_warning",
+        "contract.awaiting_company_signature",
     ],
 )
 def test_new_contract_producers_registered(event_name):
     assert event_name in EVENT_PRODUCERS
+
+
+def test_awaiting_company_signature_targets_signatory():
+    envelope = _envelope(
+        "contract.awaiting_company_signature",
+        {
+            "contract_id": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+            "office_id": "1",
+            "agent_id": "9",
+            "company_signatory_id": "15",
+            "status": "awaiting_company_signature",
+            "occurred_at": "2026-08-30T00:00:00+00:00",
+        },
+    )
+    [request] = contract_awaiting_company_signature(envelope)
+    assert request.recipient_id == 15
+    assert request.action_key == "open_company_contract_sign"
+    assert request.is_mandatory is True
+
+
+def test_pdf_ready_notifies_agent_only_when_sent():
+    ready = _envelope(
+        "contract.pdf_ready",
+        {
+            "contract_id": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+            "office_id": "1",
+            "agent_id": "9",
+            "artifact_id": "bbbbbbbb-bbbb-cccc-dddd-eeeeeeeeeeee",
+            "checksum": "a" * 64,
+            "status": "sent",
+            "occurred_at": "2026-08-30T00:00:00+00:00",
+        },
+    )
+    awaiting = _envelope(
+        "contract.pdf_ready",
+        {
+            "contract_id": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+            "office_id": "1",
+            "agent_id": "9",
+            "artifact_id": "bbbbbbbb-bbbb-cccc-dddd-eeeeeeeeeeee",
+            "checksum": "a" * 64,
+            "status": "awaiting_company_signature",
+            "occurred_at": "2026-08-30T00:00:00+00:00",
+        },
+    )
+    [request] = contract_pdf_ready(ready)
+    assert request.recipient_id == 9
+    assert contract_pdf_ready(awaiting) == []
 
 
 def test_contract_viewed_targets_staff_only():
@@ -260,8 +301,9 @@ def test_signature_reminder_schedule_skips_non_signable(seeded_offices, settings
     admin = company_admin(seeded_offices)
     recipient = agent(seeded_offices)
     contract = _issued(seeded_offices, recipient, admin=admin)
+    contract.generated_pdf = None
     contract.sent_at = timezone.now() - timedelta(days=3)
-    contract.save(update_fields=["sent_at", "updated_at"])
+    contract.save(update_fields=["generated_pdf", "sent_at", "updated_at"])
     # No generated PDF → not reminder-eligible.
     assert publish_signature_reminders() == 0
 

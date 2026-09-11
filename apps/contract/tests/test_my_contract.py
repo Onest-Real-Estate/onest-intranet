@@ -28,7 +28,14 @@ from apps.contract.my_contract import (
 )
 from apps.contract.services import create_draft_contract
 from apps.contract.statuses import ContractStatus
-from apps.contract.tests.conftest import agent, assign, company_admin, office
+from apps.contract.tests.conftest import (
+    agent,
+    assign,
+    company_admin,
+    issue_awaiting_company,
+    office,
+    release_to_agent,
+)
 from apps.user.tests.test_profile import completed_user
 
 
@@ -69,13 +76,8 @@ def _issued(admin, recipient, **kwargs):
         action="submit_for_review",
         expected_version=contract_version(contract),
     )
-    return transition(
-        actor=admin,
-        contract=contract,
-        action="issue",
-        expected_version=contract_version(contract),
-        confirmed=True,
-    )
+    awaiting = issue_awaiting_company(admin, contract, company_signatory=admin)
+    return release_to_agent(admin, awaiting)
 
 
 def _attach_pdf(contract, *, name="agreement.pdf") -> ContractArtifact:
@@ -174,6 +176,9 @@ def test_viewed_not_recorded_while_pdf_generating(client, seeded_offices):
     recipient = agent(seeded_offices)
     assign(recipient, "realtor", "office", office("fairfax-va"))
     contract = _issued(admin, recipient)
+    # Company countersign attaches a stub PDF; clear it to simulate generation.
+    contract.generated_pdf = None
+    contract.save(update_fields=["generated_pdf", "updated_at"])
     assert contract.generated_pdf_id is None
 
     client.force_login(recipient)
@@ -216,6 +221,9 @@ def test_sign_eligibility_only_for_signable_state(seeded_offices):
     recipient = agent(seeded_offices)
     assign(recipient, "realtor", "office", office("fairfax-va"))
     contract = _issued(admin, recipient)
+    # Company release attaches a stub PDF; clear it to assert pre-PDF eligibility.
+    contract.generated_pdf = None
+    contract.save(update_fields=["generated_pdf", "updated_at"])
     assert not is_signable(contract)
     _attach_pdf(contract)
     contract.refresh_from_db()
@@ -285,12 +293,9 @@ def test_family_history_lists_superseded_versions(client, seeded_offices):
         action="submit_for_review",
         expected_version=contract_version(second),
     )
-    second = transition(
-        actor=admin,
-        contract=second,
-        action="issue",
-        expected_version=contract_version(second),
-        confirmed=True,
+    second = release_to_agent(
+        admin,
+        issue_awaiting_company(admin, second, company_signatory=admin),
     )
     _attach_pdf(second)
 
@@ -402,12 +407,9 @@ def test_my_contract_page_query_count_bounded(client, seeded_offices):
             action="submit_for_review",
             expected_version=contract_version(sibling),
         )
-        sibling = transition(
-            actor=admin,
-            contract=sibling,
-            action="issue",
-            expected_version=contract_version(sibling),
-            confirmed=True,
+        sibling = release_to_agent(
+            admin,
+            issue_awaiting_company(admin, sibling, company_signatory=admin),
         )
         with allow_status_write():
             sibling.status = ContractStatus.SUPERSEDED

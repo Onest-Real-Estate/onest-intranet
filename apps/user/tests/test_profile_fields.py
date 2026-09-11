@@ -126,6 +126,42 @@ def test_normalize_languages_rejects_non_sequence():
 
 
 # ---------------------------------------------------------------------------
+# Specialties
+# ---------------------------------------------------------------------------
+
+
+def test_normalize_specialties_dedupes_and_orders():
+    from apps.user.profile_fields import normalize_specialties
+
+    assert normalize_specialties(
+        ["luxury", "residential", "luxury", " RESIDENTIAL "]
+    ) == [
+        "residential",
+        "luxury",
+    ]
+
+
+def test_normalize_specialties_rejects_unknown_code():
+    from apps.user.profile_fields import normalize_specialties
+
+    with pytest.raises(ValidationError, match="not one of the specialties"):
+        normalize_specialties(["residential", "wizarding"])
+
+
+def test_normalize_specialties_rejects_too_many():
+    from apps.user.profile_fields import (
+        MAX_SPECIALTIES,
+        SPECIALTY_CHOICES,
+        normalize_specialties,
+    )
+
+    codes = [code for code, _ in SPECIALTY_CHOICES[: MAX_SPECIALTIES + 1]]
+    assert len(codes) > MAX_SPECIALTIES
+    with pytest.raises(ValidationError):
+        normalize_specialties(codes)
+
+
+# ---------------------------------------------------------------------------
 # Text fields
 # ---------------------------------------------------------------------------
 

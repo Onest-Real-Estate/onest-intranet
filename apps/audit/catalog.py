@@ -86,6 +86,23 @@ registry.register(
 )
 
 registry.register(
+    name="contract.awaiting_company_signature",
+    version=1,
+    required_payload_keys={
+        "contract_id",
+        "office_id",
+        "agent_id",
+        "company_signatory_id",
+        "status",
+        "occurred_at",
+    },
+    description=(
+        "Emitted when a ready contract is issued and waits for the named "
+        "company officer to complete the Company ceremony."
+    ),
+)
+
+registry.register(
     name="contract.issued",
     version=1,
     required_payload_keys={
@@ -95,7 +112,10 @@ registry.register(
         "status",
         "occurred_at",
     },
-    description="Emitted when a ready contract is issued/sent to the agent.",
+    description=(
+        "Emitted when company signing completes and the agreement is released "
+        "to the agent (`sent`)."
+    ),
 )
 
 registry.register(
@@ -640,6 +660,101 @@ registry.register(
 )
 
 # ---------------------------------------------------------------------------
+# marketing domain  (publisher: apps.marketing.administration)
+# ---------------------------------------------------------------------------
+
+registry.register(
+    name="marketing.published",
+    version=1,
+    required_payload_keys={
+        "asset_id",
+        "owner_office_id",
+        "scope_level",
+        "status",
+        "version_number",
+        "version_family",
+        "occurred_at",
+    },
+    description=(
+        "Emitted when a marketing asset becomes published. Consumers holding "
+        "derived library state should re-evaluate visibility from this moment."
+    ),
+)
+
+registry.register(
+    name="marketing.scheduled",
+    version=1,
+    required_payload_keys={
+        "asset_id",
+        "owner_office_id",
+        "scope_level",
+        "status",
+        "version_number",
+        "version_family",
+        "occurred_at",
+    },
+    description=(
+        "Emitted instead of marketing.published when the row is published with "
+        "a future publish_at. Nothing should notify recipients yet."
+    ),
+)
+
+registry.register(
+    name="marketing.unpublished",
+    version=1,
+    required_payload_keys={
+        "asset_id",
+        "owner_office_id",
+        "scope_level",
+        "status",
+        "version_number",
+        "version_family",
+        "occurred_at",
+    },
+    description=(
+        "A marketing asset was pulled back to draft. Consumers should treat it "
+        "as no longer readable from this moment."
+    ),
+)
+
+registry.register(
+    name="marketing.archived",
+    version=1,
+    required_payload_keys={
+        "asset_id",
+        "owner_office_id",
+        "scope_level",
+        "status",
+        "version_number",
+        "version_family",
+        "occurred_at",
+    },
+    description=(
+        "A marketing asset left the library. The row and files are retained "
+        "for audit; only visibility ends. Also emitted when a newer version "
+        "supersedes a previously live sibling."
+    ),
+)
+
+registry.register(
+    name="marketing.restored",
+    version=1,
+    required_payload_keys={
+        "asset_id",
+        "owner_office_id",
+        "scope_level",
+        "status",
+        "version_number",
+        "version_family",
+        "occurred_at",
+    },
+    description=(
+        "An archived marketing asset was returned to draft. It is not "
+        "readable again until deliberately republished."
+    ),
+)
+
+# ---------------------------------------------------------------------------
 # inventory domain  (publisher: apps.inventory.services)
 # ---------------------------------------------------------------------------
 
@@ -802,4 +917,89 @@ registry.register(
     version=1,
     required_payload_keys={"target_type", "target_id"},
     description="A pending room reservation was denied and its capacity released.",
+)
+
+# ---------------------------------------------------------------------------
+# compliance / policy domain  (publisher: apps.compliance.administration)
+# ---------------------------------------------------------------------------
+
+registry.register(
+    name="policy.submitted",
+    version=1,
+    required_payload_keys={
+        "policy_id",
+        "owner_office_id",
+        "scope_level",
+        "status",
+        "version_number",
+        "version_family",
+        "occurred_at",
+    },
+    description="A policy draft was submitted for review.",
+)
+
+registry.register(
+    name="policy.approved",
+    version=1,
+    required_payload_keys={
+        "policy_id",
+        "owner_office_id",
+        "scope_level",
+        "status",
+        "version_number",
+        "version_family",
+        "occurred_at",
+    },
+    description="A policy in review was approved and may now be published.",
+)
+
+registry.register(
+    name="policy.published",
+    version=1,
+    required_payload_keys={
+        "policy_id",
+        "owner_office_id",
+        "scope_level",
+        "status",
+        "version_number",
+        "version_family",
+        "occurred_at",
+    },
+    description=(
+        "A policy became published. Consumers holding derived library state "
+        "should re-evaluate visibility from this moment."
+    ),
+)
+
+registry.register(
+    name="policy.superseded",
+    version=1,
+    required_payload_keys={
+        "policy_id",
+        "owner_office_id",
+        "scope_level",
+        "status",
+        "version_number",
+        "version_family",
+        "occurred_at",
+    },
+    description=(
+        "A published policy was superseded by a newer family sibling. "
+        "It is no longer the current library version."
+    ),
+)
+
+registry.register(
+    name="policy.retired",
+    version=1,
+    required_payload_keys={
+        "policy_id",
+        "owner_office_id",
+        "scope_level",
+        "status",
+        "version_number",
+        "version_family",
+        "occurred_at",
+    },
+    description="A published policy was retired and left the consumer library.",
 )

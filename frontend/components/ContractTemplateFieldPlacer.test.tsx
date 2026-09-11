@@ -18,4 +18,19 @@ describe("ContractTemplateFieldPlacer layout shape", () => {
     expect(field.page).toBe(1);
     expect(field.w * field.h).toBeGreaterThan(0);
   });
+
+  it("supports the company officer as a signing role", () => {
+    const field: TemplateFieldLayoutItem = {
+      id: "2",
+      name: "CompanySignature",
+      type: "signature",
+      role: "Company",
+      page: 1,
+      x: 72,
+      y: 320,
+      w: 180,
+      h: 48,
+    };
+    expect(field.role).toBe("Company");
+  });
 });

@@ -1286,6 +1286,7 @@ export interface SelfProfileValues extends OnboardingProfileValues {
   instagramUrl: string;
   xUrl: string;
   languages: string[];
+  specialties: string[];
 }
 
 export interface ProfileOffice {
@@ -1348,6 +1349,7 @@ export interface ProfileLimits {
   headshotMinDimension: number;
   bioMaxLength: number;
   maxLanguages: number;
+  maxSpecialties: number;
 }
 
 export interface OnboardingPageProps extends PageProps {
@@ -1364,6 +1366,7 @@ export interface ProfilePageProps extends PageProps {
   offices: OfficeGroup[];
   states: StateOption[];
   languageOptions: LanguageOption[];
+  specialtyOptions: LanguageOption[];
   contactMethods: ContactMethodOption[];
   socialPlatforms: SocialPlatformOption[];
   identity: ProfileIdentity;
@@ -1708,6 +1711,74 @@ export interface UserDirectoryPageProps extends PageProps {
   visible: { administration: boolean; contract: boolean; onboarding: boolean };
   /** Whether rows may link into the administrative record. */
   canOpenRecord: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Peer Agent Directory (privacy-aware)
+// ---------------------------------------------------------------------------
+
+export interface AgentDirectoryCodeLabel {
+  code: string;
+  name: string;
+}
+
+export interface AgentDirectoryOffice {
+  id: number;
+  name: string;
+  pathLabel: string;
+  regionName: string;
+}
+
+export interface AgentDirectoryPerson {
+  id: number;
+  preferredName: string;
+  roles: string[];
+  office: AgentDirectoryOffice | null;
+  workPhone: string;
+  workEmail: string;
+  specialties: AgentDirectoryCodeLabel[];
+  languages: AgentDirectoryCodeLabel[];
+  licenseState: string;
+  licenseStateName: string;
+  /** Gated headshot path — never a permanent public media URL. */
+  headshotPath: string | null;
+}
+
+export interface AgentDirectoryFilters {
+  q: string;
+  office: string;
+  region: string;
+  role: string;
+  licenseState: string;
+  specialty: string;
+  language: string;
+  view: string;
+  [key: string]: string;
+}
+
+export interface AgentDirectoryFilterOptions {
+  offices: FilterOption[];
+  regions: FilterOption[];
+  roles: FilterOption[];
+  licenseStates: FilterOption[];
+  specialties: FilterOption[];
+  languages: FilterOption[];
+}
+
+export interface AgentDirectoryEmptyState {
+  kind: "no-people" | "no-results";
+  title: string;
+  description: string;
+}
+
+export interface AgentDirectoryPageProps extends PageProps {
+  people: ListResponse<AgentDirectoryPerson, AgentDirectoryFilters>;
+  filterOptions: AgentDirectoryFilterOptions;
+  empty: AgentDirectoryEmptyState | null;
+}
+
+export interface AgentDirectoryDetailPageProps extends PageProps {
+  person: AgentDirectoryPerson;
 }
 
 // ---------------------------------------------------------------------------
@@ -3506,11 +3577,14 @@ export interface AgentContractWorkspacePageProps extends PageProps {
     versionNumber?: number;
     commission?: Record<string, unknown>;
     internalNotes?: string;
+    companySignatoryName?: string;
+    companySignUrl?: string | null;
   };
   expectedVersion: string;
   capabilities: AgentContractCapabilities;
   allowedActions: string[];
   generatedPdfUrl?: string | null;
+  generatedPdfPreviewUrl?: string | null;
   recipient: AgentContractRecipientResult & { agentStatus?: string };
   office: Record<string, unknown>;
   templateOptions: AgentContractTemplateOption[];
@@ -3520,6 +3594,7 @@ export interface AgentContractWorkspacePageProps extends PageProps {
   familyHistory?: AgentContractFamilyHistoryRow[];
   termComparison?: AgentContractTermComparison | null;
   governingTerms?: Record<string, unknown> | null;
+  companySignatoryOptions?: Array<{ id: number; name: string; email: string }>;
   errors: ValidationErrors;
   agreementPreview: AgentContractAgreementPreview | null;
 }
@@ -3709,6 +3784,22 @@ export interface MyContractSignPageProps extends PageProps {
   recovery: SigningCeremonyRecovery | null;
   disclosure: SigningDisclosure;
   contract: SigningCeremonyContract | null;
+  ceremony: SigningCeremonyEmbed | null;
+  errors: { fields: Record<string, string[]>; form: string[] };
+}
+
+export interface CompanyContractSignPageProps extends PageProps {
+  canSign: boolean;
+  signingReady: boolean;
+  recovery: SigningCeremonyRecovery | null;
+  disclosure: SigningDisclosure;
+  signerRole: "Company";
+  contract:
+    | (SigningCeremonyContract & {
+        recipientName?: string;
+        workspaceUrl?: string;
+      })
+    | null;
   ceremony: SigningCeremonyEmbed | null;
   errors: { fields: Record<string, string[]>; form: string[] };
 }
@@ -4491,5 +4582,467 @@ export interface MyReservationsPageProps extends PageProps {
 export interface MyReservationDetailPageProps extends PageProps {
   reservation: MyReservationSummary;
   links: { indexHref: string };
+  errors: ValidationErrors;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Marketing resources                                                        */
+/* -------------------------------------------------------------------------- */
+
+export interface MarketingPresentationBadge {
+  code: string;
+  label: string;
+  /** Server may send tones outside StatusTone (e.g. "brand"); map at render. */
+  tone: string;
+  known: boolean;
+}
+
+export interface MarketingScope {
+  level: string;
+  label: string;
+  officeName: string;
+}
+
+export interface MarketingFileItem {
+  id: number;
+  role: string;
+  displayName: string;
+  mediaType: string;
+  byteSize: number;
+  width: number | null;
+  height: number | null;
+  isImage: boolean;
+  url: string;
+  previewUrl: string;
+  variants: Record<string, string>;
+  isReadable: boolean;
+  processingState?: "pending" | "ready" | "quarantined" | "failed";
+  processingNote?: string;
+  isActive?: boolean;
+  checksum?: string;
+  sortOrder?: number;
+}
+
+export interface MarketingLibraryRow {
+  id: number;
+  slug: string;
+  title: string;
+  description: string;
+  assetType: MarketingPresentationBadge;
+  category: MarketingPresentationBadge | null;
+  scope: MarketingScope;
+  jurisdictionStateCodes: string[];
+  brandCodes: string[];
+  versionNumber: number;
+  versionLabel: string;
+  previewUrl: string;
+  exportCount: number;
+  publishedAt: string | null;
+  detailUrl: string;
+}
+
+export interface MarketingResourceDetail extends MarketingLibraryRow {
+  usageInstructions: string;
+  exports: MarketingFileItem[];
+  publishAt: string | null;
+  expiresAt: string | null;
+}
+
+export interface MarketingLibraryFilters {
+  category: string;
+  type: string;
+  jurisdiction: string;
+  brand: string;
+  q: string;
+  rejected: string[];
+  [key: string]: string | string[];
+}
+
+export interface MarketingResourcesPageProps extends PageProps {
+  library: ListResponse<MarketingLibraryRow, MarketingLibraryFilters>;
+  filterOptions: {
+    categories: FilterOption[];
+    assetTypes: FilterOption[];
+  };
+}
+
+export interface MarketingResourceDetailPageProps extends PageProps {
+  asset: MarketingResourceDetail;
+}
+
+export interface MarketingLifecycle {
+  code: "draft" | "scheduled" | "live" | "expired" | "archived";
+  label: string;
+  tone: StatusTone;
+}
+
+export interface MarketingAdminRow {
+  id: number;
+  slug: string;
+  title: string;
+  description: string;
+  lifecycle: MarketingLifecycle;
+  status: "draft" | "published" | "archived";
+  assetType: MarketingPresentationBadge;
+  category: MarketingPresentationBadge | null;
+  versionNumber: number;
+  versionLabel: string;
+  ownerOffice: { id: number; name: string };
+  scopeLevel: string;
+  audience: AnnouncementAudienceEntry[];
+  jurisdictionStateCodes: string[];
+  brandCodes: string[];
+  publishAt: string | null;
+  expiresAt: string | null;
+  publishedAt: string | null;
+  updatedAt: string | null;
+  updatedBy: string;
+  createdBy: string;
+  /** Opaque concurrency token. Sent back on every write; a mismatch is a 409. */
+  version: string;
+}
+
+export interface MarketingValidationItem {
+  field: string;
+  message: string;
+}
+
+export interface MarketingValidation {
+  isPublishable: boolean;
+  items: MarketingValidationItem[];
+}
+
+export interface MarketingHistoryEntry {
+  id: string;
+  action: string;
+  label: string;
+  tone: StatusTone;
+  actor: string;
+  occurredAt: string;
+}
+
+export interface MarketingAdminFiles {
+  exports: MarketingFileItem[];
+  sources: MarketingFileItem[];
+  previews: MarketingFileItem[];
+}
+
+export interface MarketingAdminDetail extends MarketingAdminRow {
+  usageInstructions: string;
+  categoryCode: string;
+  assetTypeCode: string;
+  displayOrder: number;
+  validation: MarketingValidation;
+  history: MarketingHistoryEntry[];
+  files: MarketingAdminFiles;
+  mediaHref: string;
+  versionFamily: string;
+}
+
+export interface MarketingCapabilities {
+  canAuthor: boolean;
+  canPublish: boolean;
+  canDownloadSources: boolean;
+}
+
+export interface MarketingWorkspaceFilters {
+  q: string;
+  lifecycle: string;
+  category: string;
+  type: string;
+  audience: string;
+  author: string;
+  office: string;
+  publishedFrom: string;
+  publishedTo: string;
+  [key: string]: string | string[];
+}
+
+export interface MarketingCreateSheet {
+  open: boolean;
+  draft: Record<string, string | string[]>;
+}
+
+export interface MarketingAdministrationPageProps extends PageProps {
+  assets: ListResponse<MarketingAdminRow, MarketingWorkspaceFilters>;
+  filterOptions: {
+    categories: FilterOption[];
+    assetTypes: FilterOption[];
+    offices: AnnouncementOfficeOption[];
+  };
+  createOptions: {
+    offices: AnnouncementOfficeOption[];
+    categories: FilterOption[];
+    assetTypes: FilterOption[];
+    audience: AnnouncementAudienceOptions;
+  };
+  createSheet: MarketingCreateSheet | null;
+  capabilities: MarketingCapabilities;
+  errors: ValidationErrors;
+}
+
+export interface MarketingPreviewReach {
+  chosen: boolean;
+  matched: boolean;
+  officeId: number | null;
+  officeName: string;
+  roleCode: string;
+  hasNamedRecipients: boolean;
+}
+
+export interface MarketingPreviewArticle extends MarketingResourceDetail {
+  audience: AnnouncementAudienceEntry[];
+}
+
+export interface MarketingPreview {
+  article: MarketingPreviewArticle;
+  reach: MarketingPreviewReach;
+  roleCode: string;
+  officeId: number | null;
+}
+
+export interface MarketingWorkspacePageProps extends PageProps {
+  asset: MarketingAdminDetail | null;
+  officeOptions: AnnouncementOfficeOption[];
+  categoryOptions: FilterOption[];
+  assetTypeOptions: FilterOption[];
+  audienceOptions: AnnouncementAudienceOptions;
+  capabilities: MarketingCapabilities;
+  preview: MarketingPreview | null;
+  errors: ValidationErrors;
+  posted: Record<string, string[]> | null;
+}
+
+export interface MarketingRecipientResult {
+  id: number;
+  name: string;
+  email: string;
+  officeName: string;
+}
+
+export interface MarketingMediaLimits {
+  export: { extensions: string[]; maxBytes: number; maxCount: number };
+  source: { extensions: string[]; maxBytes: number; maxCount: number };
+}
+
+export interface MarketingMediaManagerPageProps extends PageProps {
+  asset: { id: number; title: string; status: string; version: string };
+  files: MarketingAdminFiles;
+  limits: MarketingMediaLimits;
+  capabilities: MarketingCapabilities;
+  validation: ValidationErrors;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Policies & compliance                                                      */
+/* -------------------------------------------------------------------------- */
+
+export interface CompliancePresentationBadge {
+  code: string;
+  label: string;
+  tone: string;
+  known: boolean;
+}
+
+export interface ComplianceScope {
+  level: string;
+  label: string;
+  officeName: string;
+}
+
+export interface ComplianceFileItem {
+  id: number;
+  role: string;
+  displayName: string;
+  mediaType: string;
+  byteSize: number;
+  url: string;
+  isReadable: boolean;
+  processingState?: string;
+  processingNote?: string;
+  isActive?: boolean;
+  checksum?: string;
+  sortOrder?: number;
+}
+
+export interface ComplianceLibraryRow {
+  id: number;
+  title: string;
+  summary: string;
+  status: CompliancePresentationBadge;
+  category: CompliancePresentationBadge | null;
+  scope: ComplianceScope;
+  jurisdictionStateCodes: string[];
+  versionNumber: number;
+  versionLabel: string;
+  isMandatory: boolean;
+  publishedAt: string | null;
+  detailUrl: string;
+  acknowledged: boolean;
+  required: boolean;
+  dueAt: string | null;
+  canAcknowledge: boolean;
+}
+
+export interface CompliancePolicyDetail extends ComplianceLibraryRow {
+  body: string;
+  documents: ComplianceFileItem[];
+  contentChecksum: string;
+  acknowledgementDisclosure: string;
+  disclosureVersion: number;
+  effectiveAt: string | null;
+  expiresAt: string | null;
+  waived: boolean;
+  acknowledgedAt: string | null;
+}
+
+export interface ComplianceLibraryFilters {
+  category: string;
+  jurisdiction: string;
+  q: string;
+  rejected: string[];
+  [key: string]: string | string[];
+}
+
+export interface PoliciesCompliancePageProps extends PageProps {
+  library: ListResponse<ComplianceLibraryRow, ComplianceLibraryFilters>;
+  filterOptions: {
+    categories: FilterOption[];
+  };
+  errors: ValidationErrors;
+}
+
+export interface PolicyDetailPageProps extends PageProps {
+  policy: CompliancePolicyDetail;
+  errors: ValidationErrors;
+}
+
+export interface ComplianceCapabilities {
+  canAuthor: boolean;
+  canApprove: boolean;
+  canPublish: boolean;
+}
+
+export interface ComplianceAdminRow {
+  id: number;
+  title: string;
+  summary: string;
+  status: CompliancePresentationBadge;
+  statusCode: string;
+  category: CompliancePresentationBadge | null;
+  versionNumber: number;
+  versionLabel: string;
+  ownerOffice: { id: number; name: string };
+  scopeLevel: string;
+  audience: AnnouncementAudienceEntry[];
+  jurisdictionStateCodes: string[];
+  isMandatory: boolean;
+  effectiveAt: string | null;
+  expiresAt: string | null;
+  publishedAt: string | null;
+  updatedAt: string | null;
+  updatedBy: string;
+  createdBy: string;
+  /** Opaque concurrency token. Sent back on every write; a mismatch is a 409. */
+  version: string;
+}
+
+export interface ComplianceValidationItem {
+  field: string;
+  message: string;
+}
+
+export interface ComplianceValidation {
+  isPublishable: boolean;
+  items: ComplianceValidationItem[];
+}
+
+export interface ComplianceHistoryEntry {
+  id: string;
+  action: string;
+  label: string;
+  tone: StatusTone;
+  actor: string;
+  occurredAt: string;
+}
+
+export interface ComplianceAdminFiles {
+  documents: ComplianceFileItem[];
+  sources: ComplianceFileItem[];
+}
+
+export interface ComplianceAdminDetail extends ComplianceAdminRow {
+  body: string;
+  categoryCode: string;
+  displayOrder: number;
+  ownerUserId: number | null;
+  acknowledgementDisclosure: string;
+  disclosureVersion: number;
+  reacknowledgeOnSupersede: boolean;
+  contentChecksum: string;
+  validation: ComplianceValidation;
+  history: ComplianceHistoryEntry[];
+  files: ComplianceAdminFiles;
+  versionFamily: string;
+  capabilities: ComplianceCapabilities | null;
+}
+
+export interface ComplianceWorkspaceFilters {
+  q: string;
+  status: string;
+  category: string;
+  office: string;
+  [key: string]: string | string[];
+}
+
+export interface ComplianceAdministrationPageProps extends PageProps {
+  policies: ListResponse<ComplianceAdminRow, ComplianceWorkspaceFilters>;
+  filterOptions: {
+    categories: FilterOption[];
+    statuses: FilterOption[];
+    offices: AnnouncementOfficeOption[];
+  };
+  createOptions: {
+    offices: AnnouncementOfficeOption[];
+    categories: FilterOption[];
+    audience: AnnouncementAudienceOptions;
+  };
+  capabilities: ComplianceCapabilities;
+  errors: ValidationErrors;
+}
+
+export interface ComplianceMediaLimits {
+  document: { extensions: string[]; maxBytes: number; maxCount: number };
+  source: { extensions: string[]; maxBytes: number; maxCount: number };
+}
+
+export interface ComplianceWorkspacePageProps extends PageProps {
+  policy: ComplianceAdminDetail | null;
+  officeOptions: AnnouncementOfficeOption[];
+  categoryOptions: FilterOption[];
+  audienceOptions: AnnouncementAudienceOptions;
+  capabilities: ComplianceCapabilities;
+  mediaLimits: ComplianceMediaLimits;
+  errors: ValidationErrors;
+}
+
+export interface ComplianceAckReportRow {
+  userId: number;
+  userName: string;
+  email: string;
+  officeName: string;
+  policyId: number;
+  policyTitle: string;
+  status: "pending" | "acknowledged" | "waived" | "overdue" | string;
+  dueAt: string | null;
+  acknowledgedAt: string | null;
+}
+
+export interface ComplianceAckReportPageProps extends PageProps {
+  report: {
+    items: ComplianceAckReportRow[];
+    totalItems: number;
+  };
+  capabilities: ComplianceCapabilities;
   errors: ValidationErrors;
 }

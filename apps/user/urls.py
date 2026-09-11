@@ -7,6 +7,11 @@ from .views.administration_views import (
     user_administration_roles,
     user_administration_submit,
 )
+from .views.agent_directory_views import (
+    agent_directory,
+    agent_directory_detail,
+    agent_directory_headshot,
+)
 from .views.auth_views import (
     headshot_display,
     headshot_upload,
@@ -62,6 +67,17 @@ urlpatterns = [
     path("account/headshot/file", headshot_display, name="headshot_display"),
     path("profile", profile, name="profile"),
     path("profile/submit", profile_submit, name="profile_submit"),
+    path("hub/agent-directory", agent_directory, name="agent_directory"),
+    path(
+        "hub/agent-directory/<int:user_id>",
+        agent_directory_detail,
+        name="agent_directory_detail",
+    ),
+    path(
+        "hub/agent-directory/<int:user_id>/headshot",
+        agent_directory_headshot,
+        name="agent_directory_headshot",
+    ),
     path("office-info", office_info, name="office_info"),
     path("office-resources", office_resources, name="office_resources"),
     path(

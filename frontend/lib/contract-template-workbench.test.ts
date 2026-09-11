@@ -9,8 +9,11 @@ import {
 function input(overrides: Partial<WorkbenchReadinessInput> = {}) {
   return {
     hasSourcePdf: true,
-    placedFieldCount: 3,
-    agentFieldCount: 1,
+    placedFieldCount: 5,
+    agentFieldCount: 2,
+    companyFieldCount: 2,
+    hasRequiredAgentFields: true,
+    hasRequiredCompanyFields: true,
     unsavedPrefillNames: [],
     layoutDirty: false,
     mergeRowCount: 2,
@@ -32,7 +35,12 @@ describe("buildReadiness", () => {
 
   it("stops at the upload stage before anything downstream can be judged", () => {
     const readiness = buildReadiness(
-      input({ hasSourcePdf: false, placedFieldCount: 0, agentFieldCount: 0 }),
+      input({
+        hasSourcePdf: false,
+        placedFieldCount: 0,
+        agentFieldCount: 0,
+        companyFieldCount: 0,
+      }),
     );
     expect(readiness.next?.id).toBe("source");
     expect(readiness.next?.tab).toBe("details");
@@ -73,8 +81,18 @@ describe("buildReadiness", () => {
 
   it("singularises the placed-field summary", () => {
     const readiness = buildReadiness(
-      input({ placedFieldCount: 1, agentFieldCount: 1 }),
+      input({ placedFieldCount: 1, agentFieldCount: 1, companyFieldCount: 0 }),
     );
     expect(readiness.steps[1]?.detail).toBe("1 field · 1 signer field");
+  });
+
+  it("keeps signer fields incomplete until both parties have signature and date", () => {
+    const readiness = buildReadiness(input({ hasRequiredCompanyFields: false }));
+    const fields = readiness.steps.find((step) => step.id === "fields");
+    expect(fields?.state).toBe("attention");
+    expect(fields?.detail).toBe("Add Company signature and date fields");
+    expect(publishBlockReason(readiness)).toBe(
+      "Fields placed: add company signature and date fields",
+    );
   });
 });

@@ -520,6 +520,58 @@ PERMISSION_DEFINITIONS: tuple[PermissionDefinition, ...] = (
         default_roles=(*_MANAGERS, BRANCH_ADMIN, REGIONAL_ADMIN),
     ),
     PermissionDefinition(
+        codename="web.manage_marketing_resources",
+        name="Can manage marketing resources",
+        domain="content",
+        action="manage",
+        description=(
+            "Draft, upload, version, and target audiences for marketing "
+            "assets within effective publication scope."
+        ),
+        default_roles=(
+            *_BROKERAGE_ADMINS,
+            MARKETING_TEAM,
+            REGIONAL_MANAGER,
+            BRANCH_MANAGER,
+            REGIONAL_ADMIN,
+            BRANCH_ADMIN,
+        ),
+        risk="medium",
+    ),
+    PermissionDefinition(
+        codename="web.publish_marketing_resources",
+        name="Can publish, schedule, and archive marketing resources",
+        domain="content",
+        action="approve",
+        description=(
+            "Publish, schedule, unpublish, archive, or restore marketing "
+            "assets within effective publication scope."
+        ),
+        default_roles=(
+            *_BROKERAGE_ADMINS,
+            MARKETING_TEAM,
+            REGIONAL_MANAGER,
+            BRANCH_MANAGER,
+            REGIONAL_ADMIN,
+            BRANCH_ADMIN,
+            COMPLIANCE,
+        ),
+        risk="medium",
+    ),
+    PermissionDefinition(
+        codename="web.download_marketing_sources",
+        name="Can download marketing source files",
+        domain="content",
+        action="view",
+        description=(
+            "Download editable source files for marketing assets in scope. "
+            "Export downloads use audience visibility alone."
+        ),
+        default_roles=(*_BROKERAGE_ADMINS, MARKETING_TEAM),
+        risk="high",
+        sensitive=True,
+    ),
+    PermissionDefinition(
         codename="web.manage_documents",
         name="Can manage documents",
         domain="content",
@@ -570,6 +622,69 @@ PERMISSION_DEFINITIONS: tuple[PermissionDefinition, ...] = (
         action="view",
         description="View compliance queues within effective scope.",
         default_roles=(*_BROKERAGE_ADMINS, COMPLIANCE),
+        sensitive=True,
+    ),
+    PermissionDefinition(
+        codename="web.manage_policies",
+        name="Can manage policies",
+        domain="governance",
+        action="manage",
+        description=(
+            "Draft, edit, target audiences, upload files, submit for review, "
+            "and create new policy versions within effective scope."
+        ),
+        default_roles=(*_BROKERAGE_ADMINS, COMPLIANCE),
+        risk="medium",
+    ),
+    PermissionDefinition(
+        codename="web.approve_policies",
+        name="Can approve policies",
+        domain="governance",
+        action="approve",
+        description=(
+            "Move an in-review policy version to approved. Separate from "
+            "drafting and from publication."
+        ),
+        default_roles=(*_BROKERAGE_ADMINS, COMPLIANCE),
+        risk="high",
+        sensitive=True,
+    ),
+    PermissionDefinition(
+        codename="web.publish_policies",
+        name="Can publish and retire policies",
+        domain="governance",
+        action="approve",
+        description=(
+            "Publish, supersede, or retire approved policy versions within "
+            "effective scope."
+        ),
+        default_roles=(*_BROKERAGE_ADMINS, COMPLIANCE),
+        risk="high",
+        sensitive=True,
+    ),
+    PermissionDefinition(
+        codename="web.view_policy_acknowledgements",
+        name="Can view scoped policy acknowledgements",
+        domain="governance",
+        action="view",
+        description=(
+            "Read acknowledgement completion and overdue reports for policies in scope."
+        ),
+        default_roles=(*_BROKERAGE_ADMINS, COMPLIANCE),
+        risk="medium",
+        sensitive=True,
+    ),
+    PermissionDefinition(
+        codename="web.waive_policy_acknowledgements",
+        name="Can waive policy acknowledgements",
+        domain="governance",
+        action="manage",
+        description=(
+            "Grant a reasoned waiver for a required policy acknowledgement "
+            "within effective scope. Evidence rows are never deleted."
+        ),
+        default_roles=(*_BROKERAGE_ADMINS, COMPLIANCE),
+        risk="high",
         sensitive=True,
     ),
     PermissionDefinition(

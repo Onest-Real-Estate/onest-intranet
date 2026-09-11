@@ -18,6 +18,7 @@ const limits: ProfileLimits = {
   headshotMinDimension: 200,
   bioMaxLength: 1500,
   maxLanguages: 10,
+  maxSpecialties: 8,
 };
 
 function panel(headshotUrl: string | null = null) {

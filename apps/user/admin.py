@@ -609,7 +609,7 @@ class UserAdmin(DjangoUserAdmin):
         ),
         (
             _("Profile & photo"),
-            {"fields": ("headshot", "bio", "languages")},
+            {"fields": ("headshot", "bio", "languages", "specialties")},
         ),
         (
             _("Links"),

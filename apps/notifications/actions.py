@@ -77,6 +77,12 @@ ACTION_DEFINITIONS: tuple[NotificationAction, ...] = (
         label="Sign your contract",
     ),
     NotificationAction(
+        key="open_company_contract_sign",
+        route_name="agent_contract_company_sign",
+        label="Sign for the company",
+        arg_types=(str,),
+    ),
+    NotificationAction(
         key="open_inventory_reservation",
         route_name="inventory_reservation_detail",
         label="Open reservation",
@@ -87,6 +93,12 @@ ACTION_DEFINITIONS: tuple[NotificationAction, ...] = (
         route_name="admin_reservation_detail",
         label="Open reservation",
         arg_types=(str,),
+    ),
+    NotificationAction(
+        key="open_policy_detail",
+        route_name="policy_detail",
+        label="Open policy",
+        arg_types=(int,),
     ),
 )
 

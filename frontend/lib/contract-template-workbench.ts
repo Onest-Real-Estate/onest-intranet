@@ -33,6 +33,9 @@ export interface WorkbenchReadinessInput {
   hasSourcePdf: boolean;
   placedFieldCount: number;
   agentFieldCount: number;
+  companyFieldCount: number;
+  hasRequiredAgentFields: boolean;
+  hasRequiredCompanyFields: boolean;
   /** Prefill names on the page that the server has not stored yet. */
   unsavedPrefillNames: string[];
   /** Layout differs from the last saved layout. */
@@ -74,19 +77,25 @@ export function buildReadiness(input: WorkbenchReadinessInput): WorkbenchReadine
       ? "todo"
       : input.layoutDirty || input.unsavedPrefillNames.length > 0
         ? "attention"
-        : input.placedFieldCount > 0
-          ? "done"
-          : "todo",
+        : input.placedFieldCount === 0
+          ? "todo"
+          : input.hasRequiredAgentFields && input.hasRequiredCompanyFields
+            ? "done"
+            : "attention",
     detail: !input.hasSourcePdf
       ? "Waiting on the PDF"
       : input.layoutDirty
         ? "Unsaved layout changes"
         : input.placedFieldCount === 0
-          ? "Place Prefill and Agent fields"
-          : `${plural(input.placedFieldCount, "field")} · ${plural(
-              input.agentFieldCount,
-              "signer field",
-            )}`,
+          ? "Place Prefill, Company, and Agent fields"
+          : !input.hasRequiredCompanyFields
+            ? "Add Company signature and date fields"
+            : !input.hasRequiredAgentFields
+              ? "Add Agent signature and date fields"
+              : `${plural(input.placedFieldCount, "field")} · ${plural(
+                  input.companyFieldCount + input.agentFieldCount,
+                  "signer field",
+                )}`,
   };
 
   const mapping: WorkbenchStep = {

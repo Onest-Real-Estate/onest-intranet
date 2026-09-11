@@ -17,11 +17,14 @@ through `profile_submit`.
 | Contact | `first_name`, `last_name`, `preferred_name`, `phone_number`, `preferred_contact_method` |
 | Address | `street_address`, `city`, `state`, `zip_code` |
 | Credentials | `office`¹, `mls_number`, `nrds_number`, `license_number`, `license_state`, `license_expires_on` |
-| Biography | `bio`, `languages` |
+| Biography | `bio`, `languages`, `specialties` |
 | Links | `website_url`, `linkedin_url`, `facebook_url`, `instagram_url`, `x_url` |
 | Photo | `headshot`, through its own endpoint |
 
 ¹ Only when `services.profile.can_self_assign_office()` is true — see below.
+
+Specialties are a closed set (see `SPECIALTY_CHOICES` in `profile_fields.py`)
+and appear in the peer [agent directory](agent-directory.md).
 
 ## What a user may not change
 

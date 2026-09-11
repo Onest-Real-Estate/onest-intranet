@@ -83,13 +83,35 @@ def _hub_layout() -> list[dict]:
             "h": 24,
         },
         {
+            "id": "company-sig-1",
+            "name": "CompanySignature",
+            "type": "signature",
+            "role": "Company",
+            "page": 1,
+            "x": 20,
+            "y": 50,
+            "w": 180,
+            "h": 48,
+        },
+        {
+            "id": "company-date-1",
+            "name": "CompanySignedOn",
+            "type": "date",
+            "role": "Company",
+            "page": 1,
+            "x": 20,
+            "y": 110,
+            "w": 120,
+            "h": 24,
+        },
+        {
             "id": "sig-1",
             "name": "AgentSignature",
             "type": "signature",
             "role": "Agent",
             "page": 1,
             "x": 20,
-            "y": 80,
+            "y": 150,
             "w": 180,
             "h": 48,
         },
@@ -100,7 +122,7 @@ def _hub_layout() -> list[dict]:
             "role": "Agent",
             "page": 1,
             "x": 20,
-            "y": 140,
+            "y": 210,
             "w": 120,
             "h": 24,
         },
@@ -162,9 +184,31 @@ def test_merge_schema_must_match_extracted_placeholders():
 
 def test_normalize_field_layout_is_publishable():
     layout = normalize_field_layout(_hub_layout())
-    assert len(layout) == 3
+    assert len(layout) == 5
     assert_publishable_layout(layout)
-    assert layout[1]["type"] == "signature"
+    assert layout[3]["type"] == "signature"
+
+
+def test_normalize_rejects_prefill_signature_fields():
+    with pytest.raises(ValidationError) as exc:
+        normalize_field_layout(
+            [
+                {
+                    "id": "bad-1",
+                    "name": "PrefillSignature",
+                    "type": "signature",
+                    "role": "Prefill",
+                    "page": 1,
+                    "x": 10,
+                    "y": 10,
+                    "w": 100,
+                    "h": 40,
+                }
+            ]
+        )
+    message = str(exc.value).lower()
+    assert "agent" in message
+    assert "signature" in message
 
 
 @pytest.mark.django_db

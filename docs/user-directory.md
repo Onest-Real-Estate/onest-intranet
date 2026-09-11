@@ -4,6 +4,9 @@ The Users destination under Operations (`/operations/users`) is the product
 answer to "find this person and sort them out" — the surface that exists so
 nobody needs unrestricted Django admin to do routine people work.
 
+For the authenticated **peer** lookup of colleagues (privacy-aware field
+projection, no admin columns), see [agent-directory.md](agent-directory.md).
+
 The code is `apps/user/services/user_directory.py`,
 `apps/user/services/account_state.py`, `apps/user/views/directory_views.py`,
 and `frontend/pages/UserDirectory.tsx`. The record a row opens into is

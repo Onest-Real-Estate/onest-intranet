@@ -64,6 +64,7 @@ def test_registry_has_exact_destinations_order_routes_and_permissions():
         "Reservations",
         "Announcements",
         "Training",
+        "Marketing Resources",
         "Documents",
         "Quick Access",
         "Compliance",
@@ -86,6 +87,7 @@ def test_registry_has_exact_destinations_order_routes_and_permissions():
         80,
         90,
         100,
+        105,
         110,
         120,
         130,
@@ -99,17 +101,17 @@ def test_registry_has_exact_destinations_order_routes_and_permissions():
     assert [destination.section for destination in OPERATIONS_DESTINATIONS] == [
         *("People" for _ in range(6)),
         *("Operations" for _ in range(3)),
-        *("Content" for _ in range(4)),
+        *("Content" for _ in range(5)),
         *("Governance & support" for _ in range(4)),
         *("Content" for _ in range(1)),
         *("Governance & support" for _ in range(2)),
     ]
-    assert len({destination.key for destination in OPERATIONS_DESTINATIONS}) == 20
+    assert len({destination.key for destination in OPERATIONS_DESTINATIONS}) == 21
     assert (
-        len({destination.route_name for destination in OPERATIONS_DESTINATIONS}) == 20
+        len({destination.route_name for destination in OPERATIONS_DESTINATIONS}) == 21
     )
     assert (
-        len({destination.permission for destination in OPERATIONS_DESTINATIONS}) == 20
+        len({destination.permission for destination in OPERATIONS_DESTINATIONS}) == 21
     )
     for destination in OPERATIONS_DESTINATIONS:
         assert reverse(destination.route_name) == f"/{destination.path}"
@@ -128,11 +130,14 @@ def test_registry_has_exact_destinations_order_routes_and_permissions():
                 "admin_offices",
                 "admin_announcements",
                 "admin_training",
+                "admin_marketing_resources",
                 "admin_contract_templates",
                 "operational_tasks",
                 "admin_feedback",
                 "admin_it_support",
                 "admin_inventory",
+                "admin_reservations",
+                "admin_compliance",
             }
         )
 
@@ -172,6 +177,7 @@ def test_scoped_management_role_permission_matrix():
             "Reservations",
             "Announcements",
             "Training",
+            "Marketing Resources",
             "Documents",
             "Quick Access",
             "Tasks",
@@ -186,6 +192,7 @@ def test_scoped_management_role_permission_matrix():
             "Reservations",
             "Announcements",
             "Training",
+            "Marketing Resources",
             "Documents",
             "Quick Access",
             "Tasks",
@@ -229,7 +236,7 @@ def test_brokerage_admin_can_reach_every_registered_destination(client):
             reverse(destination.route_name),
             HTTP_X_INERTIA="true",
         )
-        assert response.status_code == 200
+        assert response.status_code == 200, destination.route_name
         props = inertia_props(response)
         if destination.route_name == "admin_users":
             assert "users" in props
@@ -263,6 +270,11 @@ def test_brokerage_admin_can_reach_every_registered_destination(client):
             assert "filterOptions" in props
             assert "capabilities" in props
             continue
+        if destination.route_name == "admin_reservations":
+            assert "reservations" in props
+            assert "filterOptions" in props
+            assert "can" in props
+            continue
         if destination.route_name == "admin_announcements":
             assert "announcements" in props
             assert "filterOptions" in props
@@ -270,6 +282,11 @@ def test_brokerage_admin_can_reach_every_registered_destination(client):
             continue
         if destination.route_name == "admin_training":
             assert "trainings" in props
+            assert "filterOptions" in props
+            assert "capabilities" in props
+            continue
+        if destination.route_name == "admin_marketing_resources":
+            assert "assets" in props
             assert "filterOptions" in props
             assert "capabilities" in props
             continue
@@ -299,6 +316,14 @@ def test_brokerage_admin_can_reach_every_registered_destination(client):
             assert "options" in props
             assert "offices" in props
             continue
+        if destination.route_name == "admin_compliance":
+            assert "policies" in props
+            assert "filterOptions" in props
+            assert "capabilities" in props
+            continue
+        assert "title" in props, (
+            f"{destination.route_name} missing title; keys={sorted(props)}"
+        )
         assert props["title"] == destination.label
         assert props["administrative"] is True
         assert props["scope"] == {
@@ -383,11 +408,15 @@ def test_permission_revocation_takes_effect_on_the_next_nested_visit(client):
             "admin_users",
         ),
         (
+            # Compliance has a real workspace now, so the specialty persona is
+            # checked against a destination that still renders the placeholder.
+            # Its scoped workspace access is covered by
+            # ``apps/compliance/tests/``.
             "compliance",
             AGENT,
             ScopeType.OFFICE,
-            "web.view_compliance",
-            "admin_compliance",
+            "web.view_platform_tasks",
+            "admin_platform_tasks",
         ),
         (
             "accountant",
@@ -408,15 +437,15 @@ def test_permission_revocation_takes_effect_on_the_next_nested_visit(client):
             "admin_documents",
         ),
         (
-            # IT Support has a real queue now, so the specialty persona is
-            # checked against a destination that still renders the placeholder.
-            # Its scoped queue access is covered by
+            # IT Support and Reservations both have real workspaces now, so the
+            # specialty persona is checked against a destination that still
+            # renders the placeholder. Scoped queue access is covered by
             # ``apps/it_support/tests/test_scope.py``.
             "it-support",
             AGENT,
             ScopeType.OFFICE,
-            "web.view_reservations",
-            "admin_reservations",
+            "web.manage_documents",
+            "admin_documents",
         ),
     ],
 )

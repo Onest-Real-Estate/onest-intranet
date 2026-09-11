@@ -154,9 +154,20 @@ describe("AgentContractWorkspace", () => {
   });
 
   it("requires confirmation before issue", async () => {
+    pageProps = buildPageProps({
+      companySignatoryOptions: [
+        { id: 9, name: "Broker Boss", email: "broker@example.com" },
+      ],
+      contract: {
+        ...(buildPageProps().contract as object),
+        companySignatoryId: 9,
+      },
+    });
     const user = userEvent.setup();
     render(<AgentContractWorkspace />);
-    await user.click(screen.getByRole("button", { name: /issue and send/i }));
+    await user.click(
+      screen.getByRole("button", { name: /issue for company signature/i }),
+    );
     expect(
       screen.getByRole("heading", { name: /issue this contract/i }),
     ).toBeInTheDocument();
@@ -166,6 +177,7 @@ describe("AgentContractWorkspace", () => {
     expect(body).toBeInstanceOf(FormData);
     expect(body.get("action")).toBe("issue");
     expect(body.get("confirmed")).toBe("1");
+    expect(body.get("company_signatory_id")).toBe("9");
   });
 
   it("requires confirmation before activate", async () => {

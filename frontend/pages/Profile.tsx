@@ -44,6 +44,7 @@ const ERROR_LABELS: Record<string, string> = {
   license_expires_on: "License expiration",
   bio: "Professional bio",
   languages: "Languages",
+  specialties: "Specialties",
   website_url: "Website",
   linkedin_url: "LinkedIn",
   facebook_url: "Facebook",
@@ -67,6 +68,7 @@ export default function Profile() {
     offices,
     states,
     languageOptions,
+    specialtyOptions,
     contactMethods,
     socialPlatforms,
     identity,
@@ -170,7 +172,9 @@ export default function Profile() {
           <ProfileBiographySection
             {...sectionProps}
             languageOptions={languageOptions}
+            specialtyOptions={specialtyOptions}
             maxLanguages={limits.maxLanguages}
+            maxSpecialties={limits.maxSpecialties}
             bioMaxLength={limits.bioMaxLength}
           />
           <ProfileLinksSection {...sectionProps} socialPlatforms={socialPlatforms} />

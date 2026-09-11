@@ -390,11 +390,22 @@ def agent_contract_lifecycle(request: HttpRequest, public_id: uuid.UUID):
 
     try:
         if action == "issue":
+            signatory_raw = (
+                request.POST.get("company_signatory_id")
+                or request.POST.get("companySignatoryId")
+                or ""
+            ).strip()
+            signatory = None
+            if signatory_raw.isdigit():
+                from apps.user.models import User as HubUser
+
+                signatory = HubUser.objects.filter(pk=int(signatory_raw)).first()
             issue_contract(
                 actor,
                 contract,
                 expected_version=expected,
                 confirmed=confirmed,
+                company_signatory=signatory,
                 idempotency_key=idempotency_key,
             )
         else:
@@ -520,6 +531,22 @@ def agent_contract_artifact_download(
         _actor(request),
         contract_public_id=public_id,
         artifact_public_id=artifact_public_id,
+    )
+
+
+@enforce_policy("agent_contract_artifact_preview")
+@require_GET
+def agent_contract_artifact_preview(
+    request: HttpRequest,
+    public_id: uuid.UUID,
+    artifact_public_id: uuid.UUID,
+) -> FileResponse:
+    """Inline PDF stream for workspace / preview embeds (scoped admin access)."""
+    return stream_contract_artifact(
+        _actor(request),
+        contract_public_id=public_id,
+        artifact_public_id=artifact_public_id,
+        as_attachment=False,
     )
 
 

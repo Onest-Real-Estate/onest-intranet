@@ -39,7 +39,13 @@ from apps.contract.signed_pdf_generation import (
 from apps.contract.signing_disclosure import DISCLOSURE_VERSION
 from apps.contract.statuses import ContractStatus
 from apps.contract.template_security import checksum_of
-from apps.contract.tests.conftest import agent, company_admin, office
+from apps.contract.tests.conftest import (
+    agent,
+    company_admin,
+    issue_awaiting_company,
+    office,
+    release_to_agent,
+)
 
 
 def _pdf_bytes(*, pages: int = 1) -> bytes:
@@ -69,6 +75,28 @@ def _hub_layout() -> list[dict]:
             "y": 100,
             "w": 120,
             "h": 18,
+        },
+        {
+            "id": "fc1",
+            "name": "CompanySignature",
+            "type": "signature",
+            "role": "Company",
+            "page": 1,
+            "x": 72,
+            "y": 500,
+            "w": 200,
+            "h": 48,
+        },
+        {
+            "id": "fc2",
+            "name": "CompanyDate",
+            "type": "date",
+            "role": "Company",
+            "page": 1,
+            "x": 300,
+            "y": 500,
+            "w": 100,
+            "h": 24,
         },
         {
             "id": "f2",
@@ -164,15 +192,12 @@ def _issued(seeded_offices, recipient, *, admin=None) -> AgentContract:
             expected_version=contract_version(contract),
         )
         contract.refresh_from_db()
-        transition(
-            actor=admin,
-            contract=contract,
-            action="issue",
-            expected_version=contract_version(contract),
-            confirmed=True,
-        )
-        contract.refresh_from_db()
-    return contract
+        awaiting = issue_awaiting_company(admin, contract, company_signatory=admin)
+    _attach_generated(awaiting)
+    awaiting.refresh_from_db()
+    sent = release_to_agent(admin, awaiting, attach_pdf=False)
+    assert sent.status == ContractStatus.SENT
+    return sent
 
 
 def _attach_generated(contract: AgentContract) -> ContractArtifact:
@@ -223,7 +248,9 @@ def _sign(recipient, contract, *, session: str = "sess") -> ContractSignature:
             signed_date="2026-08-30",
             request_meta=_meta(session),
         )
-    return ContractSignature.objects.get(contract=contract)
+    return ContractSignature.objects.get(
+        contract=contract, signer_role=ContractSignature.SignerRole.AGENT
+    )
 
 
 @pytest.mark.django_db(transaction=True)
@@ -233,7 +260,8 @@ def test_final_pdf_binds_source_checksum_and_certificate(seeded_offices, setting
     settings.CONTRACT_SIGNING_CERT_PATH = ""
     recipient = agent(seeded_offices, email="agent-final@example.com")
     contract = _issued(seeded_offices, recipient)
-    review = _attach_generated(contract)
+    review = contract.generated_pdf
+    assert review is not None
     signature = _sign(recipient, contract, session="sess-final")
 
     assert signature.source_checksum == review.checksum.lower()
@@ -276,7 +304,6 @@ def test_final_pdf_idempotent_no_overwrite(seeded_offices, settings):
     settings.CONTRACT_SIGNING_CERT_PATH = ""
     recipient = agent(seeded_offices, email="agent-idem@example.com")
     contract = _issued(seeded_offices, recipient)
-    _attach_generated(contract)
     signature = _sign(recipient, contract, session="sess-idem")
 
     assert generate_and_store_signed_pdf(signature.pk, task_id="t1") == "ready"
@@ -310,7 +337,8 @@ def test_source_checksum_mismatch_keeps_signature(seeded_offices, settings):
     settings.CONTRACT_SIGNING_CERT_PATH = ""
     recipient = agent(seeded_offices, email="agent-mismatch@example.com")
     contract = _issued(seeded_offices, recipient)
-    review = _attach_generated(contract)
+    review = contract.generated_pdf
+    assert review is not None
     signature = _sign(recipient, contract, session="sess-mismatch")
 
     ContractArtifact.objects.filter(pk=review.pk).update(checksum="0" * 64)
@@ -335,7 +363,6 @@ def test_artifact_immutable_and_admin_cannot_delete(seeded_offices, settings):
     settings.CONTRACT_SIGNING_CERT_PATH = ""
     recipient = agent(seeded_offices, email="agent-immut@example.com")
     contract = _issued(seeded_offices, recipient)
-    _attach_generated(contract)
     signature = _sign(recipient, contract, session="sess-immut")
     generate_and_store_signed_pdf(signature.pk)
     signature.refresh_from_db()
@@ -373,7 +400,6 @@ def test_verify_endpoints_authorization(client, seeded_offices, settings):
     recipient = agent(seeded_offices, email="agent-verify@example.com")
     other = agent(seeded_offices, email="agent-other@example.com", slug="fairfax-va")
     contract = _issued(seeded_offices, recipient, admin=admin)
-    _attach_generated(contract)
     signature = _sign(recipient, contract, session="sess-verify")
     generate_and_store_signed_pdf(signature.pk)
     signature.refresh_from_db()
@@ -415,7 +441,8 @@ def test_failed_finalization_can_regen_after_source_restored(seeded_offices, set
     settings.CONTRACT_SIGNING_CERT_PATH = ""
     recipient = agent(seeded_offices, email="agent-regen@example.com")
     contract = _issued(seeded_offices, recipient)
-    review = _attach_generated(contract)
+    review = contract.generated_pdf
+    assert review is not None
     signature = _sign(recipient, contract, session="sess-regen")
     source_checksum = signature.source_checksum
 

@@ -153,6 +153,17 @@ OPERATIONS_DESTINATIONS: tuple[OperationsDestination, ...] = (
         scope_rule="publication_scope",
     ),
     OperationsDestination(
+        key="admin-marketing-resources",
+        label="Marketing Resources",
+        section="Content",
+        route_name="admin_marketing_resources",
+        path="operations/marketing-resources",
+        permission="web.manage_marketing_resources",
+        order=105,
+        feature="admin-marketing-resources",
+        scope_rule="publication_scope",
+    ),
+    OperationsDestination(
         key="admin-documents",
         label="Documents",
         section="Content",
@@ -270,12 +281,15 @@ OPERATIONS_FEATURES["admin-offices"] = True
 OPERATIONS_FEATURES["admin-office-resources"] = True
 OPERATIONS_FEATURES["admin-announcements"] = True
 OPERATIONS_FEATURES["admin-training"] = True
+OPERATIONS_FEATURES["admin-marketing-resources"] = True
+OPERATIONS_FEATURES["admin-compliance"] = True
 OPERATIONS_FEATURES["admin-contract-templates"] = True
 OPERATIONS_FEATURES["admin-operational-tasks"] = True
 OPERATIONS_FEATURES["admin-feedback"] = True
 OPERATIONS_FEATURES["admin-it-support"] = True
 OPERATIONS_FEATURES["admin-agent-contracts"] = True
 OPERATIONS_FEATURES["admin-inventory"] = True
+OPERATIONS_FEATURES["admin-reservations"] = True
 
 _OPS_SURFACE_PERMISSIONS = frozenset(
     destination.permission for destination in OPERATIONS_DESTINATIONS

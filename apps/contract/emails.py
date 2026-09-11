@@ -19,9 +19,11 @@ from apps.contract.models import AgentContract
 logger = logging.getLogger(__name__)
 
 #: Lifecycle actions that email the recipient after a successful transition.
+#: ``issue`` no longer emails the agent — company signs first; ``mark_company_signed``
+#: releases the agreement and uses the issued-notice copy.
 AGENT_EMAIL_ACTIONS: frozenset[str] = frozenset(
     {
-        "issue",
+        "mark_company_signed",
         "mark_signed",
         "activate",
         "supersede",
@@ -41,6 +43,15 @@ class _LifecycleEmailCopy:
 
 
 _LIFECYCLE_COPY: dict[str, _LifecycleEmailCopy] = {
+    "mark_company_signed": _LifecycleEmailCopy(
+        kind="issued notice",
+        subject="Your oNEST agent contract was issued",
+        body=(
+            "Your agent contract has been issued and is ready for your "
+            "signature. Sign in to oNEST Hub to review and sign."
+        ),
+        route_name="my_contract",
+    ),
     "issue": _LifecycleEmailCopy(
         kind="issued notice",
         subject="Your oNEST agent contract was issued",
@@ -205,3 +216,40 @@ def send_signing_invite_email(contract: AgentContract) -> None:
 def send_signed_confirmation_email(contract: AgentContract) -> None:
     """Backward-compatible alias for the signed lifecycle email."""
     send_lifecycle_status_email(contract, action="mark_signed")
+
+
+def send_company_signatory_invite_email(contract: AgentContract) -> None:
+    """Invite the named company officer to complete the Company ceremony."""
+    signatory = contract.company_signatory
+    email = (getattr(signatory, "email", "") or "").strip() if signatory else ""
+    if not email:
+        logger.warning(
+            "company signatory invite skipped missing email contract_id=%s",
+            contract.pk,
+        )
+        return
+    try:
+        path = reverse(
+            "agent_contract_company_sign",
+            kwargs={"public_id": contract.public_id},
+        )
+    except NoReverseMatch:  # pragma: no cover
+        path = f"/operations/agent-contracts/{contract.public_id}/company-sign"
+    sign_url = _absolute(path)
+    name = signatory.preferred_display_name() if signatory is not None else "Officer"
+    party = _party_greeting(contract)
+    subject = "oNEST agent contract needs your company signature"
+    body = (
+        f"Hello {name},\n\n"
+        f"An agent contract for {party} is awaiting your company signature. "
+        "Sign in to oNEST Hub and complete the Company ceremony before the "
+        "agent can sign:\n\n"
+        f"{sign_url}\n"
+    )
+    _send(
+        subject=subject,
+        body=body,
+        to=email,
+        contract=contract,
+        kind="company signatory invite",
+    )

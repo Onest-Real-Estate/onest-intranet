@@ -48,7 +48,7 @@ GlobalWorkerOptions.workerSrc = pdfWorker;
 
 export type TemplateFieldType = "text" | "signature" | "date" | "initials" | "checkbox";
 
-export type TemplateFieldRole = "Prefill" | "Agent";
+export type TemplateFieldRole = "Prefill" | "Company" | "Agent";
 
 export type TemplateFieldLayoutItem = {
   id: string;
@@ -67,13 +67,47 @@ const PALETTE: Array<{
   label: string;
   icon: typeof Type;
   hint: string;
+  roles: TemplateFieldRole[];
 }> = [
-  { type: "signature", label: "Signature", icon: Signature, hint: "Draw / type sign" },
-  { type: "initials", label: "Initials", icon: PenLine, hint: "Short mark" },
-  { type: "date", label: "Date", icon: Calendar, hint: "Signed-on date" },
-  { type: "text", label: "Text", icon: Type, hint: "Fillable text" },
-  { type: "checkbox", label: "Checkbox", icon: CheckSquare, hint: "Yes / no" },
+  {
+    type: "signature",
+    label: "Signature",
+    icon: Signature,
+    hint: "Drawn at signing",
+    roles: ["Company", "Agent"],
+  },
+  {
+    type: "initials",
+    label: "Initials",
+    icon: PenLine,
+    hint: "Drawn at signing",
+    roles: ["Company", "Agent"],
+  },
+  {
+    type: "date",
+    label: "Date",
+    icon: Calendar,
+    hint: "Signed-on or commercial date",
+    roles: ["Prefill", "Company", "Agent"],
+  },
+  {
+    type: "text",
+    label: "Text",
+    icon: Type,
+    hint: "Fillable text",
+    roles: ["Prefill", "Company", "Agent"],
+  },
+  {
+    type: "checkbox",
+    label: "Checkbox",
+    icon: CheckSquare,
+    hint: "Yes / no",
+    roles: ["Prefill", "Company", "Agent"],
+  },
 ];
+
+const SIGNING_ONLY_TYPES = new Set<TemplateFieldType>(["signature", "initials"]);
+const HUMAN_SIGNER_ROLES = new Set<TemplateFieldRole>(["Company", "Agent"]);
 
 const DEFAULT_SIZE: Record<TemplateFieldType, { w: number; h: number }> = {
   text: { w: 180, h: 28 },
@@ -99,6 +133,12 @@ const ROLE_STYLES: Record<
     dot: "bg-info",
     chip: "border-chip-info-edge bg-chip-info text-info",
     blurb: "The Hub writes office, agent, and commercial terms into these.",
+  },
+  Company: {
+    box: "border-role-company-ink bg-chip-role-company text-role-company-ink",
+    dot: "bg-role-company-ink",
+    chip: "border-chip-role-company-edge bg-chip-role-company text-role-company-ink",
+    blurb: "The named company officer completes these before the agent signs.",
   },
   Agent: {
     box: "border-role-protected-ink bg-chip-role-protected text-role-protected-ink",
@@ -153,8 +193,13 @@ function defaultName(type: TemplateFieldType, role: TemplateFieldRole): string {
     if (type === "date") return "AgentSignedOn";
     if (type === "initials") return "AgentInitials";
   }
+  if (role === "Company") {
+    if (type === "signature") return "CompanySignature";
+    if (type === "date") return "CompanySignedOn";
+    if (type === "initials") return "CompanyInitials";
+  }
   const label = type[0]?.toUpperCase() + type.slice(1);
-  return role === "Prefill" ? `Prefill${label}` : `Agent${label}`;
+  return role === "Prefill" ? `Prefill${label}` : `${role}${label}`;
 }
 
 function round(value: number): number {
@@ -196,6 +241,15 @@ export function ContractTemplateFieldPlacer({
     startY: number;
     orig: TemplateFieldLayoutItem;
   } | null>(null);
+
+  function setPlaceRoleSafe(role: TemplateFieldRole) {
+    setPlaceRole(role);
+    setArmedType((current) => {
+      if (!current) return current;
+      const meta = PALETTE.find((item) => item.type === current);
+      return meta?.roles.includes(role) ? current : null;
+    });
+  }
 
   useEffect(() => {
     const node = viewerRef.current;
@@ -348,15 +402,17 @@ export function ContractTemplateFieldPlacer({
     pdfY: number,
   ) {
     if (readOnly) return;
+    const resolvedRole =
+      SIGNING_ONLY_TYPES.has(type) && !HUMAN_SIGNER_ROLES.has(role) ? "Agent" : role;
     const size = DEFAULT_SIZE[type];
     const pageSize = pageSizes[page - 1];
     if (!pageSize) return;
     const { w, h } = size;
     const next: TemplateFieldLayoutItem = {
       id: newId(),
-      name: uniqueName(defaultName(type, role), value),
+      name: uniqueName(defaultName(type, resolvedRole), value),
       type,
-      role,
+      role: resolvedRole,
       page,
       x: round(clamp(pdfX - w / 2, 0, pageSize.width - w)),
       y: round(clamp(pdfY - h / 2, 0, pageSize.height - h)),
@@ -511,14 +567,14 @@ export function ContractTemplateFieldPlacer({
           <legend className="text-muted-foreground mb-2 text-xs font-semibold">
             Place fields for
           </legend>
-          <div className="bg-background border-border grid grid-cols-2 gap-1 rounded-md border p-1">
-            {(["Prefill", "Agent"] as const).map((role) => (
+          <div className="bg-background border-border grid grid-cols-3 gap-1 rounded-md border p-1">
+            {(["Prefill", "Company", "Agent"] as const).map((role) => (
               <button
                 key={role}
                 type="button"
                 aria-pressed={placeRole === role}
                 disabled={readOnly}
-                onClick={() => setPlaceRole(role)}
+                onClick={() => setPlaceRoleSafe(role)}
                 className={cn(
                   "focus-visible:ring-ring rounded-sm px-2 py-1.5 text-sm font-medium transition-colors duration-(--motion-fast) focus-visible:ring-3 focus-visible:outline-none disabled:opacity-50",
                   placeRole === role
@@ -545,7 +601,7 @@ export function ContractTemplateFieldPlacer({
         <div className="grid gap-2">
           <p className="text-muted-foreground text-xs font-semibold">Fields</p>
           <div className="grid gap-1.5">
-            {PALETTE.map((item) => {
+            {PALETTE.filter((item) => item.roles.includes(placeRole)).map((item) => {
               const Icon = item.icon;
               const armed = armedType === item.type;
               return (
@@ -689,15 +745,25 @@ export function ContractTemplateFieldPlacer({
               <Select
                 value={selected.role}
                 disabled={readOnly}
-                onValueChange={(next) =>
-                  updateField(selected.id, { role: next as TemplateFieldRole })
-                }
+                onValueChange={(next) => {
+                  const role = next as TemplateFieldRole;
+                  if (role === "Prefill" && SIGNING_ONLY_TYPES.has(selected.type)) {
+                    return;
+                  }
+                  updateField(selected.id, { role });
+                }}
               >
                 <SelectTrigger id={`${labelId}-role`} className="bg-background">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Prefill">Prefill — the Hub fills it</SelectItem>
+                  <SelectItem
+                    value="Prefill"
+                    disabled={SIGNING_ONLY_TYPES.has(selected.type)}
+                  >
+                    Prefill — the Hub fills it
+                  </SelectItem>
+                  <SelectItem value="Company">Company — officer signs first</SelectItem>
                   <SelectItem value="Agent">Agent — signed at signing</SelectItem>
                 </SelectContent>
               </Select>
@@ -778,7 +844,14 @@ export function ContractTemplateFieldPlacer({
               </div>
             </fieldset>
 
-            {selected.role === "Prefill" ? (
+            {SIGNING_ONLY_TYPES.has(selected.type) ? (
+              <p className="text-muted-foreground text-xs leading-5">
+                Left blank until that party signs. The company officer signs first, then
+                the agent. The organization seal finalizes the PDF.
+              </p>
+            ) : null}
+
+            {selected.role === "Prefill" && !SIGNING_ONLY_TYPES.has(selected.type) ? (
               <p className="text-muted-foreground text-xs leading-5">
                 Save the layout, then map{" "}
                 <strong className="text-foreground font-mono">{selected.name}</strong>{" "}

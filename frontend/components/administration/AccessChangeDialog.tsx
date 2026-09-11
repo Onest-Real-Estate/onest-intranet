@@ -36,6 +36,7 @@ export function AccessChangeDialog({
   confirmLabel,
   onConfirm,
   submitting = false,
+  children,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -45,6 +46,7 @@ export function AccessChangeDialog({
   confirmLabel: string;
   onConfirm: () => void;
   submitting?: boolean;
+  children?: React.ReactNode;
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -77,6 +79,7 @@ export function AccessChangeDialog({
             </li>
           ))}
         </ul>
+        {children}
         <DialogFooter>
           <DialogClose asChild>
             <Button type="button" variant="outline" disabled={submitting}>

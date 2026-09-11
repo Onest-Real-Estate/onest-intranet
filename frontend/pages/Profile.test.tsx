@@ -50,6 +50,7 @@ const initial: SelfProfileValues = {
   instagramUrl: "",
   xUrl: "",
   languages: ["en"],
+  specialties: ["residential"],
   headshotUrl: null,
 };
 
@@ -87,6 +88,10 @@ function setPage(overrides: Partial<ProfilePageProps> = {}) {
     languageOptions: [
       { code: "en", name: "English" },
       { code: "es", name: "Spanish" },
+    ],
+    specialtyOptions: [
+      { code: "residential", name: "Residential" },
+      { code: "commercial", name: "Commercial" },
     ],
     contactMethods: [
       { value: "email", label: "Email" },
@@ -151,7 +156,7 @@ function setPage(overrides: Partial<ProfilePageProps> = {}) {
     editable: { office: true },
     completeness: {
       completed: 15,
-      total: 19,
+      total: 20,
       percent: 79,
       missing: [
         {
@@ -168,6 +173,7 @@ function setPage(overrides: Partial<ProfilePageProps> = {}) {
       headshotMinDimension: 200,
       bioMaxLength: 1500,
       maxLanguages: 10,
+      maxSpecialties: 8,
     },
     ...overrides,
   } as ProfilePageProps;
@@ -381,7 +387,7 @@ describe("Profile", () => {
     expect(
       screen.getByRole("link", { name: "MLS numberOffice and credentials" }),
     ).toHaveAttribute("href", "#profile-credentials");
-    expect(screen.getByText("15 of 19 details filled in.")).toBeInTheDocument();
+    expect(screen.getByText("15 of 20 details filled in.")).toBeInTheDocument();
   });
 
   it("is reachable by keyboard through the editable fields in order", async () => {

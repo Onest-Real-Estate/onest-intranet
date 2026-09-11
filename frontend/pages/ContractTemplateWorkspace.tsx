@@ -69,6 +69,7 @@ import {
 } from "@/lib/contract-template-workbench";
 import { routes } from "@/lib/routes";
 import { cn } from "@/lib/utils";
+import { hasValidationErrors } from "@/lib/validation";
 import type { ContractTemplateWorkspacePageProps } from "@/types";
 
 const ACCESS = {
@@ -135,6 +136,20 @@ function normalizeLayout(
   }));
 }
 
+function hasRequiredSignerFields(
+  layout: TemplateFieldLayoutItem[],
+  role: TemplateFieldLayoutItem["role"],
+): boolean {
+  let hasSignature = false;
+  let hasDate = false;
+  for (const field of layout) {
+    if (field.role !== role) continue;
+    if (field.type === "signature") hasSignature = true;
+    if (field.type === "date") hasDate = true;
+  }
+  return hasSignature && hasDate;
+}
+
 /** Position and identity only — a rename or a nudge is a change, a reorder is not. */
 function layoutFingerprint(layout: TemplateFieldLayoutItem[]): string {
   return JSON.stringify(
@@ -172,6 +187,7 @@ export default function ContractTemplateWorkspace() {
   const [suggesting, setSuggesting] = useState(false);
   const [savingFields, setSavingFields] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false);
+  const [previewing, setPreviewing] = useState(false);
 
   useEffect(() => {
     setMergeRows(normalizeMergeSchema(versionDetail.mergeSchema ?? []));
@@ -233,11 +249,16 @@ export default function ContractTemplateWorkspace() {
   const isDraft = versionDetail.status === "draft";
   const canEdit = Boolean(capabilities.canManage && isDraft);
   const hasPreview = Boolean(versionDetail.previewUrl || versionDetail.previewChecksum);
+  const hasRequiredAgentFields = hasRequiredSignerFields(fieldLayout, "Agent");
+  const hasRequiredCompanyFields = hasRequiredSignerFields(fieldLayout, "Company");
 
   const readiness = buildReadiness({
     hasSourcePdf: Boolean(versionDetail.sourcePdfUrl),
     placedFieldCount: fieldLayout.length,
     agentFieldCount: fieldLayout.filter((field) => field.role === "Agent").length,
+    companyFieldCount: fieldLayout.filter((field) => field.role === "Company").length,
+    hasRequiredAgentFields,
+    hasRequiredCompanyFields,
     unsavedPrefillNames: prefillAwaitingSave,
     layoutDirty,
     mergeRowCount: mergeRows.length,
@@ -251,12 +272,16 @@ export default function ContractTemplateWorkspace() {
     action: "preview" | "suggest_fields" | "publish" | "activate" | "retire",
   ) {
     if (action === "suggest_fields") setSuggesting(true);
+    if (action === "preview") setPreviewing(true);
     router.post(
       routes.contract_template_action(versionDetail.id),
       { action },
       {
         preserveScroll: true,
-        onFinish: () => setSuggesting(false),
+        onFinish: () => {
+          setSuggesting(false);
+          setPreviewing(false);
+        },
       },
     );
   }
@@ -274,6 +299,47 @@ export default function ContractTemplateWorkspace() {
         onFinish: () => setSavingFields(false),
       },
     );
+  }
+
+  function generatePreview() {
+    if (!versionDetail.sourcePdfUrl || fieldLayout.length === 0) return;
+    // Preview reads the saved layout. Persist current placement first so the
+    // document the user sees and the document the server renders cannot drift.
+    if (canEdit && layoutDirty) {
+      setPreviewing(true);
+      setSavingFields(true);
+      router.post(
+        routes.contract_template_field_layout(versionDetail.id),
+        {
+          fieldLayoutJson: JSON.stringify(fieldLayout),
+          expectedVersion: versionDetail.version,
+        },
+        {
+          preserveScroll: true,
+          onSuccess: (page) => {
+            const nextErrors = (
+              page.props as unknown as ContractTemplateWorkspacePageProps
+            ).errors;
+            if (hasValidationErrors(nextErrors)) {
+              setPreviewing(false);
+              return;
+            }
+            router.post(
+              routes.contract_template_action(versionDetail.id),
+              { action: "preview" },
+              {
+                preserveScroll: true,
+                onFinish: () => setPreviewing(false),
+              },
+            );
+          },
+          onError: () => setPreviewing(false),
+          onFinish: () => setSavingFields(false),
+        },
+      );
+      return;
+    }
+    postAction("preview");
   }
 
   /**
@@ -335,16 +401,16 @@ export default function ContractTemplateWorkspace() {
     const next = readiness.next;
     if (!next) {
       return {
-        label: "Generate preview",
+        label: previewing ? "Generating preview…" : "Generate preview",
         icon: Eye,
-        onClick: () => postAction("preview"),
+        onClick: generatePreview,
       };
     }
     if (next.id === "preview") {
       return {
-        label: "Generate preview",
+        label: previewing ? "Generating preview…" : "Generate preview",
         icon: Eye,
-        onClick: () => postAction("preview"),
+        onClick: generatePreview,
       };
     }
     // A stage that is stalled on unsaved work needs the save, not a trip to the
@@ -410,14 +476,18 @@ export default function ContractTemplateWorkspace() {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => postAction("preview")}
-                  disabled={fieldLayout.length === 0}
+                  onClick={generatePreview}
+                  disabled={fieldLayout.length === 0 || savingFields || previewing}
                 >
                   <Eye className="size-4" aria-hidden />
-                  Preview
+                  {previewing ? "Generating…" : "Generate preview"}
                 </Button>
               ) : null}
-              <Button type="button" onClick={primaryAction.onClick}>
+              <Button
+                type="button"
+                onClick={primaryAction.onClick}
+                disabled={savingFields || previewing}
+              >
                 <PrimaryIcon className="size-4" aria-hidden />
                 {primaryAction.label}
               </Button>
@@ -434,7 +504,10 @@ export default function ContractTemplateWorkspace() {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuItem onSelect={() => postAction("preview")}>
+                    <DropdownMenuItem
+                      onSelect={generatePreview}
+                      disabled={savingFields || previewing || fieldLayout.length === 0}
+                    >
                       <Eye className="size-4" aria-hidden />
                       Generate preview
                     </DropdownMenuItem>
@@ -507,6 +580,17 @@ export default function ContractTemplateWorkspace() {
                   saving={savingFields}
                   dirty={layoutDirty}
                 />
+                {canEdit && (!hasRequiredCompanyFields || !hasRequiredAgentFields) ? (
+                  <Callout tone="warning" title="Both signers need fields">
+                    {!hasRequiredCompanyFields
+                      ? "Add a Company signature and Company date. "
+                      : null}
+                    {!hasRequiredAgentFields
+                      ? "Add an Agent signature and Agent date. "
+                      : null}
+                    Save the layout before previewing or publishing.
+                  </Callout>
+                ) : null}
                 {prefillAwaitingSave.length > 0 ? (
                   <Callout
                     tone="info"

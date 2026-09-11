@@ -33,7 +33,13 @@ from apps.contract.services.signing_service import (
 from apps.contract.signing_disclosure import DISCLOSURE_VERSION
 from apps.contract.statuses import ContractStatus
 from apps.contract.template_security import checksum_of
-from apps.contract.tests.conftest import agent, company_admin, office
+from apps.contract.tests.conftest import (
+    agent,
+    company_admin,
+    issue_awaiting_company,
+    office,
+    release_to_agent,
+)
 
 
 def _pdf_bytes() -> bytes:
@@ -62,6 +68,28 @@ def _hub_layout() -> list[dict]:
             "y": 100,
             "w": 120,
             "h": 18,
+        },
+        {
+            "id": "fc1",
+            "name": "CompanySignature",
+            "type": "signature",
+            "role": "Company",
+            "page": 1,
+            "x": 72,
+            "y": 500,
+            "w": 200,
+            "h": 48,
+        },
+        {
+            "id": "fc2",
+            "name": "CompanyDate",
+            "type": "date",
+            "role": "Company",
+            "page": 1,
+            "x": 300,
+            "y": 500,
+            "w": 100,
+            "h": 24,
         },
         {
             "id": "f2",
@@ -156,15 +184,51 @@ def _issued(seeded_offices, recipient, *, admin=None) -> AgentContract:
             expected_version=contract_version(contract),
         )
         contract.refresh_from_db()
+        awaiting = issue_awaiting_company(admin, contract, company_signatory=admin)
+    _attach_generated(awaiting)
+    awaiting.refresh_from_db()
+    sent = release_to_agent(admin, awaiting, attach_pdf=False)
+    assert sent.status == ContractStatus.SENT
+    assert ContractSignature.objects.filter(
+        contract=sent, signer_role=ContractSignature.SignerRole.COMPANY
+    ).exists()
+    return sent
+
+
+def _awaiting_company(seeded_offices, recipient, *, admin=None) -> AgentContract:
+    hq = office("onest-head-office")
+    admin = admin or company_admin(seeded_offices)
+    version = _published_template(admin, hq)
+    with patch("apps.contract.tasks.generate_contract_pdf.delay"):
+        contract = AgentContract.objects.create(
+            recipient=recipient,
+            office=hq,
+            template_version=version,
+            effective_on=timezone.now().date(),
+            status=ContractStatus.DRAFT,
+            party_snapshot={
+                "legalFirstName": "Ada",
+                "legalLastName": "Lovelace",
+                "email": recipient.email,
+                "displayName": "Ada Lovelace",
+            },
+            office_snapshot={"name": hq.name, "state": "VA"},
+            terms_snapshot={"agentSplitPercent": "70", "officeSplitPercent": "30"},
+            calculation_rule_version="1.0.0",
+            created_by=admin,
+        )
         transition(
             actor=admin,
             contract=contract,
-            action="issue",
+            action="submit_for_review",
             expected_version=contract_version(contract),
-            confirmed=True,
         )
         contract.refresh_from_db()
-    return contract
+        awaiting = issue_awaiting_company(admin, contract, company_signatory=admin)
+    _attach_generated(awaiting)
+    awaiting.refresh_from_db()
+    assert awaiting.status == ContractStatus.AWAITING_COMPANY_SIGNATURE
+    return awaiting
 
 
 def _attach_generated(contract: AgentContract) -> ContractArtifact:
@@ -217,10 +281,27 @@ def test_admin_cannot_start_signing_for_agent(seeded_offices, settings):
     admin = company_admin(seeded_offices)
     recipient = agent(seeded_offices, email="agent-admin-block@example.com")
     contract = _issued(seeded_offices, recipient, admin=admin)
-    _attach_generated(contract)
     with pytest.raises(PermissionDenied):
         start_signing(
             admin,
+            contract_public_id=contract.public_id,
+            expected_version=contract_version(contract),
+            consent_accepted=True,
+            disclosure_version=DISCLOSURE_VERSION,
+            request_meta=_meta(),
+        )
+
+
+@pytest.mark.django_db
+def test_agent_cannot_start_signing_before_company(seeded_offices, settings):
+    settings.DEBUG = True
+    settings.CONTRACT_SIGNING_ALLOW_UNSIGNED_DEV = True
+    recipient = agent(seeded_offices, email="agent-pre-company@example.com")
+    contract = _awaiting_company(seeded_offices, recipient)
+    # Awaiting company signature is not recipient-visible / not signable.
+    with pytest.raises(PermissionDenied):
+        start_signing(
+            recipient,
             contract_public_id=contract.public_id,
             expected_version=contract_version(contract),
             consent_accepted=True,
@@ -236,7 +317,6 @@ def test_start_and_complete_signing(seeded_offices, settings):
     settings.CONTRACT_SIGNING_CERT_PATH = ""
     recipient = agent(seeded_offices, email="agent-complete@example.com")
     contract = _issued(seeded_offices, recipient)
-    _attach_generated(contract)
 
     payload = start_signing(
         recipient,
@@ -261,7 +341,9 @@ def test_start_and_complete_signing(seeded_offices, settings):
     assert result["ok"] is True
     contract.refresh_from_db()
     assert contract.status == ContractStatus.SIGNED
-    sig = ContractSignature.objects.get(contract=contract)
+    sig = ContractSignature.objects.get(
+        contract=contract, signer_role=ContractSignature.SignerRole.AGENT
+    )
     assert sig.signature_method == ContractSignature.Method.HUB_EMBEDDED
     assert sig.source_checksum
     assert sig.appearance_file
@@ -282,7 +364,8 @@ def test_complete_rejects_checksum_drift(seeded_offices, settings):
     settings.CONTRACT_SIGNING_ALLOW_UNSIGNED_DEV = True
     recipient = agent(seeded_offices, email="agent-drift@example.com")
     contract = _issued(seeded_offices, recipient)
-    artifact = _attach_generated(contract)
+    artifact = contract.generated_pdf
+    assert artifact is not None
     payload = start_signing(
         recipient,
         contract_public_id=contract.public_id,
@@ -309,7 +392,6 @@ def test_expired_intent_blocks_completion(seeded_offices, settings):
     settings.CONTRACT_SIGNING_ALLOW_UNSIGNED_DEV = True
     recipient = agent(seeded_offices, email="agent-exp@example.com")
     contract = _issued(seeded_offices, recipient)
-    _attach_generated(contract)
     payload = start_signing(
         recipient,
         contract_public_id=contract.public_id,
@@ -339,7 +421,6 @@ def test_start_signing_rejects_missing_consent(seeded_offices, settings):
     settings.CONTRACT_SIGNING_ALLOW_UNSIGNED_DEV = True
     recipient = agent(seeded_offices, email="agent-consent@example.com")
     contract = _issued(seeded_offices, recipient)
-    _attach_generated(contract)
     with pytest.raises(SigningCeremonyError):
         start_signing(
             recipient,
@@ -358,7 +439,6 @@ def test_ceremony_http_recipient_only(client, seeded_offices, settings):
     admin = company_admin(seeded_offices)
     recipient = agent(seeded_offices, email="agent-http@example.com")
     contract = _issued(seeded_offices, recipient, admin=admin)
-    _attach_generated(contract)
 
     client.force_login(admin)
     response = client.post(

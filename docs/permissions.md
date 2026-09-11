@@ -28,6 +28,12 @@ Use stable `domain.action` style Django codenames, for example:
 - `audit.can_view_activity_timeline` (user-facing timelines; distinct from raw audit)
 - `audit.can_view_audit_events`, `audit.can_export_audit_events`
 
+The peer [Agent Directory](agent-directory.md) is authenticated-only: it has no
+capability codename. Visibility (`is_active` + engaged agent status) and the
+directory field allowlist are the security boundary. Operations Users
+(`web.view_users`) remains the admin people list — see
+[user-directory.md](user-directory.md).
+
 Sensitive actions split read / export / approve / manage rather than bundling
 them into a single “admin” bit.
 
@@ -91,6 +97,20 @@ managers and brokerage administrators. Pinning changes ordering only and never
 who can read a notice, which is why it is neither of the other two. Every one
 of the three is still bounded by the actor's office scope. See
 `docs/announcements.md`.
+
+### Training and marketing resources
+
+Training authoring uses a single manage grant (`web.manage_training`). Marketing
+resources split three ways, like announcements:
+
+| Codename | What it gates |
+| --- | --- |
+| `web.manage_marketing_resources` | Draft, upload, audience, version within publication scope |
+| `web.publish_marketing_resources` | Publish / schedule / unpublish / archive / restore |
+| `web.download_marketing_sources` | Editable source-file stream (never on the consumer library) |
+
+Export downloads use audience visibility alone. See
+`docs/marketing-resources.md` and `docs/training.md`.
 
 ### Reading a record vs ending its access
 

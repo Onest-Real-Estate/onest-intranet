@@ -134,14 +134,6 @@ function Note({
  *   it, so a slow response for "sam" cannot overwrite a fast one for "samuel".
  * * **Selection roves, focus does not.** Arrow keys move a highlight while the
  *   caret stays in the input, exposed with `aria-activedescendant`.
- *
- * The result panel is **portalled**, not absolutely positioned inside the
- * field. Every surface this field is used on is a `SurfaceCard`, and that card
- * clips to its own rounded corners so a table or a hero can run edge to edge —
- * `overflow: hidden` clips an absolutely positioned descendant no matter what
- * `z-index` it carries, so the results were cut off at the bottom of the card.
- * A portal leaves the clipping context entirely; the anchor keeps the panel on
- * the input and matched to its width.
  */
 export function PersonCombobox({
   id,
@@ -181,6 +173,7 @@ export function PersonCombobox({
   const [active, setActive] = useState(0);
   const abortRef = useRef<AbortController | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const anchorRef = useRef<HTMLDivElement>(null);
 
   const searchable = term.trim().length >= MIN_QUERY;
   const activeId = open && results.length > 0 ? `${listId}-${active}` : undefined;
@@ -307,13 +300,20 @@ export function PersonCombobox({
       ) : (
         <>
           <Label htmlFor={id}>{label}</Label>
-          {/* Radix anchors and portals the panel. The anchor is the field
-              wrapper, so the popover lines up with the input and inherits its
-              width through `--radix-popover-trigger-width`; the portal puts the
-              panel outside the card that would otherwise clip it. */}
-          <Popover open={showPanel} onOpenChange={setOpen}>
+          {/*
+            Portal the panel: SurfaceCard (and other rounded shells) use
+            overflow-hidden, which clips an absolutely positioned listbox to a
+            sliver. Radix Popover escapes that the same way SelectContent does.
+          */}
+          <Popover
+            open={showPanel}
+            onOpenChange={(next) => {
+              if (!next) setOpen(false);
+            }}
+            modal={false}
+          >
             <PopoverAnchor asChild>
-              <div className="relative">
+              <div ref={anchorRef} className="relative">
                 <Search
                   className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2"
                   aria-hidden
@@ -344,15 +344,6 @@ export function PersonCombobox({
                     setOpen(true);
                   }}
                   onFocus={() => setOpen(true)}
-                  onBlur={(event) => {
-                    // Let a click on a row land before the panel closes. The
-                    // list lives in a portal, so this is DOM containment across
-                    // the React tree — which is exactly what `contains` reads.
-                    if (event.relatedTarget instanceof Node) {
-                      if (listRef.current?.contains(event.relatedTarget)) return;
-                    }
-                    setOpen(false);
-                  }}
                   onKeyDown={onKeyDown}
                 />
                 {loading && showPanel ? (
@@ -363,20 +354,22 @@ export function PersonCombobox({
                 ) : null}
               </div>
             </PopoverAnchor>
-
             <PopoverContent
               align="start"
               sideOffset={4}
-              className="w-(--radix-popover-trigger-width) overflow-hidden rounded-lg p-0"
-              // The caret never leaves the input: this is an
-              // `aria-activedescendant` combobox, and moving focus into the
-              // panel would break both typing and the roving highlight.
+              className="w-[var(--radix-popover-trigger-width)] overflow-hidden p-0"
               onOpenAutoFocus={(event) => event.preventDefault()}
               onCloseAutoFocus={(event) => event.preventDefault()}
-              // Escape and arrow keys are handled on the input, which still has
-              // focus; letting Radix also act on them would close the panel
-              // twice and swallow the highlight.
-              onKeyDownCapture={(event) => event.stopPropagation()}
+              onInteractOutside={(event) => {
+                // The input is the anchor, outside the content. Keep the panel
+                // open while the caret stays in the field.
+                if (
+                  event.target instanceof Node &&
+                  anchorRef.current?.contains(event.target)
+                ) {
+                  event.preventDefault();
+                }
+              }}
             >
               {!searchable ? (
                 <Note icon={Search}>
@@ -418,8 +411,7 @@ export function PersonCombobox({
                       )}
                       onMouseEnter={() => setActive(index)}
                       onMouseDown={(event) => {
-                        // Choose on mousedown so the input's blur cannot close
-                        // the panel out from under the click.
+                        // Choose on mousedown so focus stays in the input.
                         event.preventDefault();
                         choose(person);
                       }}
