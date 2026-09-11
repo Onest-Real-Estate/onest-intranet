@@ -162,7 +162,7 @@ function GuideDialog({
             <ol className="grid gap-3">
               {tool.steps.map((step, index) => (
                 <li key={step} className="flex gap-3 text-sm leading-6">
-                  <span className="bg-muted text-muted-foreground mt-0.5 grid size-5 shrink-0 place-items-center rounded-full text-[0.6875rem] font-semibold tabular-nums">
+                  <span className="bg-muted text-muted-foreground mt-0.5 grid size-5 shrink-0 place-items-center rounded-full text-micro font-semibold tabular-nums">
                     {index + 1}
                   </span>
                   <span className="max-w-measure">{step}</span>
@@ -262,7 +262,7 @@ function ToolCard({
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <h3 className="text-sm font-semibold">{tool.name}</h3>
             {tool.required ? null : (
-              <span className="text-muted-foreground text-[0.6875rem] font-semibold tracking-[0.02em] uppercase">
+              <span className="text-muted-foreground text-micro font-semibold tracking-[0.02em] uppercase">
                 Optional
               </span>
             )}
@@ -322,7 +322,7 @@ function ToolCard({
       {canManage ? (
         <div className="border-border/70 grid gap-1.5 border-t pt-3">
           <label
-            className="text-muted-foreground text-[0.6875rem] font-semibold tracking-[0.02em] uppercase"
+            className="text-muted-foreground text-micro font-semibold tracking-[0.02em] uppercase"
             htmlFor={`state-${tool.slug}`}
           >
             Mark as

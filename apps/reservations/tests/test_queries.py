@@ -145,3 +145,72 @@ def test_exception_query_fails_closed_for_a_foreign_space(seeded):
     )
 
     assert not exceptions_for_reader(user, space=foreign).exists()
+
+
+# ---------------------------------------------------------------------------
+# Office-chain inheritance
+#
+# Agent visibility used to be an exact `owner_office` match, so a room shared
+# by two offices had to be entered twice — the Space table still carries those
+# duplicates — and a branch with no rooms of its own showed an empty calendar.
+# ---------------------------------------------------------------------------
+
+
+def test_agent_books_a_room_published_at_the_head_office(seeded):
+    agent = person("agent@example.com", "fairfax-va")
+    shared = make_space(owner_slug="onest-head-office", name="Brokerage boardroom")
+
+    assert set(agent_spaces(agent).values_list("name", flat=True)) == {
+        "Brokerage boardroom"
+    }
+    assert space_for_agent(agent, public_id=shared.public_id) == shared
+
+
+def test_the_payload_gate_agrees_with_the_queryset(seeded):
+    # These are two gates on the same question — a list and a single record.
+    # When the rule lived in both places separately they drifted: the queryset
+    # listed an inherited room and the payload then answered `None`.
+    agent = person("agent@example.com", "fairfax-va")
+    shared = make_space(owner_slug="onest-head-office", name="Brokerage boardroom")
+
+    assert shared in list(agent_spaces(agent))
+    assert space_payload(agent, shared) is not None
+
+
+def test_the_payload_names_the_office_that_owns_the_room(seeded):
+    agent = person("agent@example.com", "fairfax-va")
+    shared = make_space(owner_slug="onest-head-office", name="Brokerage boardroom")
+
+    payload = space_payload(agent, shared)
+    assert payload is not None
+    assert payload["officeId"] == office("onest-head-office").stable_key
+
+
+def test_inheritance_does_not_reach_a_sibling_branch(seeded):
+    agent = person("agent@example.com", "fairfax-va")
+    foreign = make_space(owner_slug="harrisburg", name="Harrisburg room")
+
+    assert set(agent_spaces(agent).values_list("name", flat=True)) == set()
+    assert space_payload(agent, foreign) is None
+
+
+def test_a_reader_at_a_parent_office_does_not_inherit_the_branches(seeded):
+    staff = person("staff@example.com", "onest-head-office")
+    branch_room = make_space(owner_slug="fairfax-va", name="Fairfax room")
+    make_space(owner_slug="onest-head-office", name="Brokerage boardroom")
+
+    assert set(agent_spaces(staff).values_list("name", flat=True)) == {
+        "Brokerage boardroom"
+    }
+    assert space_payload(staff, branch_room) is None
+
+
+def test_an_inherited_room_that_is_not_reservable_stays_hidden(seeded):
+    agent = person("agent@example.com", "fairfax-va")
+    make_space(
+        owner_slug="onest-head-office",
+        name="Retired brokerage room",
+        status=SpaceStatus.INACTIVE,
+        is_reservable=False,
+    )
+    assert set(agent_spaces(agent).values_list("name", flat=True)) == set()

@@ -196,6 +196,88 @@ WIDGET_DEFINITIONS: tuple[WidgetDefinition, ...] = (
         feed_limit=5,
     ),
     WidgetDefinition(
+        key="support_queue",
+        prop="supportQueue",
+        group="widgets",
+        contract_version=1,
+        provider=providers.support_queue,
+        user_specific=True,
+        cache=CachePolicy(
+            rationale=(
+                "Queue membership is scope-derived and changes on every "
+                "transition; a stale queue sends somebody to a closed ticket."
+            )
+        ),
+        feed_limit=5,
+    ),
+    WidgetDefinition(
+        key="team_tasks",
+        prop="teamTasks",
+        group="widgets",
+        contract_version=1,
+        provider=providers.team_tasks,
+        user_specific=True,
+        cache=CachePolicy(
+            rationale=("Assigned work; must reflect the last write."),
+        ),
+        feed_limit=5,
+    ),
+    WidgetDefinition(
+        key="contracts_awaiting_signature",
+        prop="contractsAwaitingSignature",
+        group="widgets",
+        contract_version=1,
+        provider=providers.contracts_awaiting_signature,
+        user_specific=True,
+        cache=CachePolicy(
+            rationale=(
+                "A signature can land at any moment; a cached queue would "
+                "chase somebody who has already signed."
+            )
+        ),
+        feed_limit=5,
+    ),
+    WidgetDefinition(
+        key="feedback_signals",
+        prop="feedbackSignals",
+        group="widgets",
+        contract_version=1,
+        provider=providers.feedback_signals,
+        user_specific=True,
+        cache=CachePolicy(
+            rationale="Triage reach is scope-derived and changes on every write."
+        ),
+        feed_limit=5,
+    ),
+    WidgetDefinition(
+        key="agent_onboarding",
+        prop="agentOnboarding",
+        group="widgets",
+        contract_version=1,
+        provider=providers.agent_onboarding,
+        user_specific=True,
+        cache=CachePolicy(
+            rationale=(
+                "Counts the reader's administered population and must reflect "
+                "the last milestone change."
+            )
+        ),
+    ),
+    WidgetDefinition(
+        key="room_utilization",
+        prop="roomUtilization",
+        group="widgets",
+        contract_version=1,
+        provider=providers.room_utilization,
+        user_specific=True,
+        cache=CachePolicy(
+            rationale=(
+                "Derived from the reader's room scope and live occupancy; a "
+                "cached ratio would report capacity that is already taken."
+            )
+        ),
+    ),
+    WidgetDefinition(
         key="market",
         prop="market",
         group="widgets",
@@ -214,7 +296,10 @@ WIDGET_DEFINITIONS: tuple[WidgetDefinition, ...] = (
         key="quick_documents",
         prop="documents",
         group="widgets",
-        contract_version=1,
+        # v2: the payload was a bare list of `{id, name}` placeholders that all
+        # linked to the same coming-soon page. It is now the office resource
+        # library — an object with a total, real destinations, and a "view all".
+        contract_version=2,
         provider=providers.quick_documents,
         user_specific=True,
         cache=CachePolicy(rationale="Visibility is office- and role-scoped."),

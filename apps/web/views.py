@@ -1,4 +1,5 @@
 from django.http import Http404
+from django.shortcuts import redirect
 from django.utils import timezone
 from inertia import inertia, render
 
@@ -30,6 +31,7 @@ from apps.web.quick_access.views import quick_access_index
 from .authorization import enforce_policy
 from .contracts import list_response
 from .dashboard import HUB_SECTIONS, deferred_widget_props, greeting_payload
+from .dashboard.sections import LIVE_SECTION_ROUTES
 from .operations import (
     OPERATIONS_DESTINATIONS,
     OperationsDestination,
@@ -88,11 +90,20 @@ def action_items_queue(request):
 
 
 @enforce_policy("coming_soon")
-@inertia("ComingSoon")
 def coming_soon(request, section: str):
     title = HUB_SECTIONS.get(section)
     if title is None:
         raise Http404()
+    live_route = LIVE_SECTION_ROUTES.get(section)
+    if live_route is not None:
+        # The section shipped. Its stub URL stays valid because people saved and
+        # shared it, but it must not keep claiming the feature does not exist.
+        return redirect(live_route)
+    return render_coming_soon(request, title=title, section=section)
+
+
+@inertia("ComingSoon")
+def render_coming_soon(request, *, title: str, section: str):
     return {"title": title, "section": section}
 
 

@@ -1,8 +1,9 @@
 # Office inventory
 
 Physical assets and pooled stock owned by assignable offices. Agents discover
-active reservable items for their primary office; managers browse and manage
-inventory within their effective office/region scope.
+active reservable items for their primary office **and every office above it**;
+managers browse and manage inventory within their effective office/region
+scope.
 
 ## Data model
 
@@ -186,7 +187,8 @@ Partial index `inv_rsv_capacity_overlap` covers
 | `inventory.override_reservations` | Policy override with reason |
 
 Agents browse and reserve for themselves without `web.view_inventory`; the
-queryset is resolved from the reader's primary office server-side.
+queryset is resolved from the reader's primary office server-side and widened
+to that office's ancestors (see the agent browser below).
 
 Photos use protected storage unless `photo_is_public` is explicitly set.
 
@@ -194,9 +196,28 @@ Photos use protected storage unless `photo_is_public` is explicitly set.
 
 Route: `office_inventory` (`/office-inventory/`).
 
-Authenticated agents browse **active reservable** items for their primary
-office only. The Reserve CTA opens `inventory_reservation_new` with item/date
-query context; the create endpoint revalidates.
+Authenticated agents browse **active reservable** items owned by their primary
+office **or any office above it** — the chain
+`apps.user.services.hierarchy.agent_scope_office_ids` resolves, shared with
+office resources and room availability. The Reserve CTA opens
+`inventory_reservation_new` with item/date query context; the create endpoint
+revalidates through the same gate.
+
+Inheritance runs one way, and both halves matter:
+
+- **Down.** Stock bought for the brokerage is entered once at the head office
+  and every branch can reserve it. Before the chain existed the catalogue was
+  an exact `owner_office` match, so publishing company-wide meant re-creating
+  the record per branch, and any office holding nothing of its own showed its
+  agents an empty catalogue.
+- **Not up, not across.** A branch never sees a sibling branch, and a reader
+  whose primary office is a parent node does not acquire the branches' stock.
+  Descendant reach is *manager* reach: it lives behind `web.view_inventory` on
+  `/operations/inventory`. An agent must be able to walk to the thing they
+  reserved.
+
+A reader with no primary office, or whose office is inactive or not assignable,
+has no chain and sees nothing.
 
 ## Administration UI
 

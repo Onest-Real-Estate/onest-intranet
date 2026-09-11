@@ -53,6 +53,28 @@ def test_every_hub_section_declares_its_availability():
     )
 
 
+def test_every_live_section_declares_where_it_actually_lives():
+    """A shipped section must name its route, and only a shipped one may.
+
+    The Coming Soon stub at ``/hub/<section>`` outlives the placeholder it was
+    written for, because the section key is what navigation and Quick Access
+    hang on. Without this pairing an old bookmark to a feature that shipped
+    months ago keeps answering "not built yet".
+    """
+    from django.urls import reverse
+
+    from apps.web.dashboard.sections import LIVE_SECTION_ROUTES
+
+    live_sections = {
+        section for section in HUB_SECTIONS if HUB_FEATURES[section] is True
+    }
+    assert set(LIVE_SECTION_ROUTES) == live_sections
+    for section, route_name in LIVE_SECTION_ROUTES.items():
+        # Reversing here is the point: a renamed route would otherwise only
+        # surface as a 500 on somebody's stale link.
+        assert reverse(route_name), section
+
+
 def test_only_the_live_destinations_are_enabled():
     # Flip the section's entry in the commit that gives it a real route; this
     # assertion is the reminder to update the nav registry at the same time.
@@ -355,3 +377,42 @@ def test_live_administrative_features_reach_only_their_permission_holders(client
     )
     client.force_login(manager)
     assert shared_props(client)["features"]["admin-users"] is True
+
+
+@pytest.mark.django_db
+def test_a_shipped_section_redirects_instead_of_claiming_to_be_unbuilt(client):
+    from apps.user.models import User
+
+    reader = User.objects.create_user(
+        email="stale-link@example.com", profile_completed=True
+    )
+    client.force_login(reader)
+
+    shipped = client.get("/hub/announcements")
+    assert shipped.status_code == 302
+    assert shipped.url == reverse("announcements")
+
+
+@pytest.mark.django_db
+def test_a_section_with_no_destination_still_shows_the_stub(client):
+    from apps.user.models import User
+
+    reader = User.objects.create_user(
+        email="unbuilt-link@example.com", profile_completed=True
+    )
+    client.force_login(reader)
+
+    unbuilt = client.get("/hub/agent-directory")
+    assert unbuilt.status_code == 200
+
+
+@pytest.mark.django_db
+def test_an_unknown_section_is_not_invented(client):
+    from apps.user.models import User
+
+    reader = User.objects.create_user(
+        email="bogus-link@example.com", profile_completed=True
+    )
+    client.force_login(reader)
+
+    assert client.get("/hub/not-a-section").status_code == 404

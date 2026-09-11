@@ -387,7 +387,7 @@ describe("ContractTemplateWorkspace", () => {
   it("shows the approver review note when draft editing is withheld", () => {
     render(<ContractTemplateWorkspace />);
     expect(
-      screen.getByText(/review, preview, publish, and activate/i),
+      screen.getByText(/preview, publish, and activate this version/i),
     ).toBeInTheDocument();
   });
 
@@ -464,7 +464,14 @@ describe("ContractTemplateWorkspace", () => {
     } as never);
     render(<ContractTemplateWorkspace />);
     expect(screen.getByTestId("hub-field-placer")).toHaveTextContent("AgentSignature");
-    expect(screen.getByText(/prefill mapping/i)).toBeInTheDocument();
+    // Mapping moved onto its own tab; the document opens first when a PDF exists.
+    expect(screen.getByRole("tab", { name: /Document/ })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    await user.click(screen.getByRole("tab", { name: /Data mapping/ }));
+    expect(screen.getByText(/Prefill fields to hub data/i)).toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: /Document/ }));
     await user.click(screen.getByRole("button", { name: /save fields/i }));
     expect(postMock).toHaveBeenCalledWith(
       "/operations/contract-templates/templates/9/field-layout",

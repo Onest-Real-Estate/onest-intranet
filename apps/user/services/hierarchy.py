@@ -11,6 +11,7 @@ parent joins.
 
 from __future__ import annotations
 
+import contextlib
 import datetime as dt
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -59,6 +60,49 @@ def ancestors(office: Office | None) -> list[Office]:
 
 def ancestor_ids(office: Office | None) -> frozenset[int]:
     return frozenset(node.pk for node in ancestors(office))
+
+
+def agent_scope_office_ids(office: Office | None) -> frozenset[int]:
+    """Offices whose agent-facing catalogue a member of ``office`` may browse.
+
+    The office itself plus its ancestors up to the head office — the same chain
+    ``apps.user.services.office_resources`` resolves, so a room, an inventory
+    item, and an office resource published at the region reach the same people.
+
+    Without it every catalogue was an exact ``owner_office`` match, which meant
+    there was no way to publish one record for the whole brokerage: an
+    administrator had to re-create it per branch (the Space table still carries
+    two copies of every room for exactly that reason), and any office with no
+    records of its own showed an empty catalogue to its agents.
+
+    Inheritance runs one way. A branch never sees a sibling branch, and a
+    reader at the head office does not acquire every branch's stock — that is
+    manager reach, and it lives behind ``view_inventory`` / ``view_spaces`` on
+    the administration surfaces.
+
+    A reader whose own office is inactive or not assignable has no chain at all.
+    """
+    if office is None or not office.is_active or not office.is_assignable:
+        return frozenset()
+    return ancestor_ids(office)
+
+
+def reader_scope_office_ids(user) -> frozenset[int]:
+    """:func:`agent_scope_office_ids` for a reader, memoized on the instance.
+
+    Per-row visibility checks ask this once per record they serialize, and the
+    chain costs one indexed ``parent_id`` lookup per level. The answer cannot
+    change within a request, so it is resolved once.
+    """
+    cached = getattr(user, "_reader_scope_office_ids", None)
+    if cached is not None:
+        return cached
+    scope = agent_scope_office_ids(getattr(user, "office", None))
+    # AnonymousUser and other read-only stand-ins refuse the attribute; they
+    # simply pay the lookup again rather than failing the request.
+    with contextlib.suppress(AttributeError):
+        user._reader_scope_office_ids = scope
+    return scope
 
 
 def descendant_queryset(office: Office) -> QuerySet[Office]:

@@ -1,4 +1,5 @@
 import { Link } from "@inertiajs/react";
+import { ArrowRight } from "lucide-react";
 import type React from "react";
 
 import { StatusBadge } from "@/components/design-system/status-badge";
@@ -8,6 +9,7 @@ import {
   SurfaceCardContent,
   SurfaceCardMeta,
 } from "@/components/design-system/surface-card";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { DashboardQueue, DashboardQueueRow } from "@/types";
 
@@ -63,6 +65,19 @@ export function WorkQueue({
   action?: React.ReactNode;
 }) {
   const truncated = data.total > data.rows.length;
+  // The panel is a window on a queue, so it says where the rest of it is. The
+  // provider sends the destination it already reversed and guarded; an explicit
+  // `action` still wins for a caller that needs a different control.
+  const viewAll =
+    action ??
+    (data.viewAllHref ? (
+      <Button asChild variant="ghost" size="sm" className="gap-1">
+        <Link href={data.viewAllHref}>
+          View all
+          <ArrowRight className="size-3.5" strokeWidth={1.5} aria-hidden />
+        </Link>
+      </Button>
+    ) : undefined);
   return (
     <SurfaceCard className="arrive">
       <PanelHeader
@@ -72,7 +87,7 @@ export function WorkQueue({
             {truncated ? `${data.rows.length} of ${data.total}` : `${data.total} open`}
           </SurfaceCardMeta>
         }
-        action={action}
+        action={viewAll}
       />
       <SurfaceCardContent className="grid gap-2">
         {data.rows.map((row) => (

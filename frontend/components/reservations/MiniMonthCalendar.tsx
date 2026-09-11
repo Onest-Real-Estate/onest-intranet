@@ -117,7 +117,7 @@ export function MiniMonthCalendar({
         {WEEKDAYS.map((name) => (
           <div
             key={name}
-            className="text-muted-foreground text-center text-[0.6875rem] font-semibold"
+            className="text-muted-foreground text-center text-micro font-semibold"
             aria-hidden
           >
             {name.charAt(0)}

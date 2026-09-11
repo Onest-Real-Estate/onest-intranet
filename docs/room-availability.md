@@ -13,6 +13,26 @@ user's office. Another office is selectable only when the existing office-scope
 policy grants access to it; scope is applied before rooms or occupancies are
 loaded.
 
+The selected office resolves to a **chain**, not a single node: the office plus
+its ancestors, so a room published at the region or the head office is bookable
+from every branch beneath it. That is one shared rule —
+`apps.user.services.hierarchy.agent_scope_office_ids`, also used by office
+resources and office inventory. Inheritance is downward only: a branch never
+sees a sibling branch, and a reader at a parent office does not acquire the
+branches' rooms.
+
+Two gates answer this question — `Space.objects.for_agent_office` for a list and
+`_reader_visibility` for a single record — and they must agree. When the rule
+was written separately in each, they drifted, and an inherited room listed fine
+and then served an empty payload. Both now call the shared helper; a test pins
+their agreement.
+
+Because the grid can hold rooms from more than one office, every row carries
+its owning office (`key`, `name`, `timezone`). The UI names that office only on
+rows whose office is not the one being viewed — labelling every row would
+repeat the page header a dozen times, and labelling none leaves two rooms
+called "Harbor boardroom" indistinguishable.
+
 Reservations owned by another user are serialized only as a `Busy` interval.
 Their owner, title, purpose, attendee count, and related-record context are not
 included. A user's own interval is labelled `Your reservation`. Public closure

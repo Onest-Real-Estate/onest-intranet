@@ -290,7 +290,29 @@ function DayAvailability({
   );
 }
 
-function SpaceIdentity({ space }: { space: RoomCalendarSpace }) {
+/**
+ * The owning office, but only when it is not the office being viewed.
+ *
+ * A room published at the region or the head office appears on every branch's
+ * calendar, so the grid can hold two rooms with the same name at two different
+ * addresses. Naming the office on every row would repeat the page header a
+ * dozen times; naming it on the rows that are not local is the whole signal.
+ */
+function visitingOffice(space: RoomCalendarSpace, homeOfficeKey: string | null) {
+  if (!homeOfficeKey || space.office.key === homeOfficeKey) {
+    return null;
+  }
+  return space.office.name;
+}
+
+function SpaceIdentity({
+  space,
+  homeOfficeKey,
+}: {
+  space: RoomCalendarSpace;
+  homeOfficeKey: string | null;
+}) {
+  const visiting = visitingOffice(space, homeOfficeKey);
   return (
     <div className="grid gap-2">
       <div>
@@ -299,6 +321,12 @@ function SpaceIdentity({ space }: { space: RoomCalendarSpace }) {
           {space.typeLabel}
           {space.location ? ` · ${space.location}` : ""}
         </p>
+        {visiting ? (
+          <p className="text-muted-foreground mt-1 flex items-center gap-1 text-xs">
+            <Building2 className="size-3.5 shrink-0" aria-hidden />
+            {visiting}
+          </p>
+        ) : null}
       </div>
       <div className="flex flex-wrap items-center gap-1.5">
         <Badge variant="outline">
@@ -326,10 +354,12 @@ function AgendaList({
   spaces,
   dates,
   timeZone,
+  homeOfficeKey,
 }: {
   spaces: RoomCalendarSpace[];
   dates: string[];
   timeZone: string;
+  homeOfficeKey: string | null;
 }) {
   return (
     <div className="divide-border border-border divide-y rounded-lg border">
@@ -347,7 +377,7 @@ function AgendaList({
                   key={space.publicId}
                   className="grid gap-3 sm:grid-cols-[minmax(12rem,18rem)_minmax(0,1fr)]"
                 >
-                  <SpaceIdentity space={space} />
+                  <SpaceIdentity space={space} homeOfficeKey={homeOfficeKey} />
                   <DayAvailability day={day} timeZone={timeZone} />
                 </article>
               );
@@ -437,9 +467,10 @@ export default function RoomAvailability() {
       const date = dates[0];
       return spaces.map((space) => {
         const day = space.days.find((item) => item.date === date);
+        const visiting = visitingOffice(space, office?.key ?? null);
         return {
           id: space.publicId,
-          label: space.typeLabel,
+          label: visiting ? `${space.typeLabel} · ${visiting}` : space.typeLabel,
           sublabel: space.name,
           isClosed: day?.isClosed,
           events: day ? dayEvents(space, day, timeZone, bounds.startHour) : [],
@@ -459,7 +490,16 @@ export default function RoomAvailability() {
           focused && day ? dayEvents(focused, day, timeZone, bounds.startHour) : [],
       };
     });
-  }, [filters.view, dates, spaces, focused, today, timeZone, bounds.startHour]);
+  }, [
+    filters.view,
+    dates,
+    spaces,
+    focused,
+    today,
+    timeZone,
+    bounds.startHour,
+    office?.key,
+  ]);
 
   const upcoming = useMemo(() => nextOpening(spaces), [spaces]);
 
@@ -754,6 +794,7 @@ export default function RoomAvailability() {
                       spaces={spaces}
                       dates={dates}
                       timeZone={calendar.timezone}
+                      homeOfficeKey={office?.key ?? null}
                     />
                   ) : (
                     <>

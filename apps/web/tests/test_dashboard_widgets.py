@@ -158,8 +158,14 @@ def test_contract_versions_are_pinned():
         "my_day": 1,
         "action_items": 2,
         "overdue_inventory": 1,
+        "support_queue": 1,
+        "team_tasks": 1,
+        "contracts_awaiting_signature": 1,
+        "feedback_signals": 1,
+        "agent_onboarding": 1,
+        "room_utilization": 1,
         "market": 1,
-        "quick_documents": 1,
+        "quick_documents": 2,
     }
 
 
@@ -225,7 +231,6 @@ def test_modules_without_a_backing_source_report_unavailable_not_empty():
     for key in (
         "active_transactions",
         "market",
-        "quick_documents",
     ):
         payload = widget_payload(WIDGET_BY_KEY[key], context)
         assert payload["status"] == WidgetStatus.UNAVAILABLE, key

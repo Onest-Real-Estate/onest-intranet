@@ -29,6 +29,7 @@ from apps.reservations.validators import (
     validate_space_photo,
 )
 from apps.user.models import Office
+from apps.user.services.hierarchy import agent_scope_office_ids
 from apps.user.storage import private_storage
 
 
@@ -48,9 +49,16 @@ class SpaceQuerySet(models.QuerySet["Space"]):
         return self.active_catalog().filter(is_reservable=True)
 
     def for_agent_office(self, office: Office | None) -> SpaceQuerySet:
-        if office is None or not office.is_active or not office.is_assignable:
-            return self.none()
-        return self.filter(owner_office=office).reservable_catalog()
+        """Reservable spaces for one assignable office and its ancestors.
+
+        A room published at the region or head office is bookable by every
+        branch beneath it. Without the chain the only way to give two offices
+        the same room was to enter it twice, which is why this table carries
+        duplicate rows. Inheritance is downward only.
+        """
+        return self.filter(
+            owner_office_id__in=agent_scope_office_ids(office)
+        ).reservable_catalog()
 
     def for_manager(self, user, *, access) -> SpaceQuerySet:
         if getattr(user, "is_anonymous", False):

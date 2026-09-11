@@ -29,7 +29,7 @@ function AgendaRow({ event }: { event: AgendaEvent }) {
             tomorrow sitting above a 5pm row the day after reads as a sorting
             bug rather than as two different days. */}
         {event.isToday ? null : (
-          <span className="text-muted-foreground text-[0.6875rem] font-medium">
+          <span className="text-muted-foreground text-micro font-medium">
             {event.dayLabel}
           </span>
         )}
@@ -53,7 +53,7 @@ function AgendaRow({ event }: { event: AgendaEvent }) {
             {event.title}
           </span>
           {event.statusLabel ? (
-            <span className="text-warning-ink bg-chip-warning border-chip-warning-edge shrink-0 rounded-full border px-1.5 py-px text-[0.6875rem] font-medium">
+            <span className="text-warning-ink bg-chip-warning border-chip-warning-edge shrink-0 rounded-md border px-1.5 py-px text-micro font-medium">
               {event.statusLabel}
             </span>
           ) : null}
@@ -118,7 +118,7 @@ function Section({
     <section className="grid gap-1" aria-label={label}>
       <h3
         className={cn(
-          "flex items-center gap-1.5 px-2 -mx-2 text-[0.6875rem] font-semibold tracking-[0.06em] uppercase",
+          "flex items-center gap-1.5 px-2 -mx-2 text-micro font-semibold tracking-[0.06em] uppercase",
           tone === "destructive" ? "text-destructive" : "text-muted-foreground",
         )}
       >

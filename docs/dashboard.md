@@ -90,19 +90,80 @@ discriminated union. `WidgetPanel` delegates `ready` data to the established
 widget component and owns the other states:
 
 - empty states explain what will appear and offer the next useful action;
-- unbuilt modules state that they are not connected and link onward when a
-  destination exists;
 - transient failures use an alert and retry only their own prop through an
   Inertia partial reload.
 
-Skeletons remain the `Deferred` fallbacks. The role-defining workflow leads the
-working grid in both DOM and visual order, followed by the daily and utility
-rail. That keeps mobile, desktop, keyboard, and screen-reader reading order in
-agreement.
+Unbuilt modules never reach `WidgetPanel`. A widget the registry marks
+`backed: false`, or whose provider answers `unavailable` with
+`retryable: false`, is moved out of the grid by `lib/dashboard/layout.ts` and
+stated once in the `PendingModules` band at the foot of the page — named, with
+the server's reason where it authored one, and linking onward where a
+destination exists. `WidgetPanel` still renders the unavailable envelope, for
+the retryable case and for anything that reaches it another way.
+
+Skeletons remain the `Deferred` fallbacks; a deferred prop that has not landed
+is not yet known to be unbacked, so it keeps its slot and its skeleton. The
+role-defining workflow leads the working grid in both DOM and visual order,
+followed by the daily and utility panels. That keeps mobile, desktop, keyboard,
+and screen-reader reading order in agreement. Widths, and only widths, are
+computed: see "Rows, not columns" in `docs/dashboard-profiles.md`.
 
 The greeting and date are server props. `user_timezone()` currently returns the
 application timezone because no user or office timezone field exists. Add that
 configured field at this seam rather than deriving a timezone from an address.
+
+## Connected modules
+
+Fourteen of the sixteen registered widgets read a live source. Each provider is
+a *view* of an existing operations surface and reuses that surface's own
+visibility gate rather than re-deriving one, so a panel can never show a row its
+destination would deny:
+
+| Widget | Source | Gate it reuses |
+| --- | --- | --- |
+| `performance` | `web.metrics` registry | per-metric permission + scope |
+| `quick_access` | administered Quick Access links | audience resolution |
+| `announcements` | `announcements.audience` | the feed's own predicate |
+| `training` | `training` progress | per-user completion |
+| `my_day` | reservations agenda | the reader's own bookings |
+| `action_items` | action-item registry | per-source permission |
+| `overdue_inventory` | `inventory.overdue` | `managed_reservation_queryset` |
+| `support_queue` | `it_support.SupportTicket` | `TicketQuerySet.for_reader` |
+| `team_tasks` | `operational_tasks.OperationalTask` | `TaskQuerySet.for_reader` |
+| `quick_documents` | `user.OfficeResource` | `effective_resources` |
+| `agent_onboarding` | `user.UserOnboardingCase` | `new_agent_queryset` |
+| `room_utilization` | `reservations.Occupancy` | `manager_spaces` |
+| `contracts_awaiting_signature` | `contract.AgentContract` | `scoped_contract_queryset` |
+| `feedback_signals` | `feedback.FeedbackTicket` | `FeedbackQuerySet.for_reader` |
+
+Two rules the connected set follows:
+
+- **The widget's declared permission is the destination's permission.** A panel
+  admitted by a different grant links every row into a 403. `team_tasks` and
+  `support_queue` previously listed `web.view_platform_tasks`, which is
+  sanitized Celery job status and a different module entirely; both now ask for
+  the grant their own page enforces.
+- **An empty scope is `empty`, never `unavailable`.** "Nothing open" and "this
+  module does not exist" are different facts, and only the second belongs in the
+  closing "Not connected yet" band.
+
+**Still unconnected**, and honestly reported in the closing band rather than
+faked:
+
+- `active_transactions` and `market` have registered providers that answer
+  `unavailable`: the first needs a transactions domain, the second an external
+  market feed.
+- `closing_pipeline` and `compliance_exceptions` have no domain model. A
+  compliance "exception" needs defining before it can be counted.
+- `operational_activity` has the data — `audit.AuditEvent` carries office and
+  region stable keys — but `activity_timeline` is a per-record JSON endpoint,
+  not a browsable page, so there is nowhere for the panel to lead. Connecting it
+  means building that page first.
+
+**Known gap.** No catalogued role holds `web.triage_it_support`, so the IT
+support queue — page and panel alike — shows even an IT Support reader only the
+requests they raised. That is a role-bundle gap, not a widget behaviour; the
+panel deliberately mirrors the page rather than inventing wider reach.
 
 ## Adding a production provider
 
