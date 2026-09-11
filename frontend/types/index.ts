@@ -1269,6 +1269,7 @@ export interface SelfProfileValues extends OnboardingProfileValues {
   instagramUrl: string;
   xUrl: string;
   languages: string[];
+  specialties: string[];
 }
 
 export interface ProfileOffice {
@@ -1331,6 +1332,7 @@ export interface ProfileLimits {
   headshotMinDimension: number;
   bioMaxLength: number;
   maxLanguages: number;
+  maxSpecialties: number;
 }
 
 export interface OnboardingPageProps extends PageProps {
@@ -1347,6 +1349,7 @@ export interface ProfilePageProps extends PageProps {
   offices: OfficeGroup[];
   states: StateOption[];
   languageOptions: LanguageOption[];
+  specialtyOptions: LanguageOption[];
   contactMethods: ContactMethodOption[];
   socialPlatforms: SocialPlatformOption[];
   identity: ProfileIdentity;
@@ -1691,6 +1694,74 @@ export interface UserDirectoryPageProps extends PageProps {
   visible: { administration: boolean; contract: boolean; onboarding: boolean };
   /** Whether rows may link into the administrative record. */
   canOpenRecord: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Peer Agent Directory (privacy-aware)
+// ---------------------------------------------------------------------------
+
+export interface AgentDirectoryCodeLabel {
+  code: string;
+  name: string;
+}
+
+export interface AgentDirectoryOffice {
+  id: number;
+  name: string;
+  pathLabel: string;
+  regionName: string;
+}
+
+export interface AgentDirectoryPerson {
+  id: number;
+  preferredName: string;
+  roles: string[];
+  office: AgentDirectoryOffice | null;
+  workPhone: string;
+  workEmail: string;
+  specialties: AgentDirectoryCodeLabel[];
+  languages: AgentDirectoryCodeLabel[];
+  licenseState: string;
+  licenseStateName: string;
+  /** Gated headshot path — never a permanent public media URL. */
+  headshotPath: string | null;
+}
+
+export interface AgentDirectoryFilters {
+  q: string;
+  office: string;
+  region: string;
+  role: string;
+  licenseState: string;
+  specialty: string;
+  language: string;
+  view: string;
+  [key: string]: string;
+}
+
+export interface AgentDirectoryFilterOptions {
+  offices: FilterOption[];
+  regions: FilterOption[];
+  roles: FilterOption[];
+  licenseStates: FilterOption[];
+  specialties: FilterOption[];
+  languages: FilterOption[];
+}
+
+export interface AgentDirectoryEmptyState {
+  kind: "no-people" | "no-results";
+  title: string;
+  description: string;
+}
+
+export interface AgentDirectoryPageProps extends PageProps {
+  people: ListResponse<AgentDirectoryPerson, AgentDirectoryFilters>;
+  filterOptions: AgentDirectoryFilterOptions;
+  empty: AgentDirectoryEmptyState | null;
+}
+
+export interface AgentDirectoryDetailPageProps extends PageProps {
+  person: AgentDirectoryPerson;
 }
 
 // ---------------------------------------------------------------------------

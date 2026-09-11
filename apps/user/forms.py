@@ -29,8 +29,10 @@ from .profile_fields import (
     BIO_MAX_LENGTH,
     LANGUAGE_CHOICES,
     MAX_LANGUAGES,
+    MAX_SPECIALTIES,
     PREFERRED_CONTACT_CHOICES,
     SOCIAL_PLATFORMS,
+    SPECIALTY_CHOICES,
     contact_method_options,
     language_options,
     normalize_bio,
@@ -38,8 +40,10 @@ from .profile_fields import (
     normalize_license_number,
     normalize_name,
     normalize_preferred_contact_method,
+    normalize_specialties,
     normalize_url,
     social_platform_options,
+    specialty_options,
 )
 from .roles import ScopeType, is_valid_scope_type
 from .services.account_state import (
@@ -241,6 +245,12 @@ class SelfProfileForm(ProfileForm):
         required=False,
         widget=forms.CheckboxSelectMultiple,
     )
+    specialties = forms.MultipleChoiceField(
+        label=_("Specialties"),
+        choices=SPECIALTY_CHOICES,
+        required=False,
+        widget=forms.CheckboxSelectMultiple,
+    )
     # Declared as text, not URLField: a bare "example.com" is what people type,
     # and ``normalize_url`` upgrades it rather than rejecting it.
     website_url = forms.CharField(label=_("Website"), required=False)
@@ -258,6 +268,7 @@ class SelfProfileForm(ProfileForm):
             "license_expires_on",
             "bio",
             "languages",
+            "specialties",
             "website_url",
             "linkedin_url",
             "facebook_url",
@@ -289,6 +300,9 @@ class SelfProfileForm(ProfileForm):
 
     def clean_languages(self):
         return normalize_languages(self.cleaned_data.get("languages", []))
+
+    def clean_specialties(self):
+        return normalize_specialties(self.cleaned_data.get("specialties", []))
 
     def clean_website_url(self):
         return normalize_url(self.cleaned_data.get("website_url", ""), label="website")
@@ -387,6 +401,19 @@ def _posted_languages(user: User, posted: Mapping[str, Any] | None) -> list[str]
     return [str(raw)] if raw else []
 
 
+def _posted_specialties(user: User, posted: Mapping[str, Any] | None) -> list[str]:
+    """Specialty codes, preferring what was just submitted over what is stored."""
+    if posted is None:
+        return list(user.specialties or [])
+    getlist = getattr(posted, "getlist", None)
+    if callable(getlist):
+        return [str(code) for code in getlist("specialties")]
+    raw = posted.get("specialties", [])
+    if isinstance(raw, (list, tuple)):
+        return [str(code) for code in raw]
+    return [str(raw)] if raw else []
+
+
 def profile_initial(
     user: User,
     posted: Mapping[str, Any] | None = None,
@@ -394,6 +421,7 @@ def profile_initial(
     request=None,
     field_map: tuple[tuple[str, str], ...] = ONBOARDING_FIELD_MAP,
     include_languages: bool = False,
+    include_specialties: bool = False,
 ) -> dict:
     """Values for the React form. Posted data wins so a 422 doesn't wipe the form."""
 
@@ -405,6 +433,8 @@ def profile_initial(
     }
     if include_languages:
         initial["languages"] = _posted_languages(user, posted)
+    if include_specialties:
+        initial["specialties"] = _posted_specialties(user, posted)
     initial["headshotUrl"] = (
         headshot_public_url(request, user)
         if request
@@ -493,11 +523,13 @@ def self_profile_page_props(
             request=request,
             field_map=SELF_PROFILE_FIELD_MAP,
             include_languages=True,
+            include_specialties=True,
         ),
         "validation": errors or empty_validation_errors(),
         "offices": Office.grouped_choices() if can_change_office else [],
         "states": [{"code": code, "name": name} for code, name in US_STATE_CHOICES],
         "languageOptions": language_options(),
+        "specialtyOptions": specialty_options(),
         "contactMethods": contact_method_options(),
         "socialPlatforms": social_platform_options(),
         "identity": profile_identity(user),
@@ -508,6 +540,7 @@ def self_profile_page_props(
             "headshotMinDimension": MIN_DIM,
             "bioMaxLength": BIO_MAX_LENGTH,
             "maxLanguages": MAX_LANGUAGES,
+            "maxSpecialties": MAX_SPECIALTIES,
         },
     }
 

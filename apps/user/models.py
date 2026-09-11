@@ -37,11 +37,13 @@ from .profile_fields import (
     MAX_URL_LENGTH,
     PREFERRED_CONTACT_CHOICES,
     SOCIAL_PLATFORMS,
+    SPECIALTY_CHOICES,
     normalize_bio,
     normalize_languages,
     normalize_license_number,
     normalize_name,
     normalize_preferred_contact_method,
+    normalize_specialties,
     normalize_url,
 )
 from .roles import ScopeType, is_valid_scope_type, normalize_role_code
@@ -745,6 +747,13 @@ class User(AbstractUser):
         help_text=_("Language codes from %(count)d supported options.")
         % {"count": len(LANGUAGE_CHOICES)},
     )
+    specialties = models.JSONField(
+        _("specialties"),
+        default=list,
+        blank=True,
+        help_text=_("Practice-area codes from %(count)d supported options.")
+        % {"count": len(SPECIALTY_CHOICES)},
+    )
     preferred_contact_method = models.CharField(
         _("preferred contact method"),
         max_length=16,
@@ -898,6 +907,13 @@ class User(AbstractUser):
                 name="user_agent_identifier_unique_when_set",
             ),
         ]
+        indexes = [
+            models.Index(
+                fields=["is_active", "agent_status"],
+                name="user_directory_visible",
+            ),
+            models.Index(fields=["license_state"], name="user_directory_license"),
+        ]
 
     def __str__(self):
         return self.display_name or self.get_full_name() or self.email
@@ -1025,6 +1041,11 @@ class User(AbstractUser):
             self.languages = normalize_languages(self.languages)
         except ValidationError as exc:
             errors["languages"] = exc
+
+        try:
+            self.specialties = normalize_specialties(self.specialties)
+        except ValidationError as exc:
+            errors["specialties"] = exc
 
         try:
             self.preferred_contact_method = normalize_preferred_contact_method(

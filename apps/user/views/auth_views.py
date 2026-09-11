@@ -99,6 +99,7 @@ _PROFILE_AUDIT_FIELDS = [
     "license_expires_on",
     "preferred_contact_method",
     "languages",
+    "specialties",
     "website_url",
     "linkedin_url",
     "facebook_url",

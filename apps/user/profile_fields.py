@@ -68,6 +68,33 @@ _LANGUAGE_ORDER: dict[str, int] = {
 MAX_LANGUAGES = 10
 
 # ---------------------------------------------------------------------------
+# Specialties
+# ---------------------------------------------------------------------------
+
+# Closed brokerage practice areas — kept queryable for the agent directory.
+SPECIALTY_CHOICES: tuple[tuple[str, str], ...] = (
+    ("residential", "Residential"),
+    ("commercial", "Commercial"),
+    ("luxury", "Luxury"),
+    ("relocation", "Relocation"),
+    ("new_construction", "New construction"),
+    ("property_management", "Property management"),
+    ("land", "Land"),
+    ("investment", "Investment"),
+    ("short_sales", "Short sales / REO"),
+    ("first_time_buyers", "First-time buyers"),
+    ("senior_living", "Senior living"),
+    ("rentals", "Rentals"),
+)
+
+SPECIALTY_NAMES: dict[str, str] = dict(SPECIALTY_CHOICES)
+_SPECIALTY_ORDER: dict[str, int] = {
+    code: index for index, (code, _name) in enumerate(SPECIALTY_CHOICES)
+}
+
+MAX_SPECIALTIES = 8
+
+# ---------------------------------------------------------------------------
 # Preferred contact method
 # ---------------------------------------------------------------------------
 
@@ -274,8 +301,47 @@ def normalize_preferred_contact_method(value: str) -> str:
     return raw
 
 
+def normalize_specialties(values) -> list[str]:
+    """Return deduplicated, ordered specialty codes from the supported set."""
+    if values in (None, ""):
+        return []
+    if isinstance(values, str):
+        values = [values]
+    if not isinstance(values, (list, tuple, set, frozenset)):
+        raise ValidationError(_("Choose specialties from the list."), code="invalid")
+
+    seen: set[str] = set()
+    cleaned: list[str] = []
+    for raw in values:
+        code = str(raw).strip().lower()
+        if not code:
+            continue
+        if code not in SPECIALTY_NAMES:
+            raise ValidationError(
+                _("“%(code)s” is not one of the specialties we support.")
+                % {"code": code[:32]},
+                code="invalid",
+            )
+        if code in seen:
+            continue
+        seen.add(code)
+        cleaned.append(code)
+
+    if len(cleaned) > MAX_SPECIALTIES:
+        raise ValidationError(
+            _("Choose up to %(max)d specialties.") % {"max": MAX_SPECIALTIES},
+            code="max_length",
+        )
+    cleaned.sort(key=_SPECIALTY_ORDER.__getitem__)
+    return cleaned
+
+
 def language_options() -> list[dict[str, str]]:
     return [{"code": code, "name": name} for code, name in LANGUAGE_CHOICES]
+
+
+def specialty_options() -> list[dict[str, str]]:
+    return [{"code": code, "name": name} for code, name in SPECIALTY_CHOICES]
 
 
 def contact_method_options() -> list[dict[str, str]]:

@@ -417,14 +417,14 @@ export const HUB_NAV_REGISTRY: HubNavItem[] = [
   {
     key: "agent-directory",
     label: "Agent directory",
-    route: route("coming_soon", routes.coming_soon("agent-directory")),
+    route: route("agent_directory", routes.agent_directory()),
     icon: Users,
     group: "directory",
     order: 10,
     access: "authenticated",
     permissions: {},
     feature: "agent-directory",
-    activeMatch: active(routes.coming_soon("agent-directory")),
+    activeMatch: active(routes.agent_directory()),
   },
   {
     key: "admin-users",
