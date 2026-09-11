@@ -78,6 +78,7 @@ def test_only_the_live_destinations_are_enabled():
             "admin-marketing-resources": True,
             "admin-rooms": True,
             "my-reservations": True,
+            "agent-directory": True,
         }.items()
         if enabled
     }
@@ -101,6 +102,7 @@ def test_only_the_live_destinations_are_enabled():
     assert HUB_FEATURES["admin-it-support"] is True
     assert HUB_FEATURES["admin-rooms"] is True
     assert HUB_FEATURES["my-reservations"] is True
+    assert HUB_FEATURES["agent-directory"] is True
 
 
 def test_feature_states_are_a_copy_callers_cannot_corrupt():
@@ -128,6 +130,7 @@ def test_unauthorized_administrative_feature_keys_are_not_shared(client):
         "my-tools": True,
         "training-learning": True,
         "marketing-resources": True,
+        "agent-directory": True,
     }
     assert not any(key.startswith("admin-") for key in props["features"])
 
@@ -229,6 +232,7 @@ def test_shared_props_carry_feature_state_and_office(client):
         "my-tools": True,
         "training-learning": True,
         "marketing-resources": True,
+        "agent-directory": True,
     }
     assert props["primaryOffice"] == {
         "id": office.id,
