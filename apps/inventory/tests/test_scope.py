@@ -152,3 +152,80 @@ def test_superuser_writable_scope_includes_assignable_offices(seeded):
     assert scope.office_ids
     assert office("fairfax-va").pk in scope.office_ids
     assert writable_offices(superuser).filter(pk=office("fairfax-va").pk).exists()
+
+
+# ---------------------------------------------------------------------------
+# Office-chain inheritance
+#
+# The agent catalogue used to be an exact `owner_office` match, so there was no
+# way to publish one record for the whole brokerage — an administrator had to
+# re-create it per branch — and any office holding no records of its own showed
+# its agents an empty catalogue. Scope is now the office chain, downward only.
+# ---------------------------------------------------------------------------
+
+
+def test_agent_sees_company_wide_stock_published_once(seeded):
+    agent = person("agent@example.com", "fairfax-va")
+    make_item("onest-head-office", "Brokerage lockbox")
+    assert agent_names(agent) == {"Brokerage lockbox"}
+
+
+def test_own_office_and_inherited_stock_appear_together(seeded):
+    agent = person("agent@example.com", "fairfax-va")
+    make_item("onest-head-office", "Brokerage lockbox")
+    make_item("fairfax-va", "Fairfax chair")
+    assert agent_names(agent) == {"Brokerage lockbox", "Fairfax chair"}
+
+
+def test_a_node_that_cannot_own_stock_does_not_break_the_chain(seeded):
+    # Fairfax's chain is branch → ro-virginia → region-mid-atlantic → head
+    # office, and the two middle nodes are not assignable, so nothing can be
+    # owned there. The head office above them still reaches the branch.
+    agent = person("agent@example.com", "fairfax-va")
+    assert office("ro-virginia").is_assignable is False
+    make_item("onest-head-office", "Brokerage lockbox")
+    assert agent_names(agent) == {"Brokerage lockbox"}
+
+
+def test_inheritance_does_not_reach_a_sibling_branch(seeded):
+    agent = person("agent@example.com", "fairfax-va")
+    make_item("harrisburg", "Harrisburg pole")
+    make_item("onest-head-office", "Brokerage lockbox")
+    # The chain runs up, never across or down.
+    assert agent_names(agent) == {"Brokerage lockbox"}
+
+
+def test_a_reader_at_a_parent_office_does_not_inherit_the_branches(seeded):
+    # Descendant reach is manager reach and lives behind `web.view_inventory`
+    # on the administration surface. The agent catalogue must not grant it, or
+    # head-office staff could reserve a lockbox physically held in another city.
+    staff = person("staff@example.com", "onest-head-office")
+    make_item("fairfax-va", "Fairfax chair")
+    make_item("onest-head-office", "Brokerage lockbox")
+    assert agent_names(staff) == {"Brokerage lockbox"}
+
+
+def test_inherited_items_still_respect_the_reservable_catalog(seeded):
+    agent = person("agent@example.com", "fairfax-va")
+    make_item(
+        "onest-head-office", "Damaged company kit", state=ItemAvailabilityState.DAMAGED
+    )
+    assert agent_names(agent) == set()
+
+
+def test_a_reader_without_an_office_has_no_chain(seeded):
+    agent = person("agent@example.com", "fairfax-va")
+    agent.office = None
+    agent.save(update_fields=["office"])
+    make_item("onest-head-office", "Brokerage lockbox")
+    assert agent_names(agent) == set()
+
+
+def test_a_reader_whose_office_is_inactive_has_no_chain(seeded):
+    agent = person("agent@example.com", "fairfax-va")
+    branch = office("fairfax-va")
+    branch.is_active = False
+    branch.save(update_fields=["is_active"])
+    make_item("onest-head-office", "Brokerage lockbox")
+    agent.refresh_from_db()
+    assert agent_names(agent) == set()

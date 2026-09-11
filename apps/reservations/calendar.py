@@ -377,6 +377,16 @@ def build_calendar(*, user: User, filters: CalendarFilters, now=None) -> dict:
         rows.append(
             {
                 "publicId": str(space.public_id),
+                # The owning office, because the grid is no longer one office's
+                # rooms: a room published at the region or head office appears
+                # for every branch beneath it, and two sites can name a room the
+                # same thing. The reader has to be able to tell "Harbor
+                # boardroom" here from "Harbor boardroom" three floors away.
+                "office": {
+                    "key": space.owner_office.stable_key,
+                    "name": space.owner_office.name,
+                    "timezone": space.owner_office.timezone,
+                },
                 "name": space.name,
                 "type": space.space_type,
                 "typeLabel": space.get_space_type_display(),

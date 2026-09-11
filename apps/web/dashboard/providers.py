@@ -273,13 +273,54 @@ def overdue_inventory(context: DashboardContext) -> ProviderResult:
     return overdue_inventory_queue(context)
 
 
+def support_queue(context: DashboardContext) -> ProviderResult:
+    """Open IT requests inside the reader's support reach."""
+    from apps.it_support.dashboard import support_queue as build
+
+    return build(context)
+
+
+def team_tasks(context: DashboardContext) -> ProviderResult:
+    """Live operational tasks inside the reader's effective scope."""
+    from apps.operational_tasks.dashboard import team_tasks as build
+
+    return build(context)
+
+
+def contracts_awaiting_signature(context: DashboardContext) -> ProviderResult:
+    """Issued contracts sitting with the agent, oldest first."""
+    from apps.contract.dashboard import contracts_awaiting_signature as build
+
+    return build(context)
+
+
+def feedback_signals(context: DashboardContext) -> ProviderResult:
+    """Open feedback inside the reader's triage reach."""
+    from apps.feedback.dashboard import feedback_signals as build
+
+    return build(context)
+
+
+def agent_onboarding(context: DashboardContext) -> ProviderResult:
+    """New-agent onboarding funnel over the reader's administered people."""
+    from apps.user.dashboard import agent_onboarding as build
+
+    return build(context)
+
+
+def room_utilization(context: DashboardContext) -> ProviderResult:
+    """Booked share of published open hours across the reader's rooms."""
+    from apps.reservations.dashboard import room_utilization as build
+
+    return build(context)
+
+
 def market(context: DashboardContext) -> ProviderResult:
     return unavailable("No market data feed is connected to the hub yet.")
 
 
 def quick_documents(context: DashboardContext) -> ProviderResult:
-    return unavailable(
-        "The document library is not connected to the hub yet.",
-        action_label="Go to documents",
-        action_href=_section_href("documents-forms"),
-    )
+    """Files and links from the reader's office resource library."""
+    from apps.user.dashboard import quick_documents as build
+
+    return build(context)

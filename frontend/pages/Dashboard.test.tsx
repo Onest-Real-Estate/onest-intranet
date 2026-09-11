@@ -8,6 +8,7 @@ import { DASHBOARD_PROFILE_STORAGE_KEY } from "@/lib/dashboard/resolve";
 import Dashboard from "@/pages/Dashboard";
 import type {
   DashboardPageProps,
+  DashboardSchedule,
   DashboardWidget,
   DashboardWidgetProp,
   User,
@@ -39,6 +40,7 @@ const ALL_PERMISSIONS = [
   "web.view_compliance",
   "web.view_office_tasks",
   "web.view_platform_tasks",
+  "web.view_operational_tasks",
   "web.view_inventory",
   "web.view_reservations",
   "web.view_users",
@@ -74,6 +76,28 @@ function pending(reason: string): DashboardWidget<never> {
   };
 }
 
+/** A widget envelope the server filled. */
+function readySchedule(): DashboardWidget<DashboardSchedule> {
+  return {
+    status: "ready",
+    version: 1,
+    generatedAt: "2026-08-19T09:00:00-04:00",
+    data: {
+      dateLabel: "Wednesday, August 19",
+      timezone: "America/New_York",
+      overdue: [],
+      today: [],
+      upcoming: [],
+      total: 0,
+      viewAllHref: "/reservations/",
+      viewAllLabel: "View my reservations",
+    },
+    emptyState: null,
+    unavailable: null,
+    meta: {},
+  };
+}
+
 /** Only the props a server provider actually fills today. */
 const BACKED_PROPS: DashboardWidgetProp[] = [
   "metrics",
@@ -85,12 +109,28 @@ const BACKED_PROPS: DashboardWidgetProp[] = [
   "actionItems",
   "market",
   "documents",
+  "supportQueue",
+  "teamTasks",
+  "contractsAwaitingSignature",
+  "feedbackSignals",
+  "agentOnboarding",
+  "roomUtilization",
+  "overdueInventory",
 ];
 
-function setPage(overrides: Partial<DashboardPageProps> = {}) {
+function setPage(
+  overrides: Partial<DashboardPageProps> = {},
+  /**
+   * False leaves every widget prop absent, which is what a page whose deferred
+   * props have not arrived yet actually looks like.
+   */
+  { envelopes = true }: { envelopes?: boolean } = {},
+) {
   const widgets: Partial<Record<DashboardWidgetProp, DashboardWidget<never>>> = {};
-  for (const prop of BACKED_PROPS) {
-    widgets[prop] = pending(`${prop} is not connected.`);
+  if (envelopes) {
+    for (const prop of BACKED_PROPS) {
+      widgets[prop] = pending(`${prop} is not connected.`);
+    }
   }
   pageProps.current = {
     user: reader(),
@@ -117,10 +157,26 @@ function setPage(overrides: Partial<DashboardPageProps> = {}) {
   };
 }
 
-function panelTitles(): string[] {
-  return screen
-    .getAllByRole("heading", { level: 2 })
-    .map((heading) => heading.textContent ?? "");
+/**
+ * Every widget the active profile resolved to, in the order the page renders
+ * it — whether it got a panel or a line in the closing "Not connected yet"
+ * band. Composition and reading order are the contract these tests assert;
+ * which of the two forms a widget takes depends only on whether a provider has
+ * shipped, and must not change the answer.
+ */
+function widgetTitles(): string[] {
+  const nodes = document.querySelectorAll<HTMLElement>(
+    'h2, [data-dashboard-band="pending"] li[data-widget]',
+  );
+  return Array.from(nodes)
+    .filter(
+      (node) => !(node.tagName === "H2" && node.textContent === "Not connected yet"),
+    )
+    .map((node) =>
+      node.tagName === "H2"
+        ? (node.textContent ?? "")
+        : (node.querySelector("p")?.textContent ?? ""),
+    );
 }
 
 beforeEach(() => {
@@ -145,7 +201,7 @@ describe("Dashboard shell", () => {
 
   it("leads with the metrics row, then brokerage news", () => {
     render(<Dashboard />);
-    const titles = panelTitles();
+    const titles = widgetTitles();
     expect(titles[0]).toBe("Performance");
     expect(titles[1]).toBe("News & announcements");
   });
@@ -154,7 +210,7 @@ describe("Dashboard shell", () => {
     // The columns collapse into one on a phone. Keeping the primary workflow
     // first in the DOM also keeps keyboard and desktop visual order aligned.
     render(<Dashboard />);
-    const titles = panelTitles();
+    const titles = widgetTitles();
 
     expect(titles.indexOf("Active transactions")).toBeLessThan(
       titles.indexOf("Action items"),
@@ -166,6 +222,10 @@ describe("Dashboard shell", () => {
 
   it("shows skeletons while deferred widgets are loading", () => {
     deferredReady.current = false;
+    // A deferred prop that has not arrived is absent from the page props, not
+    // present as an envelope. The page cannot know a widget is unbacked yet, so
+    // it keeps its slot and renders its own skeleton.
+    setPage({}, { envelopes: false });
     render(<Dashboard />);
 
     // The metrics row's skeleton is four loading stat cards.
@@ -200,7 +260,7 @@ describe("per-role dashboards", () => {
         user: reader({ roles: [role], permissions: ALL_PERMISSIONS }),
       });
       render(<Dashboard />);
-      const titles = panelTitles();
+      const titles = widgetTitles();
 
       expect(titles).toContain(workflow);
       expect(titles).toContain(support);
@@ -210,7 +270,7 @@ describe("per-role dashboards", () => {
 
   it("gives an agent their own book of business and no team panels", () => {
     render(<Dashboard />);
-    const titles = panelTitles();
+    const titles = widgetTitles();
 
     expect(titles).toContain("Active transactions");
     expect(titles).toContain("Market snapshot");
@@ -223,7 +283,7 @@ describe("per-role dashboards", () => {
       user: reader({ roles: ["branch_manager"], permissions: ALL_PERMISSIONS }),
     });
     render(<Dashboard />);
-    const titles = panelTitles();
+    const titles = widgetTitles();
 
     expect(titles).toContain("Closing pipeline");
     expect(titles).toContain("Agent onboarding");
@@ -237,7 +297,7 @@ describe("per-role dashboards", () => {
     });
     render(<Dashboard />);
 
-    expect(panelTitles()).toContain("Compliance exceptions");
+    expect(widgetTitles()).toContain("Compliance exceptions");
   });
 
   it("gives IT support the support queue", () => {
@@ -246,7 +306,7 @@ describe("per-role dashboards", () => {
     });
     render(<Dashboard />);
 
-    const titles = panelTitles();
+    const titles = widgetTitles();
     expect(titles).toContain("Support queue");
     expect(titles.indexOf("Support queue")).toBeLessThan(titles.indexOf("Team tasks"));
   });
@@ -256,25 +316,29 @@ describe("per-role dashboards", () => {
       user: reader({ roles: ["system_admin"], permissions: ALL_PERMISSIONS }),
     });
     render(<Dashboard />);
-    const titles = panelTitles();
+    const titles = widgetTitles();
 
     expect(new Set(titles).size).toBe(titles.length);
   });
 
-  it("lets a rail-only scoped dashboard use the full working width", () => {
+  it("widens a narrow widget rather than leaving a hole beside it", () => {
     setPage({
       user: reader({ roles: ["system_admin"], permissions: ALL_PERMISSIONS }),
       scope: {
         selectedKey: "self",
         options: [{ key: "self", label: "My work", level: "self" }],
       },
+      // One connected widget, and it is a rail-width one. A four-twelfths panel
+      // with eight empty twelfths beside it is the hole this layout exists to
+      // close.
+      schedule: readySchedule(),
     });
     const { container } = render(<Dashboard />);
 
-    expect(container.querySelector('[data-dashboard-column="main"]')).toBeNull();
-    expect(container.querySelector('[data-dashboard-column="rail"]')).toHaveClass(
-      "xl:col-span-12",
-    );
+    const slots = container.querySelectorAll("[data-dashboard-slot]");
+    expect(slots).toHaveLength(1);
+    expect(slots[0]).toHaveAttribute("data-dashboard-slot", "rail");
+    expect(slots[0]).toHaveClass("xl:col-span-12");
   });
 });
 
@@ -297,6 +361,42 @@ describe("widget states", () => {
     expect(screen.getAllByText("Not connected yet").length).toBeGreaterThan(0);
   });
 
+  it("states every unconnected module once, with its destination", () => {
+    const { container } = render(<Dashboard />);
+    const band = container.querySelector('[data-dashboard-band="pending"]');
+
+    // One statement for the whole page rather than one panel-sized apology per
+    // module — but the same modules, named, with the same reasons.
+    expect(band).not.toBeNull();
+    expect(screen.getAllByRole("heading", { name: "Not connected yet" })).toHaveLength(
+      1,
+    );
+    expect(
+      within(band as HTMLElement).getByText("transactions is not connected."),
+    ).toBeVisible();
+    expect(container.querySelectorAll("[data-dashboard-slot]")).toHaveLength(0);
+  });
+
+  it("keeps a widget that failed this request as a panel with its retry", () => {
+    setPage({
+      schedule: {
+        status: "unavailable",
+        version: 1,
+        generatedAt: "2026-08-19T09:00:00-04:00",
+        data: null,
+        emptyState: null,
+        // A provider that fell over is not an unbuilt module: the reader can
+        // act on it, so it keeps the panel that carries the action.
+        unavailable: { reason: "The agenda service did not answer.", retryable: true },
+        meta: {},
+      },
+    });
+    render(<Dashboard />);
+
+    expect(widgetTitles()).toContain("My day");
+    expect(screen.getByRole("button", { name: "Try again" })).toBeVisible();
+  });
+
   it("withholds a restricted panel instead of implying nothing to review", () => {
     // Compliance role, but the compliance permission has been revoked.
     setPage({ user: reader({ roles: ["compliance"], permissions: [] }) });
@@ -305,7 +405,7 @@ describe("widget states", () => {
     expect(
       screen.getAllByRole("heading", { name: "Restricted" }).length,
     ).toBeGreaterThan(0);
-    expect(panelTitles()).toContain("Compliance exceptions");
+    expect(widgetTitles()).toContain("Compliance exceptions");
   });
 
   it("marks the page stale when effective access changes mid-session", async () => {
@@ -347,8 +447,8 @@ describe("profile switching", () => {
     await userEvent.click(switcher);
     await userEvent.click(screen.getByRole("option", { name: "Agent" }));
 
-    expect(panelTitles()).toContain("Market snapshot");
-    expect(panelTitles()).not.toContain("Closing pipeline");
+    expect(widgetTitles()).toContain("Market snapshot");
+    expect(widgetTitles()).not.toContain("Closing pipeline");
     // Presentation only: nothing was asked of the server.
     expect(routerReload).not.toHaveBeenCalled();
     expect(window.localStorage.getItem(DASHBOARD_PROFILE_STORAGE_KEY)).toBe("agent");
@@ -366,7 +466,7 @@ describe("profile switching", () => {
     await userEvent.click(screen.getByLabelText("Dashboard view"));
     await userEvent.click(screen.getByRole("option", { name: "Branch Manager" }));
 
-    const titles = panelTitles();
+    const titles = widgetTitles();
     expect(titles).not.toContain("Agent onboarding");
     expect(titles).not.toContain("Room utilization");
   });
@@ -375,8 +475,8 @@ describe("profile switching", () => {
     window.localStorage.setItem(DASHBOARD_PROFILE_STORAGE_KEY, "systemAdmin");
     render(<Dashboard />);
 
-    expect(panelTitles()).not.toContain("Operational activity");
-    expect(panelTitles()).toContain("Active transactions");
+    expect(widgetTitles()).not.toContain("Operational activity");
+    expect(widgetTitles()).toContain("Active transactions");
   });
 });
 

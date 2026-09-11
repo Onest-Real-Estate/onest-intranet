@@ -1,9 +1,13 @@
+import { Link } from "@inertiajs/react";
+import { ArrowRight } from "lucide-react";
+
 import {
   PanelHeader,
   SurfaceCard,
   SurfaceCardContent,
   SurfaceCardMeta,
 } from "@/components/design-system/surface-card";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import type { DashboardStages } from "@/types";
@@ -39,7 +43,19 @@ export function StageFunnel({
       <PanelHeader
         title={title}
         meta={<SurfaceCardMeta>{data.caption}</SurfaceCardMeta>}
-        action={action}
+        // The provider sends the list this funnel counts; an explicit `action`
+        // still wins for a caller that needs a different control.
+        action={
+          action ??
+          (data.viewAllHref ? (
+            <Button asChild variant="ghost" size="sm" className="gap-1">
+              <Link href={data.viewAllHref}>
+                View all
+                <ArrowRight className="size-3.5" strokeWidth={1.5} aria-hidden />
+              </Link>
+            </Button>
+          ) : undefined)
+        }
       />
       <SurfaceCardContent>
         <dl className="grid gap-2 sm:grid-cols-2">

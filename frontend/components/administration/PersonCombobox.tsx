@@ -4,6 +4,7 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import type { AgentContractRecipientResult } from "@/types";
 
@@ -133,6 +134,14 @@ function Note({
  *   it, so a slow response for "sam" cannot overwrite a fast one for "samuel".
  * * **Selection roves, focus does not.** Arrow keys move a highlight while the
  *   caret stays in the input, exposed with `aria-activedescendant`.
+ *
+ * The result panel is **portalled**, not absolutely positioned inside the
+ * field. Every surface this field is used on is a `SurfaceCard`, and that card
+ * clips to its own rounded corners so a table or a hero can run edge to edge —
+ * `overflow: hidden` clips an absolutely positioned descendant no matter what
+ * `z-index` it carries, so the results were cut off at the bottom of the card.
+ * A portal leaves the clipping context entirely; the anchor keeps the panel on
+ * the input and matched to its width.
  */
 export function PersonCombobox({
   id,
@@ -298,133 +307,149 @@ export function PersonCombobox({
       ) : (
         <>
           <Label htmlFor={id}>{label}</Label>
-          <div className="relative">
-            <Search
-              className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2"
-              aria-hidden
-            />
-            <Input
-              id={id}
-              role="combobox"
-              aria-expanded={showPanel}
-              aria-controls={listId}
-              aria-activedescendant={activeId}
-              aria-autocomplete="list"
-              aria-describedby={description ? describedId : undefined}
-              aria-invalid={invalid || undefined}
-              aria-required={required || undefined}
-              autoComplete="off"
-              autoCorrect="off"
-              autoCapitalize="off"
-              spellCheck={false}
-              data-1p-ignore
-              data-lpignore="true"
-              data-form-type="other"
-              disabled={disabled}
-              className="pl-9"
-              value={term}
-              placeholder={placeholder}
-              onChange={(event) => {
-                setTerm(event.target.value);
-                setOpen(true);
-              }}
-              onFocus={() => setOpen(true)}
-              onBlur={(event) => {
-                // Let a click on a row land before the panel closes.
-                if (event.relatedTarget instanceof Node) {
-                  if (listRef.current?.contains(event.relatedTarget)) return;
-                }
-                setOpen(false);
-              }}
-              onKeyDown={onKeyDown}
-            />
-            {loading && showPanel ? (
-              <Loader2
-                className="text-muted-foreground absolute top-1/2 right-3 size-4 -translate-y-1/2 animate-spin"
-                aria-hidden
-              />
-            ) : null}
-
-            {showPanel ? (
-              <div className="animate-listbox border-border bg-popover shadow-popover absolute top-[calc(100%+0.25rem)] right-0 left-0 z-30 overflow-hidden rounded-lg border">
-                {!searchable ? (
-                  <Note icon={Search}>
-                    {`Type at least ${MIN_QUERY} characters to search.`}
-                  </Note>
-                ) : failed ? (
-                  <Note icon={TriangleAlert} tone="destructive">
-                    Search could not run. Check your connection and try again.
-                  </Note>
-                ) : loading && results.length === 0 ? (
-                  <div className="grid gap-1 p-1" aria-hidden>
-                    {[0, 1, 2].map((row) => (
-                      <div
-                        key={row}
-                        className="bg-muted h-12 animate-pulse rounded-md"
-                      />
-                    ))}
-                  </div>
-                ) : results.length === 0 ? (
-                  <Note icon={Search}>
-                    Nobody in your scope matches “{term.trim()}”.
-                  </Note>
-                ) : (
-                  <div
-                    ref={listRef}
-                    id={listId}
-                    role="listbox"
-                    aria-label={label}
-                    className="max-h-64 overflow-y-auto p-1"
-                  >
-                    {results.map((person, index) => (
-                      // ARIA 1.2 combobox: options are pointed at with
-                      // `aria-activedescendant` and must NOT be focusable, so the
-                      // caret stays in the input while the arrows move a highlight.
-                      // biome-ignore lint/a11y/useFocusableInteractive: roving selection, not focus
-                      <div
-                        key={person.id}
-                        id={`${listId}-${index}`}
-                        role="option"
-                        aria-selected={index === active}
-                        className={cn(
-                          "flex scroll-m-1 cursor-pointer items-center gap-3 rounded-md px-2.5 py-2 transition-colors",
-                          index === active ? "bg-accent" : "bg-transparent",
-                        )}
-                        onMouseEnter={() => setActive(index)}
-                        onMouseDown={(event) => {
-                          // Choose on mousedown so the input's blur cannot close
-                          // the panel out from under the click.
-                          event.preventDefault();
-                          choose(person);
-                        }}
-                      >
-                        <span
-                          className="bg-muted text-muted-foreground grid size-8 shrink-0 place-items-center rounded-md text-xs font-semibold"
-                          aria-hidden
-                        >
-                          {initials(person.name)}
-                        </span>
-                        <span className="grid min-w-0 flex-1 gap-0.5">
-                          <span className="truncate text-sm font-medium">
-                            <Highlight text={person.name} term={term} />
-                          </span>
-                          <span className="text-muted-foreground truncate text-xs">
-                            <Highlight text={person.email} term={term} />
-                          </span>
-                        </span>
-                        {person.officeName ? (
-                          <span className="text-muted-foreground hidden shrink-0 items-center gap-1 text-xs sm:flex">
-                            <Building2 className="size-3.5" aria-hidden />
-                            {person.officeName}
-                          </span>
-                        ) : null}
-                      </div>
-                    ))}
-                  </div>
-                )}
+          {/* Radix anchors and portals the panel. The anchor is the field
+              wrapper, so the popover lines up with the input and inherits its
+              width through `--radix-popover-trigger-width`; the portal puts the
+              panel outside the card that would otherwise clip it. */}
+          <Popover open={showPanel} onOpenChange={setOpen}>
+            <PopoverAnchor asChild>
+              <div className="relative">
+                <Search
+                  className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2"
+                  aria-hidden
+                />
+                <Input
+                  id={id}
+                  role="combobox"
+                  aria-expanded={showPanel}
+                  aria-controls={listId}
+                  aria-activedescendant={activeId}
+                  aria-autocomplete="list"
+                  aria-describedby={description ? describedId : undefined}
+                  aria-invalid={invalid || undefined}
+                  aria-required={required || undefined}
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
+                  data-1p-ignore
+                  data-lpignore="true"
+                  data-form-type="other"
+                  disabled={disabled}
+                  className="pl-9"
+                  value={term}
+                  placeholder={placeholder}
+                  onChange={(event) => {
+                    setTerm(event.target.value);
+                    setOpen(true);
+                  }}
+                  onFocus={() => setOpen(true)}
+                  onBlur={(event) => {
+                    // Let a click on a row land before the panel closes. The
+                    // list lives in a portal, so this is DOM containment across
+                    // the React tree — which is exactly what `contains` reads.
+                    if (event.relatedTarget instanceof Node) {
+                      if (listRef.current?.contains(event.relatedTarget)) return;
+                    }
+                    setOpen(false);
+                  }}
+                  onKeyDown={onKeyDown}
+                />
+                {loading && showPanel ? (
+                  <Loader2
+                    className="text-muted-foreground absolute top-1/2 right-3 size-4 -translate-y-1/2 animate-spin"
+                    aria-hidden
+                  />
+                ) : null}
               </div>
-            ) : null}
-          </div>
+            </PopoverAnchor>
+
+            <PopoverContent
+              align="start"
+              sideOffset={4}
+              className="w-(--radix-popover-trigger-width) overflow-hidden rounded-lg p-0"
+              // The caret never leaves the input: this is an
+              // `aria-activedescendant` combobox, and moving focus into the
+              // panel would break both typing and the roving highlight.
+              onOpenAutoFocus={(event) => event.preventDefault()}
+              onCloseAutoFocus={(event) => event.preventDefault()}
+              // Escape and arrow keys are handled on the input, which still has
+              // focus; letting Radix also act on them would close the panel
+              // twice and swallow the highlight.
+              onKeyDownCapture={(event) => event.stopPropagation()}
+            >
+              {!searchable ? (
+                <Note icon={Search}>
+                  {`Type at least ${MIN_QUERY} characters to search.`}
+                </Note>
+              ) : failed ? (
+                <Note icon={TriangleAlert} tone="destructive">
+                  Search could not run. Check your connection and try again.
+                </Note>
+              ) : loading && results.length === 0 ? (
+                <div className="grid gap-1 p-1" aria-hidden>
+                  {[0, 1, 2].map((row) => (
+                    <div key={row} className="bg-muted h-12 animate-pulse rounded-md" />
+                  ))}
+                </div>
+              ) : results.length === 0 ? (
+                <Note icon={Search}>Nobody in your scope matches “{term.trim()}”.</Note>
+              ) : (
+                <div
+                  ref={listRef}
+                  id={listId}
+                  role="listbox"
+                  aria-label={label}
+                  className="max-h-64 overflow-y-auto p-1"
+                >
+                  {results.map((person, index) => (
+                    // ARIA 1.2 combobox: options are pointed at with
+                    // `aria-activedescendant` and must NOT be focusable, so the
+                    // caret stays in the input while the arrows move a highlight.
+                    // biome-ignore lint/a11y/useFocusableInteractive: roving selection, not focus
+                    <div
+                      key={person.id}
+                      id={`${listId}-${index}`}
+                      role="option"
+                      aria-selected={index === active}
+                      className={cn(
+                        "flex scroll-m-1 cursor-pointer items-center gap-3 rounded-md px-2.5 py-2 transition-colors",
+                        index === active ? "bg-accent" : "bg-transparent",
+                      )}
+                      onMouseEnter={() => setActive(index)}
+                      onMouseDown={(event) => {
+                        // Choose on mousedown so the input's blur cannot close
+                        // the panel out from under the click.
+                        event.preventDefault();
+                        choose(person);
+                      }}
+                    >
+                      <span
+                        className="bg-muted text-muted-foreground grid size-8 shrink-0 place-items-center rounded-md text-xs font-semibold"
+                        aria-hidden
+                      >
+                        {initials(person.name)}
+                      </span>
+                      <span className="grid min-w-0 flex-1 gap-0.5">
+                        <span className="truncate text-sm font-medium">
+                          <Highlight text={person.name} term={term} />
+                        </span>
+                        <span className="text-muted-foreground truncate text-xs">
+                          <Highlight text={person.email} term={term} />
+                        </span>
+                      </span>
+                      {person.officeName ? (
+                        <span className="text-muted-foreground hidden shrink-0 items-center gap-1 text-xs sm:flex">
+                          <Building2 className="size-3.5" aria-hidden />
+                          {person.officeName}
+                        </span>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </PopoverContent>
+          </Popover>
         </>
       )}
 

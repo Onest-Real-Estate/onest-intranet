@@ -121,7 +121,19 @@ export function MetricCards({ metrics }: { metrics: DashboardMetrics }) {
     metrics.scope.level === "self" ? null : `Team figures cover ${metrics.scope.label}`;
 
   return (
-    <div className="arrive @container grid gap-3">
+    // A named `section` rather than a bare `div`. The band is deliberately a
+    // ruled strip instead of a card — see the Rule Before The Box rule — but
+    // dropping the card also dropped the only heading on the page's most
+    // important figures, so somebody navigating by heading skipped straight
+    // past them. The heading is real for the document outline and hidden
+    // visually, exactly as the news carousel does it.
+    <section
+      aria-labelledby="dashboard-performance"
+      className="arrive @container grid gap-3"
+    >
+      <h2 id="dashboard-performance" className="sr-only">
+        Performance
+      </h2>
       {visible.length > 0 ? (
         // One strip, auto-fitting: these figures are permission- and
         // source-filtered, so the count varies per reader, and a ruled row
@@ -144,7 +156,7 @@ export function MetricCards({ metrics }: { metrics: DashboardMetrics }) {
             .join(" · ")}
         </p>
       ) : null}
-    </div>
+    </section>
   );
 }
 

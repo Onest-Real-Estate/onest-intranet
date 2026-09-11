@@ -598,7 +598,11 @@ function PageContext({ context }: { context: HubPageContext }) {
               {item.href && !current ? (
                 <Link
                   href={safeInternalHref(item.href)}
-                  className="text-muted-foreground hover:text-foreground focus-visible:ring-ring truncate rounded-sm transition-colors duration-(--motion-fast) focus-visible:ring-2 focus-visible:outline-none"
+                  // `py-0.5` is hit area, not spacing: the text's own line box
+                  // is 20px, which is under the 24px target minimum. The row is
+                  // centred inside a much taller bar, so the padding grows the
+                  // target without moving a pixel of the label.
+                  className="text-muted-foreground hover:text-foreground focus-visible:ring-ring truncate rounded-sm py-0.5 transition-colors duration-(--motion-fast) focus-visible:ring-2 focus-visible:outline-none"
                 >
                   {item.label}
                 </Link>

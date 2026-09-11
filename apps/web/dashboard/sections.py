@@ -22,3 +22,28 @@ HUB_SECTIONS: dict[str, str] = {
     "policies-compliance": "Policies & compliance",
     "agent-directory": "Agent directory",
 }
+
+
+#: Sections whose live destination has shipped, mapped to the route that serves
+#: it.
+#:
+#: A section stays in ``HUB_SECTIONS`` for good — the key is what the navigation
+#: registry and Quick Access hang on — so the Coming Soon stub at
+#: ``/hub/<section>`` outlives the placeholder it was written for. Without this
+#: map an old bookmark or a link somebody pasted into chat before the feature
+#: shipped keeps answering "not built yet" about a page that has been live for
+#: months. Listed sections redirect to the real thing instead.
+#:
+#: Every entry here must have ``HUB_FEATURES[section] is True``; a test pins
+#: that, so flipping the flag without adding the route (or the reverse) fails.
+LIVE_SECTION_ROUTES: dict[str, str] = {
+    "announcements": "announcements",
+    "my-contract": "my_contract",
+    "my-tools": "my_tools",
+    "my-reservations": "my_reservations",
+    "office-info": "office_info",
+    "office-resources": "office_resources",
+    "office-inventory": "office_inventory",
+    "room-availability": "room_availability",
+    "training-learning": "training_learning",
+}

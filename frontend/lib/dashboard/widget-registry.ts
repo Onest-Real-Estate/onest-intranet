@@ -37,11 +37,12 @@ export type DashboardWidgetId =
   | "feedbackSignals";
 
 /**
- * Where a widget sits once the grid has two columns.
+ * How wide a widget needs to be to stay legible.
  *
- * `wide` spans the page above the grid, `main` is the reading column, `rail`
- * is the narrow column of today's obligations. A profile orders widgets; the
- * registry decides which column each one is legible in.
+ * `wide` owns a whole row, `main` is a reading-width panel, `rail` is a narrow
+ * one for today's obligations. These are widths, not containers: there is one
+ * twelve-column grid, and `lib/dashboard/layout.ts` packs widgets into rows
+ * from these values. A profile orders widgets; the registry sizes them.
  */
 export type DashboardWidgetColumn = "wide" | "main" | "rail";
 
@@ -72,10 +73,10 @@ export interface DashboardWidgetDefinition {
   deniedBehavior: DashboardDeniedBehavior;
   column: DashboardWidgetColumn;
   /**
-   * Columns out of twelve this widget occupies in the `wide` band, so two
-   * widgets can share the top row. Ignored outside that band, and only honored
-   * once there is a twelve-column grid to divide — everything stacks below
-   * `xl`. Defaults to the full width.
+   * Columns out of twelve this widget occupies, overriding the width `column`
+   * implies, so two widgets can share a row that neither would otherwise fill.
+   * Only honored once there is a twelve-column grid to divide — everything
+   * stacks below `xl`.
    */
   span?: number;
   /**
@@ -150,10 +151,12 @@ export const DASHBOARD_WIDGETS: readonly DashboardWidgetDefinition[] = [
     id: "announcements",
     title: "News & announcements",
     prop: "announcements",
-    // The provider exists but has nothing to read: company news is not
-    // published through the hub yet, so it always answers `unavailable`.
-    // Flip to `true` with the publishing model.
-    backed: false,
+    // Backed by `providers.announcements`, which reads the same audience
+    // predicate as the announcements feed. The flag matters twice: it is what
+    // makes the panel wait behind `<Deferred>` for its own skeleton instead of
+    // rendering not-connected, and what stops the page listing the band as an
+    // unbuilt module for the one frame before the prop lands.
+    backed: true,
     permissions: {},
     deniedBehavior: "omit",
     // Top of the page in every profile: brokerage news is the one thing
@@ -198,7 +201,7 @@ export const DASHBOARD_WIDGETS: readonly DashboardWidgetDefinition[] = [
     id: "agentOnboarding",
     title: "Agent onboarding",
     prop: "agentOnboarding",
-    backed: false,
+    backed: true,
     permissions: {
       any: ["web.view_new_agents", "web.manage_new_agent_onboarding"],
     },
@@ -220,7 +223,7 @@ export const DASHBOARD_WIDGETS: readonly DashboardWidgetDefinition[] = [
     id: "contractsAwaitingSignature",
     title: "Awaiting signature",
     prop: "contractsAwaitingSignature",
-    backed: false,
+    backed: true,
     permissions: { all: ["web.view_agent_contracts"] },
     deniedBehavior: "withhold",
     column: "rail",
@@ -240,8 +243,12 @@ export const DASHBOARD_WIDGETS: readonly DashboardWidgetDefinition[] = [
     id: "teamTasks",
     title: "Team tasks",
     prop: "teamTasks",
-    backed: false,
-    permissions: { any: ["web.view_office_tasks", "web.view_platform_tasks"] },
+    backed: true,
+    // The grant the operational-tasks page itself enforces. It used to ask for
+    // `view_office_tasks` or `view_platform_tasks`: the first is the metric
+    // grant and the second is sanitized Celery job status, so a reader admitted
+    // by either would have had every row link into a 403.
+    permissions: { all: ["web.view_operational_tasks"] },
     deniedBehavior: "omit",
     column: "rail",
     scopes: TEAM_SCOPES,
@@ -260,7 +267,7 @@ export const DASHBOARD_WIDGETS: readonly DashboardWidgetDefinition[] = [
     id: "roomUtilization",
     title: "Room utilization",
     prop: "roomUtilization",
-    backed: false,
+    backed: true,
     permissions: { all: ["web.view_reservations"] },
     deniedBehavior: "omit",
     column: "rail",
@@ -280,8 +287,11 @@ export const DASHBOARD_WIDGETS: readonly DashboardWidgetDefinition[] = [
     id: "supportQueue",
     title: "Support queue",
     prop: "supportQueue",
-    backed: false,
-    permissions: { any: ["web.view_it_support", "web.view_platform_tasks"] },
+    backed: true,
+    // The grant the IT queue destination enforces. `view_platform_tasks` is a
+    // different module (sanitized Celery status) and never admitted anyone to
+    // a support ticket.
+    permissions: { all: ["web.view_it_support"] },
     deniedBehavior: "withhold",
     column: "main",
     scopes: TEAM_SCOPES,
@@ -290,7 +300,7 @@ export const DASHBOARD_WIDGETS: readonly DashboardWidgetDefinition[] = [
     id: "feedbackSignals",
     title: "Feedback signals",
     prop: "feedbackSignals",
-    backed: false,
+    backed: true,
     permissions: { all: ["web.view_feedback"] },
     deniedBehavior: "omit",
     column: "main",

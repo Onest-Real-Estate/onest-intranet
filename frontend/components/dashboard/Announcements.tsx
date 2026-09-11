@@ -1,5 +1,5 @@
 import { Link } from "@inertiajs/react";
-import { ChevronLeft, ChevronRight, Newspaper } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useState } from "react";
 
 import { SurfaceCard } from "@/components/design-system/surface-card";
@@ -11,12 +11,22 @@ function Slide({
   position,
   total,
   current,
+  media,
 }: {
   announcement: DashboardAnnouncement;
   position: number;
   total: number;
   current: boolean;
+  /**
+   * At least one story in this band carries artwork, so every frame keeps the
+   * media proportion and the track stays one height. With no artwork anywhere,
+   * the band is type — and a 16:8 frame would be four hundred pixels of empty
+   * ground held open for a photograph nobody uploaded.
+   */
+  media: boolean;
 }) {
+  const hasArtwork = Boolean(announcement.imageUrl);
+
   return (
     <article
       // `article` carries its own role, so the APG's `role="group"` would be an
@@ -26,7 +36,7 @@ function Slide({
       aria-roledescription="slide"
       aria-label={`${position} of ${total}: ${announcement.title}`}
       aria-hidden={current ? undefined : true}
-      className="w-full shrink-0"
+      className="h-full w-full shrink-0"
     >
       {/*
         Copy sits directly on the photograph — no scrim, no gradient, no panel
@@ -39,26 +49,46 @@ function Slide({
         category are available as ordinary text on the announcements feed and
         the detail page — nothing here is the only copy of anything.
 
-        Every frame carries the same fixed box and the same clamped copy, so the
-        band holds its height whichever story — with artwork or without — is on
-        it.
+        With no artwork there is nothing to lay copy *over*, and the two things
+        that were tried in its place both failed: light media ink on the pale
+        gold well reached about 1.3:1, and a photograph-shaped frame with no
+        photograph in it held four hundred pixels of empty ground open. So a
+        story without artwork is not treated as media at all. It is a typographic
+        slide on the card's own surface, set in the page's own ink and centred in
+        whatever height the band ends up with, which is the form the words
+        deserved in the first place.
       */}
-      <div className="bg-muted relative aspect-[4/3] w-full overflow-hidden sm:aspect-[16/8]">
-        {announcement.imageUrl ? (
+      <div
+        className={cn(
+          "relative h-full w-full overflow-hidden",
+          media
+            ? "bg-muted aspect-[4/3] sm:aspect-[16/8]"
+            : "bg-card min-h-52 sm:min-h-56",
+        )}
+      >
+        {hasArtwork ? (
           <img
-            src={announcement.imageUrl}
+            src={announcement.imageUrl ?? undefined}
             // Decorative: the headline over it already names the story.
             alt=""
             loading="lazy"
             className="size-full object-cover"
           />
-        ) : (
-          <span className="brand-well text-primary grid size-full place-items-center">
-            <Newspaper className="size-10" aria-hidden />
-          </span>
-        )}
-        <div className="on-media-ink absolute inset-x-0 bottom-0 grid gap-1.5 px-5 pb-5 sm:px-6 sm:pb-6">
-          <p className="text-xs font-bold tracking-[0.08em] uppercase">
+        ) : null}
+        <div
+          className={cn(
+            "grid gap-1.5",
+            hasArtwork
+              ? "on-media-ink absolute inset-x-0 bottom-0 px-5 pb-5 sm:px-6 sm:pb-6"
+              : "text-foreground h-full content-center px-5 py-7 sm:px-8 sm:py-9",
+          )}
+        >
+          <p
+            className={cn(
+              "text-xs font-bold tracking-[0.08em] uppercase",
+              hasArtwork ? undefined : "text-muted-foreground",
+            )}
+          >
             {announcement.tag}
           </p>
           <h3 className="line-clamp-2 text-xl leading-snug font-bold tracking-[-0.02em] text-balance sm:text-2xl">
@@ -67,13 +97,21 @@ function Slide({
             <Link
               href={announcement.href}
               tabIndex={current ? undefined : -1}
-              className="focus-visible:ring-on-media rounded-sm hover:underline focus-visible:ring-2 focus-visible:outline-none"
+              className={cn(
+                "rounded-sm hover:underline focus-visible:ring-2 focus-visible:outline-none",
+                hasArtwork ? "focus-visible:ring-on-media" : "focus-visible:ring-ring",
+              )}
             >
               {announcement.title}
             </Link>
           </h3>
           {announcement.excerpt ? (
-            <p className="line-clamp-2 max-w-2xl text-sm leading-6">
+            <p
+              className={cn(
+                "line-clamp-2 max-w-2xl text-sm leading-6",
+                hasArtwork ? undefined : "text-muted-foreground",
+              )}
+            >
               {announcement.excerpt}
             </p>
           ) : null}
@@ -106,13 +144,14 @@ export function Announcements({ data }: { data: DashboardAnnouncements }) {
   const items = [data.featured, ...data.items];
   const [current, setCurrent] = useState(0);
   const single = items.length < 2;
+  const media = items.some((item) => Boolean(item.imageUrl));
 
   function show(index: number) {
     setCurrent(Math.min(Math.max(index, 0), items.length - 1));
   }
 
   return (
-    <SurfaceCard className="gap-0 py-0">
+    <SurfaceCard className="h-full gap-0 py-0">
       {/*
         A named `section` is a `region`, which the APG lists alongside `group`
         for a carousel — and unlike an explicit `role="group"` it is the
@@ -122,13 +161,13 @@ export function Announcements({ data }: { data: DashboardAnnouncements }) {
       <section
         aria-roledescription="carousel"
         aria-label="News and announcements"
-        className="group/carousel relative overflow-hidden rounded-(--radius-card)"
+        className="group/carousel relative h-full overflow-hidden rounded-(--radius-card)"
       >
         <h2 className="sr-only">News & announcements</h2>
 
-        <div className="overflow-hidden">
+        <div className="h-full overflow-hidden">
           <div
-            className="motion-safe:duration-(--motion-slow) flex transition-transform ease-out"
+            className="motion-safe:duration-(--motion-slow) flex h-full transition-transform ease-out"
             style={{ transform: `translateX(-${current * 100}%)` }}
           >
             {items.map((item, index) => (
@@ -138,6 +177,7 @@ export function Announcements({ data }: { data: DashboardAnnouncements }) {
                 position={index + 1}
                 total={items.length}
                 current={index === current}
+                media={media}
               />
             ))}
           </div>
@@ -181,9 +221,15 @@ export function Announcements({ data }: { data: DashboardAnnouncements }) {
                   <span
                     className={cn(
                       "rounded-full transition-[width,background-color]",
+                      // The inactive dot has to read on two different grounds:
+                      // an unknown photograph, where a translucent white is the
+                      // only safe mark, and the card's own white surface, where
+                      // that same mark is invisible.
                       index === current
                         ? "bg-primary h-1.5 w-5"
-                        : "bg-background/70 group-hover:bg-background h-1.5 w-1.5",
+                        : media
+                          ? "bg-background/70 group-hover:bg-background h-1.5 w-1.5"
+                          : "bg-border-strong group-hover:bg-muted-foreground h-1.5 w-1.5",
                     )}
                     aria-hidden
                   />
@@ -199,7 +245,7 @@ export function Announcements({ data }: { data: DashboardAnnouncements }) {
 
 export function AnnouncementsSkeleton() {
   return (
-    <SurfaceCard state="loading" className="gap-0 py-0">
+    <SurfaceCard state="loading" className="h-full gap-0 py-0">
       <div className="bg-muted animate-pulse aspect-[4/3] w-full sm:aspect-[16/8]" />
     </SurfaceCard>
   );

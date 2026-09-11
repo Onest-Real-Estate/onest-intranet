@@ -44,7 +44,12 @@ export function TrainingResources({ training }: { training: DashboardTraining })
   return (
     <SurfaceCard className="arrive">
       <PanelHeader title="Training & resources" />
-      <SurfaceCardContent className="grid gap-5 @md:grid-cols-[auto_1fr] @md:items-center">
+      {/* The panel shares a row with whatever sits beside it and stretches to
+          that row's height. A body pinned to the top of a stretched card leaves
+          a bar of dead space under it; centring the two sections in the height
+          the card actually got keeps the panel looking drawn rather than
+          padded. */}
+      <SurfaceCardContent className="grid flex-1 content-center gap-5 @md:grid-cols-[auto_1fr] @md:items-center">
         <section
           className="flex items-center gap-4"
           aria-labelledby="training-progress"

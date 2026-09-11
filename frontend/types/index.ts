@@ -230,6 +230,19 @@ export interface DashboardMarket {
 export interface DashboardDocument {
   id: string;
   name: string;
+  /** `file` or `link`; picks the icon and nothing else. */
+  kind: string;
+  /** Server-reversed: a protected download that re-checks scope, or the link. */
+  href: string;
+  /** The office that published it, shown when it is not the reader's own. */
+  office: string;
+}
+
+export interface DashboardDocuments {
+  /** Total in the reader's library, which may exceed `items.length`. */
+  total: number;
+  items: DashboardDocument[];
+  viewAllHref: string;
 }
 
 export interface DashboardGreeting {
@@ -260,6 +273,8 @@ export interface DashboardStages {
   stages: DashboardStage[];
   /** What the funnel totals, e.g. "48 files in flight". */
   caption: string;
+  /** Server-reversed list this funnel counts, guarded by its own policy. */
+  viewAllHref?: string;
 }
 
 export interface DashboardQueueRow {
@@ -279,6 +294,8 @@ export interface DashboardQueue {
   /** Total matching records in scope, which may exceed `rows.length`. */
   total: number;
   rows: DashboardQueueRow[];
+  /** Server-reversed queue this panel is a window on, guarded by its own policy. */
+  viewAllHref?: string;
 }
 
 export interface DashboardMeterSeries {
@@ -1174,7 +1191,7 @@ export interface DashboardPageProps extends PageProps {
   schedule?: DashboardWidget<DashboardSchedule>;
   actionItems?: DashboardWidget<DashboardActionItems>;
   market?: DashboardWidget<DashboardMarket>;
-  documents?: DashboardWidget<DashboardDocument[]>;
+  documents?: DashboardWidget<DashboardDocuments>;
   // Administrative widgets — providers land in P1-021..P1-027.
   agentOnboarding?: DashboardWidget<DashboardStages>;
   closingPipeline?: DashboardWidget<DashboardStages>;
@@ -4061,6 +4078,12 @@ export interface RoomCalendarDay {
 
 export interface RoomCalendarSpace {
   publicId: string;
+  /**
+   * The office that owns the room. The grid holds more than one: a room
+   * published at the region or the head office appears for every branch
+   * beneath it, so a row has to be able to say where it is.
+   */
+  office: { key: string; name: string; timezone: string };
   name: string;
   type: string;
   typeLabel: string;

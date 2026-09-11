@@ -40,6 +40,7 @@ from apps.inventory.taxonomy import (
     TrackingMode,
 )
 from apps.user.models import Office
+from apps.user.services.hierarchy import agent_scope_office_ids
 from apps.user.storage import private_storage
 
 _TERMINAL: list[str] = sorted(TERMINAL_STATES)
@@ -84,14 +85,21 @@ class InventoryQuerySet(models.QuerySet["InventoryItem"]):
         return self.filter(reach)
 
     def for_agent_office(self, office: Office | None) -> InventoryQuerySet:
-        """Active reservable items for one assignable office.
+        """Active reservable items for one assignable office and its ancestors.
 
         Used by the agent browser. Never accepts a client-supplied office id —
         the caller must resolve the reader's primary office server-side.
+
+        Scope is the office chain, not the office alone: stock published at the
+        region or the head office reaches every branch beneath it, which is
+        what makes "buy one box of lockboxes for the brokerage" expressible.
+        Inheritance is downward only — a branch never sees a sibling branch,
+        and a reader at a parent node does not acquire the branches' stock.
+        See :func:`apps.user.services.hierarchy.agent_scope_office_ids`.
         """
-        if office is None or not office.is_assignable or not office.is_active:
-            return self.none()
-        return self.filter(owner_office=office).reservable_catalog()
+        return self.filter(
+            owner_office_id__in=agent_scope_office_ids(office)
+        ).reservable_catalog()
 
 
 class InventoryItem(models.Model):

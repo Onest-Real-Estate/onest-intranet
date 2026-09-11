@@ -5,34 +5,25 @@ import { DashboardGreeting } from "@/components/dashboard/DashboardGreeting";
 import { DashboardProfileSwitcher } from "@/components/dashboard/DashboardProfileSwitcher";
 import { DashboardScopeSelector } from "@/components/dashboard/DashboardScopeSelector";
 import { DashboardWidgetSlot } from "@/components/dashboard/DashboardWidgetSlot";
+import { PendingModules } from "@/components/dashboard/PendingModules";
 import { HubLayout } from "@/components/HubLayout";
 import { Button } from "@/components/ui/button";
 import { useAuthorizationStaleness } from "@/hooks/use-authorization-staleness";
+import {
+  naturalSpan,
+  packRows,
+  partitionPending,
+  spanClass,
+} from "@/lib/dashboard/layout";
 import {
   readRememberedProfile,
   rememberProfile,
   resolveDashboard,
   resolveWidgets,
 } from "@/lib/dashboard/resolve";
-import type { DashboardWidgetColumn } from "@/lib/dashboard/widget-registry";
 import { routes } from "@/lib/routes";
+import { cn } from "@/lib/utils";
 import type { DashboardPageProps, MetricScopeLevel } from "@/types";
-
-/**
- * Twelfths a `wide` widget may claim, spelled out because Tailwind needs to see
- * the class to emit it. Anything unlisted takes the full band.
- */
-const SPAN_CLASS: Record<number, string> = {
-  4: "h-full xl:col-span-4",
-  5: "h-full xl:col-span-5",
-  6: "h-full xl:col-span-6",
-  7: "h-full xl:col-span-7",
-  8: "h-full xl:col-span-8",
-};
-
-function spanClass(span: number | undefined): string {
-  return (span && SPAN_CLASS[span]) || "h-full xl:col-span-12";
-}
 
 /**
  * One dashboard, eleven presentations.
@@ -72,6 +63,22 @@ export default function Dashboard() {
     [resolved.profile, user, scopeLevel],
   );
 
+  // Modules with nothing behind them leave the grid and are stated once at the
+  // foot of the page. What is left is every panel that has — or is still
+  // fetching — something to show.
+  const { laidOut, pending } = useMemo(
+    () => partitionPending(widgets, page),
+    [widgets, page],
+  );
+
+  // Reading order is the profile's; only the widths are computed, so that every
+  // row of the grid closes on the twelfth column and the page never ends in a
+  // half-empty band.
+  const placed = useMemo(
+    () => packRows(laidOut, (widget) => naturalSpan(widget.definition)),
+    [laidOut],
+  );
+
   // No server scope means the reader has one breadth and nothing to choose;
   // the control is absent rather than offering breadths that do not apply.
   const scopeOptions = serverScope ? serverScope.options : [];
@@ -93,13 +100,6 @@ export default function Dashboard() {
   function refreshAll() {
     router.reload({ onSuccess: acknowledge });
   }
-
-  const column = (name: DashboardWidgetColumn) =>
-    widgets.filter((widget) => widget.definition.column === name);
-
-  const wide = column("wide");
-  const main = column("main");
-  const rail = column("rail");
 
   return (
     <div className="flex flex-1 flex-col gap-8">
@@ -154,65 +154,38 @@ export default function Dashboard() {
         ) : null}
       </div>
 
-      {/* Band: where things stand, and the tools to act on them. Figures and
-          launchers are one thought, so they sit a section apart (24px) rather
-          than a page apart. */}
-      {wide.length > 0 ? (
-        <div className="-mt-2 grid items-stretch gap-6 xl:grid-cols-12">
-          {wide.map((widget) => (
+      {/* One grid, packed into full rows.
+          The page used to run a wide reading column beside a narrow rail, each
+          stacking until its own contents ran out — which left the shorter of
+          the two ending in blank canvas whenever a role resolved to an uneven
+          split. Widgets keep their reviewed order and their natural width here;
+          `layout.ts` decides which of them share a row and widens a row that
+          cannot otherwise close. Panels in a row stretch to a common height, so
+          every band has one baseline top and bottom.
+
+          `grid-flow-row-dense` is load-bearing, not decoration: the packer
+          places each widget in the earliest row it fits, and the browser has to
+          make the same choice or the two disagree. Without it a narrow widget
+          later in the DOM cannot back-fill the gap beside a wide one, and the
+          row the packer treated as closed renders with a hole in it. */}
+      {placed.length > 0 ? (
+        <div className="grid grid-flow-row-dense items-stretch gap-6 xl:grid-cols-12">
+          {placed.map(({ item, span }) => (
             <div
-              key={widget.definition.id}
-              className={spanClass(widget.definition.span)}
+              key={item.definition.id}
+              data-dashboard-slot={item.definition.column}
+              // `grid` rather than `block`: the panel inside is a single child
+              // and stretches to the row's height instead of leaving the
+              // shorter card floating against the top of a tall row.
+              className={cn("grid", spanClass(span))}
             >
-              <DashboardWidgetSlot resolved={widget} page={page} stale={stale} />
+              <DashboardWidgetSlot resolved={item} page={page} stale={stale} />
             </div>
           ))}
         </div>
       ) : null}
 
-      {/* Band: the role-defining workflow leads in both DOM and visual order.
-          Supporting daily and utility panels follow, so keyboard, screen-reader,
-          mobile, and desktop reading order never disagree. */}
-      <div className="grid items-start gap-6 xl:grid-cols-12">
-        {main.length > 0 ? (
-          <div
-            data-dashboard-column="main"
-            className={
-              rail.length > 0
-                ? "grid content-start gap-6 xl:col-span-8"
-                : "grid content-start gap-6 xl:col-span-12"
-            }
-          >
-            {main.map((widget) => (
-              <DashboardWidgetSlot
-                key={widget.definition.id}
-                resolved={widget}
-                page={page}
-                stale={stale}
-              />
-            ))}
-          </div>
-        ) : null}
-        {rail.length > 0 ? (
-          <div
-            data-dashboard-column="rail"
-            className={
-              main.length > 0
-                ? "grid content-start gap-6 xl:col-span-4"
-                : "grid content-start gap-6 xl:col-span-12"
-            }
-          >
-            {rail.map((widget) => (
-              <DashboardWidgetSlot
-                key={widget.definition.id}
-                resolved={widget}
-                page={page}
-                stale={stale}
-              />
-            ))}
-          </div>
-        ) : null}
-      </div>
+      <PendingModules modules={pending} />
     </div>
   );
 }

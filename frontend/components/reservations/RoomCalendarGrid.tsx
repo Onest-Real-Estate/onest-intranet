@@ -133,7 +133,7 @@ function EventBlock({
       <p
         className={cn(
           "text-foreground truncate font-semibold",
-          compact ? "text-[0.6875rem] leading-4" : "text-xs leading-4",
+          compact ? "text-micro leading-4" : "text-xs leading-4",
         )}
         title={event.title}
       >
@@ -143,13 +143,13 @@ function EventBlock({
         {event.title}
       </p>
       {!compact || wholeBlockLinks ? (
-        <p className="mt-0.5 flex items-center gap-1 text-[0.6875rem] tabular-nums">
+        <p className="mt-0.5 flex items-center gap-1 text-micro tabular-nums">
           <Clock3 className="size-3 shrink-0" aria-hidden />
           {shownTime}
         </p>
       ) : null}
       {unbookable && !compact ? (
-        <p className="mt-1 text-[0.6875rem] font-medium">No valid starts</p>
+        <p className="mt-1 text-micro font-medium">No valid starts</p>
       ) : null}
       {showsChips ? (
         <div className="mt-1.5 flex flex-wrap gap-1.5">
@@ -256,7 +256,7 @@ export function RoomCalendarGrid({
               gridTemplateColumns: `4.5rem repeat(${columns.length}, minmax(9rem, 1fr))`,
             }}
           >
-            <div className="text-muted-foreground flex items-end justify-end p-2 text-[0.6875rem] font-semibold">
+            <div className="text-muted-foreground flex items-end justify-end p-2 text-micro font-semibold">
               {timeZone.split("/").pop()?.replace("_", " ")}
             </div>
             {columns.map((column) => (
@@ -269,7 +269,7 @@ export function RoomCalendarGrid({
                       : "border-transparent bg-muted",
                   )}
                 >
-                  <p className="text-muted-foreground truncate text-[0.6875rem] font-semibold tracking-[0.02em]">
+                  <p className="text-muted-foreground truncate text-micro font-semibold tracking-[0.02em]">
                     {column.label}
                   </p>
                   {/* A heading per column, so a screen reader can jump between
@@ -289,7 +289,7 @@ export function RoomCalendarGrid({
                     </span>
                   </h2>
                   {column.emphasis && column.sublabel ? (
-                    <p className="text-muted-foreground truncate text-[0.6875rem]">
+                    <p className="text-muted-foreground truncate text-micro">
                       {column.sublabel}
                     </p>
                   ) : null}
@@ -308,7 +308,7 @@ export function RoomCalendarGrid({
               {hours.map((hour, index) => (
                 <div
                   key={hour}
-                  className="text-muted-foreground absolute right-2 -translate-y-1/2 text-[0.6875rem] font-semibold tabular-nums"
+                  className="text-muted-foreground absolute right-2 -translate-y-1/2 text-micro font-semibold tabular-nums"
                   style={{ top: index * HOUR_PX + GRID_TOP_PAD }}
                 >
                   {hourLabel(hour)}

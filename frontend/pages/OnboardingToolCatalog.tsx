@@ -470,12 +470,12 @@ function CatalogRow({
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <span className="text-sm font-medium">{tool.name}</span>
             {tool.active ? null : (
-              <span className="text-muted-foreground text-[0.6875rem] font-medium tracking-[0.02em] uppercase">
+              <span className="text-muted-foreground text-micro font-medium tracking-[0.02em] uppercase">
                 Inactive
               </span>
             )}
             {tool.required ? null : (
-              <span className="text-muted-foreground text-[0.6875rem] font-medium tracking-[0.02em] uppercase">
+              <span className="text-muted-foreground text-micro font-medium tracking-[0.02em] uppercase">
                 Optional
               </span>
             )}

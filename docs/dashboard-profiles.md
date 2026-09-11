@@ -28,8 +28,8 @@ where:
 | `backed` | Whether a server provider fills `prop` yet |
 | `permissions` | `PermissionCheck` the reader must satisfy for the card |
 | `deniedBehavior` | `omit` (drop silently) or `withhold` (render a restricted placeholder) |
-| `column` | `wide`, `main`, or `rail` |
-| `span` | Twelfths claimed in the `wide` band, so two widgets can share the top row |
+| `column` | `wide`, `main`, or `rail` — the widget's natural width, not a container |
+| `span` | Twelfths claimed explicitly, overriding the width `column` implies |
 | `scopes` | Breadths the widget is meaningful at |
 
 A profile stores ids and nothing else — no component name, no import path, no
@@ -46,8 +46,13 @@ everybody is meant to have read, and a panel two columns down in a rail is a
 panel nobody reads.
 
 The news band renders one story at a time as a full-bleed hero — the picture
-fills the card and the headline sits over it on a scrim built from the page's
-own background tokens, so it reads in both themes. The track is moved with a
+fills the card and the headline sits over it in a fixed light ink with a shadow
+on the glyphs, so the artwork is shown exactly as uploaded. With no artwork
+anywhere in the band there is nothing to lay copy over: the band drops the media
+proportion and the media ink and becomes a typographic slide on the card's own
+surface, in the page's own foreground. Holding a photograph-shaped frame open
+for a photograph nobody uploaded cost four hundred pixels and left the headline
+at about 1.3:1 on the pale gold well. The track is moved with a
 transform rather than by scrolling a snap container: a programmatic scroll
 inside `scroll-snap-type: mandatory` is not dependable, because Chrome re-snaps
 to the slide it is already on the moment the animation starts, and a profile
@@ -59,10 +64,52 @@ reordering a profile:
 
 - Every profile's list starts `performance`, `announcements`, `quickAccess`,
   in that order. A widget between the news pair wraps the band into three rows.
-- Everything stacks below `xl`; `span` is only honored once there is a
+- Everything stacks below `xl`; spans are only honored once there is a
   twelve-column grid to divide.
 - The metrics row shows every measured figure the reader is entitled to, with
   no cap and nothing folded away (see below).
+
+### Rows, not columns
+
+`column` names a widget's **width**, not a container it lives in. There is one
+twelve-column grid, and `lib/dashboard/layout.ts` packs the resolved widgets
+into rows of exactly twelve: a `wide` widget takes the whole row, a `main`
+widget eight twelfths, a `rail` widget four, and an explicit `span` overrides
+all three. Each widget goes into the earliest row with room for it — the same
+placement `grid-auto-flow: dense` would produce — and a row that still cannot
+close has its leftover twelfths shared out over its own widgets, so a lone
+trailing panel becomes a full-width band and a trailing pair becomes an even
+split.
+
+This replaced two independent stacks, a wide reading column beside a narrow
+rail. Each stack ended wherever its own contents ran out, so any role that
+resolved to an uneven split — most of them, while most providers are still
+unbuilt — closed the page with one column of panels beside several hundred
+pixels of blank canvas. Packing is computed from the widget list alone: no
+height is measured, so the server-rendered first paint, every partial reload,
+and the tests all agree.
+
+Panels in a row stretch to a common height. A panel whose body would then float
+against the top of a taller row centres it instead — see `TrainingResources`.
+
+### Modules with no data source
+
+A widget the registry marks `backed: false`, or whose provider answers
+`unavailable` with `retryable: false`, does not get a panel. Those modules
+collect in one `PendingModules` band at the foot of the page: the heading says
+once why they are absent, and each module contributes its name, any reason the
+server authored for it, and its destination.
+
+The honesty is unchanged — the dashboard still names every module it cannot
+show, and still never invents a figure. What changed is the price. A module
+with nothing behind it used to render the full widget envelope, so a dashboard
+where seven of eleven widgets were unbacked spent most of its height on seven
+copies of the same apology, and the gaps fell unevenly between the two columns.
+
+A widget that *failed this request* is not in the band. That is a retryable
+error, it carries its own retry control, and it keeps its panel. So does a
+`withhold` placeholder: a compliance dashboard whose compliance panel became a
+footnote reads as a dashboard with nothing to review.
 
 ### Figures without a data source
 

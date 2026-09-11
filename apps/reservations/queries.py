@@ -9,6 +9,7 @@ from apps.reservations.taxonomy import (
     SpaceStatus,
 )
 from apps.user.models import User
+from apps.user.services.hierarchy import reader_scope_office_ids
 from apps.web.capability import has_capability
 
 
@@ -64,8 +65,13 @@ def space_for_manager(
 
 
 def _reader_visibility(user: User, space: Space, *, access=None) -> tuple[bool, bool]:
+    # The same chain `Space.objects.for_agent_office` filters on. These two
+    # gates decide the same question — one for a list, one for a single record —
+    # and when they were written separately they disagreed: the queryset was
+    # widened to the office chain while this one still compared a single id, so
+    # an inherited room listed fine and then served an empty payload.
     agent_visible = (
-        space.owner_office_id == getattr(user, "office_id", None)
+        space.owner_office_id in reader_scope_office_ids(user)
         and space.status == SpaceStatus.ACTIVE
         and space.is_reservable
     )

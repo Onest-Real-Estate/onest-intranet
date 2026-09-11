@@ -203,7 +203,3 @@ function ActivityTimelineSkeletonRows() {
     </div>
   );
 }
-
-export function ActivityTimelineSkeleton({ title = "Activity" }: { title?: string }) {
-  return <ActivityTimeline title={title} state="loading" page={null} />;
-}

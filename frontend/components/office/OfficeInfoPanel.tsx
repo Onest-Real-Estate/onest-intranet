@@ -388,7 +388,7 @@ export function OfficeInfoPanel({
                                 // panel are the page's only legitimate claims
                                 // on it — the row is already carried by weight
                                 // and full-contrast ink.
-                                <span className="text-muted-foreground ml-1.5 text-[0.6875rem] font-semibold tracking-[0.02em] uppercase">
+                                <span className="text-muted-foreground ml-1.5 text-micro font-semibold tracking-[0.02em] uppercase">
                                   Today
                                 </span>
                               ) : null}

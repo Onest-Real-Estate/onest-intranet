@@ -841,6 +841,22 @@
     background: color-mix(in oklab, var(--brand-gold) 18%, transparent);
   }
 
+  /* A rendered document page is white paper in both themes. Every mark drawn
+     on top of it — a placed contract field, its hairline, its ink — therefore
+     has to keep the light palette, because the dark chip tokens are mixed for
+     a dark card and paint a navy box on white paper with inverted contrast.
+     Scoping the tokens here keeps the components themselves theme-agnostic. */
+  .dark .paper-surface {
+    --card: oklch(1 0 0);
+    --border: oklch(0.917 0.003 286);
+    --info: oklch(0.52 0.13 245);
+    --chip-info: oklch(0.965 0.017 245);
+    --chip-info-edge: oklch(0.88 0.043 245);
+    --role-protected-ink: oklch(0.46 0.139 310);
+    --chip-role-protected: oklch(0.965 0.021 310);
+    --chip-role-protected-edge: oklch(0.88 0.043 310);
+  }
+
   /* Text laid over a photograph, with no scrim, box, or gradient beneath it.
      The legibility comes from a shadow on the glyphs themselves, so the image
      is shown exactly as uploaded. A shadow is weaker than a scrim — a very

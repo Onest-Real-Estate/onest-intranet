@@ -32,6 +32,13 @@ const user = {
 
 const room = {
   publicId: "11111111-1111-1111-1111-111111111111",
+  // The grid can hold rooms from several offices now, so every row names its
+  // own. This one is the office being viewed, so the UI stays quiet about it.
+  office: {
+    key: "fairfax-va",
+    name: "Fairfax VA",
+    timezone: "America/New_York",
+  },
   name: "Blue conference room",
   type: "conference_room",
   typeLabel: "Conference room",
