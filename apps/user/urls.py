@@ -17,8 +17,6 @@ from .views.auth_views import (
     headshot_upload,
     login_page,
     logout,
-    onboarding,
-    onboarding_submit,
     profile,
     profile_submit,
 )
@@ -51,6 +49,11 @@ from .views.onboarding_administration_views import (
     onboarding_tools,
     onboarding_workspace,
 )
+from .views.onboarding_profile_views import (
+    onboarding,
+    onboarding_profile_finalize,
+    onboarding_profile_save,
+)
 from .views.role_assignment_views import (
     role_assignment_mutate,
     role_assignment_preview,
@@ -62,7 +65,16 @@ urlpatterns = [
     path("login", RedirectView.as_view(pattern_name="login", query_string=True)),
     path("logout", logout, name="logout"),
     path("onboarding", onboarding, name="onboarding"),
-    path("onboarding/submit", onboarding_submit, name="onboarding_submit"),
+    path(
+        "onboarding/profile/sections/<slug:section>",
+        onboarding_profile_save,
+        name="onboarding_profile_save",
+    ),
+    path(
+        "onboarding/profile/finalize",
+        onboarding_profile_finalize,
+        name="onboarding_profile_finalize",
+    ),
     path("account/headshot", headshot_upload, name="headshot_upload"),
     path("account/headshot/file", headshot_display, name="headshot_display"),
     path("profile", profile, name="profile"),

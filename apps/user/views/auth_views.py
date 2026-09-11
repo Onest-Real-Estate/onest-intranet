@@ -7,7 +7,6 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.http import FileResponse, Http404, HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import redirect
-from django.utils import timezone
 from django.views.decorators.http import require_GET, require_POST
 from inertia import inertia, render
 from inertia.http import clear_history
@@ -18,7 +17,6 @@ from ..forms import (
     ProfileForm,
     SelfProfileForm,
     form_errors,
-    profile_page_props,
     self_profile_page_props,
 )
 from ..headshot import headshot_public_url, validate_headshot
@@ -28,34 +26,17 @@ from ..services.agent_administration import (
     reset_license_verification,
 )
 from ..services.profile import (
+    PROFILE_AUDIT_FIELDS,
+    HeadshotStorageUnavailable,
     can_self_assign_office,
     remove_headshot,
     replace_headshot,
 )
 from ..services.role_assignments import sync_default_agent_assignment
 
-
-def _onboarding_page_props(user: User, *, request=None, **kwargs):
-    payload = profile_page_props(user, request=request, **kwargs)
-    from apps.user.services.onboarding_state import (
-        agent_journey_payload,
-        journey_applies_to,
-        journey_for_user,
-    )
-
-    if journey_applies_to(user):
-        journey = getattr(request, "_onboarding_journey", None)
-        if journey is None:
-            journey = journey_for_user(user)
-        payload["onboardingJourney"] = agent_journey_payload(journey)
-    return payload
-
-
 __all__ = [
     "login_page",
     "logout",
-    "onboarding",
-    "onboarding_submit",
     "headshot_upload",
     "headshot_display",
     "profile",
@@ -98,31 +79,6 @@ _PROTECTED_FIELDS = frozenset(
         "password",
     }
 )
-
-# Profile fields whose audit snapshot is safe to keep. Contact details and the
-# photo are excluded — ``apps.audit.service`` redacts them anyway, and there is
-# no reason to route a home address through the event stream to find out.
-_PROFILE_AUDIT_FIELDS = [
-    "first_name",
-    "last_name",
-    "preferred_name",
-    "state",
-    "city",
-    "office",
-    "mls_number",
-    "nrds_number",
-    "license_number",
-    "license_state",
-    "license_expires_on",
-    "preferred_contact_method",
-    "languages",
-    "specialties",
-    "website_url",
-    "linkedin_url",
-    "facebook_url",
-    "instagram_url",
-    "x_url",
-]
 
 
 _LICENSE_FIELDS = ("license_number", "license_state", "license_expires_on")
@@ -198,119 +154,6 @@ def _render_profile_form(
     return response
 
 
-@enforce_policy("onboarding")
-@require_GET
-@inertia("Onboarding")
-def onboarding(request: HttpRequest):
-    """First-signup details page. Completed users go to the dashboard."""
-    user = cast(User, request.user)
-    if user.profile_completed:
-        return redirect("dashboard")
-    return _onboarding_page_props(user, request=request)
-
-
-@enforce_policy("onboarding_submit")
-@require_POST
-def onboarding_submit(request: HttpRequest):
-    """Save onboarding details and mark the profile complete, atomically."""
-    user = cast(User, request.user)
-
-    # Secondary mass-assignment guard — block crafted POSTs even if the form
-    # somehow failed to exclude these fields.
-    rejected = _rejected_fields(request)
-    if rejected:
-        _log_protected_field_rejection(request, rejected)
-        return HttpResponse("Forbidden", status=403)
-
-    # Already completed — idempotency: just redirect.
-    if user.profile_completed:
-        return redirect("dashboard")
-
-    form = ProfileForm(request.POST, request.FILES, instance=user)
-    if not form.is_valid():
-        return _render_profile_form(
-            request,
-            component="Onboarding",
-            props_builder=_onboarding_page_props,
-            form=form,
-            status=422,
-        )
-
-    from apps.user.services.onboarding_operations import (
-        StaleJourneyVersion,
-        complete_required_setup,
-    )
-
-    try:
-        with transaction.atomic():
-            from apps.audit.service import actor_from_user, log_model_change
-            from apps.user.services.hierarchy import sync_primary_membership
-
-            before_user = User.objects.get(pk=user.pk)
-            saved_user = form.save(commit=False)
-            saved_user.profile_completed = True
-            saved_user.profile_completed_at = timezone.now()
-            saved_user.save()
-            sync_primary_membership(
-                saved_user,
-                actor=saved_user,
-                business_reason="Office set during onboarding.",
-            )
-            sync_default_agent_assignment(
-                saved_user,
-                actor=saved_user,
-                business_reason="Office set during onboarding.",
-            )
-            complete_required_setup(
-                user=saved_user,
-                expected_version=request.POST.get("expected_version") or None,
-            )
-            log_model_change(
-                "user.onboarding.completed",
-                actor=actor_from_user(user),
-                instance=saved_user,
-                before_instance=before_user,
-                snapshot_fields=[
-                    "first_name",
-                    "last_name",
-                    "display_name",
-                    "state",
-                    "office",
-                    "profile_completed",
-                    "profile_completed_at",
-                    "onboarding_version",
-                ],
-                metadata={"path": request.path},
-            )
-            try:
-                from apps.audit.events import publish
-
-                publish(
-                    "user.onboarded",
-                    version=2,
-                    actor_id=str(saved_user.pk),
-                    subject=f"user:{saved_user.pk}",
-                    payload={
-                        "user_id": saved_user.pk,
-                        "office_id": saved_user.office_id,
-                    },
-                )
-            except ImportError:
-                # audit app not yet merged into this branch.
-                pass
-    except StaleJourneyVersion:
-        form.add_error(None, StaleJourneyVersion.message)
-        return _render_profile_form(
-            request,
-            component="Onboarding",
-            props_builder=_onboarding_page_props,
-            form=form,
-            status=409,
-        )
-
-    return redirect("dashboard")
-
-
 @enforce_policy("headshot_upload")
 @require_POST
 def headshot_upload(request: HttpRequest) -> JsonResponse:
@@ -320,6 +163,9 @@ def headshot_upload(request: HttpRequest) -> JsonResponse:
     upload progress before the surrounding form is submitted. The endpoint only
     ever reads ``request.user``; no user identifier is accepted from the client,
     so no cross-user upload or deletion is possible through it.
+
+    ``retryable`` tells the page whether sending the same file again can help:
+    a storage outage can, a file Pillow rejected cannot.
     """
     user = cast(User, request.user)
 
@@ -329,14 +175,22 @@ def headshot_upload(request: HttpRequest) -> JsonResponse:
 
     upload = request.FILES.get("headshot")
     if not upload:
-        return JsonResponse({"error": "No file provided."}, status=400)
+        return JsonResponse(
+            {"error": "Choose a JPEG or PNG photo to upload.", "retryable": False},
+            status=400,
+        )
 
     try:
         validate_headshot(upload)
     except ValidationError as exc:
-        return JsonResponse({"error": " ".join(exc.messages)}, status=422)
+        return JsonResponse(
+            {"error": " ".join(exc.messages), "retryable": False}, status=422
+        )
 
-    replace_headshot(user, upload)
+    try:
+        replace_headshot(user, upload)
+    except HeadshotStorageUnavailable as exc:
+        return JsonResponse({"error": exc.message, "retryable": True}, status=503)
     return JsonResponse({"url": headshot_public_url(request, user)})
 
 
@@ -419,7 +273,7 @@ def profile_submit(request: HttpRequest):
             actor=actor_from_user(saved_user),
             instance=saved_user,
             before_instance=before_user,
-            snapshot_fields=_PROFILE_AUDIT_FIELDS,
+            snapshot_fields=PROFILE_AUDIT_FIELDS,
             metadata={"path": request.path},
         )
 

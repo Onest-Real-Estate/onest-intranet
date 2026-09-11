@@ -1335,8 +1335,11 @@ export interface SocialPlatformOption {
   placeholder: string;
 }
 
-/** The details onboarding collects. Keys mirror `forms.ONBOARDING_FIELD_MAP`. */
-export interface OnboardingProfileValues {
+/**
+ * Everything a user may maintain about themselves, per `SelfProfileForm`.
+ * Keys mirror `forms.SELF_PROFILE_FIELD_MAP`, shared by onboarding and /profile.
+ */
+export interface SelfProfileValues {
   firstName: string;
   lastName: string;
   phoneNumber: string;
@@ -1348,10 +1351,6 @@ export interface OnboardingProfileValues {
   mlsNumber: string;
   nrdsNumber: string;
   headshotUrl: string | null;
-}
-
-/** Everything a user may maintain about themselves, per `SelfProfileForm`. */
-export interface SelfProfileValues extends OnboardingProfileValues {
   preferredName: string;
   preferredContactMethod: string;
   licenseNumber: string;
@@ -1431,11 +1430,94 @@ export interface ProfileLimits {
   maxSpecialties: number;
 }
 
+export type OnboardingProfileSectionCode =
+  | "identity"
+  | "contact"
+  | "credentials"
+  | "review";
+export type OnboardingEditableSectionCode = Exclude<
+  OnboardingProfileSectionCode,
+  "review"
+>;
+export type OnboardingProfileSectionStatus = "not_started" | "in_progress" | "complete";
+/** Who is the source of truth for a value: Microsoft, the brokerage, or the agent. */
+export type ProfileFieldOwner = "agent" | "microsoft" | "brokerage";
+
+export interface OnboardingProfileSection {
+  code: OnboardingProfileSectionCode;
+  label: string;
+  description: string;
+  /** Null for review, which confirms rather than saves. */
+  status: OnboardingProfileSectionStatus | null;
+  /** Fingerprint of the section's stored values; echoed back on save. */
+  revision: string | null;
+}
+
+/** Server-owned policy for one Django field. React renders it; it never decides it. */
+export interface OnboardingFieldPolicy {
+  label: string;
+  section: OnboardingEditableSectionCode;
+  required: boolean;
+  owner: ProfileFieldOwner;
+  readOnly: boolean;
+  /** Availability reasons and helper copy, e.g. why MLS may be left blank. */
+  guidance: string;
+}
+
+export interface OnboardingReviewRow {
+  field: string;
+  label: string;
+  /** The stored, normalized value as it will be saved. Empty when not provided. */
+  display: string;
+  required: boolean;
+  owner: ProfileFieldOwner;
+}
+
+export interface OnboardingReview {
+  ready: boolean;
+  missing: { field: string; label: string; section: OnboardingEditableSectionCode }[];
+  groups: {
+    section: OnboardingEditableSectionCode;
+    label: string;
+    rows: OnboardingReviewRow[];
+  }[];
+}
+
+export interface OnboardingProfileFlow {
+  onboardingVersion: number;
+  currentSection: OnboardingProfileSectionCode;
+  sections: OnboardingProfileSection[];
+  fields: Record<string, OnboardingFieldPolicy>;
+  review: OnboardingReview;
+}
+
+export interface OnboardingIdentity {
+  email: string;
+  emailOwner: "microsoft";
+  /** Microsoft's name when it sent a complete one; otherwise what is stored. */
+  legalName: { firstName: string; lastName: string };
+  legalNameLocked: boolean;
+  legalNameNotice: string | null;
+}
+
+export type OnboardingLimits = Omit<ProfileLimits, "maxSpecialties">;
+
 export interface OnboardingPageProps extends PageProps {
-  initial: OnboardingProfileValues;
+  profileFlow: OnboardingProfileFlow;
+  identity: OnboardingIdentity;
+  /** Values to show: what was just submitted after a 422 or 409, else `saved`. */
+  initial: SelfProfileValues;
+  /** What the server holds right now. */
+  saved: SelfProfileValues;
   validation: ValidationErrors;
+  /** Empty when the office is administrative for this user. */
   offices: OfficeGroup[];
+  officeLabel: string;
   states: StateOption[];
+  languageOptions: LanguageOption[];
+  contactMethods: ContactMethodOption[];
+  socialPlatforms: SocialPlatformOption[];
+  limits: OnboardingLimits;
   /** Present for the Agent journey; omitted by the explicit non-Agent policy. */
   onboardingJourney?: AgentOnboardingJourney;
 }

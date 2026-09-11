@@ -77,12 +77,27 @@ ROUTE_POLICIES: dict[str, AuthorizationPolicy] = {
         allow_incomplete_profile=True,
         scope_rule="self_only",
     ),
-    "onboarding_submit": AuthorizationPolicy(
-        key="onboarding_submit",
+    "onboarding_profile_save": AuthorizationPolicy(
+        key="onboarding_profile_save",
         access="onboarding_only",
-        description="Persist onboarding profile details.",
+        description=(
+            "Save one onboarding profile section for the signed-in user without "
+            "completing the profile."
+        ),
         methods=("POST",),
-        route_names=("onboarding_submit",),
+        route_names=("onboarding_profile_save",),
+        allow_incomplete_profile=True,
+        scope_rule="self_only",
+    ),
+    "onboarding_profile_finalize": AuthorizationPolicy(
+        key="onboarding_profile_finalize",
+        access="onboarding_only",
+        description=(
+            "Confirm the reviewed onboarding profile and complete it atomically "
+            "once every required fact and the stored headshot are present."
+        ),
+        methods=("POST",),
+        route_names=("onboarding_profile_finalize",),
         allow_incomplete_profile=True,
         scope_rule="self_only",
     ),

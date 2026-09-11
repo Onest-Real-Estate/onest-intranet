@@ -96,18 +96,62 @@ Normalization happens in `clean_fields()` rather than `clean()` because
 `full_clean()` runs field validators first: normalizing any later would let
 `URLField`'s validator reject `example.com` before it was upgraded.
 
+## First-login onboarding
+
+Onboarding collects the same profile in four short sections — identity and
+photo, contact and home address, professional credentials, review — through
+`apps/user/services/onboarding_profile.py` and
+`frontend/components/onboarding/profile/`. It shares this page's contract
+rather than keeping its own:
+
+- **One allowlist.** `OnboardingProfileSectionForm` subclasses
+  `SelfProfileForm` and removes every bound field outside the section, so the
+  declarations, normalizers, and cross-field rules are the ones above.
+  `specialties` has no onboarding section; it stays profile enrichment.
+- **Server-owned policy.** Each `ProfileFieldSpec` names its
+  `onboarding_section`, `owner` (`agent`, `microsoft`, `brokerage`),
+  `guidance` (for example why MLS may be blank), and `required_from_version`.
+  The page receives this as `profileFlow.fields` and never hard-codes
+  requiredness or availability reasons.
+- **Microsoft identity.** Email is always read-only. When Microsoft sends a
+  complete given name and surname they are read-only too, the section ignores
+  posted names, and the Microsoft values are saved — a conflicting stored name
+  is replaced and the page says so. An empty or partial Microsoft name leaves
+  both fields editable and required.
+
+Endpoints, all `self_only` and guarded by the same `_PROTECTED_FIELDS` 403:
+
+| Route | Does |
+| --- | --- |
+| `GET onboarding?section=` | Resumes at the requested section, else the first unfinished one |
+| `POST onboarding_profile_save` (`/onboarding/profile/sections/<section>`) | Validates and saves one section; never sets `profile_completed`. 422 re-renders with the posted values |
+| `POST onboarding_profile_finalize` | Requires `confirm_review`, re-validates everything stored against today's rules, checks the headshot exists in storage, then completes atomically |
+
+Concurrency without a new column: every write carries
+`expected_onboarding_version` (409 after an administrator reset) and a section
+save carries that section's `revision`, a fingerprint of its stored values. A
+save that would change nothing succeeds as a no-op whatever its revision, so a
+double submit is harmless; a real change from a stale tab returns 409 with the
+agent's typed values kept. Finalization locks the user row, returns early when
+already complete, and publishes `user.onboarded` (v2) once per onboarding cycle.
+
 ## Adding a field
 
 1. Add the model field, the normalizer in `profile_fields.py`, and a migration.
 2. Add it to `SelfProfileForm` (declared field + `Meta.fields`) and to
    `SELF_PROFILE_FIELD_MAP` so the camelCase prop exists.
-3. Add a `ProfileFieldSpec` in `services/profile.py` if it counts toward
-   completeness.
+3. Add a `ProfileFieldSpec` in `services/profile.py`. Set `onboarding_section`
+   to collect it during onboarding (or leave it `None` for profile-only
+   enrichment), `required=True` with a `required_from_version` to require it
+   from a future onboarding cycle, and `counts_toward_completeness`.
 4. Add the control to the matching section in
-   `frontend/components/profile/ProfileFormSections.tsx` and the label to
-   `ERROR_LABELS` in `frontend/pages/Profile.tsx`.
+   `frontend/components/profile/ProfileFormSections.tsx`, the label to
+   `ERROR_LABELS` in `frontend/pages/Profile.tsx`, and — when it has an
+   onboarding section — the control to that section component and its prop to
+   `PROP_FOR_FIELD` in `frontend/components/onboarding/profile/field-names.ts`.
 5. Cover normalization, persistence, and a rejection case in
-   `apps/user/tests/test_profile_fields.py` and `test_profile.py`.
+   `apps/user/tests/test_profile_fields.py`, `test_profile.py`, and
+   `test_onboarding_profile.py`.
 
 ## Photo
 
@@ -116,10 +160,19 @@ The headshot is the one thing that does not save with the form. It posts to
 and the profile page, which validates with Pillow, stores under a UUID name
 from `headshot_upload_path` (the browser's filename is never trusted), and
 returns JSON so the page can show progress, a preview, and a server error in
-place. `remove=1` on the same endpoint deletes the stored photo and is
+place. `remove=1` on the same endpoint clears the stored photo and is
 idempotent. Both outcomes emit `user.headshot.updated` /
 `user.headshot.removed` audit events recording only that a photo changed —
 never the file, its name, or its URL.
+
+A replacement is written to storage before the previous file is touched, and
+the previous file is deleted only after the row commits, so a storage outage
+leaves the photo the user already had. An outage answers **503** with
+`retryable: true`; a file Pillow rejects answers 422 with `retryable: false`.
+Storage failures are logged by exception type only, never with the object key.
+The signed-in user's photo URL carries `?v=<fingerprint>` of the generated
+name, so a replaced photo is never served from the browser cache and no
+storage path reaches the client.
 
 ## Completeness
 
@@ -131,5 +184,5 @@ onboarding is complete keeps full access at any score.
 ## Audit
 
 A successful save writes `user.profile.updated` with a before/after diff over
-`_PROFILE_AUDIT_FIELDS`. Home address, phone, email, and the photo are
+`services.profile.PROFILE_AUDIT_FIELDS`. Home address, phone, email, and the photo are
 excluded, and `apps.audit.service.redact` would strip them regardless.

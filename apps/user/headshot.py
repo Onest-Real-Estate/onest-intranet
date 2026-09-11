@@ -11,6 +11,7 @@ Security rules
 
 from __future__ import annotations
 
+import hashlib
 import uuid
 from pathlib import Path
 
@@ -80,7 +81,11 @@ def headshot_public_url(request, user) -> str | None:
     if not user.headshot:
         return None
     if request.user.is_authenticated and request.user.pk == user.pk:
-        return request.build_absolute_uri(reverse("headshot_display"))
+        # A fingerprint of the generated storage name, never the name itself:
+        # the URL changes whenever the photo does, so a replaced photo is not
+        # served from the browser cache and no storage path reaches the client.
+        version = hashlib.sha256(user.headshot.name.encode()).hexdigest()[:12]
+        return request.build_absolute_uri(f"{reverse('headshot_display')}?v={version}")
     stored = user.headshot.url
     if stored.startswith(("http://", "https://")):
         return stored

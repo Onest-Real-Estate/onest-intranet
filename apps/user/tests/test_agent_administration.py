@@ -29,7 +29,6 @@ from apps.user.services.agent_administration import (
     update_administration,
 )
 from apps.user.services.role_assignments import get_effective_access
-from apps.user.tests.test_onboarding import valid_profile_post
 from apps.user.tests.test_profile import completed_user, valid_self_profile_post
 
 # ---------------------------------------------------------------------------
@@ -864,11 +863,13 @@ def test_a_change_administrator_still_reads_the_notes(client):
 
 
 @pytest.mark.django_db
-def test_a_new_user_starts_active_and_unverified(client):
+def test_a_new_user_starts_active_and_unverified(client, settings, tmp_path):
+    from apps.user.tests.test_onboarding_profile import complete_profile
+
+    settings.MEDIA_ROOT = str(tmp_path)
     user = User.objects.create_user(email="new@example.com")
     client.force_login(user)
-    response = client.post(reverse("onboarding_submit"), valid_profile_post())
-    assert response.status_code == 302
+    complete_profile(client)
     user.refresh_from_db()
     assert user.agent_status == "active"
     assert user.license_verification_state == "unverified"
