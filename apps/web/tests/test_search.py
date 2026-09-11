@@ -553,7 +553,7 @@ def test_the_query_count_is_bounded_by_the_provider_set(
 
     # Warm the access lookup so the assertion measures the providers.
     run_search(user, "warmup")
-    with django_assert_num_queries(8):
+    with django_assert_num_queries(10):
         run_search(user, "countable")
 
 

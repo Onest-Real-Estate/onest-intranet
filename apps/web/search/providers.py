@@ -154,6 +154,29 @@ def search_training(actor: User, query: str, limit: int) -> list[SearchHit]:
     ]
 
 
+def search_marketing(actor: User, query: str, limit: int) -> list[SearchHit]:
+    """Current approved marketing assets addressed to this reader."""
+    from apps.marketing.services import library_queryset
+
+    rows = search_ranked(
+        library_queryset(actor),
+        query,
+        fields=("title", "description", "usage_instructions"),
+        trigram_field="title",
+        order=("display_order", "title"),
+    )[:limit]
+    return [
+        SearchHit(
+            id=str(row.pk),
+            title=row.title,
+            href=reverse("marketing_resource_detail", args=[row.pk]),
+            snippet=snippet_from(row.description or row.usage_instructions, query),
+            meta=row.category.label if row.category else "Marketing",
+        )
+        for row in rows
+    ]
+
+
 # --------------------------------------------------------------------------- #
 # Offices
 # --------------------------------------------------------------------------- #
@@ -259,6 +282,15 @@ SEARCH_PROVIDERS: tuple[SearchProvider, ...] = (
         permission="",
         order=25,
         all_results_route="training_learning",
+    ),
+    SearchProvider(
+        key="marketing",
+        label="Marketing resources",
+        icon="megaphone",
+        search=search_marketing,
+        permission="",
+        order=27,
+        all_results_route="marketing_resources",
     ),
     SearchProvider(
         key="office-resources",

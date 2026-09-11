@@ -64,6 +64,7 @@ def test_registry_has_exact_destinations_order_routes_and_permissions():
         "Reservations",
         "Announcements",
         "Training",
+        "Marketing Resources",
         "Documents",
         "Quick Access",
         "Compliance",
@@ -86,6 +87,7 @@ def test_registry_has_exact_destinations_order_routes_and_permissions():
         80,
         90,
         100,
+        105,
         110,
         120,
         130,
@@ -99,17 +101,17 @@ def test_registry_has_exact_destinations_order_routes_and_permissions():
     assert [destination.section for destination in OPERATIONS_DESTINATIONS] == [
         *("People" for _ in range(6)),
         *("Operations" for _ in range(3)),
-        *("Content" for _ in range(4)),
+        *("Content" for _ in range(5)),
         *("Governance & support" for _ in range(4)),
         *("Content" for _ in range(1)),
         *("Governance & support" for _ in range(2)),
     ]
-    assert len({destination.key for destination in OPERATIONS_DESTINATIONS}) == 20
+    assert len({destination.key for destination in OPERATIONS_DESTINATIONS}) == 21
     assert (
-        len({destination.route_name for destination in OPERATIONS_DESTINATIONS}) == 20
+        len({destination.route_name for destination in OPERATIONS_DESTINATIONS}) == 21
     )
     assert (
-        len({destination.permission for destination in OPERATIONS_DESTINATIONS}) == 20
+        len({destination.permission for destination in OPERATIONS_DESTINATIONS}) == 21
     )
     for destination in OPERATIONS_DESTINATIONS:
         assert reverse(destination.route_name) == f"/{destination.path}"
@@ -128,6 +130,7 @@ def test_registry_has_exact_destinations_order_routes_and_permissions():
                 "admin_offices",
                 "admin_announcements",
                 "admin_training",
+                "admin_marketing_resources",
                 "admin_contract_templates",
                 "operational_tasks",
                 "admin_feedback",
@@ -172,6 +175,7 @@ def test_scoped_management_role_permission_matrix():
             "Reservations",
             "Announcements",
             "Training",
+            "Marketing Resources",
             "Documents",
             "Quick Access",
             "Tasks",
@@ -186,6 +190,7 @@ def test_scoped_management_role_permission_matrix():
             "Reservations",
             "Announcements",
             "Training",
+            "Marketing Resources",
             "Documents",
             "Quick Access",
             "Tasks",
@@ -270,6 +275,11 @@ def test_brokerage_admin_can_reach_every_registered_destination(client):
             continue
         if destination.route_name == "admin_training":
             assert "trainings" in props
+            assert "filterOptions" in props
+            assert "capabilities" in props
+            continue
+        if destination.route_name == "admin_marketing_resources":
+            assert "assets" in props
             assert "filterOptions" in props
             assert "capabilities" in props
             continue

@@ -520,6 +520,58 @@ PERMISSION_DEFINITIONS: tuple[PermissionDefinition, ...] = (
         default_roles=(*_MANAGERS, BRANCH_ADMIN, REGIONAL_ADMIN),
     ),
     PermissionDefinition(
+        codename="web.manage_marketing_resources",
+        name="Can manage marketing resources",
+        domain="content",
+        action="manage",
+        description=(
+            "Draft, upload, version, and target audiences for marketing "
+            "assets within effective publication scope."
+        ),
+        default_roles=(
+            *_BROKERAGE_ADMINS,
+            MARKETING_TEAM,
+            REGIONAL_MANAGER,
+            BRANCH_MANAGER,
+            REGIONAL_ADMIN,
+            BRANCH_ADMIN,
+        ),
+        risk="medium",
+    ),
+    PermissionDefinition(
+        codename="web.publish_marketing_resources",
+        name="Can publish, schedule, and archive marketing resources",
+        domain="content",
+        action="approve",
+        description=(
+            "Publish, schedule, unpublish, archive, or restore marketing "
+            "assets within effective publication scope."
+        ),
+        default_roles=(
+            *_BROKERAGE_ADMINS,
+            MARKETING_TEAM,
+            REGIONAL_MANAGER,
+            BRANCH_MANAGER,
+            REGIONAL_ADMIN,
+            BRANCH_ADMIN,
+            COMPLIANCE,
+        ),
+        risk="medium",
+    ),
+    PermissionDefinition(
+        codename="web.download_marketing_sources",
+        name="Can download marketing source files",
+        domain="content",
+        action="view",
+        description=(
+            "Download editable source files for marketing assets in scope. "
+            "Export downloads use audience visibility alone."
+        ),
+        default_roles=(*_BROKERAGE_ADMINS, MARKETING_TEAM),
+        risk="high",
+        sensitive=True,
+    ),
+    PermissionDefinition(
         codename="web.manage_documents",
         name="Can manage documents",
         domain="content",

@@ -59,6 +59,7 @@ INSTALLED_APPS = [
     "apps.inventory",
     "apps.reservations",
     "apps.training",
+    "apps.marketing",
 ]
 
 # Silk (SQL profiling, N+1 detection) is dev-only: its web UI lives at
@@ -248,6 +249,7 @@ CELERY_TIMEZONE = TIME_ZONE
 # an announcement's hero image then sits in PENDING for ever, which the publish
 # checklist honestly — but unhelpfully — reports as "still being processed".
 # `manage.py process_announcement_media` clears a backlog that already exists.
+# `manage.py process_marketing_file` does the same for marketing uploads.
 CELERY_TASK_ALWAYS_EAGER = config("CELERY_TASK_ALWAYS_EAGER", default=False, cast=bool)
 # Eager tasks re-raise instead of swallowing: a local failure should be a
 # traceback, not a silently quarantined file.
@@ -406,7 +408,7 @@ DJANGO_VITE = {
 # ---------------------------------------------------------------------------
 INERTIA_LAYOUT = "layout.html"
 # Bump whenever the frontend bundle changes so stale clients get a full reload.
-INERTIA_VERSION = "33"
+INERTIA_VERSION = "34"
 
 # Optional external help centre. The shell exposes it only when it is an
 # absolute, credential-free HTTPS URL; an empty or unsafe value leaves the
