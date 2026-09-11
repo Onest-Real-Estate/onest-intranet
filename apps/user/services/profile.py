@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from django.utils import timezone
 
 from apps.user.models import User
-from apps.user.profile_fields import LANGUAGE_NAMES, SOCIAL_PLATFORMS
+from apps.user.profile_fields import LANGUAGE_NAMES, SOCIAL_PLATFORMS, SPECIALTY_NAMES
 from apps.user.roles import AGENT, ROLE_LABELS, SUPERADMIN_LABEL
 from apps.user.services.role_assignments import get_effective_role_keys
 
@@ -34,7 +34,7 @@ SECTION_LABELS: dict[str, str] = {
     CONTACT: "Contact details",
     ADDRESS: "Mailing address",
     CREDENTIALS: "Office and credentials",
-    BIOGRAPHY: "Biography and languages",
+    BIOGRAPHY: "Biography, languages, and specialties",
     LINKS: "Website and social links",
 }
 
@@ -67,6 +67,7 @@ PROFILE_FIELD_SPECS: tuple[ProfileFieldSpec, ...] = (
     ProfileFieldSpec("nrds_number", "NRDS number", CREDENTIALS),
     ProfileFieldSpec("bio", "Professional bio", BIOGRAPHY),
     ProfileFieldSpec("languages", "Languages", BIOGRAPHY),
+    ProfileFieldSpec("specialties", "Specialties", BIOGRAPHY),
     ProfileFieldSpec("website_url", "Website", LINKS),
     ProfileFieldSpec("social_links", "At least one social link", LINKS),
 )
@@ -79,6 +80,8 @@ def _is_present(user: User, key: str) -> bool:
         return user.office is not None
     if key == "languages":
         return bool(user.languages)
+    if key == "specialties":
+        return bool(user.specialties)
     if key == "license_expires_on":
         return user.license_expires_on is not None
     if key == "social_links":
@@ -147,6 +150,14 @@ def license_status(user: User) -> dict | None:
 def language_labels(user: User) -> list[str]:
     return [
         LANGUAGE_NAMES[code] for code in user.languages or [] if code in LANGUAGE_NAMES
+    ]
+
+
+def specialty_labels(user: User) -> list[str]:
+    return [
+        SPECIALTY_NAMES[code]
+        for code in user.specialties or []
+        if code in SPECIALTY_NAMES
     ]
 
 

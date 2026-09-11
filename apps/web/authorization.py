@@ -565,6 +565,40 @@ ROUTE_POLICIES: dict[str, AuthorizationPolicy] = {
         route_names=("office_inventory_photo",),
         scope_rule="self_only",
     ),
+    "agent_directory": AuthorizationPolicy(
+        key="agent_directory",
+        access="authenticated",
+        description=(
+            "Company-wide peer Agent Directory. Visibility and field "
+            "allowlisting are enforced in the service layer; inactive and "
+            "non-engaged people never appear in search, counts, or filters."
+        ),
+        methods=("GET",),
+        route_names=("agent_directory",),
+        scope_rule="self_only",
+    ),
+    "agent_directory_detail": AuthorizationPolicy(
+        key="agent_directory_detail",
+        access="authenticated",
+        description=(
+            "One directory-visible person. Out-of-policy ids are 404 so "
+            "direct URLs cannot confirm hidden accounts."
+        ),
+        methods=("GET",),
+        route_names=("agent_directory_detail",),
+        scope_rule="self_only",
+    ),
+    "agent_directory_headshot": AuthorizationPolicy(
+        key="agent_directory_headshot",
+        access="authenticated",
+        description=(
+            "Stream a directory-visible headshot after re-checking "
+            "visibility. Never returns a permanent public media URL."
+        ),
+        methods=("GET",),
+        route_names=("agent_directory_headshot",),
+        scope_rule="self_only",
+    ),
     "room_availability": AuthorizationPolicy(
         key="room_availability",
         access="permission_protected",

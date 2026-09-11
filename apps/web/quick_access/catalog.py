@@ -57,6 +57,7 @@ LIVE_HUB_ROUTES: dict[str, tuple[str, tuple[str, ...]]] = {
     "office-inventory": ("office_inventory", ()),
     "training-learning": ("training_learning", ()),
     "marketing-resources": ("marketing_resources", ()),
+    "agent-directory": ("agent_directory", ()),
 }
 
 

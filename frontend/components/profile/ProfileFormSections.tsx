@@ -424,23 +424,28 @@ export function ProfileBiographySection({
   validation,
   onDirty,
   languageOptions,
+  specialtyOptions,
   maxLanguages,
+  maxSpecialties,
   bioMaxLength,
 }: SectionProps & {
   languageOptions: LanguageOption[];
+  specialtyOptions: LanguageOption[];
   maxLanguages: number;
+  maxSpecialties: number;
   bioMaxLength: number;
 }) {
   const [bioLength, setBioLength] = useState(initial.bio.length);
   const [languages, setLanguages] = useState<string[]>(initial.languages);
+  const [specialties, setSpecialties] = useState<string[]>(initial.specialties);
   const bioHelp = descriptionId("bio");
   const bioNearLimit = bioLength >= bioMaxLength * 0.9;
 
   return (
     <Section
       id={SECTION_ANCHORS.biography}
-      title="Biography and languages"
-      description="A short introduction shown wherever your name appears in the hub."
+      title="Biography, languages, and specialties"
+      description="A short introduction plus directory specialties shown alongside your name."
     >
       <FormField>
         <FormLabel htmlFor="bio" optional>
@@ -500,7 +505,90 @@ export function ProfileBiographySection({
           onDirty();
         }}
       />
+
+      <SpecialtyPicker
+        options={specialtyOptions}
+        selected={specialties}
+        max={maxSpecialties}
+        validation={validation}
+        onToggle={(code, next) => {
+          setSpecialties((current) =>
+            next
+              ? current.includes(code)
+                ? current
+                : [...current, code]
+              : current.filter((item) => item !== code),
+          );
+          onDirty();
+        }}
+      />
     </Section>
+  );
+}
+
+function SpecialtyPicker({
+  options,
+  selected,
+  max,
+  onToggle,
+  validation,
+}: {
+  options: LanguageOption[];
+  selected: string[];
+  max: number;
+  onToggle: (code: string, next: boolean) => void;
+  validation: ValidationErrors;
+}) {
+  const groupId = useId();
+  const atLimit = selected.length >= max;
+  const error = firstFieldError(validation, "specialties");
+
+  return (
+    <fieldset
+      className="grid gap-2"
+      aria-describedby={`${groupId}-help${error ? " specialties_error" : ""}`}
+      aria-invalid={Boolean(error) || undefined}
+    >
+      <legend className="text-sm leading-none font-medium">Specialties</legend>
+      <FormDescription id={`${groupId}-help`}>
+        Practice areas shown in the agent directory. Choose up to {max}.{" "}
+        {selected.length} selected.
+      </FormDescription>
+      {selected.map((code) => (
+        <input key={code} type="hidden" name="specialties" value={code} />
+      ))}
+      <div className="flex flex-wrap gap-2">
+        {options.map((option) => {
+          const checked = selected.includes(option.code);
+          const id = `${groupId}-${option.code}`;
+          return (
+            <div
+              key={option.code}
+              className={cn(
+                "-m-px flex items-center gap-2 rounded-md border py-1.5 pr-3.5 pl-3 transition-colors duration-(--motion-fast)",
+                checked
+                  ? "border-chip-primary-edge bg-chip-primary"
+                  : "border-border hover:border-primary/30 hover:bg-muted/50",
+              )}
+            >
+              <Checkbox
+                id={id}
+                checked={checked}
+                disabled={!checked && atLimit}
+                onCheckedChange={(next) => onToggle(option.code, next === true)}
+              />
+              <label
+                htmlFor={id}
+                className="cursor-pointer text-sm leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-60"
+              >
+                {option.name}
+              </label>
+            </div>
+          );
+        })}
+      </div>
+      <FormFieldError id="specialties_error" message={error} />
+    </fieldset>
   );
 }
 

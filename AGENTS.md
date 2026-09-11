@@ -104,6 +104,7 @@ docs/quick-create.md   Global Quick Create menu: action registry, scope, safe re
 docs/search.md     Global search: provider contract, isolation, caps, palette
 docs/notifications.md  In-app notifications: producers, sources, centre, badge
 docs/user-directory.md Scoped people directory: filters, field permissions, account state
+docs/agent-directory.md Peer Agent Directory: privacy allowlist, visibility, gated headshots
 docs/profile.md    Self-service profile: editable allowlist, normalization, audit
 docs/agent-administration.md  Broker-controlled profile half: scope, delegation, audit
 docs/agent-contracts.md  Agent contract schema, snapshots, scope, permissions

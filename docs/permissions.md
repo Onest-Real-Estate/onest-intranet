@@ -28,6 +28,12 @@ Use stable `domain.action` style Django codenames, for example:
 - `audit.can_view_activity_timeline` (user-facing timelines; distinct from raw audit)
 - `audit.can_view_audit_events`, `audit.can_export_audit_events`
 
+The peer [Agent Directory](agent-directory.md) is authenticated-only: it has no
+capability codename. Visibility (`is_active` + engaged agent status) and the
+directory field allowlist are the security boundary. Operations Users
+(`web.view_users`) remains the admin people list — see
+[user-directory.md](user-directory.md).
+
 Sensitive actions split read / export / approve / manage rather than bundling
 them into a single “admin” bit.
 
