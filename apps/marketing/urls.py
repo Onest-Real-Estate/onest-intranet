@@ -1,0 +1,113 @@
+from django.urls import path
+
+from .administration_views import (
+    marketing_administration_index,
+    marketing_create,
+    marketing_duplicate_version,
+    marketing_edit,
+    marketing_lifecycle,
+    marketing_media_manager,
+    marketing_media_remove,
+    marketing_media_reorder,
+    marketing_media_replace,
+    marketing_media_upload,
+    marketing_new,
+    marketing_recipient_search,
+    marketing_update,
+)
+from .views import (
+    marketing_resource_detail,
+    marketing_resource_export,
+    marketing_resource_preview,
+    marketing_resource_source,
+    marketing_resources,
+)
+
+urlpatterns = [
+    path("marketing-resources", marketing_resources, name="marketing_resources"),
+    path(
+        "marketing-resources/<int:asset_id>",
+        marketing_resource_detail,
+        name="marketing_resource_detail",
+    ),
+    path(
+        "marketing-resources/export/<int:file_id>",
+        marketing_resource_export,
+        name="marketing_resource_export",
+    ),
+    path(
+        "marketing-resources/preview/<int:file_id>",
+        marketing_resource_preview,
+        name="marketing_resource_preview",
+    ),
+    path(
+        "marketing-resources/source/<int:file_id>",
+        marketing_resource_source,
+        name="marketing_resource_source",
+    ),
+    path(
+        "operations/marketing-resources",
+        marketing_administration_index,
+        name="admin_marketing_resources",
+    ),
+    path(
+        "operations/marketing-resources/recipients",
+        marketing_recipient_search,
+        name="marketing_recipient_search",
+    ),
+    path(
+        "operations/marketing-resources/new",
+        marketing_new,
+        name="marketing_new",
+    ),
+    path(
+        "operations/marketing-resources/create",
+        marketing_create,
+        name="marketing_create",
+    ),
+    path(
+        "operations/marketing-resources/<int:asset_id>/edit",
+        marketing_edit,
+        name="marketing_edit",
+    ),
+    path(
+        "operations/marketing-resources/<int:asset_id>/save",
+        marketing_update,
+        name="marketing_update",
+    ),
+    path(
+        "operations/marketing-resources/<int:asset_id>/lifecycle",
+        marketing_lifecycle,
+        name="marketing_lifecycle",
+    ),
+    path(
+        "operations/marketing-resources/<int:asset_id>/duplicate-version",
+        marketing_duplicate_version,
+        name="marketing_duplicate_version",
+    ),
+    path(
+        "operations/marketing-resources/<int:asset_id>/media",
+        marketing_media_manager,
+        name="marketing_media_manager",
+    ),
+    path(
+        "operations/marketing-resources/<int:asset_id>/media/upload",
+        marketing_media_upload,
+        name="marketing_media_upload",
+    ),
+    path(
+        "operations/marketing-resources/<int:asset_id>/media/reorder",
+        marketing_media_reorder,
+        name="marketing_media_reorder",
+    ),
+    path(
+        "operations/marketing-resources/media/<int:file_id>/replace",
+        marketing_media_replace,
+        name="marketing_media_replace",
+    ),
+    path(
+        "operations/marketing-resources/media/<int:file_id>/remove",
+        marketing_media_remove,
+        name="marketing_media_remove",
+    ),
+]

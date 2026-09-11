@@ -4490,3 +4490,251 @@ export interface MyReservationDetailPageProps extends PageProps {
   links: { indexHref: string };
   errors: ValidationErrors;
 }
+
+/* -------------------------------------------------------------------------- */
+/* Marketing resources                                                        */
+/* -------------------------------------------------------------------------- */
+
+export interface MarketingPresentationBadge {
+  code: string;
+  label: string;
+  /** Server may send tones outside StatusTone (e.g. "brand"); map at render. */
+  tone: string;
+  known: boolean;
+}
+
+export interface MarketingScope {
+  level: string;
+  label: string;
+  officeName: string;
+}
+
+export interface MarketingFileItem {
+  id: number;
+  role: string;
+  displayName: string;
+  mediaType: string;
+  byteSize: number;
+  width: number | null;
+  height: number | null;
+  isImage: boolean;
+  url: string;
+  previewUrl: string;
+  variants: Record<string, string>;
+  isReadable: boolean;
+  processingState?: "pending" | "ready" | "quarantined" | "failed";
+  processingNote?: string;
+  isActive?: boolean;
+  checksum?: string;
+  sortOrder?: number;
+}
+
+export interface MarketingLibraryRow {
+  id: number;
+  slug: string;
+  title: string;
+  description: string;
+  assetType: MarketingPresentationBadge;
+  category: MarketingPresentationBadge | null;
+  scope: MarketingScope;
+  jurisdictionStateCodes: string[];
+  brandCodes: string[];
+  versionNumber: number;
+  versionLabel: string;
+  previewUrl: string;
+  exportCount: number;
+  publishedAt: string | null;
+  detailUrl: string;
+}
+
+export interface MarketingResourceDetail extends MarketingLibraryRow {
+  usageInstructions: string;
+  exports: MarketingFileItem[];
+  publishAt: string | null;
+  expiresAt: string | null;
+}
+
+export interface MarketingLibraryFilters {
+  category: string;
+  type: string;
+  jurisdiction: string;
+  brand: string;
+  q: string;
+  rejected: string[];
+  [key: string]: string | string[];
+}
+
+export interface MarketingResourcesPageProps extends PageProps {
+  library: ListResponse<MarketingLibraryRow, MarketingLibraryFilters>;
+  filterOptions: {
+    categories: FilterOption[];
+    assetTypes: FilterOption[];
+  };
+}
+
+export interface MarketingResourceDetailPageProps extends PageProps {
+  asset: MarketingResourceDetail;
+}
+
+export interface MarketingLifecycle {
+  code: "draft" | "scheduled" | "live" | "expired" | "archived";
+  label: string;
+  tone: StatusTone;
+}
+
+export interface MarketingAdminRow {
+  id: number;
+  slug: string;
+  title: string;
+  description: string;
+  lifecycle: MarketingLifecycle;
+  status: "draft" | "published" | "archived";
+  assetType: MarketingPresentationBadge;
+  category: MarketingPresentationBadge | null;
+  versionNumber: number;
+  versionLabel: string;
+  ownerOffice: { id: number; name: string };
+  scopeLevel: string;
+  audience: AnnouncementAudienceEntry[];
+  jurisdictionStateCodes: string[];
+  brandCodes: string[];
+  publishAt: string | null;
+  expiresAt: string | null;
+  publishedAt: string | null;
+  updatedAt: string | null;
+  updatedBy: string;
+  createdBy: string;
+  /** Opaque concurrency token. Sent back on every write; a mismatch is a 409. */
+  version: string;
+}
+
+export interface MarketingValidationItem {
+  field: string;
+  message: string;
+}
+
+export interface MarketingValidation {
+  isPublishable: boolean;
+  items: MarketingValidationItem[];
+}
+
+export interface MarketingHistoryEntry {
+  id: string;
+  action: string;
+  label: string;
+  tone: StatusTone;
+  actor: string;
+  occurredAt: string;
+}
+
+export interface MarketingAdminFiles {
+  exports: MarketingFileItem[];
+  sources: MarketingFileItem[];
+  previews: MarketingFileItem[];
+}
+
+export interface MarketingAdminDetail extends MarketingAdminRow {
+  usageInstructions: string;
+  categoryCode: string;
+  assetTypeCode: string;
+  displayOrder: number;
+  validation: MarketingValidation;
+  history: MarketingHistoryEntry[];
+  files: MarketingAdminFiles;
+  mediaHref: string;
+  versionFamily: string;
+}
+
+export interface MarketingCapabilities {
+  canAuthor: boolean;
+  canPublish: boolean;
+  canDownloadSources: boolean;
+}
+
+export interface MarketingWorkspaceFilters {
+  q: string;
+  lifecycle: string;
+  category: string;
+  type: string;
+  audience: string;
+  author: string;
+  office: string;
+  publishedFrom: string;
+  publishedTo: string;
+  [key: string]: string | string[];
+}
+
+export interface MarketingCreateSheet {
+  open: boolean;
+  draft: Record<string, string | string[]>;
+}
+
+export interface MarketingAdministrationPageProps extends PageProps {
+  assets: ListResponse<MarketingAdminRow, MarketingWorkspaceFilters>;
+  filterOptions: {
+    categories: FilterOption[];
+    assetTypes: FilterOption[];
+    offices: AnnouncementOfficeOption[];
+  };
+  createOptions: {
+    offices: AnnouncementOfficeOption[];
+    categories: FilterOption[];
+    assetTypes: FilterOption[];
+    audience: AnnouncementAudienceOptions;
+  };
+  createSheet: MarketingCreateSheet | null;
+  capabilities: MarketingCapabilities;
+  errors: ValidationErrors;
+}
+
+export interface MarketingPreviewReach {
+  chosen: boolean;
+  matched: boolean;
+  officeId: number | null;
+  officeName: string;
+  roleCode: string;
+  hasNamedRecipients: boolean;
+}
+
+export interface MarketingPreviewArticle extends MarketingResourceDetail {
+  audience: AnnouncementAudienceEntry[];
+}
+
+export interface MarketingPreview {
+  article: MarketingPreviewArticle;
+  reach: MarketingPreviewReach;
+  roleCode: string;
+  officeId: number | null;
+}
+
+export interface MarketingWorkspacePageProps extends PageProps {
+  asset: MarketingAdminDetail | null;
+  officeOptions: AnnouncementOfficeOption[];
+  categoryOptions: FilterOption[];
+  assetTypeOptions: FilterOption[];
+  audienceOptions: AnnouncementAudienceOptions;
+  capabilities: MarketingCapabilities;
+  preview: MarketingPreview | null;
+  errors: ValidationErrors;
+  posted: Record<string, string[]> | null;
+}
+
+export interface MarketingRecipientResult {
+  id: number;
+  name: string;
+  email: string;
+  officeName: string;
+}
+
+export interface MarketingMediaLimits {
+  export: { extensions: string[]; maxBytes: number; maxCount: number };
+  source: { extensions: string[]; maxBytes: number; maxCount: number };
+}
+
+export interface MarketingMediaManagerPageProps extends PageProps {
+  asset: { id: number; title: string; status: string; version: string };
+  files: MarketingAdminFiles;
+  limits: MarketingMediaLimits;
+  capabilities: MarketingCapabilities;
+  validation: ValidationErrors;
+}

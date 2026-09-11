@@ -45,6 +45,8 @@ HUB_FEATURES["reports"] = True
 HUB_FEATURES["admin-tool-catalog"] = True
 HUB_FEATURES["training-learning"] = True
 HUB_FEATURES["admin-training"] = True
+HUB_FEATURES["marketing-resources"] = True
+HUB_FEATURES["admin-marketing-resources"] = True
 HUB_FEATURES["admin-rooms"] = True
 HUB_FEATURES["my-reservations"] = True
 

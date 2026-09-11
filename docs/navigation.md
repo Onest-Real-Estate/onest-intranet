@@ -77,6 +77,11 @@ Inertia response, so the shell does not render an optimistic menu while
 authorization data loads. A subsequent Inertia response recomputes the resolver;
 revoked items and emptied groups disappear immediately.
 
+`marketing-resources` and `admin-marketing-resources` are **live**
+(`HUB_FEATURES` / `OPERATIONS_FEATURES` both `True`) — not Coming Soon stubs.
+They resolve to the real library and operations workspace behind audience and
+`web.manage_marketing_resources` respectively.
+
 Unknown permission names, absent permission data, missing feature keys, and missing
 required office context fail closed. A current deep link can therefore have no
 visible parent after a revocation; the route still returns the backend's 403 page.

@@ -43,6 +43,18 @@ class OperationsPermission(models.Model):
             ),
             ("pin_announcements", _("Can pin announcements")),
             ("manage_training", _("Can manage training")),
+            (
+                "manage_marketing_resources",
+                _("Can manage marketing resources"),
+            ),
+            (
+                "publish_marketing_resources",
+                _("Can publish, schedule, and archive marketing resources"),
+            ),
+            (
+                "download_marketing_sources",
+                _("Can download marketing source files"),
+            ),
             ("manage_documents", _("Can manage documents")),
             ("view_compliance", _("Can view scoped compliance items")),
             ("view_feedback", _("Can view scoped feedback")),

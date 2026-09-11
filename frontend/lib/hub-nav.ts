@@ -341,7 +341,7 @@ export const HUB_NAV_REGISTRY: HubNavItem[] = [
   {
     key: "marketing-resources",
     label: "Marketing resources",
-    route: route("coming_soon", routes.coming_soon("marketing-resources")),
+    route: route("marketing_resources", routes.marketing_resources()),
     icon: Megaphone,
     group: "tools",
     order: 30,
@@ -349,7 +349,7 @@ export const HUB_NAV_REGISTRY: HubNavItem[] = [
     permissions: {},
     roles: MARKETING_ROLES,
     feature: "marketing-resources",
-    activeMatch: active(routes.coming_soon("marketing-resources")),
+    activeMatch: active(routes.marketing_resources()),
   },
   {
     key: "policies-compliance",
@@ -597,6 +597,19 @@ export const HUB_NAV_REGISTRY: HubNavItem[] = [
     permissions: { all: ["web.manage_training"] },
     feature: "admin-training",
     activeMatch: active(routes.admin_training()),
+  },
+  {
+    key: "admin-marketing-resources",
+    label: "Marketing Resources",
+    route: route("admin_marketing_resources", routes.admin_marketing_resources()),
+    icon: Megaphone,
+    group: "administration",
+    section: "admin-content",
+    order: 25,
+    access: "permission-protected",
+    permissions: { all: ["web.manage_marketing_resources"] },
+    feature: "admin-marketing-resources",
+    activeMatch: active(routes.admin_marketing_resources()),
   },
   {
     key: "admin-documents",
