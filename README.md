@@ -89,6 +89,12 @@ dev server, so no build step is needed while developing.
 > `config/settings.py` (`SOCIALACCOUNT_PROVIDERS`), so no admin/social-app
 > record is required. Change the `tenant` to `organizations` or a specific
 > tenant id to restrict who can sign in.
+>
+> A Microsoft sign-in links to an account that already has the same email —
+> one an administrator created or a data import added — only when
+> `MICROSOFT_TENANT` is a specific tenant id. Under `common`, `organizations`,
+> or `consumers` another directory could assert any address, so the email is
+> not trusted and a matching account stops on allauth's sign-up form instead.
 
 > **Troubleshooting — `AADSTS50194`** (“application is not configured as a
 > multi-tenant application … usage of the `/common` endpoint is not

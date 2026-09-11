@@ -198,7 +198,9 @@ services:
   # readable so browsers can fetch media URLs built from AWS_S3_CUSTOM_DOMAIN.
   # Idempotent; safe to re-run on every `docker compose up`.
   minio-init:
-    image: minio/mc:latest
+    # MinIO's own registry: Docker Hub no longer serves minio/mc
+    # ("pull access denied"), which stopped the whole stack from starting.
+    image: quay.io/minio/mc:latest
     restart: "no"
     depends_on:
       minio:

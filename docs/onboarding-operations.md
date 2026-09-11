@@ -52,7 +52,8 @@ business wording.
 
 | From | Action | To | Preconditions and effects |
 | --- | --- | --- | --- |
-| Profile `not_started`/`in_progress` | Submit required profile and office data | Profile `complete`; office `confirmed` | Valid profile, selected office, current version. Sets the compatibility flag and required-setup checkpoint atomically. |
+| Profile `not_started`/`in_progress` | Save one profile section | Profile `in_progress` or unchanged | Valid section values, current `onboarding_version` and section revision. Never sets the compatibility flag. See [profile.md](profile.md#first-login-onboarding). |
+| Profile `not_started`/`in_progress` | Confirm the reviewed profile | Profile `complete`; office `confirmed` | Explicit review confirmation, every required field valid under today's rules, a headshot present in storage, a selected office, current `onboarding_version`. Sets the compatibility flag and required-setup checkpoint atomically and publishes `user.onboarded` once. |
 | Office handoff `pending` | Record successful notification | `notified` | Authorized scoped administrator and current version. |
 | Office handoff `pending` | Record delivery failure | `notification_failed` | Authorized scoped administrator and current version. |
 | Office handoff `notification_failed` | Retry successfully | `notified` | Authorized scoped administrator and current version. |

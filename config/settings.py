@@ -409,7 +409,7 @@ DJANGO_VITE = {
 # ---------------------------------------------------------------------------
 INERTIA_LAYOUT = "layout.html"
 # Bump whenever the frontend bundle changes so stale clients get a full reload.
-INERTIA_VERSION = "36"
+INERTIA_VERSION = "37"
 
 # Optional external help centre. The shell exposes it only when it is an
 # absolute, credential-free HTTPS URL; an empty or unsafe value leaves the
@@ -450,19 +450,32 @@ ACCOUNT_USER_MODEL_EMAIL_FIELD = "email"
 ACCOUNT_SIGNUP_FIELDS = ["email*", "password1*", "password2*"]
 ACCOUNT_UNIQUE_EMAIL = True
 
+# "common" (personal + work/school), "organizations", "consumers", or a
+# specific tenant id.
+MICROSOFT_TENANT = config("MICROSOFT_TENANT", default="common")
+MICROSOFT_MULTI_TENANT_AUTHORITIES = frozenset({"common", "organizations", "consumers"})
+
 SOCIALACCOUNT_PROVIDERS = {
     "microsoft": {
         "APP": {
             "client_id": config("MICROSOFT_CLIENT_ID", default=""),
             "secret": config("MICROSOFT_CLIENT_SECRET", default=""),
-            "settings": {
-                # "common" (personal + work/school), "organizations",
-                # "consumers", or a specific tenant id.
-                "tenant": config("MICROSOFT_TENANT", default="common"),
-            },
-        }
+            "settings": {"tenant": MICROSOFT_TENANT},
+        },
+        # An email is trusted only when sign-in is limited to the brokerage's
+        # own Entra directory, where addresses are administrator-managed. Any
+        # multi-tenant authority lets an outside directory assert an arbitrary
+        # address, so those sign-ins stay unverified and never link by email.
+        "VERIFIED_EMAIL": MICROSOFT_TENANT not in MICROSOFT_MULTI_TENANT_AUTHORITIES,
     }
 }
+
+# A Microsoft sign-in whose verified email already belongs to an account
+# (imported, seeded, or created by an administrator) signs into that account
+# and links the Microsoft identity, instead of stopping on allauth's
+# "choose another email" sign-up form. Unverified emails never link.
+SOCIALACCOUNT_EMAIL_AUTHENTICATION = True
+SOCIALACCOUNT_EMAIL_AUTHENTICATION_AUTO_CONNECT = True
 
 # New signups (including the first Microsoft SSO login) are added to this
 # group automatically — see apps/user/signals.py. Roles are Django Groups:

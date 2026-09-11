@@ -5,7 +5,6 @@ from django.contrib.auth.models import Group, Permission
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.test import RequestFactory
-from django.urls import reverse
 
 from apps.audit.models import AuditEvent
 from apps.audit.query import export_audit_events, query_audit_events
@@ -21,7 +20,7 @@ from apps.audit.service import (
 from apps.user.admin import UserAdmin
 from apps.user.models import Office, User
 from apps.user.roles import BRANCH_MANAGER, role_group_name
-from apps.user.tests.test_onboarding import assignable_office, valid_profile_post
+from apps.user.tests.test_onboarding import assignable_office
 from apps.web.permissions import permission_required
 
 
@@ -164,11 +163,13 @@ def test_permission_denial_writes_audit_event(rf):
 
 
 @pytest.mark.django_db
-def test_onboarding_completion_writes_audit_event(client):
+def test_onboarding_completion_writes_audit_event(client, settings, tmp_path):
+    from apps.user.tests.test_onboarding_profile import complete_profile
+
+    settings.MEDIA_ROOT = str(tmp_path)
     user = User.objects.create_user(email="bob@example.com")
     client.force_login(user)
-    response = client.post(reverse("onboarding_submit"), valid_profile_post())
-    assert response.status_code == 302
+    complete_profile(client)
     event = AuditEvent.objects.get(action="user.onboarding.completed")
     assert event.actor_id == str(user.pk)
     assert event.outcome == AuditEvent.Outcome.SUCCESS

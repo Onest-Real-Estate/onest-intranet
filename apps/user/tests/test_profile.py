@@ -445,7 +445,12 @@ def test_completeness_reports_missing_optional_fields_without_blocking(client):
     assert "bio" in missing
     assert "languages" in missing
     assert "office" not in missing
-    assert all(item["required"] is False for item in page["completeness"]["missing"])
+    # Onboarding now requires a headshot, so a legacy profile without one is
+    # the only required gap; everything else missing is optional enrichment.
+    required = {
+        item["key"] for item in page["completeness"]["missing"] if item["required"]
+    }
+    assert required == {"headshot"}
     assert page["completeness"]["percent"] < 100
 
 
@@ -617,19 +622,6 @@ def test_saving_the_profile_leaves_onboarding_state_alone(client):
     assert user.profile_completed is True
     assert user.profile_completed_at == completed_at
     assert user.onboarding_version == original_version
-
-
-@pytest.mark.django_db
-def test_onboarding_ignores_professional_fields(client):
-    """Onboarding keeps its own, smaller contract; extras are simply not read."""
-    user = User.objects.create_user(email="new@example.com")
-    client.force_login(user)
-    response = client.post(reverse("onboarding_submit"), valid_self_profile_post())
-    assert response.status_code == 302
-    user.refresh_from_db()
-    assert user.profile_completed is True
-    assert user.preferred_name == ""
-    assert user.bio == ""
 
 
 @pytest.mark.django_db

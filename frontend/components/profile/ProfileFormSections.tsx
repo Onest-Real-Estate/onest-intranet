@@ -351,7 +351,7 @@ export function ProfileCredentialsSection({
 // Biography and languages
 // ---------------------------------------------------------------------------
 
-function LanguagePicker({
+export function LanguagePicker({
   options,
   selected,
   max,

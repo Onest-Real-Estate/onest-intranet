@@ -333,8 +333,8 @@ def test_shared_user_carries_headshot_url(client, settings, tmp_path):
         format="multipart",
     )
     user.refresh_from_db()
-    assert shared_props(client)["user"]["headshotUrl"] == (
-        "http://testserver/account/headshot/file"
+    assert shared_props(client)["user"]["headshotUrl"].startswith(
+        "http://testserver/account/headshot/file?v="
     )
 
 

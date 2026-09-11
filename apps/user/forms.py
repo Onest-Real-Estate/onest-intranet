@@ -1,4 +1,4 @@
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from typing import Any, cast
 
 from django import forms
@@ -134,7 +134,9 @@ class ProfileForm(forms.ModelForm):
     )
     nrds_number = forms.CharField(
         label=_("NRDS number"),
-        max_length=9,
+        # Wider than the stored 9 digits so ``normalize_nrds`` can strip the
+        # dashes and spaces people copy from their membership card.
+        max_length=16,
         required=False,
         help_text=_("Optional 8- or 9-digit ID — you can add this later."),
     )
@@ -345,14 +347,59 @@ class SelfProfileForm(ProfileForm):
 SELF_EDITABLE_FIELDS: frozenset[str] = frozenset(SelfProfileForm.Meta.fields)
 
 
+class OnboardingProfileSectionForm(SelfProfileForm):
+    """One section of first-login onboarding, bound to the ``/profile`` contract.
+
+    It declares nothing of its own, so a value saved during onboarding passes
+    through exactly the declarations, normalizers, and cross-field rules the
+    profile page uses. A section is a subset of that allowlist: every other
+    bound field is removed, which is the enforcement, because
+    ``construct_instance`` only writes what survives in ``cleaned_data``.
+    Requiredness comes from the server-owned field specs, not the declarations.
+    """
+
+    def __init__(
+        self,
+        *args,
+        field_names: Iterable[str],
+        required_fields: Iterable[str],
+        can_change_office: bool,
+        **kwargs,
+    ):
+        super().__init__(*args, can_change_office=can_change_office, **kwargs)
+        keep = set(field_names)
+        required = set(required_fields)
+        for name in list(self.fields):
+            if name not in keep:
+                self.fields.pop(name)
+                continue
+            self.fields[name].required = name in required
+
+
+class OnboardingProfileSubmissionForm(forms.Form):
+    """The concurrency tokens every onboarding section save must carry.
+
+    ``expected_`` keeps the version token distinct from the protected
+    ``onboarding_version`` field, which no request may set.
+    """
+
+    expected_onboarding_version = forms.IntegerField(min_value=0)
+    revision = forms.CharField(max_length=64)
+
+
+class OnboardingProfileFinalizeForm(forms.Form):
+    expected_onboarding_version = forms.IntegerField(min_value=0)
+    confirm_review = forms.BooleanField(required=False)
+
+
 def form_errors(form: forms.BaseForm) -> dict:
     """Return the shared field/form validation payload for Inertia."""
     return validation_errors(form)
 
 
-# camelCase Inertia prop → Django field name. One map per surface so the two
-# forms and the two pages cannot drift out of step.
-ONBOARDING_FIELD_MAP: tuple[tuple[str, str], ...] = (
+# camelCase Inertia prop → Django field name, shared by onboarding and the
+# profile page so the two surfaces cannot drift out of step.
+SELF_PROFILE_FIELD_MAP: tuple[tuple[str, str], ...] = (
     ("firstName", "first_name"),
     ("lastName", "last_name"),
     ("phoneNumber", "phone_number"),
@@ -363,10 +410,6 @@ ONBOARDING_FIELD_MAP: tuple[tuple[str, str], ...] = (
     ("officeId", "office"),
     ("mlsNumber", "mls_number"),
     ("nrdsNumber", "nrds_number"),
-)
-
-SELF_PROFILE_FIELD_MAP: tuple[tuple[str, str], ...] = (
-    *ONBOARDING_FIELD_MAP,
     ("preferredName", "preferred_name"),
     ("preferredContactMethod", "preferred_contact_method"),
     ("licenseNumber", "license_number"),
@@ -419,7 +462,7 @@ def profile_initial(
     posted: Mapping[str, Any] | None = None,
     *,
     request=None,
-    field_map: tuple[tuple[str, str], ...] = ONBOARDING_FIELD_MAP,
+    field_map: tuple[tuple[str, str], ...] = SELF_PROFILE_FIELD_MAP,
     include_languages: bool = False,
     include_specialties: bool = False,
 ) -> dict:
@@ -441,22 +484,6 @@ def profile_initial(
         else (user.headshot.url if user.headshot else None)
     )
     return initial
-
-
-def profile_page_props(
-    user: User,
-    *,
-    request=None,
-    errors: dict | None = None,
-    posted: Mapping[str, Any] | None = None,
-):
-    """Props for the onboarding page — the essential fields only."""
-    return {
-        "initial": profile_initial(user, posted, request=request),
-        "validation": errors or empty_validation_errors(),
-        "offices": Office.grouped_choices(),
-        "states": [{"code": code, "name": name} for code, name in US_STATE_CHOICES],
-    }
 
 
 def _office_payload(user: User) -> dict | None:
