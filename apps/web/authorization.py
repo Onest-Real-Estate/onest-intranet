@@ -1630,6 +1630,15 @@ ROUTE_POLICIES: dict[str, AuthorizationPolicy] = {
         all_permissions=("web.view_new_agents",),
         scope_rule="administered_user_scope",
     ),
+    "new_agent_onboarding_headshot": AuthorizationPolicy(
+        key="new_agent_onboarding_headshot",
+        access="permission_protected",
+        description="Stream one scoped onboarding headshot.",
+        methods=("GET",),
+        route_names=("new_agent_onboarding_headshot",),
+        all_permissions=("web.view_new_agents",),
+        scope_rule="administered_user_scope",
+    ),
     "new_agent_onboarding_owner": AuthorizationPolicy(
         key="new_agent_onboarding_owner",
         access="permission_protected",
@@ -1655,6 +1664,21 @@ ROUTE_POLICIES: dict[str, AuthorizationPolicy] = {
         methods=("POST",),
         route_names=("new_agent_onboarding_tools",),
         all_permissions=("web.manage_new_agent_onboarding",),
+        scope_rule="administered_user_scope",
+    ),
+    "new_agent_onboarding_contract": AuthorizationPolicy(
+        key="new_agent_onboarding_contract",
+        access="permission_protected",
+        description=(
+            "Initiate a contract for one scoped onboarding case through the "
+            "contract domain."
+        ),
+        methods=("POST",),
+        route_names=("new_agent_onboarding_contract",),
+        all_permissions=(
+            "web.manage_new_agent_onboarding",
+            "contract.manage_agent_contracts",
+        ),
         scope_rule="administered_user_scope",
     ),
     "new_agent_onboarding_notice": AuthorizationPolicy(

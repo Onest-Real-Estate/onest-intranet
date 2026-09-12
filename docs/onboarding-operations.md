@@ -43,6 +43,9 @@ profile/office gate from releasing.
 | Tool source | `available`, `unavailable` |
 | Tool progress | `complete`, `pending`, `blocked`, `unavailable` |
 | Tool invitation | `not_applicable`, `pending`, `sent`, `unavailable` |
+| Admin tool shelf | `waiting`, `invitation_sent`, `ready`, `blocked`, `not_applicable` |
+| Admin tool action | `mark_invitation_sent`, `revoke_invitation`, `mark_ready`, `mark_blocked`, `retry_notification` |
+| Admin contract action | `initiate_contract`, `open_contract` |
 | Current step | `profile`, `office`, `activation`, `complete` |
 | Next action | `complete_profile`, `confirm_office`, `set_up_tool`, `wait_for_office`, `wait_for_activation`, `none` |
 
@@ -61,6 +64,11 @@ business wording.
 | Office handoff `pending` | Recipient is unavailable or no longer authorized | `notification_failed` | The outbox consumer records the failure and retries. The agent sees support escalation copy, never a false delivery claim. |
 | Office handoff `notification_failed` | Retry successfully | `notified` | Authorized scoped administrator and current version. |
 | Office handoff `notified` | Any handoff transition | — | Rejected; delivered history is not rewound. |
+| Tool waiting/requested | Mark invitation sent | `invitation_sent` | Required setup is complete; the tool remains active and applicable to the agent's current office; actor retains onboarding-management permission and scope; current journey version. Records sender/timestamp and publishes one agent-notice intent after commit. |
+| Tool invitation/in progress/ready | Correct invitation record | `requested` | Same live permission, scope, office, applicability, and version checks, plus a required safe business reason. Clears current invitation provenance without erasing audit history. |
+| Applicable tool | Mark ready or blocked | `ready` or `blocked` | Action is offered by the tool source capability; moving backward or blocking requires a reason. Repeated identical state is a no-op. |
+| Failed invitation delivery | Retry agent notice | Delivery `pending` | Exact agent/onboarding-cycle/tool notification and a failed or terminal email ledger row. Tool state is unchanged. |
+| No contract | Initiate contract | Contract `draft` | Required profile and current office confirmation are complete; actor retains onboarding-management and contract-management permission and scope; current journey version. Delegates to the contract service. An existing contract is returned unchanged. |
 | Any required-setup state | Administrative reset | Correct derived profile/office step | Staff or superuser. Increments `User.onboarding_version`; clears only the profile compatibility flag and this cycle's required-setup checkpoints. |
 
 Repeating a completed transition is a no-op: it produces no duplicate audit
@@ -95,6 +103,38 @@ recipient only when the case has no owner. An existing explicit owner is never
 replaced. The notification uses the typed scoped onboarding-workspace action;
 that destination rechecks capability and office scope, so the link grants no
 access by itself.
+
+## Administrator workspace contract
+
+`/operations/new-agents/<id>` is the single scoped action surface. Read access
+requires `web.view_new_agents`; mutations require
+`web.manage_new_agent_onboarding`, and contract initiation additionally
+requires `contract.manage_agent_contracts`. The target queryset applies the
+actor's effective office/region/company scope before lookup, so an unknown and
+an out-of-scope id both return 404. Source services repeat permission and scope
+checks inside the write transaction, and self-management is refused.
+
+The detail payload contains the submitted profile allowlist, current confirmed
+office and resolved Branch Admin, source-derived contract and training facts,
+operational blockers and activity, and catalog tools enriched with source-owned
+capabilities. Sensitive profile fields appear only with
+`user.view_user_administration`; the headshot streams through the same scoped
+policy rather than exposing a storage path. Tool controls are rendered by
+capability code, not by vendor name, so a new catalog tool needs no workspace
+branch.
+
+The composer selects exactly one `recommendedAction`. Every POST carries the
+opaque `journeyVersion`, whose inputs include onboarding cycle, current office,
+and case update time. The service locks the user and case, compares the token,
+then rechecks the live catalog and confirmed office. A concurrent action or an
+office change therefore returns 409 before overwriting work. Validation errors
+return the shared 422 `fields`/`form` contract; authorization lost between
+render and submit returns 403.
+
+Recent activity combines case lifecycle entries with tool-source audit entries.
+It exposes actor, action, safe changed-field names, and timestamp only. Free-text
+reasons, home address, phone, license/MLS/NRDS values, headshot paths, vendor
+URLs, and contract terms never enter the workspace activity payload.
 
 ## Derived completion
 

@@ -28,6 +28,11 @@ from apps.notifications.contract import (
     NotificationType,
 )
 from apps.notifications.resolvers import ONBOARDING_MODULE
+from apps.onboarding_tools.models import ToolState
+from apps.onboarding_tools.services import (
+    INVITATION_EVENT,
+    invitation_dedupe_key,
+)
 from apps.user.services.onboarding_office import (
     OFFICE_HANDOFF_EVENT,
     handoff_dedupe_key,
@@ -122,6 +127,41 @@ def onboarding_office_handoff(
             source_record_id=str(user_id),
             action_key="open_onboarding_case",
             action_args=(user_id,),
+        )
+    ]
+
+
+def onboarding_tool_invitation_sent(
+    envelope: EventEnvelope,
+) -> list[NotificationRequest]:
+    """Tell only the target agent that a catalog-tool invitation was recorded."""
+    if envelope.payload.get("to") != ToolState.INVITATION_SENT:
+        return []
+    agent_id = _int_or_none(envelope.payload.get("agent_id"))
+    onboarding_version = _nonnegative_int_or_none(
+        envelope.payload.get("onboarding_version")
+    )
+    tool_slug = str(envelope.payload.get("tool") or "").strip()
+    tool_name = str(envelope.payload.get("tool_name") or "").strip()
+    if agent_id is None or onboarding_version is None or not tool_slug or not tool_name:
+        return []
+    return [
+        NotificationRequest(
+            recipient_id=agent_id,
+            notification_type=NotificationType.ACCOUNT,
+            event_key=INVITATION_EVENT,
+            title=f"Your {tool_name} invitation was sent",
+            dedupe_key=invitation_dedupe_key(
+                agent_id=agent_id,
+                onboarding_version=onboarding_version,
+                tool_slug=tool_slug,
+            ),
+            priority=NotificationPriority.HIGH,
+            is_mandatory=True,
+            source_module="onboarding_tool",
+            source_record_type="agent_tool_invitation",
+            source_record_id=f"{agent_id}:{tool_slug}",
+            action_key="open_onboarding_status",
         )
     ]
 
@@ -554,6 +594,7 @@ EventBuilder = Callable[[EventEnvelope], list[NotificationRequest]]
 EVENT_PRODUCERS: dict[str, EventBuilder] = {
     "user.onboarding.owner_assigned": onboarding_owner_assigned,
     OFFICE_HANDOFF_EVENT: onboarding_office_handoff,
+    INVITATION_EVENT: onboarding_tool_invitation_sent,
     "user.account.state_changed": account_reactivated,
     "contract.awaiting_company_signature": contract_awaiting_company_signature,
     "contract.pdf_ready": contract_pdf_ready,

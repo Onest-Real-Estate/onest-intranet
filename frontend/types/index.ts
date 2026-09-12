@@ -2067,6 +2067,50 @@ export interface OnboardingTool {
   invitationSentAt: string | null;
   updatedAt: string | null;
   updatedBy: string | null;
+  description: string;
+  provisioning: string;
+  provisioningLabel: string;
+  selfService: boolean;
+  group: "waiting" | "invitation_sent" | "ready" | "blocked" | "not_applicable";
+  delivery: {
+    state:
+      | "not_recorded"
+      | "recorded"
+      | "queued"
+      | "sent"
+      | "retryable"
+      | "failed"
+      | "suppressed";
+    label: string;
+    retryable: boolean;
+    channels: { channel: string; state: string; label: string }[];
+  };
+  actions: OnboardingWorkspaceAction[];
+}
+
+export type OnboardingWorkspaceActionCode =
+  | "mark_invitation_sent"
+  | "revoke_invitation"
+  | "mark_ready"
+  | "mark_blocked"
+  | "retry_notification"
+  | "initiate_contract"
+  | "open_contract"
+  | "wait_for_required_setup"
+  | "review_blockers";
+
+export interface OnboardingWorkspaceAction {
+  code: OnboardingWorkspaceActionCode;
+  label: string;
+  enabled: boolean;
+  unavailableReason: string;
+  requiresReason?: boolean;
+  tool?: string | null;
+  method?: "get" | "post";
+  href?: string | null;
+  permission?: string;
+  source?: "tool" | "contract" | "profile" | "onboarding";
+  description?: string;
 }
 
 export interface OnboardingOperationalTask {
@@ -2083,6 +2127,8 @@ export interface OnboardingDetail extends OnboardingSummary {
   tools: OnboardingTool[];
   tasks: OnboardingOperationalTask[];
   eligibleNotices: { source: string; key: string; label: string }[];
+  contractAction: OnboardingWorkspaceAction;
+  recommendedAction: OnboardingWorkspaceAction;
   editable: boolean;
 }
 
@@ -2188,6 +2234,12 @@ export interface NewAgentListPageProps extends PageProps {
 
 export interface OnboardingWorkspacePageProps extends PageProps {
   onboarding: OnboardingDetail;
+  profileSummary: {
+    headshotUrl: string | null;
+    fields: { key: string; label: string; value: string }[];
+    sensitiveFieldsIncluded: boolean;
+  };
+  confirmedOffice: OnboardingOfficeSelection | null;
   ownerOptions: FilterOption[];
   toolStateOptions: FilterOption[];
   activity: {

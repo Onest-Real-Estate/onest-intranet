@@ -5,12 +5,12 @@ from typing import cast
 from django import forms
 from django.utils.translation import gettext_lazy as _
 
-from apps.onboarding_tools.models import ToolState
+from apps.onboarding_tools.services import ToolWorkspaceAction
 from apps.user.models import User
 
 
 class VersionedOnboardingForm(forms.Form):
-    expected_version = forms.CharField(required=False, widget=forms.HiddenInput)
+    expected_version = forms.CharField(required=True, widget=forms.HiddenInput)
 
 
 class OnboardingOwnerForm(VersionedOnboardingForm):
@@ -41,16 +41,25 @@ class OnboardingTaskResolveForm(VersionedOnboardingForm):
     task = forms.IntegerField(widget=forms.HiddenInput)
 
 
-class OnboardingToolForm(VersionedOnboardingForm):
+class OnboardingToolActionForm(VersionedOnboardingForm):
     """One catalog row by stable slug. Adding a tool is data, not a deploy."""
 
     tool = forms.SlugField()
-    state = forms.ChoiceField(choices=ToolState.choices)
+    action = forms.ChoiceField(
+        choices=tuple(
+            (str(action), action.name.replace("_", " ").title())
+            for action in ToolWorkspaceAction
+        )
+    )
     #: The business reason a correction needs. Never a place for credentials.
-    note = forms.CharField(max_length=300, required=False)
+    reason = forms.CharField(max_length=300, required=False)
 
 
-class OnboardingNoticeForm(forms.Form):
+class OnboardingContractForm(VersionedOnboardingForm):
+    pass
+
+
+class OnboardingNoticeForm(VersionedOnboardingForm):
     source = forms.ChoiceField(
         choices=(("contract", "Contract"), ("training", "Training"))
     )

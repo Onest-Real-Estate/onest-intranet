@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import mimetypes
 from typing import Any, cast
 
 from django.core.exceptions import ValidationError
 from django.db.models import Prefetch, Q
-from django.http import Http404, HttpRequest, HttpResponse
+from django.http import FileResponse, Http404, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from django.utils.dateparse import parse_date
@@ -21,22 +22,28 @@ from apps.user.models import (
     UserOnboardingCase,
 )
 from apps.user.onboarding_forms import (
+    OnboardingContractForm,
     OnboardingNoticeForm,
     OnboardingOwnerForm,
     OnboardingTaskCreateForm,
     OnboardingTaskResolveForm,
-    OnboardingToolForm,
+    OnboardingToolActionForm,
 )
 from apps.user.services.agent_administration import assignable_office_queryset
+from apps.user.services.onboarding_office import (
+    office_confirmation_is_current,
+    office_confirmation_payload,
+)
 from apps.user.services.onboarding_operations import (
     SourceActionUnavailable,
     StaleOnboardingVersion,
     assign_owner,
     create_task,
+    initiate_contract,
     owner_queryset,
+    perform_tool_action,
     resend_notice,
     resolve_task,
-    update_tool_setup,
 )
 from apps.user.services.onboarding_state import (
     build_onboarding_states,
@@ -44,8 +51,10 @@ from apps.user.services.onboarding_state import (
     overall_status_options,
     state_payload,
 )
+from apps.user.services.role_assignments import has_effective_permission
 from apps.web.authorization import enforce_policy
 from apps.web.contracts import empty_validation_errors, list_response, validation_errors
+from apps.web.flash import set_flash
 
 PAGE_SIZE = 25
 SORT_KEYS = {"name", "office", "owner", "startDate", "overallStatus"}
@@ -264,12 +273,88 @@ def _detail_props(
 ) -> dict[str, Any]:
     state = build_onboarding_states([target])[0]
     events = AuditEvent.objects.filter(
-        target_type=UserOnboardingCase._meta.label_lower,
-        target_id=str(target.pk),
-        action__startswith="user.onboarding.",
-    ).order_by("-occurred_at")[:8]
+        Q(
+            target_type=UserOnboardingCase._meta.label_lower,
+            target_id=str(target.pk),
+            action__startswith="user.onboarding.",
+        )
+        | Q(
+            action="onboarding_tool.state_changed",
+            metadata__agent_id=target.pk,
+        )
+    ).order_by("-occurred_at")[:12]
+    can_read_sensitive = has_effective_permission(
+        actor, "user.view_user_administration"
+    )
+    profile_fields = [
+        {"key": "legalName", "label": "Legal name", "value": target.get_full_name()},
+        {
+            "key": "preferredName",
+            "label": "Preferred name",
+            "value": target.preferred_name,
+        },
+        {"key": "email", "label": "Microsoft email", "value": target.email},
+        {
+            "key": "languages",
+            "label": "Languages",
+            "value": ", ".join(target.languages or []),
+        },
+        {"key": "bio", "label": "Professional bio", "value": target.bio},
+    ]
+    if can_read_sensitive:
+        profile_fields.extend(
+            [
+                {
+                    "key": "phoneNumber",
+                    "label": "Phone",
+                    "value": target.phone_number,
+                },
+                {
+                    "key": "homeAddress",
+                    "label": "Home / mailing address",
+                    "value": ", ".join(
+                        item
+                        for item in (
+                            target.street_address,
+                            target.city,
+                            target.state,
+                            target.zip_code,
+                        )
+                        if item
+                    ),
+                },
+                {
+                    "key": "license",
+                    "label": "Real-estate license",
+                    "value": " · ".join(
+                        item
+                        for item in (target.license_state, target.license_number)
+                        if item
+                    ),
+                },
+                {"key": "mlsNumber", "label": "MLS number", "value": target.mls_number},
+                {
+                    "key": "nrdsNumber",
+                    "label": "NRDS number",
+                    "value": target.nrds_number,
+                },
+            ]
+        )
+    confirmed_office = None
+    if target.office and office_confirmation_is_current(target, state.case):
+        confirmed_office = office_confirmation_payload(target.office)
     return {
         "onboarding": state_payload(actor, state, detail=True),
+        "profileSummary": {
+            "headshotUrl": (
+                reverse("new_agent_onboarding_headshot", args=[target.pk])
+                if target.headshot
+                else None
+            ),
+            "fields": profile_fields,
+            "sensitiveFieldsIncluded": can_read_sensitive,
+        },
+        "confirmedOffice": confirmed_office,
         "ownerOptions": [
             {"value": str(owner.pk), "label": str(owner)}
             for owner in owner_queryset(actor, target)
@@ -305,6 +390,24 @@ def onboarding_workspace(request: HttpRequest, user_id: int):
     return _detail_props(actor, _target(actor, user_id))
 
 
+@enforce_policy("new_agent_onboarding_headshot")
+@require_GET
+def onboarding_headshot(request: HttpRequest, user_id: int) -> FileResponse:
+    actor = cast(User, request.user)
+    target = _target(actor, user_id)
+    if not target.headshot:
+        raise Http404
+    content_type, _ = mimetypes.guess_type(target.headshot.name)
+    response = FileResponse(
+        target.headshot.open("rb"),
+        as_attachment=False,
+        filename=target.headshot.name.rsplit("/", 1)[-1],
+        content_type=content_type or "application/octet-stream",
+    )
+    response["Cache-Control"] = "private, max-age=300"
+    return response
+
+
 def _render_error(
     request: HttpRequest,
     actor: User,
@@ -323,7 +426,7 @@ def _render_error(
     return response
 
 
-def _mutation_error(request, actor, target, form, callback):
+def _mutation_error(request, actor, target, form, callback, *, success_message: str):
     if not form.is_valid():
         return _render_error(
             request, actor, target, validation_errors(form), status=422
@@ -356,6 +459,7 @@ def _mutation_error(request, actor, target, form, callback):
             else {"fields": {}, "form": list(exc.messages)}
         )
         return _render_error(request, actor, target, validation, status=422)
+    set_flash(request, level="success", message=success_message)
     return redirect("new_agent_onboarding", user_id=target.pk)
 
 
@@ -378,6 +482,7 @@ def onboarding_owner(request: HttpRequest, user_id: int):
             owner=data.get("owner"),
             expected_version=data.get("expected_version", ""),
         ),
+        success_message="Onboarding owner updated.",
     )
 
 
@@ -412,7 +517,14 @@ def onboarding_tasks(request: HttpRequest, user_id: int):
 
     else:
         raise Http404()
-    return _mutation_error(request, actor, target, form, callback)
+    return _mutation_error(
+        request,
+        actor,
+        target,
+        form,
+        callback,
+        success_message="Onboarding task updated.",
+    )
 
 
 @enforce_policy("new_agent_onboarding_tools")
@@ -420,20 +532,41 @@ def onboarding_tasks(request: HttpRequest, user_id: int):
 def onboarding_tools(request: HttpRequest, user_id: int):
     actor = cast(User, request.user)
     target = _target(actor, user_id)
-    form = OnboardingToolForm(request.POST)
+    form = OnboardingToolActionForm(request.POST)
     return _mutation_error(
         request,
         actor,
         target,
         form,
-        lambda data: update_tool_setup(
+        lambda data: perform_tool_action(
             actor=actor,
             user=target,
             tool=data["tool"],
-            state=data["state"],
-            note=data.get("note", ""),
+            action=data["action"],
+            reason=data.get("reason", ""),
             expected_version=data.get("expected_version", ""),
         ),
+        success_message="Tool onboarding updated.",
+    )
+
+
+@enforce_policy("new_agent_onboarding_contract")
+@require_POST
+def onboarding_contract(request: HttpRequest, user_id: int):
+    actor = cast(User, request.user)
+    target = _target(actor, user_id)
+    form = OnboardingContractForm(request.POST)
+    return _mutation_error(
+        request,
+        actor,
+        target,
+        form,
+        lambda data: initiate_contract(
+            actor=actor,
+            user=target,
+            expected_version=data["expected_version"],
+        ),
+        success_message="Agent contract initiated.",
     )
 
 
@@ -454,7 +587,9 @@ def onboarding_notice(request: HttpRequest, user_id: int):
             source=data["source"],
             notice=data["notice"],
             idempotency_key=str(data["idempotency_key"]),
+            expected_version=data["expected_version"],
         ),
+        success_message="Notice retry requested.",
     )
 
 
