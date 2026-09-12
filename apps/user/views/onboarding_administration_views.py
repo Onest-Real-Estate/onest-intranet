@@ -14,9 +14,9 @@ from django.views.decorators.http import require_GET, require_POST
 from inertia import inertia, render
 
 from apps.audit.models import AuditEvent
+from apps.onboarding_tools.payloads import state_options
 from apps.user.models import (
     OnboardingTask,
-    OnboardingToolSetup,
     User,
     UserOnboardingCase,
 )
@@ -67,10 +67,6 @@ def _prefetched_queryset(actor: User):
                 queryset=OnboardingTask.objects.select_related("created_by").order_by(
                     "status", "due_on", "created_at"
                 ),
-            ),
-            Prefetch(
-                "onboarding_case__tool_setups",
-                queryset=OnboardingToolSetup.objects.select_related("updated_by"),
             ),
         )
     )
@@ -278,10 +274,7 @@ def _detail_props(
             {"value": str(owner.pk), "label": str(owner)}
             for owner in owner_queryset(actor, target)
         ],
-        "toolStateOptions": [
-            {"value": value, "label": label}
-            for value, label in OnboardingToolSetup.State.choices
-        ],
+        "toolStateOptions": state_options(),
         "activity": [
             {
                 "id": str(event.pk),
@@ -346,13 +339,23 @@ def _mutation_error(request, actor, target, form, callback):
             status=409,
         )
     except (ValidationError, SourceActionUnavailable) as exc:
-        return _render_error(
-            request,
-            actor,
-            target,
-            {"fields": {}, "form": list(exc.messages)},
-            status=422,
+        # Keep a field-scoped service error on its field. The reason a
+        # correction needs belongs under the note control, not in a summary the
+        # writer has to translate back into a box.
+        message_dict = getattr(exc, "message_dict", None)
+        validation = (
+            {
+                "fields": {
+                    field: list(messages)
+                    for field, messages in message_dict.items()
+                    if field != "__all__"
+                },
+                "form": list(message_dict.get("__all__", [])),
+            }
+            if message_dict
+            else {"fields": {}, "form": list(exc.messages)}
         )
+        return _render_error(request, actor, target, validation, status=422)
     return redirect("new_agent_onboarding", user_id=target.pk)
 
 
@@ -428,6 +431,7 @@ def onboarding_tools(request: HttpRequest, user_id: int):
             user=target,
             tool=data["tool"],
             state=data["state"],
+            note=data.get("note", ""),
             expected_version=data.get("expected_version", ""),
         ),
     )

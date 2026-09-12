@@ -228,11 +228,18 @@ class OnboardingToolOfficeAudience(models.Model):
 class ToolState(models.TextChoices):
     """Where one agent is with one tool.
 
+    ``REQUESTED`` and ``INVITATION_SENT`` exist because "in progress" could not
+    answer the one question activation depends on: *has the office actually
+    sent this agent their vendor invitation, and when?* A free-text note cannot
+    be queried, and audit history is not a state machine.
+
     ``NOT_APPLICABLE`` exists so a branch can switch a tool off for one person
     without deleting the row and losing who decided that.
     """
 
     NOT_STARTED = "not_started", _("Not started")
+    REQUESTED = "requested", _("Requested")
+    INVITATION_SENT = "invitation_sent", _("Invitation sent")
     IN_PROGRESS = "in_progress", _("In progress")
     READY = "ready", _("Ready")
     BLOCKED = "blocked", _("Blocked")
@@ -242,6 +249,51 @@ class ToolState(models.TextChoices):
 #: States that count toward "ready". Used by the progress figure and the group
 #: headers — one definition, so a count and a bar cannot disagree.
 COMPLETE_STATES: frozenset[str] = frozenset({ToolState.READY, ToolState.NOT_APPLICABLE})
+
+#: Settled either way: the agent is not waiting on anybody.
+SETTLED_STATES: frozenset[str] = COMPLETE_STATES
+
+#: Still outstanding. The New Agent List keeps a record while any tool is here.
+OPEN_STATES: frozenset[str] = frozenset(
+    {
+        ToolState.NOT_STARTED,
+        ToolState.REQUESTED,
+        ToolState.INVITATION_SENT,
+        ToolState.IN_PROGRESS,
+        ToolState.BLOCKED,
+    }
+)
+
+#: The forward order of a normal setup. Skipping ahead is ordinary — a
+#: self-serve tool goes straight to ready — but moving *back* down this ladder
+#: is a correction, and :func:`services.set_state` demands a reason for it.
+STATE_ORDER: tuple[str, ...] = (
+    ToolState.NOT_STARTED,
+    ToolState.REQUESTED,
+    ToolState.INVITATION_SENT,
+    ToolState.IN_PROGRESS,
+    ToolState.READY,
+)
+
+#: States only meaningful when somebody at oNEST provisions the seat. Nobody
+#: sends an invitation for a tool the agent signs up for themselves.
+PROVISIONED_ONLY_STATES: frozenset[str] = frozenset(
+    {ToolState.REQUESTED, ToolState.INVITATION_SENT}
+)
+
+
+def invitation_presentation(*, provisioning: str, invitation_sent_at) -> dict[str, str]:
+    """How the invitation reads, in one place for every surface.
+
+    Values mirror the journey contract's invitation states so the agent's own
+    page, the operational list, and the dashboard cannot describe the same row
+    differently.
+    """
+    if provisioning == Provisioning.SELF_SERVE:
+        return {"state": "not_applicable", "label": "You set this one up yourself"}
+    if invitation_sent_at is not None:
+        return {"state": "sent", "label": "Invitation sent"}
+    return {"state": "pending", "label": "Waiting on your office"}
 
 
 class AgentToolStatusQuerySet(models.QuerySet["AgentToolStatus"]):
@@ -305,6 +357,21 @@ class AgentToolStatus(models.Model):
         related_name="updated_tool_statuses",
         verbose_name=_("updated by"),
     )
+    #: Invitation provenance as structured columns rather than a note or an
+    #: audit scrape: "has the office sent this agent their Lofty invitation,
+    #: and when" has to be answerable in a query, and training unlocks on it.
+    requested_at = models.DateTimeField(_("requested at"), null=True, blank=True)
+    invitation_sent_at = models.DateTimeField(
+        _("invitation sent at"), null=True, blank=True
+    )
+    invitation_sent_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="sent_tool_invitations",
+        verbose_name=_("invitation sent by"),
+    )
     ready_at = models.DateTimeField(_("ready at"), null=True, blank=True)
     updated_at = models.DateTimeField(_("updated at"), auto_now=True)
 
@@ -326,6 +393,24 @@ class AgentToolStatus(models.Model):
                     | (~Q(state="ready") & Q(ready_at__isnull=True))
                 ),
                 name="agent_tool_ready_at_matches_state",
+            ),
+            # A named sender without a time is provenance nobody can use. The
+            # reverse is allowed: the sender's account may be deleted later,
+            # and losing the name must not erase the fact it was sent.
+            models.CheckConstraint(
+                condition=(
+                    Q(invitation_sent_by__isnull=True)
+                    | Q(invitation_sent_at__isnull=False)
+                ),
+                name="agent_tool_invitation_sender_has_time",
+            ),
+            # "Invitation sent" with no timestamp is exactly the ambiguity this
+            # lifecycle exists to remove.
+            models.CheckConstraint(
+                condition=(
+                    ~Q(state="invitation_sent") | Q(invitation_sent_at__isnull=False)
+                ),
+                name="agent_tool_invitation_sent_has_time",
             ),
         ]
         indexes = [

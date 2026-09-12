@@ -763,6 +763,8 @@ export interface AgentTool {
   contact: string;
   requestPath: string;
   state: { code: string; label: string; tone: StatusTone };
+  /** Whether the office has sent the vendor invitation, from stored provenance. */
+  invitation: { state: string; label: string; sentAt: string | null };
   complete: boolean;
   note: string;
   updatedAt: string | null;
@@ -1226,6 +1228,8 @@ export interface AgentJourneyTool {
   statusLabel: string;
   invitationState: AgentJourneyInvitationState;
   invitationLabel: string;
+  /** When the office sent it. Null until somebody records the send. */
+  invitationSentAt: string | null;
   complete: boolean;
   updatedAt: string | null;
 }
@@ -2047,13 +2051,20 @@ export interface OnboardingMilestone {
   correction: { label: string; href: string } | null;
 }
 
+/** One catalog tool for one agent, keyed by the catalog's stable slug. */
 export interface OnboardingTool {
   key: string;
   label: string;
   state: string;
+  stateLabel: string;
   status: string;
   statusLabel: string;
   tone: StatusTone;
+  required: boolean;
+  invitationState: AgentJourneyInvitationState;
+  invitationLabel: string;
+  /** When the office sent the vendor invitation, from stored provenance. */
+  invitationSentAt: string | null;
   updatedAt: string | null;
   updatedBy: string | null;
 }

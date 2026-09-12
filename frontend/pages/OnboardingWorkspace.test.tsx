@@ -117,9 +117,14 @@ function setPage(
           key: "lofty",
           label: "Lofty",
           state: "not_started",
+          stateLabel: "Not started",
           status: "pending",
           statusLabel: "Pending",
           tone: "warning",
+          required: true,
+          invitationState: "pending",
+          invitationLabel: "Waiting on your office",
+          invitationSentAt: null,
           updatedAt: null,
           updatedBy: null,
         },
@@ -179,6 +184,18 @@ describe("OnboardingWorkspace", () => {
       "value",
       "2026-08-19T12:00:00+00:00",
     );
+  });
+
+  it("moves a tool against the catalog row, and offers the reason a correction needs", () => {
+    render(<OnboardingWorkspace />);
+    const form = screen.getByLabelText("Lofty state").closest("form");
+
+    expect(form).toHaveAttribute("action", "/operations/new-agents/9/tools");
+    // The stable catalog slug, not a deployed enum value.
+    expect(form?.querySelector('input[name="tool"]')).toHaveAttribute("value", "lofty");
+    // Whether anybody has actually sent the invitation yet.
+    expect(screen.getByText("Waiting on your office")).toBeVisible();
+    expect(screen.getByLabelText("Lofty note")).toBeEnabled();
   });
 
   it("makes every operational control read-only without manage permission", () => {

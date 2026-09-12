@@ -230,8 +230,14 @@ def test_ready_stamps_a_timestamp_and_reverting_clears_it(seeded):
     )
     assert row.ready_at is not None
 
+    # Coming back out of a settled state is a correction, so it carries a
+    # reason: the agent was already told this one was working.
     row = services.set_state(
-        actor=admin, agent=agent, tool=tool("lofty"), state=ToolState.BLOCKED
+        actor=admin,
+        agent=agent,
+        tool=tool("lofty"),
+        state=ToolState.BLOCKED,
+        note="Vendor suspended the seat.",
     )
     assert row.ready_at is None
 

@@ -292,9 +292,22 @@ function ToolCard({
           background, and it drowned the handful of states that genuinely need
           finding. The count in the header says it once, where it is rare
           enough to read. */}
-      <div className="text-muted-foreground border-border/70 mt-auto flex items-center gap-1.5 border-t pt-3 text-xs">
-        {yourMove ? <UserRound className="size-3 shrink-0" aria-hidden /> : null}
-        {tool.provisioningLabel}
+      <div className="text-muted-foreground border-border/70 mt-auto grid gap-1 border-t pt-3 text-xs">
+        <span className="flex items-center gap-1.5">
+          {yourMove ? <UserRound className="size-3 shrink-0" aria-hidden /> : null}
+          {tool.provisioningLabel}
+        </span>
+        {/* For a seat somebody at oNEST creates, "has anyone done anything yet"
+            is the question this card exists to answer. */}
+        {tool.invitation.state === "not_applicable" ? null : (
+          <span
+            className={tool.invitation.state === "sent" ? "text-success" : undefined}
+          >
+            {tool.invitation.sentAt
+              ? `${tool.invitation.label} · ${new Date(tool.invitation.sentAt).toLocaleDateString()}`
+              : tool.invitation.label}
+          </span>
+        )}
       </div>
 
       <div className="flex flex-wrap items-center gap-2">

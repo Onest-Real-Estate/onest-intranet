@@ -13,7 +13,6 @@ from apps.audit.events import publish
 from apps.audit.service import AuditTarget, actor_from_user, log_event
 from apps.user.models import (
     OnboardingTask,
-    OnboardingToolSetup,
     User,
     UserOnboardingCase,
     UserRoleAssignment,
@@ -454,45 +453,34 @@ def update_tool_setup(
     tool: str,
     state: str,
     expected_version: str,
+    note: str = "",
 ) -> bool:
+    """Move one tool from the New Agent List, through the one tool writer.
+
+    The catalog owns tool state; this wrapper adds what the workspace needs
+    around it — scoped authority over *this* agent, and the case version token
+    that stops a stale screen overwriting somebody else's change. The audit
+    event and the domain event belong to ``onboarding_tools.services``, so a
+    change made here and one made from tool readiness are the same event.
+    """
+    from apps.onboarding_tools.models import AgentToolStatus, OnboardingTool, ToolState
+    from apps.onboarding_tools.services import set_state
+
     ensure_manage_authority(actor, user)
-    if tool not in OnboardingToolSetup.Tool.values:
+    catalog_tool = OnboardingTool.objects.live().filter(slug=tool).first()
+    if catalog_tool is None:
         raise ValidationError({"tool": "Choose an approved onboarding tool."})
-    if state not in OnboardingToolSetup.State.values:
-        raise ValidationError({"state": "Choose an approved setup state."})
     case = _lock_case(user, expected_version)
-    setup = (
-        OnboardingToolSetup.objects.select_for_update()
-        .filter(case=case, tool=tool)
+    before = (
+        AgentToolStatus.objects.filter(agent=user, tool=catalog_tool)
+        .values_list("state", flat=True)
         .first()
+        or ToolState.NOT_STARTED
     )
-    before = setup.state if setup else OnboardingToolSetup.State.NOT_STARTED
-    if before == state:
+    row = set_state(actor=actor, agent=user, tool=catalog_tool, state=state, note=note)
+    if row.state == before:
         return False
-    if setup is None:
-        setup = OnboardingToolSetup.objects.create(
-            case=case, tool=tool, state=state, updated_by=actor
-        )
-    else:
-        setup.state = state
-        setup.updated_by = actor
-        setup.save(update_fields=["state", "updated_by", "updated_at"])
     _touch(case, actor)
-    log_event(
-        "user.onboarding.tool_setup_changed",
-        actor=actor_from_user(actor),
-        target=_target(actor, user),
-        before={"tool": tool, "state": before},
-        after={"tool": tool, "state": state},
-        office_id=user.office.stable_key if user.office else "",
-        channel="onboarding_workspace",
-    )
-    _publish(
-        "user.onboarding.tool_setup_changed",
-        actor,
-        user,
-        {"tool": tool, "state": state},
-    )
     return True
 
 

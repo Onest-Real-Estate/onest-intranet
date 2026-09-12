@@ -39,7 +39,7 @@ from apps.training.taxonomy import (
     LIBRARY_VIEW_CODES,
     LIBRARY_VIEW_RECOMMENDED,
     LIBRARY_VIEW_REQUIRED,
-    TOOL_CODES,
+    is_known_tool_code,
 )
 from apps.user.models import User
 from apps.web.contracts import list_response
@@ -91,7 +91,7 @@ class TrainingFilters:
             rejected.append("required")
 
         raw_tool = (params.get("tool") or "").strip()[:32]
-        tool = raw_tool if raw_tool in TOOL_CODES else ""
+        tool = raw_tool if raw_tool and is_known_tool_code(raw_tool) else ""
         if raw_tool and not tool:
             rejected.append("tool")
 
@@ -499,13 +499,29 @@ def content_type_filter_options() -> list[dict[str, str]]:
 
 
 def tool_filter_options() -> list[dict[str, str]]:
-    from apps.user.models import OnboardingToolSetup
+    """Tools content can be tagged with: the live catalog, in catalog order.
 
-    return [
-        {"value": value, "label": str(label)}
-        for value, label in OnboardingToolSetup.Tool.choices
-        if value in TOOL_CODES
-    ]
+    Two bounded queries, never one per option. Legacy codes still carried by
+    published content keep an option so an existing filter does not silently
+    stop matching anything.
+    """
+    from apps.onboarding_tools.models import OnboardingTool
+    from apps.training.models import TrainingContent
+
+    options = {
+        tool.slug: tool.name
+        for tool in OnboardingTool.objects.live().order_by(
+            "group", "sort_order", "name"
+        )
+    }
+    still_tagged = set(
+        TrainingContent.objects.exclude(tool_code="")
+        .values_list("tool_code", flat=True)
+        .distinct()
+    )
+    for code in sorted(still_tagged - set(options)):
+        options[code] = code.replace("-", " ").replace("_", " ").title()
+    return [{"value": value, "label": label} for value, label in options.items()]
 
 
 def completion_filter_options() -> list[dict[str, str]]:

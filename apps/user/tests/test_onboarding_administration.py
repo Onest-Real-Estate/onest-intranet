@@ -15,10 +15,10 @@ from django.urls import reverse
 from django.utils import timezone
 
 from apps.audit.models import AuditEvent, DomainEvent
+from apps.onboarding_tools.models import AgentToolStatus
 from apps.user.models import (
     Office,
     OnboardingTask,
-    OnboardingToolSetup,
     User,
     UserOnboardingCase,
     UserRoleAssignment,
@@ -280,8 +280,54 @@ def test_stale_tool_update_is_rejected_without_overwrite(client):
     assert stale.status_code == 409
     assert b"Somebody else changed" in stale.content
     assert (
-        OnboardingToolSetup.objects.get(case__user=target, tool="lofty").state
-        == "ready"
+        AgentToolStatus.objects.get(agent=target, tool__slug="lofty").state == "ready"
+    )
+
+
+@pytest.mark.django_db
+def test_the_workspace_records_an_invitation_against_the_catalog_row(client):
+    target = account("target@example.com", "fairfax-va")
+    actor = company_admin()
+    client.force_login(actor)
+
+    response = client.post(
+        reverse("new_agent_onboarding_tools", args=[target.pk]),
+        {"tool": "skyslope", "state": "invitation_sent", "expected_version": ""},
+    )
+
+    assert response.status_code == 302
+    row = AgentToolStatus.objects.get(agent=target, tool__slug="skyslope")
+    assert row.state == "invitation_sent"
+    assert row.invitation_sent_at is not None
+    assert row.invitation_sent_by == actor
+
+
+@pytest.mark.django_db
+def test_correcting_a_tool_backwards_needs_a_reason(client):
+    target = account("target@example.com", "fairfax-va")
+    actor = company_admin()
+    client.force_login(actor)
+    first = client.post(
+        reverse("new_agent_onboarding_tools", args=[target.pk]),
+        {"tool": "lofty", "state": "ready", "expected_version": ""},
+    )
+    assert first.status_code == 302
+    case = UserOnboardingCase.objects.get(user=target)
+
+    refused = client.post(
+        reverse("new_agent_onboarding_tools", args=[target.pk]),
+        {
+            "tool": "lofty",
+            "state": "in_progress",
+            "expected_version": case.updated_at.isoformat(),
+        },
+        HTTP_X_INERTIA="true",
+    )
+
+    assert refused.status_code == 422
+    assert "note" in json.loads(refused.content)["props"]["validation"]["fields"]
+    assert (
+        AgentToolStatus.objects.get(agent=target, tool__slug="lofty").state == "ready"
     )
 
 

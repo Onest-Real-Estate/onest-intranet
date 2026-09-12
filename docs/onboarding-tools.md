@@ -53,7 +53,8 @@ not grow as the catalog does.
 ## Progress
 
 `AgentToolStatus` holds one agent's state on one tool:
-`not_started · in_progress · ready · blocked · not_applicable`.
+`not_started · requested · invitation_sent · in_progress · ready · blocked ·
+not_applicable`.
 
 - **Rows are created lazily.** A tool with no row reads as "not started", so
   adding a tool to the catalog does not write a row for every agent.
@@ -64,6 +65,54 @@ not grow as the catalog does.
 - **`is_required=False` tools are excluded from the figure.** Facebook and
   Instagram are available, not expected; counting them would make 100%
   unreachable.
+
+### The invitation checkpoint
+
+`requested` and `invitation_sent` exist because "in progress" could not answer
+the question activation depends on: *has the office actually sent this agent
+their Lofty or SkySlope invitation, and when?* A note cannot be queried, and
+audit history is not a state machine.
+
+`invitation_sent_at` and `invitation_sent_by` are columns, not prose. Two
+constraints keep them honest: `invitation_sent` requires a timestamp, and a
+named sender requires one too — the reverse is allowed, because deleting the
+sender's account must not erase the fact that it was sent. Nothing about the
+vendor account is stored: no password, invitation link, token, or email body.
+
+### Which moves are allowed
+
+Skipping *forward* is ordinary — a self-serve tool goes straight to `ready`.
+Two rules are enforced server-side by `services.validate_transition`:
+
+- `requested` and `invitation_sent` are refused for a `self_serve` tool.
+  Nobody sends an invitation for an account the agent creates.
+- Moving **back** down `not_started → requested → invitation_sent →
+  in_progress → ready`, or out of a settled state, requires a business reason
+  in `note`. That is the correction path for somebody who marked an invitation
+  sent by mistake: the agent was told it was sent, so the reversal is recorded
+  against whoever made it. Dropping back behind the invitation clears its
+  provenance; states after it keep it.
+
+Every accepted change writes an audit entry and publishes
+`onboarding_tool.state_changed`, carrying the tool slug, agent, office, the
+enum transition, the actor, and the invitation timestamp — never the note.
+
+## One source of truth
+
+`user.OnboardingToolSetup` was a second, enum-shaped copy of this: four tools,
+read by the operational composer while My Tools read the catalog, and the two
+disagreed. Every read and write now goes through this app —
+`onboarding_state`, the New Agent List, the dashboard, and My Tools — and
+`onboarding_tools/migrations/0004` folds the legacy rows in, mapping
+`microsoft365 → office-365` and `not_required → not_applicable`. Where both
+sides held a row, the further-along state survives and ties go to the more
+recently updated one. `dotloop` has no catalog row (the brokerage retired it),
+so those rows are left alone rather than invented into a tool nobody uses.
+
+The legacy model still exists and still holds its rows: nothing reads or writes
+it, and it is kept for one release so a rollback loses nothing. Removing the
+table is a follow-up migration once this has shipped and been verified in
+production.
 
 ### Who may change it
 
