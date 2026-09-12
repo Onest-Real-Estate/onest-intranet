@@ -385,6 +385,8 @@ class OnboardingProfileSubmissionForm(forms.Form):
 
     expected_onboarding_version = forms.IntegerField(min_value=0)
     revision = forms.CharField(max_length=64)
+    confirm_office = forms.BooleanField(required=False)
+    confirmed_office_id = forms.IntegerField(min_value=1, required=False)
 
 
 class OnboardingProfileFinalizeForm(forms.Form):

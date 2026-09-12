@@ -1235,7 +1235,20 @@ export interface AgentOnboardingJourney {
   schemaVersion: 1;
   profile: AgentJourneyState<AgentJourneyProfileState>;
   office: AgentJourneyState<AgentJourneyOfficeState>;
-  officeHandoff: AgentJourneyState<AgentJourneyOfficeHandoffState>;
+  officeHandoff: AgentJourneyState<AgentJourneyOfficeHandoffState> & {
+    recipient: { name: string } | null;
+    message: string;
+    delivery: {
+      state: "pending" | "recorded" | "queued" | "sent" | "retryable" | "failed";
+      label: string;
+      channels: {
+        channel: string;
+        state: string;
+        label: string;
+        retryable: boolean;
+      }[];
+    };
+  };
   contract: AgentJourneyState<AgentJourneyContractState>;
   toolsSource: AgentJourneyToolSourceState;
   tools: AgentJourneyTool[];
@@ -1309,7 +1322,13 @@ export interface ActionItemsQueuePageProps extends PageProps {
 /** Assignable offices, grouped by region for a `<select>` with optgroups. */
 export interface OfficeGroup {
   label: string;
-  offices: { id: number; name: string }[];
+  offices: {
+    id: number;
+    name: string;
+    city?: string;
+    state?: string;
+    region?: string;
+  }[];
 }
 
 export interface StateOption {
@@ -1502,6 +1521,34 @@ export interface OnboardingIdentity {
 
 export type OnboardingLimits = Omit<ProfileLimits, "maxSpecialties">;
 
+export type OnboardingOfficeAdminResolution = "office" | "region" | "company";
+
+export interface OnboardingOfficeSelection {
+  office: {
+    id: number;
+    name: string;
+    hierarchy: string;
+    region: string;
+    streetAddress: string;
+    city: string;
+    state: string;
+    zipCode: string;
+    mainPhone: string;
+    publicEmail: string;
+    officeHours: unknown[];
+  };
+  administrator: {
+    id: number;
+    name: string;
+    phone: string;
+    email: string;
+    isPrimary: boolean;
+    resolutionLevel: OnboardingOfficeAdminResolution;
+    resolutionLabel: string;
+  } | null;
+  support: { available: boolean; message: string };
+}
+
 export interface OnboardingPageProps extends PageProps {
   profileFlow: OnboardingProfileFlow;
   identity: OnboardingIdentity;
@@ -1513,6 +1560,9 @@ export interface OnboardingPageProps extends PageProps {
   /** Empty when the office is administrative for this user. */
   offices: OfficeGroup[];
   officeLabel: string;
+  /** Public facts for only the selected office; internal instructions are excluded. */
+  officeSelection: OnboardingOfficeSelection | null;
+  officeConfirmed: boolean;
   states: StateOption[];
   languageOptions: LanguageOption[];
   contactMethods: ContactMethodOption[];

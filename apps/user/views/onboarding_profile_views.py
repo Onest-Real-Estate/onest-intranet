@@ -7,7 +7,7 @@ crafted identifier before any form is bound.
 
 from typing import cast
 
-from django.http import Http404, HttpRequest, HttpResponse
+from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import redirect
 from django.urls import reverse
 from django.views.decorators.http import require_GET, require_POST
@@ -21,7 +21,8 @@ from ..forms import (
     OnboardingProfileSubmissionForm,
     form_errors,
 )
-from ..models import User
+from ..models import Office, User
+from ..services.onboarding_office import office_confirmation_payload
 from ..services.onboarding_profile import (
     EDITABLE_SECTIONS,
     ProfileAlreadyFinalized,
@@ -41,8 +42,24 @@ from .auth_views import _log_protected_field_rejection, _rejected_fields
 __all__ = [
     "onboarding",
     "onboarding_profile_finalize",
+    "onboarding_office_preview",
     "onboarding_profile_save",
 ]
+
+
+@enforce_policy("onboarding_office_preview")
+@require_GET
+def onboarding_office_preview(request: HttpRequest, office_id: int) -> JsonResponse:
+    """Self-safe preview for one currently assignable office."""
+    from apps.user.services.onboarding_state import journey_applies_to
+
+    user = cast(User, request.user)
+    if user.profile_completed or not journey_applies_to(user):
+        raise Http404
+    office = Office.assignable_queryset().filter(pk=office_id).first()
+    if office is None:
+        raise Http404
+    return JsonResponse(office_confirmation_payload(office))
 
 
 def _form_message(message: str) -> dict:
@@ -138,6 +155,8 @@ def onboarding_profile_save(request: HttpRequest, section: str) -> HttpResponse:
             expected_onboarding_version=tokens.cleaned_data[
                 "expected_onboarding_version"
             ],
+            office_confirmed=tokens.cleaned_data["confirm_office"],
+            confirmed_office_id=tokens.cleaned_data["confirmed_office_id"],
         )
     except ProfileAlreadyFinalized:
         return redirect("dashboard")
@@ -161,6 +180,14 @@ def onboarding_profile_save(request: HttpRequest, section: str) -> HttpResponse:
             section=target,
             status=422,
             errors=form_errors(result.invalid_form),
+            posted=request.POST,
+        )
+    if result.errors is not None:
+        return _render_flow(
+            request,
+            section=target,
+            status=422,
+            errors=result.errors,
             posted=request.POST,
         )
     return redirect(f"{reverse('onboarding')}?section={next_section(target)}")

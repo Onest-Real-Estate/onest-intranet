@@ -28,6 +28,10 @@ from apps.notifications.contract import (
     NotificationType,
 )
 from apps.notifications.resolvers import ONBOARDING_MODULE
+from apps.user.services.onboarding_office import (
+    OFFICE_HANDOFF_EVENT,
+    handoff_dedupe_key,
+)
 
 
 #: The event id is the idempotency key by default: a replay of the same event
@@ -45,6 +49,14 @@ def _int_or_none(value: object) -> int | None:
     except (TypeError, ValueError):
         return None
     return number or None
+
+
+def _nonnegative_int_or_none(value: object) -> int | None:
+    try:
+        number = int(str(value))
+    except (TypeError, ValueError):
+        return None
+    return number if number >= 0 else None
 
 
 def onboarding_owner_assigned(envelope: EventEnvelope) -> list[NotificationRequest]:
@@ -71,6 +83,45 @@ def onboarding_owner_assigned(envelope: EventEnvelope) -> list[NotificationReque
             source_record_id=str(subject_id),
             action_key="open_onboarding_case",
             action_args=(subject_id,),
+        )
+    ]
+
+
+def onboarding_office_handoff(
+    envelope: EventEnvelope,
+) -> list[NotificationRequest]:
+    """Tell the resolved, scoped office administrator an agent is ready."""
+    recipient_id = _int_or_none(envelope.payload.get("recipient_id"))
+    user_id = _int_or_none(envelope.payload.get("user_id"))
+    office_id = _int_or_none(envelope.payload.get("office_id"))
+    onboarding_version = _nonnegative_int_or_none(
+        envelope.payload.get("onboarding_version")
+    )
+    if (
+        recipient_id is None
+        or user_id is None
+        or office_id is None
+        or onboarding_version is None
+    ):
+        return []
+    return [
+        NotificationRequest(
+            recipient_id=recipient_id,
+            notification_type=NotificationType.ADMINISTRATIVE,
+            event_key=OFFICE_HANDOFF_EVENT,
+            title="A new agent is ready for office onboarding",
+            dedupe_key=handoff_dedupe_key(
+                user_id=user_id,
+                onboarding_version=onboarding_version,
+                office_id=office_id,
+            ),
+            priority=NotificationPriority.HIGH,
+            is_mandatory=True,
+            source_module=ONBOARDING_MODULE,
+            source_record_type="user_onboarding_case",
+            source_record_id=str(user_id),
+            action_key="open_onboarding_case",
+            action_args=(user_id,),
         )
     ]
 
@@ -502,6 +553,7 @@ EventBuilder = Callable[[EventEnvelope], list[NotificationRequest]]
 
 EVENT_PRODUCERS: dict[str, EventBuilder] = {
     "user.onboarding.owner_assigned": onboarding_owner_assigned,
+    OFFICE_HANDOFF_EVENT: onboarding_office_handoff,
     "user.account.state_changed": account_reactivated,
     "contract.awaiting_company_signature": contract_awaiting_company_signature,
     "contract.pdf_ready": contract_pdf_ready,

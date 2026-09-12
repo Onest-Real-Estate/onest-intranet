@@ -98,6 +98,14 @@ export function OnboardingProfileFlow() {
       ? applyDraft(initial, draft.values, editableFields)
       : initial;
   const view = restored === initial ? page : { ...page, initial: restored };
+  const restoredOfficeConfirmed =
+    current === "credentials" && draft?.key === sectionKey
+      ? draft.values.confirm_office?.[0] === "true"
+      : page.officeConfirmed;
+  const sectionView =
+    view.officeConfirmed === restoredOfficeConfirmed
+      ? view
+      : { ...view, officeConfirmed: restoredOfficeConfirmed };
 
   // After a 422, a conflict, or a restored draft the page opens with values the
   // server has not saved; those are unsaved changes before anything is typed.
@@ -114,6 +122,7 @@ export function OnboardingProfileFlow() {
     Object.entries(profileFlow.fields).map(([name, policy]) => [name, policy.label]),
   );
   labels[CONFIRMATION_FIELD] = "Confirmation";
+  labels.confirm_office = "Office confirmation";
 
   function navigate(code: OnboardingProfileSectionCode) {
     if (code === current) {
@@ -222,7 +231,10 @@ export function OnboardingProfileFlow() {
                 <ContactSection page={view} onDirty={() => setTouched(true)} />
               ) : null}
               {current === "credentials" ? (
-                <CredentialsSection page={view} onDirty={() => setTouched(true)} />
+                <CredentialsSection
+                  page={sectionView}
+                  onDirty={() => setTouched(true)}
+                />
               ) : null}
             </SectionForm>
           )}

@@ -25,6 +25,17 @@ def deliver_for_event(envelope: EventEnvelope) -> None:
     if not requests:
         return
     created = deliver_many(requests)
+    from apps.user.services.onboarding_office import OFFICE_HANDOFF_EVENT
+
+    if envelope.name == OFFICE_HANDOFF_EVENT:
+        from apps.user.services.onboarding_office import record_office_handoff_delivery
+
+        record_office_handoff_delivery(
+            user_id=int(envelope.payload["user_id"]),
+            office_id=int(envelope.payload["office_id"]),
+            onboarding_version=int(envelope.payload["onboarding_version"]),
+            recipient_id=int(envelope.payload["recipient_id"]),
+        )
     logger.info(
         "notifications.event_consumed event=%s id=%s created=%d",
         envelope.name,

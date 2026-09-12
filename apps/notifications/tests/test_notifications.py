@@ -472,7 +472,9 @@ def test_onboarding_detail_appears_only_while_the_grant_and_scope_hold():
 
     now = timezone.now()
     [payload] = serialize_page(owner, [notification], now=now)
-    assert payload["detail"] == f"Onboarding for {agent.preferred_display_name()}"
+    assert payload["detail"] == (
+        f"Onboarding for {agent.preferred_display_name()} · {agent.office.name}"  # ty: ignore[unresolved-attribute]
+    )
     assert payload["action"]["href"].endswith(f"/{agent.pk}")
     assert payload["staleAction"] is False
 
@@ -716,6 +718,6 @@ def test_company_admins_keep_detail_for_agents_in_any_office():
     resolution = resolve_sources(admin_user, [notification])[notification.public_id]
     assert resolution == SourceResolution(
         available=True,
-        detail=f"Onboarding for {agent.preferred_display_name()}",
+        detail=f"Onboarding for {agent.preferred_display_name()} · {agent.office.name}",  # ty: ignore[unresolved-attribute]
         action_available=True,
     )

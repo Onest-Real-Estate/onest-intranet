@@ -108,6 +108,15 @@ class ToolSourceStatus(StrEnum):
     UNAVAILABLE = "unavailable"
 
 
+class HandoffDeliveryState(StrEnum):
+    PENDING = "pending"
+    RECORDED = "recorded"
+    QUEUED = "queued"
+    SENT = "sent"
+    RETRYABLE = "retryable"
+    FAILED = "failed"
+
+
 @dataclass(frozen=True)
 class SourceMilestone:
     key: str
@@ -183,6 +192,9 @@ class AgentOnboardingJourney:
     office_updated_at: datetime | None
     office_handoff_status: UserOnboardingCase.OfficeHandoffState
     office_handoff_updated_at: datetime | None
+    office_handoff_recipient_name: str
+    office_handoff_delivery_state: HandoffDeliveryState
+    office_handoff_deliveries: tuple[dict[str, Any], ...]
     contract_status: ContractJourneyStatus
     contract_updated_at: datetime | None
     tools: ToolOnboardingState
@@ -370,6 +382,79 @@ def microsoft_user_ids(users: list[User]) -> set[int]:
     )
 
 
+def handoff_delivery_states(users: list[User]) -> dict[int, dict[str, Any]]:
+    """Bulk notification-domain adapter for the current handoff cycle."""
+    from apps.notifications.models import Notification, NotificationEmail
+    from apps.user.services.onboarding_office import (
+        OFFICE_HANDOFF_EVENT,
+        handoff_dedupe_key,
+    )
+
+    keys = {
+        user.pk: handoff_dedupe_key(
+            user_id=user.pk,
+            onboarding_version=user.onboarding_version,
+            office_id=user.office_id,  # ty: ignore[unresolved-attribute]
+        )
+        for user in users
+        if getattr(user, "office_id", None)
+    }
+    notifications = (
+        Notification.objects.filter(
+            event_key=OFFICE_HANDOFF_EVENT,
+            dedupe_key__in=keys.values(),
+        )
+        .select_related("recipient")
+        .prefetch_related("deliveries")
+    )
+    by_key = {notification.dedupe_key: notification for notification in notifications}
+    result: dict[int, dict[str, Any]] = {}
+    for user in users:
+        notification = by_key.get(keys.get(user.pk, ""))
+        if notification is None:
+            result[user.pk] = {
+                "recipientName": "",
+                "state": HandoffDeliveryState.PENDING,
+                "deliveries": (),
+            }
+            continue
+        deliveries = tuple(
+            {
+                "channel": delivery.channel,
+                "state": delivery.status,
+                "label": str(NotificationEmail.Status(delivery.status).label),
+                "retryable": delivery.status
+                in {
+                    NotificationEmail.Status.PENDING,
+                    NotificationEmail.Status.SENDING,
+                    NotificationEmail.Status.FAILED,
+                },
+            }
+            for delivery in notification.deliveries.all()  # ty: ignore[unresolved-attribute]
+        )
+        statuses = {item["state"] for item in deliveries}
+        if NotificationEmail.Status.FAILED in statuses:
+            state = HandoffDeliveryState.RETRYABLE
+        elif NotificationEmail.Status.PENDING in statuses or (
+            NotificationEmail.Status.SENDING in statuses
+        ):
+            state = HandoffDeliveryState.QUEUED
+        elif NotificationEmail.Status.DEAD in statuses:
+            state = HandoffDeliveryState.FAILED
+        elif NotificationEmail.Status.SENT in statuses:
+            state = HandoffDeliveryState.SENT
+        else:
+            state = HandoffDeliveryState.RECORDED
+        result[user.pk] = {
+            "recipientName": notification.recipient.get_full_name()
+            or notification.recipient.display_name
+            or notification.recipient.email,
+            "state": state,
+            "deliveries": deliveries,
+        }
+    return result
+
+
 def _case_for(user: User) -> UserOnboardingCase | None:
     try:
         return user.onboarding_case  # ty: ignore[unresolved-attribute]
@@ -487,7 +572,13 @@ def _office_journey_status(
     user: User,
     case: UserOnboardingCase | None,
 ) -> OfficeJourneyStatus:
-    if case and (case.office_confirmed_at or case.required_setup_completed_at):
+    if (
+        case
+        and case.office_confirmed_at
+        and getattr(case, "office_confirmed_for_id", None)
+        == getattr(user, "office_id", None)
+        and case.office_confirmation_version == user.onboarding_version
+    ):
         return OfficeJourneyStatus.CONFIRMED
     if user.office_id:  # ty: ignore[unresolved-attribute]
         return OfficeJourneyStatus.SELECTED
@@ -529,6 +620,9 @@ def _journey_blockers(
         )
     if (
         case
+        and getattr(case, "office_handoff_office_id", None)
+        == getattr(user, "office_id", None)
+        and case.office_handoff_onboarding_version == user.onboarding_version
         and case.office_handoff_state
         == UserOnboardingCase.OfficeHandoffState.NOTIFICATION_FAILED
     ):
@@ -606,15 +700,22 @@ def _compose_journey(
     training: TrainingOnboardingState,
     tools: ToolOnboardingState,
     tasks: tuple[OnboardingTask, ...],
+    handoff_delivery: dict[str, Any],
 ) -> AgentOnboardingJourney:
     profile_status = _profile_journey_status(user)
     office_status = _office_journey_status(user, case)
     required_setup_complete = bool(
         (case and case.required_setup_completed_at) or user.profile_completed
     )
+    handoff_is_current = bool(
+        case
+        and getattr(case, "office_handoff_office_id", None)
+        == getattr(user, "office_id", None)
+        and case.office_handoff_onboarding_version == user.onboarding_version
+    )
     handoff_status = (
         UserOnboardingCase.OfficeHandoffState(case.office_handoff_state)
-        if case
+        if handoff_is_current and case
         else UserOnboardingCase.OfficeHandoffState.PENDING
     )
     required_tools_complete = all(
@@ -671,6 +772,15 @@ def _compose_journey(
         office_updated_at=case.office_confirmed_at if case else None,
         office_handoff_status=handoff_status,
         office_handoff_updated_at=(case.office_handoff_updated_at if case else None),
+        office_handoff_recipient_name=handoff_delivery["recipientName"],
+        office_handoff_delivery_state=(
+            HandoffDeliveryState.FAILED
+            if handoff_status
+            == UserOnboardingCase.OfficeHandoffState.NOTIFICATION_FAILED
+            and not handoff_delivery["recipientName"]
+            else handoff_delivery["state"]
+        ),
+        office_handoff_deliveries=handoff_delivery["deliveries"],
         contract_status=contract.journey_status,
         contract_updated_at=contract.active.updated_at,
         tools=tools,
@@ -706,6 +816,7 @@ def build_onboarding_states(
     training = training_states(users)
     tool_sources = tool_states(users)
     microsoft_ids = microsoft_user_ids(users)
+    handoff_deliveries = handoff_delivery_states(users)
     states = []
     for user in users:
         case = _case_for(user)
@@ -765,6 +876,7 @@ def build_onboarding_states(
             training=training_state,
             tools=tool_sources[user.pk],
             tasks=tasks,
+            handoff_delivery=handoff_deliveries[user.pk],
         )
         states.append(
             OnboardingState(
@@ -907,6 +1019,24 @@ def agent_journey_payload(journey: AgentOnboardingJourney) -> dict[str, Any]:
         "state": str(journey.office_handoff_status),
         "label": str(journey.office_handoff_status.label),
     }
+    if journey.office_handoff_status == UserOnboardingCase.OfficeHandoffState.NOTIFIED:
+        if journey.office_handoff_recipient_name:
+            handoff_message = (
+                f"We notified {journey.office_handoff_recipient_name}. "
+                "Their onboarding workspace is ready."
+            )
+        else:
+            handoff_message = "We notified your office onboarding team."
+    elif (
+        journey.office_handoff_status
+        == UserOnboardingCase.OfficeHandoffState.NOTIFICATION_FAILED
+    ):
+        handoff_message = (
+            "We could not notify an office administrator. Contact IT Support "
+            "from the Hub so the onboarding team can route your case."
+        )
+    else:
+        handoff_message = "We are recording the handoff to your office administrator."
     return {
         "schemaVersion": 1,
         "profile": {
@@ -932,6 +1062,24 @@ def agent_journey_payload(journey: AgentOnboardingJourney) -> dict[str, Any]:
                 if journey.office_handoff_updated_at
                 else None
             ),
+            "recipient": (
+                {"name": journey.office_handoff_recipient_name}
+                if journey.office_handoff_recipient_name
+                else None
+            ),
+            "message": handoff_message,
+            "delivery": {
+                "state": str(journey.office_handoff_delivery_state),
+                "label": {
+                    HandoffDeliveryState.PENDING: "Pending",
+                    HandoffDeliveryState.RECORDED: "Recorded in the Hub",
+                    HandoffDeliveryState.QUEUED: "Outbound delivery queued",
+                    HandoffDeliveryState.SENT: "Sent",
+                    HandoffDeliveryState.RETRYABLE: "Delivery will retry",
+                    HandoffDeliveryState.FAILED: "Delivery failed",
+                }[journey.office_handoff_delivery_state],
+                "channels": list(journey.office_handoff_deliveries),
+            },
         },
         "contract": {
             **_journey_status_payload(

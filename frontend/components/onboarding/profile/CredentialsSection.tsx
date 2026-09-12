@@ -1,7 +1,8 @@
-import { ChevronDown, Globe, Link2 } from "lucide-react";
+import { ChevronDown, Globe, Link2, Search } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import {
+  Callout,
   DateField,
   FormDescription,
   FormField,
@@ -14,10 +15,18 @@ import {
   policyFor,
   ReadOnlyField,
 } from "@/components/onboarding/profile/field-ownership";
+import {
+  OFFICE_CONFIRMATION_FIELD,
+  OfficeConfirmation,
+} from "@/components/onboarding/profile/OfficeConfirmation";
+import { loadOfficePreview } from "@/components/onboarding/profile/office-preview-transport";
 import { LanguagePicker } from "@/components/profile/ProfileFormSections";
 import { SelectField, TextField } from "@/components/profile/profile-fields";
+import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import { routes } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 import { firstFieldError } from "@/lib/validation";
 import type { OnboardingPageProps } from "@/types";
@@ -37,6 +46,8 @@ export function CredentialsSection({
     profileFlow,
     offices,
     officeLabel,
+    officeSelection,
+    officeConfirmed,
     states,
     languageOptions,
     socialPlatforms,
@@ -60,6 +71,11 @@ export function CredentialsSection({
     socialPlatforms.some((platform) => Boolean(values[platform.prop]));
 
   const [officeId, setOfficeId] = useState(initial.officeId);
+  const [officePreview, setOfficePreview] = useState(officeSelection);
+  const [officeLoading, setOfficeLoading] = useState(false);
+  const [officeLoadError, setOfficeLoadError] = useState("");
+  const [officeIsConfirmed, setOfficeIsConfirmed] = useState(officeConfirmed);
+  const [officeSearch, setOfficeSearch] = useState("");
   const [licenseState, setLicenseState] = useState(initial.licenseState);
   const [languages, setLanguages] = useState<string[]>(initial.languages);
   const [bioLength, setBioLength] = useState(initial.bio.length);
@@ -74,8 +90,84 @@ export function CredentialsSection({
     }
   }, [introductionHasErrors]);
 
+  useEffect(() => {
+    if (!officeId) {
+      setOfficePreview(null);
+      return;
+    }
+    if (officeSelection?.office.id === Number(officeId)) {
+      setOfficePreview(officeSelection);
+      setOfficeLoading(false);
+      setOfficeLoadError("");
+      return;
+    }
+    const controller = new AbortController();
+    setOfficeLoading(true);
+    setOfficeLoadError("");
+    loadOfficePreview(
+      routes.onboarding_office_preview(Number(officeId)),
+      controller.signal,
+    )
+      .then(setOfficePreview)
+      .catch((error: unknown) => {
+        if (!controller.signal.aborted) {
+          setOfficePreview(null);
+          setOfficeLoadError(
+            error instanceof Error
+              ? error.message
+              : "We could not load that office right now.",
+          );
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          setOfficeLoading(false);
+        }
+      });
+    return () => controller.abort();
+  }, [officeId, officeSelection]);
+
+  const officeCount = offices.reduce((count, group) => count + group.offices.length, 0);
+  const officeQuery = officeSearch.trim().toLocaleLowerCase();
+  const filteredOffices = officeQuery
+    ? offices
+        .map((group) => ({
+          ...group,
+          offices: group.offices.filter((office) =>
+            [office.name, office.city, office.state, office.region, group.label]
+              .filter(Boolean)
+              .some((value) => value?.toLocaleLowerCase().includes(officeQuery)),
+          ),
+        }))
+        .filter((group) => group.offices.length > 0)
+    : offices;
+  const officeConfirmationError = firstFieldError(
+    validation,
+    OFFICE_CONFIRMATION_FIELD,
+  );
+
   return (
     <div className="grid gap-6">
+      {officeCount > 6 && !officePolicy.readOnly ? (
+        <FormField>
+          <FormLabel htmlFor="office_search">Find an office</FormLabel>
+          <div className="relative">
+            <Search
+              className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2"
+              aria-hidden
+            />
+            <Input
+              id="office_search"
+              type="search"
+              value={officeSearch}
+              onChange={(event) => setOfficeSearch(event.target.value)}
+              onInput={(event) => event.stopPropagation()}
+              placeholder="Search office, city, state, or region"
+              className="pl-9"
+            />
+          </div>
+        </FormField>
+      ) : null}
       {officePolicy.readOnly ? (
         <dl>
           <ReadOnlyField
@@ -92,10 +184,12 @@ export function CredentialsSection({
           value={officeId}
           onChange={(next) => {
             setOfficeId(next);
+            setOfficeIsConfirmed(false);
+            setOfficePreview(null);
             onDirty();
           }}
           placeholder="Select your office"
-          groups={offices}
+          groups={filteredOffices}
           validation={validation}
           required={officePolicy.required}
           description={
@@ -106,6 +200,34 @@ export function CredentialsSection({
           }
         />
       )}
+
+      {officeLoading ? (
+        <div
+          role="status"
+          aria-label="Loading office details"
+          className="grid gap-3 rounded-lg border p-4"
+        >
+          <Skeleton className="h-5 w-48" />
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-4 w-2/3" />
+        </div>
+      ) : null}
+      {officeLoadError ? (
+        <Callout tone="destructive" title="Office details unavailable">
+          {officeLoadError}
+        </Callout>
+      ) : null}
+      {officePreview && !officeLoading ? (
+        <OfficeConfirmation
+          selection={officePreview}
+          confirmed={officeIsConfirmed}
+          onConfirmedChange={(value) => {
+            setOfficeIsConfirmed(value);
+            onDirty();
+          }}
+          error={officeConfirmationError}
+        />
+      ) : null}
 
       <Separator />
 
