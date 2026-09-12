@@ -20,7 +20,6 @@ from django.utils import timezone
 
 from apps.user.models import (
     OnboardingTask,
-    OnboardingToolSetup,
     User,
     UserOnboardingCase,
 )
@@ -176,6 +175,10 @@ class JourneyToolState:
     invitation_label: str
     complete: bool
     updated_at: datetime | None = None
+    #: When the office actually sent the vendor invitation, and who did. The
+    #: fact activation and training read, rather than inferring it from a note.
+    invitation_sent_at: datetime | None = None
+    updated_by_label: str = ""
 
 
 @dataclass(frozen=True)
@@ -242,6 +245,8 @@ def new_agent_queryset(
     ``access`` is accepted for dashboard callers that already resolved it; the
     administration scope service remains the one database boundary.
     """
+    from apps.onboarding_tools.models import OPEN_STATES
+
     del access  # administered_user_queryset resolves the same effective grant.
     moment = at or timezone.now()
     cutoff_date = timezone.localdate(moment) - timedelta(days=NEW_AGENT_WINDOW_DAYS)
@@ -253,13 +258,7 @@ def new_agent_queryset(
             | Q(date_joined__gte=cutoff_datetime)
             | Q(profile_completed=False)
             | Q(onboarding_case__tasks__status=OnboardingTask.Status.OPEN)
-            | Q(
-                onboarding_case__tool_setups__state__in=[
-                    OnboardingToolSetup.State.NOT_STARTED,
-                    OnboardingToolSetup.State.IN_PROGRESS,
-                    OnboardingToolSetup.State.BLOCKED,
-                ]
-            )
+            | Q(tool_statuses__state__in=sorted(OPEN_STATES))
         )
         .distinct()
     )
@@ -471,31 +470,34 @@ def _related_rows(case: UserOnboardingCase | None, relation: str) -> list[Any]:
     return list(getattr(case, relation).all())
 
 
-def _tool_payloads(case: UserOnboardingCase | None) -> tuple[dict[str, Any], ...]:
-    stored = {item.tool: item for item in _related_rows(case, "tool_setups")}
+def _tool_payloads(tools: ToolOnboardingState) -> tuple[dict[str, Any], ...]:
+    """The operational rows, from the same catalog the agent's own page reads.
+
+    Keyed by the catalog's stable slug, so a tool added as data appears in the
+    New Agent List without an enum and without a deploy.
+    """
     payloads = []
-    for value, label in OnboardingToolSetup.Tool.choices:
-        item = stored.get(value)
-        state = item.state if item else OnboardingToolSetup.State.NOT_STARTED
-        if state in {
-            OnboardingToolSetup.State.READY,
-            OnboardingToolSetup.State.NOT_REQUIRED,
-        }:
-            status = MilestoneStatus.COMPLETE
-        elif state == OnboardingToolSetup.State.BLOCKED:
-            status = MilestoneStatus.BLOCKED
-        else:
-            status = MilestoneStatus.PENDING
+    for item in tools.items:
+        presentation = milestone_status_payload(item.status)
         payloads.append(
             {
-                "key": value,
-                "label": label,
-                "state": state,
-                "status": status,
-                "statusLabel": milestone_status_payload(status)["label"],
-                "tone": milestone_status_payload(status)["tone"],
-                "updatedAt": item.updated_at.isoformat() if item else None,
-                "updatedBy": str(item.updated_by) if item else None,
+                "key": item.key,
+                "label": item.label,
+                "state": item.state,
+                "stateLabel": item.state_label,
+                "status": item.status,
+                "statusLabel": presentation["label"],
+                "tone": presentation["tone"],
+                "required": item.required,
+                "invitationState": str(item.invitation_status),
+                "invitationLabel": item.invitation_label,
+                "invitationSentAt": (
+                    item.invitation_sent_at.isoformat()
+                    if item.invitation_sent_at
+                    else None
+                ),
+                "updatedAt": item.updated_at.isoformat() if item.updated_at else None,
+                "updatedBy": item.updated_by_label or None,
             }
         )
     return tuple(payloads)
@@ -867,7 +869,7 @@ def build_onboarding_states(
             for task in _related_rows(case, "tasks")
             if task.status == OnboardingTask.Status.OPEN
         )
-        tools = _tool_payloads(case)
+        tools = _tool_payloads(tool_sources[user.pk])
         overall, blockers = _overall(user, milestones, tools, tasks)
         journey = _compose_journey(
             user=user,
@@ -1115,6 +1117,11 @@ def agent_journey_payload(journey: AgentOnboardingJourney) -> dict[str, Any]:
                 "statusLabel": milestone_status_payload(item.status)["label"],
                 "invitationState": str(item.invitation_status),
                 "invitationLabel": item.invitation_label,
+                "invitationSentAt": (
+                    item.invitation_sent_at.isoformat()
+                    if item.invitation_sent_at
+                    else None
+                ),
                 "complete": item.complete,
                 "updatedAt": item.updated_at.isoformat() if item.updated_at else None,
             }
@@ -1175,7 +1182,7 @@ def journey_for_user(user: User) -> AgentOnboardingJourney:
             "onboarding_case__owner",
             "onboarding_case__updated_by",
         )
-        .prefetch_related("onboarding_case__tasks", "onboarding_case__tool_setups")
+        .prefetch_related("onboarding_case__tasks")
         .get(pk=user.pk)
     )
     return build_onboarding_states([prepared])[0].journey

@@ -25,6 +25,27 @@ from apps.audit.events import registry
 # user domain  (publisher: apps.user)
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# onboarding tools domain  (publisher: apps.onboarding_tools)
+# ---------------------------------------------------------------------------
+
+registry.register(
+    name="onboarding_tool.state_changed",
+    version=1,
+    required_payload_keys={"tool", "agent_id", "office_id", "from", "to", "actor_id"},
+    description=(
+        "One agent's state on one catalog tool changed, including the "
+        "invitation-sent checkpoint that activation and training read. Carries "
+        "stable identifiers, the enum transition, and the invitation timestamp "
+        "only: never a vendor credential, invitation link, or the operational "
+        "note staff typed."
+    ),
+)
+
+# ---------------------------------------------------------------------------
+# user domain  (publisher: apps.user)
+# ---------------------------------------------------------------------------
+
 registry.register(
     name="user.onboarded",
     version=1,

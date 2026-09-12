@@ -15,6 +15,7 @@ from apps.onboarding_tools.models import (
     Provisioning,
     ToolGroup,
     ToolState,
+    invitation_presentation,
 )
 from apps.onboarding_tools.services import Readiness, ToolProgress
 
@@ -58,6 +59,17 @@ def tool_payload(item: ToolProgress) -> dict[str, Any]:
         },
         "complete": item.is_complete,
         "note": item.note,
+        # Whether the office has actually sent the vendor invitation. The agent
+        # asking "has anybody done anything about my Lofty seat" reads this.
+        "invitation": {
+            **invitation_presentation(
+                provisioning=tool.provisioning,
+                invitation_sent_at=item.invitation_sent_at,
+            ),
+            "sentAt": (
+                item.invitation_sent_at.isoformat() if item.invitation_sent_at else None
+            ),
+        },
         "updatedAt": item.updated_at.isoformat() if item.updated_at else None,
     }
 

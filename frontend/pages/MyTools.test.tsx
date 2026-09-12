@@ -35,6 +35,11 @@ function tool(overrides: Partial<AgentTool> = {}): AgentTool {
     contact: "Your branch admin, for your NRDS number",
     requestPath: "",
     state: { code: "not_started", label: "Not started", tone: "neutral" },
+    invitation: {
+      state: "not_applicable",
+      label: "You set this one up yourself",
+      sentAt: null,
+    },
     complete: false,
     note: "",
     updatedAt: null,

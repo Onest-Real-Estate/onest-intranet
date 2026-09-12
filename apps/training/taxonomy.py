@@ -117,9 +117,25 @@ CERTIFICATE_STATUS_CHOICES = (
 
 CERTIFICATE_STATUS_CODES = frozenset(code for code, _ in CERTIFICATE_STATUS_CHOICES)
 
-TOOL_CODES = frozenset(
+#: Codes from the retired four-value tool enum. Published content still carries
+#: them, so they stay valid forever; anything new is checked against the live
+#: catalog instead, which is data rather than a deploy.
+LEGACY_TOOL_CODES = frozenset(
     {"lofty", "skyslope", "microsoft365", "dotloop"},
 )
+
+TOOL_CODES = LEGACY_TOOL_CODES
+
+
+def is_known_tool_code(code: str) -> bool:
+    """Whether content may be tagged with this tool code."""
+    if code in LEGACY_TOOL_CODES:
+        return True
+
+    from apps.onboarding_tools.models import OnboardingTool
+
+    return OnboardingTool.objects.filter(slug=code, is_active=True).exists()
+
 
 LIBRARY_VIEW_ALL = "all"
 LIBRARY_VIEW_REQUIRED = "required"

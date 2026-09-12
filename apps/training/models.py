@@ -20,10 +20,10 @@ from apps.training.taxonomy import (
     QUIZ_FEEDBACK_POLICY_CHOICES,
     SESSION_REGISTRATION_STATUS_CHOICES,
     SYSTEM_CATEGORY_CODES,
-    TOOL_CODES,
     VERSION_COMPLETION_POLICY_CHOICES,
     VERSION_POLICY_ANY,
     VERSION_POLICY_CURRENT,
+    is_known_tool_code,
 )
 from apps.user.models import Office
 from apps.user.storage import private_storage
@@ -274,7 +274,7 @@ class TrainingContent(models.Model):
                 "These links are not allowed: %(links)s. Use https://, "
                 "mailto:, or a hub path starting with /."
             ) % {"links": ", ".join(refused[:3])}
-        if self.tool_code and self.tool_code not in TOOL_CODES:
+        if self.tool_code and not is_known_tool_code(self.tool_code):
             errors["tool_code"] = _("Unknown tool code.")
         if (
             self.category is not None

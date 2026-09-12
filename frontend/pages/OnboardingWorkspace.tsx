@@ -87,6 +87,11 @@ function ToolSetupForm({
             ? `Updated by ${tool.updatedBy} · ${formatMoment(tool.updatedAt)}`
             : "No operational update yet"}
         </span>
+        <span className="text-muted-foreground text-xs">
+          {tool.invitationSentAt
+            ? `${tool.invitationLabel} · ${formatMoment(tool.invitationSentAt)}`
+            : tool.invitationLabel}
+        </span>
       </div>
       <SelectField
         name="state"
@@ -98,6 +103,16 @@ function ToolSetupForm({
         options={options}
         validation={validation}
         disabled={!editable}
+      />
+      {/* Moving a tool backwards needs a reason the server will demand, so the
+          field is here rather than leaving the save to fail with advice. */}
+      <TextField
+        name="note"
+        label={`${tool.label} note`}
+        placeholder="Reason, if correcting"
+        validation={validation}
+        disabled={!editable}
+        className="sm:col-span-2"
       />
       <Button type="submit" variant="outline" size="sm" disabled={!editable}>
         Save

@@ -27,6 +27,9 @@ from django.utils import timezone
 from apps.audit.service import actor_from_user, log_on_commit, target_from_instance
 from apps.onboarding_tools.models import (
     COMPLETE_STATES,
+    PROVISIONED_ONLY_STATES,
+    SETTLED_STATES,
+    STATE_ORDER,
     AgentToolStatus,
     OnboardingTool,
     Provisioning,
@@ -49,6 +52,7 @@ class ToolProgress:
     state: str
     note: str
     updated_at: Any
+    invitation_sent_at: Any = None
 
     @property
     def is_complete(self) -> bool:
@@ -90,7 +94,7 @@ def checklist_for(agent) -> list[ToolProgress]:
     states = {
         row.tool_id: row
         for row in AgentToolStatus.objects.filter(agent=agent, tool__in=tools).only(
-            "tool_id", "state", "note", "updated_at"
+            "tool_id", "state", "note", "updated_at", "invitation_sent_at"
         )
     }
     progress: list[ToolProgress] = []
@@ -102,6 +106,7 @@ def checklist_for(agent) -> list[ToolProgress]:
                 state=row.state if row else ToolState.NOT_STARTED,
                 note=row.note if row else "",
                 updated_at=row.updated_at if row else None,
+                invitation_sent_at=row.invitation_sent_at if row else None,
             )
         )
     return progress
@@ -141,7 +146,7 @@ def bulk_agent_onboarding_states(users):
         for row in AgentToolStatus.objects.filter(
             agent_id__in=[user.pk for user in users],
             tool_id__in=[tool.pk for tool in tools],
-        ).only("agent_id", "tool_id", "state", "updated_at")
+        ).select_related("updated_by")
     }
     state_labels = dict(ToolState.choices)
     provisioning_labels = dict(Provisioning.choices)
@@ -175,15 +180,16 @@ def bulk_agent_onboarding_states(users):
                 status = MilestoneStatus.BLOCKED
             else:
                 status = MilestoneStatus.PENDING
+            invitation_sent_at = row.invitation_sent_at if row else None
             if tool.provisioning == Provisioning.SELF_SERVE:
                 invitation = ToolInvitationStatus.NOT_APPLICABLE
-                invitation_label = "Not applicable"
+                invitation_label = "You set this one up yourself"
+            elif invitation_sent_at is not None:
+                invitation = ToolInvitationStatus.SENT
+                invitation_label = "Invitation sent"
             else:
-                # The catalog/status source does not yet prove that a vendor
-                # invitation was sent. Issue #192 can replace this adapter
-                # result without changing the journey contract.
-                invitation = ToolInvitationStatus.UNAVAILABLE
-                invitation_label = "Not available"
+                invitation = ToolInvitationStatus.PENDING
+                invitation_label = "Waiting on your office"
             items.append(
                 JourneyToolState(
                     key=tool.slug,
@@ -202,6 +208,10 @@ def bulk_agent_onboarding_states(users):
                     invitation_label=invitation_label,
                     complete=state in COMPLETE_STATES,
                     updated_at=row.updated_at if row else None,
+                    invitation_sent_at=invitation_sent_at,
+                    updated_by_label=(
+                        str(row.updated_by) if row and row.updated_by else ""
+                    ),
                 )
             )
         result[user.pk] = ToolOnboardingState(
@@ -222,35 +232,115 @@ def can_manage(actor, agent) -> bool:
         return False
     if getattr(actor, "is_superuser", False):
         return True
-    return actor.has_perm(MANAGE_PERMISSION)
+    # The project's effective union, not ``has_perm``: onboarding managers hold
+    # this through a scoped role assignment, and the New Agent List authorizes
+    # the same way. Two different answers to "may this person manage tools"
+    # is how one surface silently refuses what the other allows.
+    from apps.user.services.role_assignments import has_effective_permission
+
+    return has_effective_permission(actor, MANAGE_PERMISSION)
+
+
+def state_rank(state: str) -> int:
+    """Position on the normal setup ladder; ``-1`` for the settled states."""
+    try:
+        return STATE_ORDER.index(state)
+    except ValueError:
+        return -1
+
+
+def validate_transition(
+    *, tool: OnboardingTool, current: str, target: str, reason: str
+) -> None:
+    """Refuse states a tool cannot hold, and corrections without a reason.
+
+    Skipping *forward* is ordinary — a self-serve tool goes straight to ready.
+    Moving back down the ladder, or out of a settled state, is a correction:
+    the person who marked an invitation sent by mistake has to say so, because
+    the agent was told it was sent.
+    """
+    if target not in ToolState.values:
+        raise ValidationError({"state": ["Unknown state."]})
+    if (
+        target in PROVISIONED_ONLY_STATES
+        and tool.provisioning == Provisioning.SELF_SERVE
+    ):
+        raise ValidationError(
+            {
+                "state": [
+                    f"{tool.name} is one the agent sets up, so there is no "
+                    "invitation for anybody to send."
+                ]
+            }
+        )
+    if current == target:
+        return
+    target_rank = state_rank(target)
+    backward = target_rank >= 0 and state_rank(current) > target_rank
+    revoking = current in SETTLED_STATES and target not in SETTLED_STATES
+    if (backward or revoking) and not reason:
+        raise ValidationError(
+            {
+                "note": [
+                    "Say why this is moving back. Corrections are recorded "
+                    "against the person who made them."
+                ]
+            }
+        )
 
 
 @transaction.atomic
 def set_state(*, actor, agent, tool: OnboardingTool, state: str, note: str = ""):
-    """Move one agent's state on one tool.
+    """Move one agent's state on one tool. The only writer.
 
-    Authorizes against the stored agent, creates the row lazily, and keeps
-    ``ready_at`` in step with the state the database constraint requires.
+    Authorizes against the stored agent, creates the row lazily, validates the
+    move, and keeps every timestamp the database constraints require in step:
+    ``ready_at`` with ready, and the invitation provenance with
+    ``invitation_sent``.
     """
-    if state not in ToolState.values:
-        raise ValidationError({"state": ["Unknown state."]})
     if not can_manage(actor, agent):
         raise PermissionDenied("You cannot change this person's tool setup.")
 
     row, _created = AgentToolStatus.objects.select_for_update(
         of=("self",)
     ).get_or_create(agent=agent, tool=tool, defaults={"updated_by": actor})
-    if row.state == state and row.note == note.strip():
+    reason = note.strip()[:300]
+    validate_transition(tool=tool, current=row.state, target=state, reason=reason)
+    if row.state == state and row.note == reason:
         # Idempotent: a double-clicked control is not an event worth auditing
-        # twice.
+        # twice, and re-sending is an explicit act, not a repeated submit.
         return row
 
     before = row.state
+    now = timezone.now()
     row.state = state
-    row.note = note.strip()[:300]
+    row.note = reason
     row.updated_by = actor
-    row.ready_at = timezone.now() if state == ToolState.READY else None
-    row.save(update_fields=["state", "note", "updated_by", "ready_at", "updated_at"])
+    row.ready_at = now if state == ToolState.READY else None
+    if state in {ToolState.REQUESTED, ToolState.INVITATION_SENT}:
+        row.requested_at = row.requested_at or now
+    if state == ToolState.INVITATION_SENT:
+        # A re-send records the latest one: "when was I invited" is the
+        # question the agent and training are actually asking.
+        row.invitation_sent_at = now
+        row.invitation_sent_by = actor
+    elif 0 <= state_rank(state) < state_rank(ToolState.INVITATION_SENT):
+        # Moved back behind the invitation, so the provenance is no longer
+        # true. Leave it in place for states that come after it.
+        row.invitation_sent_at = None
+        row.invitation_sent_by = None
+    row.save(
+        update_fields=[
+            "state",
+            "note",
+            "updated_by",
+            "ready_at",
+            "requested_at",
+            "invitation_sent_at",
+            "invitation_sent_by",
+            "updated_at",
+        ]
+    )
 
     log_on_commit(
         action="onboarding_tool.state_changed",
@@ -258,7 +348,35 @@ def set_state(*, actor, agent, tool: OnboardingTool, state: str, note: str = "")
         target=target_from_instance(row, label=f"{agent} / {tool.name}"),
         metadata={"tool": tool.slug, "from": before, "to": state},
     )
+    _publish_state_change(actor=actor, agent=agent, tool=tool, before=before, row=row)
     return row
+
+
+def _publish_state_change(*, actor, agent, tool: OnboardingTool, before: str, row):
+    """Durable event for downstream consumers: identifiers and enums only.
+
+    The operational note never travels. It is free text a person typed about
+    somebody's account, and no consumer needs it to react to a state change.
+    """
+    from apps.audit.events import publish
+
+    publish(
+        "onboarding_tool.state_changed",
+        actor_id=str(getattr(actor, "pk", "")),
+        subject=f"user:{agent.pk}",
+        payload={
+            "tool": tool.slug,
+            "agent_id": agent.pk,
+            "office_id": getattr(agent, "office_id", None),
+            "from": str(before),
+            "to": str(row.state),
+            "actor_id": getattr(actor, "pk", None),
+            "invitation_sent_at": (
+                row.invitation_sent_at.isoformat() if row.invitation_sent_at else None
+            ),
+            "ready_at": row.ready_at.isoformat() if row.ready_at else None,
+        },
+    )
 
 
 # --------------------------------------------------------------------------- #
