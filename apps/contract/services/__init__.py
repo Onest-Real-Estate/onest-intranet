@@ -9,11 +9,14 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
+from enum import StrEnum
 from typing import Any
 
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import IntegrityError, transaction
 from django.db.models import Q, QuerySet
+from django.urls import reverse
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from apps.audit.models import AuditEvent
@@ -74,10 +77,55 @@ __all__ = [
     "bulk_agent_onboarding_states",
     "contract_status_options",
     "create_draft_contract",
+    "initiate_onboarding_contract",
     "recipient_contract_queryset",
     "scoped_contract_queryset",
     "serialize_contract",
 ]
+
+
+class OnboardingContractAction(StrEnum):
+    INITIATE = "initiate_contract"
+    OPEN = "open_contract"
+
+
+def onboarding_workspace_capability(
+    *, actor: User, user: User, public_id: str | None, required_setup_complete: bool
+) -> dict[str, Any]:
+    """Source-owned action contract for the New Agent workspace."""
+    may_manage = bool(
+        getattr(actor, "is_superuser", False)
+        or has_effective_permission(actor, MANAGE_AGENT_CONTRACTS)
+    )
+    if public_id:
+        may_view = may_manage or has_effective_permission(actor, VIEW_AGENT_CONTRACTS)
+        return {
+            "code": str(OnboardingContractAction.OPEN),
+            "label": "Open contract workspace",
+            "method": "get",
+            "href": reverse("agent_contract_workspace", args=[public_id]),
+            "enabled": may_view,
+            "unavailableReason": (
+                "" if may_view else "You do not have permission to view contracts."
+            ),
+            "permission": VIEW_AGENT_CONTRACTS,
+        }
+    unavailable_reason = ""
+    if not may_manage:
+        unavailable_reason = "You do not have permission to manage contracts."
+    elif not required_setup_complete:
+        unavailable_reason = (
+            "Wait until the agent completes their profile and confirms their office."
+        )
+    return {
+        "code": str(OnboardingContractAction.INITIATE),
+        "label": "Initiate agent contract",
+        "method": "post",
+        "href": None,
+        "enabled": not unavailable_reason,
+        "unavailableReason": unavailable_reason,
+        "permission": MANAGE_AGENT_CONTRACTS,
+    }
 
 
 def scoped_contract_queryset(actor: User) -> QuerySet[AgentContract]:
@@ -280,6 +328,7 @@ def _onboarding_state_for_contract(contract: AgentContract | None):
         generated=generated,
         signed=signed,
         active=active,
+        public_id=str(contract.public_id) if contract is not None else None,
     )
 
 
@@ -640,6 +689,59 @@ def create_draft_contract(
             office_id=owning_office.stable_key,
         )
     return contract
+
+
+@transaction.atomic
+def initiate_onboarding_contract(
+    actor: User, *, recipient: User
+) -> tuple[AgentContract, bool]:
+    """Create or reuse the recipient's contract draft from confirmed Hub facts.
+
+    This is intentionally an initiation seam, not a second status writer. The
+    contract workspace still owns template selection, commercial review, issue,
+    PDF generation, and signing through the existing lifecycle service.
+    """
+    from apps.user.models import UserOnboardingCase
+    from apps.user.services.onboarding_office import office_confirmation_is_current
+
+    _ensure_manage(actor)
+    if actor.pk == recipient.pk:
+        raise PermissionDenied(_("You cannot initiate your own agent contract."))
+    locked = (
+        User.objects.select_for_update().select_related("office").get(pk=recipient.pk)
+    )
+    if not is_user_in_scope(actor, locked):
+        raise PermissionDenied(_("Recipient is outside your administrative scope."))
+    case = UserOnboardingCase.objects.filter(user=locked).first()
+    if not locked.profile_completed:
+        raise ValidationError(
+            {"contract": _("The agent must complete their profile first.")}
+        )
+    if not office_confirmation_is_current(locked, case) or not (
+        case and case.required_setup_completed_at
+    ):
+        raise ValidationError(
+            {"contract": _("The agent must confirm their current office first.")}
+        )
+    existing = (
+        AgentContract.objects.filter(recipient=locked)
+        .order_by(
+            models_order_priority(),
+            "-effective_on",
+            "-version_number",
+            "-pk",
+        )
+        .first()
+    )
+    if existing is not None:
+        return existing, False
+    contract = create_draft_contract(
+        actor,
+        recipient=locked,
+        office=locked.office,
+        effective_on=locked.start_date or timezone.localdate(),
+    )
+    return contract, True
 
 
 def attach_artifact(

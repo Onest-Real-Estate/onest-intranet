@@ -51,6 +51,11 @@ ACTION_DEFINITIONS: tuple[NotificationAction, ...] = (
         label="Open your dashboard",
     ),
     NotificationAction(
+        key="open_onboarding_status",
+        route_name="dashboard",
+        label="View onboarding status",
+    ),
+    NotificationAction(
         key="open_action_items",
         route_name="action_items_queue",
         label="Open action items",

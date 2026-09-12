@@ -43,6 +43,8 @@ from .views.office_resource_views import (
     office_resources,
 )
 from .views.onboarding_administration_views import (
+    onboarding_contract,
+    onboarding_headshot,
     onboarding_notice,
     onboarding_owner,
     onboarding_tasks,
@@ -214,6 +216,11 @@ urlpatterns = [
         name="new_agent_onboarding_owner",
     ),
     path(
+        "operations/new-agents/<int:user_id>/headshot",
+        onboarding_headshot,
+        name="new_agent_onboarding_headshot",
+    ),
+    path(
         "operations/new-agents/<int:user_id>/tasks",
         onboarding_tasks,
         name="new_agent_onboarding_tasks",
@@ -222,6 +229,11 @@ urlpatterns = [
         "operations/new-agents/<int:user_id>/tools",
         onboarding_tools,
         name="new_agent_onboarding_tools",
+    ),
+    path(
+        "operations/new-agents/<int:user_id>/contract",
+        onboarding_contract,
+        name="new_agent_onboarding_contract",
     ),
     path(
         "operations/new-agents/<int:user_id>/notices",

@@ -97,6 +97,22 @@ Every accepted change writes an audit entry and publishes
 `onboarding_tool.state_changed`, carrying the tool slug, agent, office, the
 enum transition, the actor, and the invitation timestamp — never the note.
 
+The New Agent workspace asks this source for a generic capability list rather
+than branching on Lofty, SkySlope, or any other slug. Provisioning mode,
+current state, completed setup, delivery outcome, and the actor's live grant
+determine which of `mark_invitation_sent`, `revoke_invitation`, `mark_ready`,
+`mark_blocked`, and `retry_notification` is enabled. The write path resolves
+the current applicable catalog row again after locking; an inactive tool or an
+office move cannot be acted on from a stale page.
+
+Recording `invitation_sent` produces one mandatory notification for the target
+agent, keyed by agent/onboarding-version/tool/transition. It says which tool to
+look for in Microsoft Outlook and links through the typed dashboard onboarding
+action. It never stores or sends a vendor invitation URL. In-app truth survives
+an outbound provider failure; email/Microsoft attempts remain in the
+notifications ledger and an authorized administrator can explicitly requeue a
+failed attempt without changing the tool state.
+
 ## One source of truth
 
 `user.OnboardingToolSetup` was a second, enum-shaped copy of this: four tools,

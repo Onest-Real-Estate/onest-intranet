@@ -18,6 +18,7 @@ for every agent in the brokerage.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import Any
 
 from django.core.exceptions import PermissionDenied, ValidationError
@@ -42,6 +43,47 @@ from apps.user.models import Office
 #: who already hold this, and a second grant would be one more thing to forget
 #: when somebody joins the IT team.
 MANAGE_PERMISSION = "web.manage_new_agent_onboarding"
+
+
+class ToolWorkspaceAction(StrEnum):
+    """Stable commands exposed to administrative onboarding surfaces."""
+
+    MARK_INVITATION_SENT = "mark_invitation_sent"
+    REVOKE_INVITATION = "revoke_invitation"
+    MARK_READY = "mark_ready"
+    MARK_BLOCKED = "mark_blocked"
+    RETRY_NOTIFICATION = "retry_notification"
+
+
+class ToolWorkspaceGroup(StrEnum):
+    WAITING = "waiting"
+    INVITATION_SENT = "invitation_sent"
+    READY = "ready"
+    BLOCKED = "blocked"
+    NOT_APPLICABLE = "not_applicable"
+
+
+class ToolDeliveryState(StrEnum):
+    NOT_RECORDED = "not_recorded"
+    RECORDED = "recorded"
+    QUEUED = "queued"
+    SENT = "sent"
+    RETRYABLE = "retryable"
+    FAILED = "failed"
+    SUPPRESSED = "suppressed"
+
+
+INVITATION_EVENT = "onboarding_tool.state_changed"
+
+
+def invitation_dedupe_key(
+    *, agent_id: int, onboarding_version: int, tool_slug: str
+) -> str:
+    """One agent notice per onboarding cycle, tool, and invitation transition."""
+    return (
+        f"tool-invitation:agent:{agent_id}:version:{onboarding_version}:"
+        f"tool:{tool_slug}:transition:{ToolState.INVITATION_SENT}"
+    )
 
 
 @dataclass(frozen=True)
@@ -241,6 +283,271 @@ def can_manage(actor, agent) -> bool:
     return has_effective_permission(actor, MANAGE_PERMISSION)
 
 
+def invitation_delivery_states(
+    *, agent, onboarding_version: int, tool_slugs: list[str]
+) -> dict[str, dict[str, Any]]:
+    """Read every current invitation notice in two bounded notification queries."""
+    from apps.notifications.models import Notification, NotificationEmail
+
+    keys = {
+        slug: invitation_dedupe_key(
+            agent_id=agent.pk,
+            onboarding_version=onboarding_version,
+            tool_slug=slug,
+        )
+        for slug in tool_slugs
+    }
+    rows = (
+        Notification.objects.filter(
+            recipient=agent,
+            event_key=INVITATION_EVENT,
+            dedupe_key__in=keys.values(),
+        )
+        .prefetch_related("deliveries")
+        .order_by("pk")
+    )
+    by_key = {row.dedupe_key: row for row in rows}
+    result: dict[str, dict[str, Any]] = {}
+    for slug, key in keys.items():
+        notification = by_key.get(key)
+        if notification is None:
+            result[slug] = {
+                "state": ToolDeliveryState.NOT_RECORDED,
+                "label": "Agent notice not recorded",
+                "channels": (),
+                "retryable": False,
+            }
+            continue
+        deliveries = tuple(
+            {
+                "channel": delivery.channel,
+                "state": delivery.status,
+                "label": str(NotificationEmail.Status(delivery.status).label),
+            }
+            for delivery in notification.deliveries.all()  # ty: ignore[unresolved-attribute]
+        )
+        statuses = {delivery["state"] for delivery in deliveries}
+        if NotificationEmail.Status.FAILED in statuses:
+            state = ToolDeliveryState.RETRYABLE
+            label = "Outbound notice will retry"
+        elif NotificationEmail.Status.DEAD in statuses:
+            state = ToolDeliveryState.FAILED
+            label = "Outbound notice failed"
+        elif NotificationEmail.Status.PENDING in statuses or (
+            NotificationEmail.Status.SENDING in statuses
+        ):
+            state = ToolDeliveryState.QUEUED
+            label = "Outbound notice queued"
+        elif NotificationEmail.Status.SENT in statuses:
+            state = ToolDeliveryState.SENT
+            label = "Agent notice sent"
+        elif NotificationEmail.Status.SUPPRESSED in statuses:
+            state = ToolDeliveryState.SUPPRESSED
+            label = "Outbound notice suppressed"
+        else:
+            state = ToolDeliveryState.RECORDED
+            label = "Agent notice recorded in the Hub"
+        result[slug] = {
+            "state": state,
+            "label": label,
+            "channels": deliveries,
+            "retryable": state
+            in {ToolDeliveryState.RETRYABLE, ToolDeliveryState.FAILED},
+        }
+    return result
+
+
+def workspace_capabilities(
+    *,
+    editable: bool,
+    tool_slug: str,
+    provisioning: str,
+    state: str,
+    required_setup_complete: bool,
+    delivery: dict[str, Any],
+) -> tuple[dict[str, Any], ...]:
+    """Return source-owned commands; callers render these without vendor branches."""
+    unavailable_reason = ""
+    if not editable:
+        unavailable_reason = "You do not have permission to manage this tool."
+    elif not required_setup_complete:
+        unavailable_reason = (
+            "Wait until the agent completes their profile and confirms their office."
+        )
+
+    def action(
+        code: ToolWorkspaceAction,
+        label: str,
+        *,
+        requires_reason: bool = False,
+    ) -> dict[str, Any]:
+        return {
+            "code": str(code),
+            "label": label,
+            "tool": tool_slug,
+            "requiresReason": requires_reason,
+            "enabled": not unavailable_reason,
+            "unavailableReason": unavailable_reason,
+        }
+
+    actions: list[dict[str, Any]] = []
+    provisioned = provisioning != Provisioning.SELF_SERVE
+    invitation_recorded = state in {
+        ToolState.INVITATION_SENT,
+        ToolState.IN_PROGRESS,
+        ToolState.READY,
+    }
+    leaving_settled_state = state in SETTLED_STATES
+    if provisioned and not invitation_recorded:
+        actions.append(
+            action(
+                ToolWorkspaceAction.MARK_INVITATION_SENT,
+                "Mark invitation sent",
+                requires_reason=leaving_settled_state,
+            )
+        )
+    elif provisioned and invitation_recorded:
+        actions.append(
+            action(
+                ToolWorkspaceAction.REVOKE_INVITATION,
+                "Correct invitation record",
+                requires_reason=True,
+            )
+        )
+    if state != ToolState.READY:
+        actions.append(
+            action(
+                ToolWorkspaceAction.MARK_READY,
+                "Mark ready",
+                requires_reason=leaving_settled_state,
+            )
+        )
+    if state not in {ToolState.BLOCKED, ToolState.NOT_APPLICABLE}:
+        actions.append(
+            action(
+                ToolWorkspaceAction.MARK_BLOCKED,
+                "Mark blocked",
+                requires_reason=True,
+            )
+        )
+    if delivery.get("retryable"):
+        actions.insert(
+            0,
+            action(
+                ToolWorkspaceAction.RETRY_NOTIFICATION,
+                "Retry agent notice",
+            ),
+        )
+    return tuple(actions)
+
+
+def workspace_group(*, state: str, invitation_sent_at) -> ToolWorkspaceGroup:
+    if state == ToolState.NOT_APPLICABLE:
+        return ToolWorkspaceGroup.NOT_APPLICABLE
+    if state == ToolState.BLOCKED:
+        return ToolWorkspaceGroup.BLOCKED
+    if state == ToolState.READY:
+        return ToolWorkspaceGroup.READY
+    if invitation_sent_at is not None or state in {
+        ToolState.INVITATION_SENT,
+        ToolState.IN_PROGRESS,
+    }:
+        return ToolWorkspaceGroup.INVITATION_SENT
+    return ToolWorkspaceGroup.WAITING
+
+
+@transaction.atomic
+def perform_workspace_action(
+    *, actor, agent, tool: OnboardingTool, action: str, reason: str = ""
+):
+    """Translate one reviewed command into the lifecycle's single state writer."""
+    try:
+        command = ToolWorkspaceAction(action)
+    except ValueError as exc:
+        raise ValidationError({"action": ["Choose an available tool action."]}) from exc
+    if command == ToolWorkspaceAction.RETRY_NOTIFICATION:
+        return retry_invitation_notice(
+            actor=actor,
+            agent=agent,
+            tool=tool,
+            onboarding_version=agent.onboarding_version,
+        )
+    target = {
+        ToolWorkspaceAction.MARK_INVITATION_SENT: ToolState.INVITATION_SENT,
+        ToolWorkspaceAction.REVOKE_INVITATION: ToolState.REQUESTED,
+        ToolWorkspaceAction.MARK_READY: ToolState.READY,
+        ToolWorkspaceAction.MARK_BLOCKED: ToolState.BLOCKED,
+    }[command]
+    row = AgentToolStatus.objects.filter(agent=agent, tool=tool).first()
+    current = ToolState(row.state if row else ToolState.NOT_STARTED)
+    if current == target:
+        # An exact repeated command is a source-level no-op. The workspace
+        # version still protects a different concurrent transition.
+        return row or AgentToolStatus(agent=agent, tool=tool, state=current)
+    invitation_recorded = current in {
+        ToolState.INVITATION_SENT,
+        ToolState.IN_PROGRESS,
+        ToolState.READY,
+    }
+    allowed = {
+        ToolWorkspaceAction.MARK_INVITATION_SENT: (
+            tool.provisioning != Provisioning.SELF_SERVE and not invitation_recorded
+        ),
+        ToolWorkspaceAction.REVOKE_INVITATION: (
+            tool.provisioning != Provisioning.SELF_SERVE and invitation_recorded
+        ),
+        ToolWorkspaceAction.MARK_READY: current != ToolState.READY,
+        ToolWorkspaceAction.MARK_BLOCKED: current
+        not in {ToolState.BLOCKED, ToolState.NOT_APPLICABLE},
+    }[command]
+    if not allowed:
+        raise ValidationError(
+            {"action": ["That action is not available for the tool's current state."]}
+        )
+    try:
+        return set_state(actor=actor, agent=agent, tool=tool, state=target, note=reason)
+    except ValidationError as exc:
+        # ``note`` is the source model's field; the workspace intentionally
+        # exposes the narrower, safer command name reason instead.
+        if "note" not in exc.message_dict:
+            raise
+        raise ValidationError({"reason": exc.message_dict["note"]}) from exc
+
+
+def retry_invitation_notice(
+    *, actor, agent, tool: OnboardingTool, onboarding_version: int
+) -> int:
+    """Requeue only failed deliveries for this exact agent/tool/cycle notice."""
+    if not can_manage(actor, agent):
+        raise PermissionDenied("You cannot retry this person's tool notice.")
+    from apps.notifications.delivery import retry_failed_delivery
+    from apps.notifications.models import NotificationEmail
+
+    key = invitation_dedupe_key(
+        agent_id=agent.pk,
+        onboarding_version=onboarding_version,
+        tool_slug=tool.slug,
+    )
+    rows = list(
+        NotificationEmail.objects.select_related("notification").filter(
+            notification__recipient=agent,
+            notification__event_key=INVITATION_EVENT,
+            notification__dedupe_key=key,
+            status__in=(
+                NotificationEmail.Status.FAILED,
+                NotificationEmail.Status.DEAD,
+            ),
+        )
+    )
+    if not rows:
+        raise ValidationError(
+            {"action": ["There is no failed invitation notice to retry."]}
+        )
+    for row in rows:
+        retry_failed_delivery(actor=actor, delivery=row)
+    return len(rows)
+
+
 def state_rank(state: str) -> int:
     """Position on the normal setup ladder; ``-1`` for the settled states."""
     try:
@@ -346,7 +653,14 @@ def set_state(*, actor, agent, tool: OnboardingTool, state: str, note: str = "")
         action="onboarding_tool.state_changed",
         actor=actor_from_user(actor),
         target=target_from_instance(row, label=f"{agent} / {tool.name}"),
-        metadata={"tool": tool.slug, "from": before, "to": state},
+        before={"state": before},
+        after={"state": state},
+        metadata={
+            "agent_id": agent.pk,
+            "tool": tool.slug,
+            "from": before,
+            "to": state,
+        },
     )
     _publish_state_change(actor=actor, agent=agent, tool=tool, before=before, row=row)
     return row
@@ -366,8 +680,10 @@ def _publish_state_change(*, actor, agent, tool: OnboardingTool, before: str, ro
         subject=f"user:{agent.pk}",
         payload={
             "tool": tool.slug,
+            "tool_name": tool.name,
             "agent_id": agent.pk,
             "office_id": getattr(agent, "office_id", None),
+            "onboarding_version": agent.onboarding_version,
             "from": str(before),
             "to": str(row.state),
             "actor_id": getattr(actor, "pk", None),

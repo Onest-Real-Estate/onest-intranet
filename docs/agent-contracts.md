@@ -221,6 +221,11 @@ stay consistent.
 - `create_draft_contract(...)` — validates active recipient, active assignable
   office, in-scope assignment, decimal bounds, published **and applicable**
   template version
+- `initiate_onboarding_contract(...)` — the New Agent workspace seam. It
+  rechecks contract permission and scope, requires completed profile plus a
+  current confirmed office, and creates or reuses the recipient's contract.
+  It does not accept or store a manual status; template review, issue,
+  generation, signing, and activation continue through the lifecycle domain.
 - `apps.contract.administration` — admin authoring: `update_draft_contract`,
   `applicable_template_versions`, `search_contract_recipients`, commercial and
   agreement preview, `issue_contract` (wraps lifecycle `issue`)

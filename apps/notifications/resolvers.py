@@ -23,6 +23,7 @@ from apps.user.services.role_assignments import has_effective_permission
 
 #: Source module key used by onboarding-coordination notifications.
 ONBOARDING_MODULE = "onboarding"
+ONBOARDING_TOOL_MODULE = "onboarding_tool"
 
 
 def _record_ids(notifications: Sequence) -> dict[UUID, int]:
@@ -68,6 +69,38 @@ def resolve_onboarding_cases(
             action_available=True,
         )
     return resolutions
+
+
+def resolve_onboarding_tools(
+    user, notifications: Sequence
+) -> dict[UUID, SourceResolution]:
+    """Resolve only this agent's catalog-tool invitation notices."""
+    from apps.onboarding_tools.models import OnboardingTool
+
+    slugs_by_id: dict[UUID, str] = {}
+    for notification in notifications:
+        raw = str(notification.source_record_id or "")
+        agent_id, separator, slug = raw.partition(":")
+        if separator and agent_id.isdigit() and int(agent_id) == user.pk and slug:
+            slugs_by_id[notification.public_id] = slug
+    if not slugs_by_id:
+        return {}
+    names = dict(
+        OnboardingTool.objects.filter(slug__in=set(slugs_by_id.values())).values_list(
+            "slug", "name"
+        )
+    )
+    return {
+        public_id: SourceResolution(
+            available=True,
+            detail=(
+                f"Look for the {names.get(slug, slug)} activation email in "
+                "Microsoft Outlook."
+            ),
+            action_available=True,
+        )
+        for public_id, slug in slugs_by_id.items()
+    }
 
 
 CONTRACT_MODULE = "contract"
@@ -156,5 +189,7 @@ def register_default_resolvers() -> None:
 
     if ONBOARDING_MODULE not in registered_modules():
         register_resolver(ONBOARDING_MODULE, resolve_onboarding_cases)
+    if ONBOARDING_TOOL_MODULE not in registered_modules():
+        register_resolver(ONBOARDING_TOOL_MODULE, resolve_onboarding_tools)
     if CONTRACT_MODULE not in registered_modules():
         register_resolver(CONTRACT_MODULE, resolve_contracts)

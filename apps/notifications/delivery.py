@@ -39,7 +39,7 @@ from django.db.models.functions import Coalesce
 from django.utils import timezone
 
 from apps.audit.models import AuditEvent
-from apps.audit.service import AuditTarget, log_event, system_actor
+from apps.audit.service import AuditTarget, actor_from_user, log_event, system_actor
 from apps.notifications.models import Notification, NotificationEmail
 from apps.notifications.preferences import stored_choices_map
 from apps.notifications.providers.email import (
@@ -414,6 +414,61 @@ def _audit_dead(
 # --------------------------------------------------------------------------- #
 # Recovery
 # --------------------------------------------------------------------------- #
+
+
+@transaction.atomic
+def retry_failed_delivery(*, actor: User, delivery: NotificationEmail) -> bool:
+    """Requeue one source-authorized failed delivery without changing its notice."""
+    locked = NotificationEmail.objects.select_for_update(of=("self",)).get(
+        pk=delivery.pk
+    )
+    if locked.status not in {
+        NotificationEmail.Status.FAILED,
+        NotificationEmail.Status.DEAD,
+    }:
+        return False
+    before = locked.status
+    locked.status = NotificationEmail.Status.PENDING
+    locked.attempts = 0
+    locked.next_attempt_at = timezone.now()
+    locked.resolved_at = None
+    locked.last_error = ""
+    locked.suppression_reason = ""
+    locked.save(
+        update_fields=[
+            "status",
+            "attempts",
+            "next_attempt_at",
+            "resolved_at",
+            "last_error",
+            "suppression_reason",
+        ]
+    )
+    log_event(
+        "notification.email.retry_requested",
+        actor=actor_from_user(actor),
+        target=AuditTarget(
+            target_type="notification.delivery",
+            target_id=str(locked.public_id),
+            target_label=locked.notification.event_key,
+            target_snapshot={
+                "channel": locked.channel,
+                "eventKey": locked.notification.event_key,
+            },
+        ),
+        before={"status": before},
+        after={"status": locked.status},
+        source="service",
+        channel="notifications",
+    )
+
+    def _enqueue() -> None:
+        from apps.notifications.tasks import send_notification_email
+
+        send_notification_email.delay(str(locked.public_id))
+
+    transaction.on_commit(_enqueue)
+    return True
 
 
 def reclaim_stalled(*, now: datetime | None = None) -> int:

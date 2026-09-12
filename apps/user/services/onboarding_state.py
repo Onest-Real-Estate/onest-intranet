@@ -148,6 +148,7 @@ class ContractOnboardingState:
     signed: SourceMilestone
     active: SourceMilestone
     eligible_notices: tuple[dict[str, str], ...] = ()
+    public_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -483,6 +484,10 @@ def _tool_payloads(tools: ToolOnboardingState) -> tuple[dict[str, Any], ...]:
             {
                 "key": item.key,
                 "label": item.label,
+                "description": item.description,
+                "provisioning": item.provisioning,
+                "provisioningLabel": item.provisioning_label,
+                "selfService": item.self_service,
                 "state": item.state,
                 "stateLabel": item.state_label,
                 "status": item.status,
@@ -501,6 +506,133 @@ def _tool_payloads(tools: ToolOnboardingState) -> tuple[dict[str, Any], ...]:
             }
         )
     return tuple(payloads)
+
+
+def _workspace_tool_payloads(
+    actor: User, state: OnboardingState
+) -> list[dict[str, Any]]:
+    """Attach source-owned actions and notice delivery to each catalog row."""
+    from apps.onboarding_tools.services import (
+        can_manage,
+        invitation_delivery_states,
+        workspace_capabilities,
+        workspace_group,
+    )
+
+    slugs = [item.key for item in state.journey.tools.items]
+    deliveries = invitation_delivery_states(
+        agent=state.user,
+        onboarding_version=state.user.onboarding_version,
+        tool_slugs=slugs,
+    )
+    editable = can_manage(actor, state.user)
+    by_slug = {item.key: item for item in state.journey.tools.items}
+    result: list[dict[str, Any]] = []
+    for original in state.tool_setups:
+        item = by_slug[original["key"]]
+        delivery = deliveries[item.key]
+        result.append(
+            {
+                **original,
+                "group": str(
+                    workspace_group(
+                        state=item.state,
+                        invitation_sent_at=item.invitation_sent_at,
+                    )
+                ),
+                "delivery": {
+                    **delivery,
+                    "state": str(delivery["state"]),
+                    "channels": list(delivery["channels"]),
+                },
+                "actions": list(
+                    workspace_capabilities(
+                        editable=editable,
+                        tool_slug=item.key,
+                        provisioning=item.provisioning,
+                        state=item.state,
+                        required_setup_complete=(state.journey.required_setup_complete),
+                        delivery=delivery,
+                    )
+                ),
+            }
+        )
+    return result
+
+
+def _contract_workspace_action(actor: User, state: OnboardingState) -> dict[str, Any]:
+    from apps.contract.services import onboarding_workspace_capability
+
+    action = onboarding_workspace_capability(
+        actor=actor,
+        user=state.user,
+        public_id=state.contract.public_id,
+        required_setup_complete=state.journey.required_setup_complete,
+    )
+    if action["method"] == "post":
+        action["href"] = reverse("new_agent_onboarding_contract", args=[state.user.pk])
+    return action
+
+
+def _recommended_workspace_action(
+    *,
+    state: OnboardingState,
+    tools: list[dict[str, Any]],
+    contract_action: dict[str, Any],
+) -> dict[str, Any]:
+    """Choose exactly one server-owned next action from source capabilities."""
+    from apps.contract.services import OnboardingContractAction
+    from apps.onboarding_tools.services import ToolWorkspaceAction
+
+    if not state.journey.required_setup_complete:
+        return {
+            "source": "profile",
+            "code": "wait_for_required_setup",
+            "label": "Wait for profile and office confirmation",
+            "description": (
+                "Tool invitations and contract initiation unlock after required "
+                "setup is complete."
+            ),
+            "enabled": False,
+            "tool": None,
+        }
+    priorities = (
+        ToolWorkspaceAction.RETRY_NOTIFICATION,
+        ToolWorkspaceAction.MARK_INVITATION_SENT,
+        OnboardingContractAction.INITIATE,
+        ToolWorkspaceAction.MARK_READY,
+    )
+    candidates = [
+        {
+            "source": "tool",
+            **action,
+            "description": f"Continue {tool['label']} setup.",
+        }
+        for tool in tools
+        for action in tool["actions"]
+        if action["enabled"]
+    ]
+    if contract_action["enabled"]:
+        candidates.append(
+            {
+                "source": "contract",
+                **contract_action,
+                "tool": None,
+                "description": "Continue the source-owned agent contract workflow.",
+            }
+        )
+    for code in priorities:
+        match = next((item for item in candidates if item["code"] == code), None)
+        if match is not None:
+            return match
+    return {
+        "source": "onboarding",
+        "code": "review_blockers",
+        "label": "Review remaining blockers",
+        "description": "The source milestones above identify the remaining work.",
+        "enabled": False,
+        "tool": None,
+    }
 
 
 def _overall(
@@ -807,7 +939,8 @@ def _compose_journey(
 
 def journey_version(user: User, case: UserOnboardingCase | None) -> str:
     changed_at = case.updated_at if case else user.date_joined
-    return f"{user.onboarding_version}:{changed_at.isoformat()}"
+    office_id = getattr(user, "office_id", None) or 0
+    return f"{user.onboarding_version}:{office_id}:{changed_at.isoformat()}"
 
 
 def build_onboarding_states(
@@ -961,6 +1094,8 @@ def state_payload(
     }
     if not detail:
         return payload
+    workspace_tools = _workspace_tool_payloads(actor, state)
+    contract_action = _contract_workspace_action(actor, state)
     payload.update(
         {
             "milestones": [
@@ -972,7 +1107,13 @@ def state_payload(
                 )
                 for milestone in state.milestones
             ],
-            "tools": list(state.tool_setups),
+            "tools": workspace_tools,
+            "contractAction": contract_action,
+            "recommendedAction": _recommended_workspace_action(
+                state=state,
+                tools=workspace_tools,
+                contract_action=contract_action,
+            ),
             "tasks": [
                 {
                     "id": task.pk,

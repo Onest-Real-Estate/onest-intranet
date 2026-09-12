@@ -110,18 +110,25 @@ def locked_case_queryset():
     queryset against the PostgreSQL backend to keep the guarantee testable.
     """
     return UserOnboardingCase.objects.select_for_update(of=("self",)).select_related(
-        "owner", "updated_by"
+        "user",
+        "user__office",
+        "user__office__region",
+        "owner",
+        "updated_by",
     )
 
 
 def _lock_case(user: User, expected_version: str) -> UserOnboardingCase:
-    case = locked_case_queryset().filter(user=user).first()
-    if case is None:
-        if expected_version:
-            raise StaleOnboardingVersion()
-        case = UserOnboardingCase.objects.create(user=user)
-    elif case.updated_at.isoformat() != (expected_version or ""):
+    locked_user = (
+        User.objects.select_for_update()
+        .select_related("office", "office__region")
+        .get(pk=user.pk)
+    )
+    case = locked_case_queryset().filter(user=locked_user).first()
+    if expected_version != journey_version_token(locked_user, case):
         raise StaleOnboardingVersion()
+    if case is None:
+        case = UserOnboardingCase.objects.create(user=locked_user)
     return case
 
 
@@ -445,45 +452,120 @@ def resolve_task(
     return True
 
 
+def _locked_tool_context(*, user: User, tool: str, expected_version: str):
+    from apps.onboarding_tools.models import OnboardingTool
+
+    case = _lock_case(user, expected_version)
+    locked_user = case.user
+    if not (
+        locked_user.profile_completed
+        and case.required_setup_completed_at
+        and case.office_confirmed_at
+        and getattr(case, "office_confirmed_for_id", None)
+        == getattr(locked_user, "office_id", None)
+        and case.office_confirmation_version == locked_user.onboarding_version
+    ):
+        raise ValidationError(
+            {
+                "tool": (
+                    "Tool actions unlock after the agent completes their profile "
+                    "and confirms their current office."
+                )
+            }
+        )
+    catalog_tool = (
+        OnboardingTool.objects.for_office(locked_user.office).filter(slug=tool).first()
+    )
+    if catalog_tool is None:
+        raise ValidationError(
+            {"tool": "That tool is inactive or no longer applies to this office."}
+        )
+    return case, locked_user, catalog_tool
+
+
 @transaction.atomic
-def update_tool_setup(
+def perform_tool_action(
     *,
     actor: User,
     user: User,
     tool: str,
-    state: str,
+    action: str,
     expected_version: str,
-    note: str = "",
+    reason: str = "",
 ) -> bool:
-    """Move one tool from the New Agent List, through the one tool writer.
+    """Run a source-owned catalog action under onboarding scope and versioning.
 
-    The catalog owns tool state; this wrapper adds what the workspace needs
-    around it — scoped authority over *this* agent, and the case version token
-    that stops a stale screen overwriting somebody else's change. The audit
-    event and the domain event belong to ``onboarding_tools.services``, so a
-    change made here and one made from tool readiness are the same event.
+    The onboarding layer neither owns nor accepts a free-form tool state. It
+    locks the case, revalidates the agent's current office, and delegates the
+    stable action code to the catalog lifecycle.
     """
-    from apps.onboarding_tools.models import AgentToolStatus, OnboardingTool, ToolState
-    from apps.onboarding_tools.services import set_state
+    from apps.onboarding_tools.models import AgentToolStatus, ToolState
+    from apps.onboarding_tools.services import (
+        ToolWorkspaceAction,
+        perform_workspace_action,
+    )
 
     ensure_manage_authority(actor, user)
-    catalog_tool = OnboardingTool.objects.live().filter(slug=tool).first()
-    if catalog_tool is None:
-        raise ValidationError({"tool": "Choose an approved onboarding tool."})
-    case = _lock_case(user, expected_version)
+    case, locked_user, catalog_tool = _locked_tool_context(
+        user=user,
+        tool=tool,
+        expected_version=expected_version,
+    )
     before = (
-        AgentToolStatus.objects.filter(agent=user, tool=catalog_tool)
+        AgentToolStatus.objects.filter(agent=locked_user, tool=catalog_tool)
         .values_list("state", flat=True)
         .first()
         or ToolState.NOT_STARTED
     )
-    row = set_state(actor=actor, agent=user, tool=catalog_tool, state=state, note=note)
-    if row.state == before:
+    result = perform_workspace_action(
+        actor=actor,
+        agent=locked_user,
+        tool=catalog_tool,
+        action=action,
+        reason=reason,
+    )
+    command = ToolWorkspaceAction(action)
+    if command == ToolWorkspaceAction.RETRY_NOTIFICATION:
+        _touch(case, actor)
+        log_event(
+            "user.onboarding.tool_notice_retried",
+            actor=actor_from_user(actor),
+            target=_target(actor, locked_user),
+            after={"tool": catalog_tool.slug, "deliveries": int(result)},
+            office_id=(locked_user.office.stable_key if locked_user.office else ""),
+            channel="onboarding_workspace",
+        )
+        return True
+    if result.state == before:
         return False
     _touch(case, actor)
     return True
 
 
+@transaction.atomic
+def initiate_contract(*, actor: User, user: User, expected_version: str):
+    """Delegate contract creation while keeping the case token consistent."""
+    from apps.contract.services import initiate_onboarding_contract
+
+    ensure_manage_authority(actor, user)
+    case = _lock_case(user, expected_version)
+    locked_user = case.user
+    contract, created = initiate_onboarding_contract(actor, recipient=locked_user)
+    if not created:
+        return contract, False
+    _touch(case, actor)
+    log_event(
+        "user.onboarding.contract_initiated",
+        actor=actor_from_user(actor),
+        target=_target(actor, locked_user),
+        after={"contract_id": str(contract.public_id)},
+        office_id=locked_user.office.stable_key if locked_user.office else "",
+        channel="onboarding_workspace",
+    )
+    return contract, True
+
+
+@transaction.atomic
 def resend_notice(
     *,
     actor: User,
@@ -491,9 +573,12 @@ def resend_notice(
     source: str,
     notice: str,
     idempotency_key: str,
+    expected_version: str,
 ) -> None:
     """Delegate to the owning source, which re-checks permission and dedupes."""
     ensure_manage_authority(actor, user)
+    case = _lock_case(user, expected_version)
+    locked_user = case.user
     module_name = {
         "contract": "apps.contract.services",
         "training": "apps.training.services",
@@ -510,22 +595,23 @@ def resend_notice(
         ) from exc
     module.resend_onboarding_notice(
         actor=actor,
-        user=user,
+        user=locked_user,
         notice=notice,
         idempotency_key=idempotency_key,
     )
     log_event(
         "user.onboarding.notice_resent",
         actor=actor_from_user(actor),
-        target=_target(actor, user),
+        target=_target(actor, locked_user),
         after={"source": source, "notice": notice},
-        office_id=user.office.stable_key if user.office else "",
+        office_id=locked_user.office.stable_key if locked_user.office else "",
         channel="onboarding_workspace",
         metadata={"idempotency_key": idempotency_key},
     )
     _publish(
         "user.onboarding.notice_resent",
         actor,
-        user,
+        locked_user,
         {"source": source, "notice": notice},
     )
+    _touch(case, actor)
