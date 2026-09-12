@@ -14,7 +14,7 @@ from django.forms.models import model_to_dict
 from django.urls import reverse
 
 from apps.audit.models import AuditEvent, DomainEvent
-from apps.user.models import Office, User
+from apps.user.models import Office, User, UserOnboardingCase
 from apps.user.services import onboarding_profile
 from apps.user.services.onboarding_operations import reset_required_setup
 from apps.user.tests.test_onboarding import assignable_office, make_agent, make_image
@@ -33,8 +33,11 @@ CONTACT = {
 
 
 def credentials(**overrides):
+    office_id = assignable_office().pk
     data = {
-        "office": str(assignable_office().pk),
+        "office": str(office_id),
+        "confirm_office": "true",
+        "confirmed_office_id": str(office_id),
         "license_number": " va-99 11 ",
         "license_state": "VA",
         "license_expires_on": "2030-06-30",
@@ -334,6 +337,53 @@ def test_credentials_section_uses_the_profile_normalizers(client, json_body):
     assert user.linkedin_url == "https://linkedin.com/in/bob"
     assert user.languages == ["en", "es"]
     assert user.bio == "Hello\n\nthere"
+
+
+@pytest.mark.django_db
+def test_credentials_requires_confirmation_for_the_exact_selected_office(client):
+    user = agent(street_address="Agent home address")
+    client.force_login(user)
+    selected = assignable_office()
+    response = save(
+        client,
+        "credentials",
+        credentials(confirm_office="false", confirmed_office_id=str(selected.pk)),
+    )
+
+    assert response.status_code == 422
+    assert page(response)["validation"]["fields"]["confirm_office"]
+    user.refresh_from_db()
+    assert user.office is None
+    assert user.street_address == "Agent home address"
+
+
+@pytest.mark.django_db
+def test_changing_office_invalidates_confirmation_without_overwriting_home_address(
+    client,
+):
+    user = agent(street_address="99 Private Home Lane")
+    client.force_login(user)
+    first = assignable_office()
+    second = Office.assignable_queryset().exclude(pk=first.pk).first()
+    assert second is not None
+    assert save(client, "credentials", credentials()).status_code == 302
+
+    response = save(
+        client,
+        "credentials",
+        credentials(
+            office=str(second.pk),
+            confirm_office="true",
+            confirmed_office_id=str(first.pk),
+        ),
+    )
+
+    assert response.status_code == 422
+    user.refresh_from_db()
+    assert user.office == first
+    assert user.street_address == "99 Private Home Lane"
+    case = UserOnboardingCase.objects.get(user=user)
+    assert case.office_confirmed_for == first
     assert user.license_expires_on is not None
     assert user.license_expires_on.isoformat() == "2030-06-30"
 
@@ -837,10 +887,11 @@ def test_reset_user_resumes_with_saved_values_and_must_confirm_again(
 
     props = flow(client)
     assert props["profileFlow"]["onboardingVersion"] == 1
-    assert props["profileFlow"]["currentSection"] == "review"
-    assert props["profileFlow"]["review"]["ready"] is True
+    assert props["profileFlow"]["currentSection"] == "credentials"
+    assert props["profileFlow"]["review"]["ready"] is False
 
     assert finalize(client, version=0).status_code == 409
+    assert save(client, "credentials", credentials()).status_code == 302
     assert finalize(client).status_code == 302
     user.refresh_from_db()
     assert user.profile_completed is True

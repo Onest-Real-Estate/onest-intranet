@@ -1506,6 +1506,21 @@ class UserOnboardingCase(models.Model):
             "When the agent confirmed the selected office for this onboarding cycle."
         ),
     )
+    office_confirmed_for = models.ForeignKey(
+        Office,
+        verbose_name=_("confirmed office"),
+        related_name="+",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        help_text=_("Office identity covered by the current confirmation."),
+    )
+    office_confirmation_version = models.PositiveIntegerField(
+        _("office confirmation onboarding version"),
+        null=True,
+        blank=True,
+        help_text=_("Onboarding cycle covered by the current confirmation."),
+    )
     required_setup_completed_at = models.DateTimeField(
         _("required setup completed at"),
         null=True,
@@ -1522,6 +1537,19 @@ class UserOnboardingCase(models.Model):
     )
     office_handoff_updated_at = models.DateTimeField(
         _("office handoff updated at"),
+        null=True,
+        blank=True,
+    )
+    office_handoff_office = models.ForeignKey(
+        Office,
+        verbose_name=_("office handoff office"),
+        related_name="+",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+    )
+    office_handoff_onboarding_version = models.PositiveIntegerField(
+        _("office handoff onboarding version"),
         null=True,
         blank=True,
     )

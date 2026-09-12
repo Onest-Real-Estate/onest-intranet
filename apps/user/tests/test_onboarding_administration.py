@@ -356,7 +356,21 @@ def test_list_state_build_has_a_fixed_query_budget():
         users = list(_prefetched_queryset(actor))
         build_onboarding_states(users)
 
-    assert len(queries) <= 12
+    # One bulk call per source domain — contract, training, tools, Microsoft
+    # identity, and the office-handoff delivery state — never one per agent.
+    assert len(queries) <= 14
+
+    for index in range(5, 15):
+        account(f"agent-{index}@example.com", "fairfax-va")
+
+    with CaptureQueriesContext(connection) as larger:
+        build_onboarding_states(list(_prefetched_queryset(actor)))
+
+    with CaptureQueriesContext(connection) as smaller:
+        build_onboarding_states(list(_prefetched_queryset(actor))[:5])
+
+    # Tripling the batch must not cost a single extra query.
+    assert len(larger) == len(smaller)
 
 
 @pytest.mark.django_db

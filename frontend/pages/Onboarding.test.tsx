@@ -306,6 +306,32 @@ function setPage(
     validation: { fields: {}, form: [] },
     offices: [{ label: "Mid-Atlantic", offices: [{ id: 7, name: "Fairfax VA" }] }],
     officeLabel: "Mid-Atlantic / Fairfax VA",
+    officeSelection: {
+      office: {
+        id: 7,
+        name: "Fairfax VA",
+        hierarchy: "ONEST / Mid-Atlantic / Fairfax VA",
+        region: "Mid-Atlantic",
+        streetAddress: "4000 Chain Bridge Road",
+        city: "Fairfax",
+        state: "VA",
+        zipCode: "22030",
+        mainPhone: "(703) 555-0100",
+        publicEmail: "fairfax@example.com",
+        officeHours: ["Monday–Friday: 9:00 AM–5:00 PM"],
+      },
+      administrator: {
+        id: 22,
+        name: "Avery Admin",
+        phone: "(703) 555-0199",
+        email: "avery@example.com",
+        isPrimary: true,
+        resolutionLevel: "office",
+        resolutionLabel: "Office Branch Admin",
+      },
+      support: { available: false, message: "" },
+    },
+    officeConfirmed: true,
     states: [
       { code: "VA", name: "Virginia" },
       { code: "MD", name: "Maryland" },
@@ -342,6 +368,14 @@ function postedBody(): FormData {
     throw new Error("Nothing was posted.");
   }
   return call[1] as FormData;
+}
+
+function currentOfficeSelection() {
+  const selection = inertia.props.officeSelection;
+  if (!selection?.administrator) {
+    throw new Error("The office-selection fixture requires an administrator.");
+  }
+  return selection;
 }
 
 describe("Onboarding profile flow", () => {
@@ -571,6 +605,99 @@ describe("Onboarding profile flow", () => {
     await user.click(screen.getByRole("button", { name: /Save and continue/ }));
     expect(postedBody().has("bio")).toBe(true);
     expect(postedBody().get("office")).toBe("7");
+    expect(postedBody().get("confirm_office")).toBe("true");
+    expect(postedBody().get("confirmed_office_id")).toBe("7");
+  });
+
+  it("shows the selected office, its public address, and current administrator", () => {
+    setPage("credentials");
+    render(<Onboarding />);
+
+    expect(screen.getByRole("heading", { name: "Fairfax VA" })).toBeVisible();
+    expect(screen.getByText("Office address")).toBeVisible();
+    expect(screen.getByText(/4000 Chain Bridge Road/)).toBeVisible();
+    expect(screen.getByText("Avery Admin")).toBeVisible();
+    expect(screen.getByRole("link", { name: "Call Avery Admin" })).toHaveAttribute(
+      "href",
+      "tel:7035550199",
+    );
+    expect(screen.getByRole("link", { name: "Email Avery Admin" })).toHaveAttribute(
+      "href",
+      "mailto:avery@example.com",
+    );
+    expect(screen.getByText(/never changes the home or mailing address/)).toBeVisible();
+  });
+
+  it("shows an honest support path when no current office administrator exists", () => {
+    const selection = currentOfficeSelection();
+    setPage("credentials", {
+      officeSelection: {
+        ...selection,
+        administrator: null,
+        support: {
+          available: true,
+          message: "No current office administrator is available. Contact IT Support.",
+        },
+      },
+    });
+    render(<Onboarding />);
+
+    expect(screen.getByText("Office administrator unavailable")).toBeVisible();
+    expect(screen.getByText(/Contact IT Support/)).toBeVisible();
+    expect(screen.queryByText(/We notified/)).not.toBeInTheDocument();
+  });
+
+  it("invalidates confirmation and loads only the newly selected office", async () => {
+    const user = userEvent.setup();
+    const selection = currentOfficeSelection();
+    const nextSelection = {
+      ...selection,
+      office: {
+        ...selection.office,
+        id: 8,
+        name: "Baltimore",
+        city: "Baltimore",
+      },
+      administrator: {
+        ...selection.administrator,
+        id: 23,
+        name: "Blair Admin",
+        email: "blair@example.com",
+      },
+    };
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(JSON.stringify(nextSelection), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    setPage("credentials", {
+      offices: [
+        {
+          label: "Mid-Atlantic",
+          offices: [
+            { id: 7, name: "Fairfax VA" },
+            { id: 8, name: "Baltimore" },
+          ],
+        },
+      ],
+    });
+    render(<Onboarding />);
+
+    await user.click(screen.getByLabelText(/^Office/));
+    await user.click(screen.getByRole("option", { name: "Baltimore" }));
+
+    expect(await screen.findByRole("heading", { name: "Baltimore" })).toBeVisible();
+    expect(screen.getByText("Blair Admin")).toBeVisible();
+    const confirmation = screen.getByRole("checkbox", {
+      name: /I confirm this is the office/,
+    });
+    expect(confirmation).not.toBeChecked();
+    await user.click(confirmation);
+    await user.click(screen.getByRole("button", { name: /Save and continue/ }));
+    expect(postedBody().get("office")).toBe("8");
+    expect(postedBody().get("confirm_office")).toBe("true");
+    expect(postedBody().get("confirmed_office_id")).toBe("8");
   });
 
   it("opens the introduction when the server rejects a value inside it", () => {

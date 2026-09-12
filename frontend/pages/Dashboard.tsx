@@ -131,6 +131,27 @@ export default function Dashboard() {
     <div className="flex flex-1 flex-col gap-8">
       <Head title="Dashboard" />
 
+      {onboardingJourney && !onboardingJourney.activationComplete ? (
+        <Callout
+          tone={
+            onboardingJourney.officeHandoff.state === "notification_failed"
+              ? "warning"
+              : "info"
+          }
+          title="Your office activation is in progress"
+          action={
+            onboardingJourney.officeHandoff.state === "notification_failed" ? (
+              <Button asChild size="sm" variant="outline">
+                <Link href={routes.it_support()}>Contact IT Support</Link>
+              </Button>
+            ) : null
+          }
+        >
+          {onboardingJourney.officeHandoff.message} {onboardingJourney.nextAction.label}
+          .
+        </Callout>
+      ) : null}
+
       {/* Orientation is one masthead: identity, the qualifiers that affect
           every figure below, and a rule closing the block. The controls ride
           inside the header rather than beside it, so the rule spans the page

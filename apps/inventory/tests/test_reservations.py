@@ -292,12 +292,15 @@ def test_cancel_releases_capacity(client, seeded, django_capture_on_commit_callb
 
 @pytest.mark.django_db
 def test_cancel_cutoff_blocks_late_cancel(seeded):
+    from apps.inventory.policy import agent_may_cancel
+    from apps.inventory.reservations import CancelNotAllowed, cancel_reservation
+
     item = make_item("fairfax-va", "Kit")
     user = agent()
-    pickup, return_day = future_dates(start_offset=0, length_days=1)
-    # Pickup today — cancel cutoff is 24h before start-of-day, already passed.
+    actor = ActorContext(user=user, permissions=frozenset())
+    pickup, return_day = future_dates()
     reservation, _ = create_reservation(
-        actor=ActorContext(user=user, permissions=frozenset()),
+        actor=actor,
         item_public_id=str(item.public_id),
         pickup=pickup,
         return_date=return_day,
@@ -305,13 +308,20 @@ def test_cancel_cutoff_blocks_late_cancel(seeded):
         purpose="",
         submission_key=str(uuid4()),
     )
-    from apps.inventory.reservations import CancelNotAllowed, cancel_reservation
+    # Comfortably before pickup, the owner may still cancel.
+    assert agent_may_cancel(status=reservation.status, starts_at=reservation.starts_at)
+
+    # Move the hold inside the 24h cutoff. Booking "today" cannot express this:
+    # ``future_dates`` skips weekends, so on a Saturday or Sunday the pickup
+    # silently lands on Monday and the cutoff has not passed at all.
+    starts_at = timezone.now() + timedelta(hours=1)
+    InventoryReservation.objects.filter(pk=reservation.pk).update(
+        starts_at=starts_at, ends_at=starts_at + timedelta(days=1)
+    )
+    reservation.refresh_from_db()
 
     with pytest.raises(CancelNotAllowed):
-        cancel_reservation(
-            actor=ActorContext(user=user, permissions=frozenset()),
-            reservation=reservation,
-        )
+        cancel_reservation(actor=actor, reservation=reservation)
 
 
 @pytest.mark.django_db

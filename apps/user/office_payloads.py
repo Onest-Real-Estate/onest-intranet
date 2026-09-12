@@ -21,6 +21,8 @@ def office_selector_payload(office: Office) -> dict:
         "slug": office.slug,
         "stableKey": office.stable_key,
         "region": office.region_name(),
+        "city": office.city,
+        "state": office.state,
         "isActive": office.is_active,
         "isAssignable": office.is_assignable,
     }

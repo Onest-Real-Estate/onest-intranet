@@ -39,7 +39,7 @@ from apps.user.forms import (
     profile_initial,
 )
 from apps.user.headshot import MAX_BYTES, MIN_DIM
-from apps.user.models import Office, User
+from apps.user.models import Office, User, UserOnboardingCase
 from apps.user.profile_fields import (
     BIO_MAX_LENGTH,
     LANGUAGE_NAMES,
@@ -49,6 +49,15 @@ from apps.user.profile_fields import (
     contact_method_options,
     language_options,
     social_platform_options,
+)
+from apps.user.services.onboarding_office import (
+    DEFAULT_OWNER_POLICY,
+    OFFICE_CONFIRMATION_FIELD,
+    OFFICE_HANDOFF_EVENT,
+    DefaultOnboardingOwnerPolicy,
+    office_confirmation_is_current,
+    office_confirmation_payload,
+    resolve_office_administrator,
 )
 from apps.user.services.profile import (
     PROFILE_AUDIT_FIELDS,
@@ -149,6 +158,7 @@ class ProfileFlowContext:
     user: User
     microsoft_name: MicrosoftLegalName | None
     office_editable: bool
+    office_confirmed: bool
 
     @property
     def legal_name_locked(self) -> bool:
@@ -168,6 +178,7 @@ class ProfileFlowContext:
 
 
 def flow_context(user: User) -> ProfileFlowContext:
+    case = getattr(user, "onboarding_case", None)
     return ProfileFlowContext(
         user=user,
         microsoft_name=microsoft_legal_name(user),
@@ -176,6 +187,7 @@ def flow_context(user: User) -> ProfileFlowContext:
         office_editable=(
             can_self_assign_office(user) or user.office_id is None  # ty: ignore[unresolved-attribute]
         ),
+        office_confirmed=office_confirmation_is_current(user, case),
     )
 
 
@@ -230,6 +242,12 @@ def missing_required(
 def section_status(
     context: ProfileFlowContext, section: OnboardingSection
 ) -> ProfileSectionStatus:
+    if (
+        section == OnboardingSection.CREDENTIALS
+        and not context.office_confirmed
+        and getattr(context.user, "office_id", None)
+    ):
+        return ProfileSectionStatus.IN_PROGRESS
     if not missing_required(context, (section,)):
         return ProfileSectionStatus.COMPLETE
     if any(is_field_present(context.user, spec.key) for spec in section_specs(section)):
@@ -313,6 +331,7 @@ def _apply_microsoft_name(user: User, name: MicrosoftLegalName | None) -> None:
 class SectionSaveResult:
     changed: bool
     invalid_form: OnboardingProfileSectionForm | None = None
+    errors: dict | None = None
 
 
 def _lock_writable_user(user: User, expected_onboarding_version: int) -> User:
@@ -331,6 +350,8 @@ def save_profile_section(
     data: Mapping[str, Any],
     expected_revision: str,
     expected_onboarding_version: int,
+    office_confirmed: bool = False,
+    confirmed_office_id: int | None = None,
 ) -> SectionSaveResult:
     """Validate and persist one section without completing the profile."""
     from apps.audit.service import actor_from_user, log_model_change
@@ -355,13 +376,50 @@ def save_profile_section(
         )
         if not form.is_valid():
             return SectionSaveResult(changed=False, invalid_form=form)
+        case = (
+            UserOnboardingCase.objects.select_for_update(of=("self",))
+            .filter(user=locked)
+            .first()
+        )
+        selected_office = (
+            form.cleaned_data.get("office", locked.office)
+            if section == OnboardingSection.CREDENTIALS
+            else locked.office
+        )
+        confirmation_changed = False
+        if section == OnboardingSection.CREDENTIALS:
+            confirmation_is_current = bool(
+                case
+                and case.office_confirmed_at
+                and getattr(case, "office_confirmed_for_id", None)
+                == getattr(selected_office, "pk", None)
+                and case.office_confirmation_version == locked.onboarding_version
+            )
+            posted_confirmation_is_valid = bool(
+                office_confirmed
+                and selected_office is not None
+                and confirmed_office_id == selected_office.pk
+            )
+            if not confirmation_is_current and not posted_confirmation_is_valid:
+                return SectionSaveResult(
+                    changed=False,
+                    errors={
+                        "fields": {
+                            OFFICE_CONFIRMATION_FIELD: [
+                                "Review and confirm this office before continuing."
+                            ]
+                        },
+                        "form": [],
+                    },
+                )
+            confirmation_changed = not confirmation_is_current
         if section == OnboardingSection.IDENTITY:
             _apply_microsoft_name(locked, context.microsoft_name)
 
         compared = [
             name for spec in section_specs(section) for name in spec.field_names
         ]
-        if all(
+        if not confirmation_changed and all(
             _comparable(before, name) == _comparable(locked, name) for name in compared
         ):
             return SectionSaveResult(changed=False)
@@ -376,6 +434,16 @@ def save_profile_section(
             sync_default_agent_assignment(
                 saved, actor=saved, business_reason=ONBOARDING_OFFICE_REASON
             )
+        if section == OnboardingSection.CREDENTIALS and confirmation_changed:
+            now = timezone.now()
+            if case is None:
+                case = UserOnboardingCase(user=saved)
+            case.office_confirmed_at = now
+            case.office_confirmed_for = saved.office
+            case.office_confirmation_version = saved.onboarding_version
+            case.required_setup_completed_at = None
+            case.updated_by = saved
+            case.save()
         if any(
             _comparable(before, name) != _comparable(saved, name)
             for name in LICENSE_FIELDS
@@ -409,7 +477,12 @@ def _missing_message(spec: ProfileFieldSpec) -> str:
     return f"{spec.label} is required."
 
 
-def _finalize_errors(context: ProfileFlowContext, *, confirmed: bool) -> dict | None:
+def _finalize_errors(
+    context: ProfileFlowContext,
+    *,
+    confirmed: bool,
+    case: UserOnboardingCase | None,
+) -> dict | None:
     user = context.user
     names = tuple(
         name
@@ -439,6 +512,16 @@ def _finalize_errors(context: ProfileFlowContext, *, confirmed: bool) -> dict | 
         fields["headshot"] = [
             "We could not find your uploaded photo. Upload it again to finish."
         ]
+    if not (
+        case
+        and case.office_confirmed_at
+        and getattr(case, "office_confirmed_for_id", None)
+        == getattr(user, "office_id", None)
+        and case.office_confirmation_version == user.onboarding_version
+    ):
+        fields[OFFICE_CONFIRMATION_FIELD] = [
+            "Review and confirm your selected office before you finish."
+        ]
     if not confirmed:
         fields[REVIEW_CONFIRMATION_FIELD] = [
             "Confirm that these details are correct before you finish."
@@ -455,7 +538,12 @@ def finalize_profile(
     photo, and ``StaleOnboardingVersion`` for a page from an earlier cycle.
     """
     from apps.audit.events import publish
-    from apps.audit.service import actor_from_user, log_model_change
+    from apps.audit.service import (
+        AuditTarget,
+        actor_from_user,
+        log_event,
+        log_model_change,
+    )
     from apps.user.services.hierarchy import sync_primary_membership
     from apps.user.services.onboarding_operations import complete_required_setup
     from apps.user.services.role_assignments import sync_default_agent_assignment
@@ -467,7 +555,12 @@ def finalize_profile(
             return FinalizeResult(completed=False)
         context = flow_context(locked)
         before = copy.copy(locked)
-        errors = _finalize_errors(context, confirmed=confirmed)
+        case = (
+            UserOnboardingCase.objects.select_for_update(of=("self",))
+            .filter(user=locked)
+            .first()
+        )
+        errors = _finalize_errors(context, confirmed=confirmed, case=case)
         if errors is not None:
             return FinalizeResult(completed=False, errors=errors)
 
@@ -489,6 +582,47 @@ def finalize_profile(
         )
         sync_default_agent_assignment(
             locked, actor=locked, business_reason=ONBOARDING_OFFICE_REASON
+        )
+        assert case is not None
+        assert locked.office is not None
+        resolved_admin = resolve_office_administrator(locked.office)
+        case.office_handoff_office = locked.office
+        case.office_handoff_onboarding_version = locked.onboarding_version
+        case.office_handoff_updated_at = timezone.now()
+        if resolved_admin is None:
+            case.office_handoff_state = (
+                UserOnboardingCase.OfficeHandoffState.NOTIFICATION_FAILED
+            )
+        else:
+            case.office_handoff_state = UserOnboardingCase.OfficeHandoffState.PENDING
+            if (
+                case.owner is None
+                and DEFAULT_OWNER_POLICY
+                == DefaultOnboardingOwnerPolicy.RESOLVED_OFFICE_ADMIN
+            ):
+                case.owner = resolved_admin.user
+        case.updated_by = locked
+        case.save()
+        log_event(
+            (
+                "user.onboarding.office_handoff_requested"
+                if resolved_admin is not None
+                else "user.onboarding.office_handoff_unavailable"
+            ),
+            actor=actor_from_user(locked),
+            target=AuditTarget(
+                target_type=UserOnboardingCase._meta.label_lower,
+                target_id=str(locked.pk),
+                target_label=f"User {locked.pk}",
+            ),
+            after={
+                "state": case.office_handoff_state,
+                "office_id": getattr(locked, "office_id", None),
+                "onboarding_version": locked.onboarding_version,
+                "recipient_id": resolved_admin.user.pk if resolved_admin else None,
+            },
+            office_id=locked.office.stable_key,
+            channel="onboarding",
         )
         complete_required_setup(user=locked)
         log_model_change(
@@ -520,6 +654,18 @@ def finalize_profile(
                 "office_id": locked.office_id,  # ty: ignore[unresolved-attribute]
             },
         )
+        if resolved_admin is not None:
+            publish(
+                OFFICE_HANDOFF_EVENT,
+                actor_id=str(locked.pk),
+                subject=f"user:{locked.pk}",
+                payload={
+                    "user_id": locked.pk,
+                    "office_id": getattr(locked, "office_id", None),
+                    "recipient_id": resolved_admin.user.pk,
+                    "onboarding_version": locked.onboarding_version,
+                },
+            )
     return FinalizeResult(completed=True)
 
 
@@ -605,6 +751,14 @@ def _review_payload(context: ProfileFlowContext) -> dict:
         }
         for spec in missing_required(context)
     ]
+    if not context.office_confirmed:
+        missing.append(
+            {
+                "field": OFFICE_CONFIRMATION_FIELD,
+                "label": "Office confirmation",
+                "section": str(OnboardingSection.CREDENTIALS),
+            }
+        )
     return {"ready": not missing, "missing": missing, "groups": groups}
 
 
@@ -674,6 +828,42 @@ def onboarding_profile_page_props(
         legal_first = context.microsoft_name.first_name
         legal_last = context.microsoft_name.last_name
 
+    selected_office = None
+    offices = []
+    if context.office_editable:
+        office_rows = list(Office.assignable_queryset())
+        try:
+            preview_office_id = int(initial.get("officeId") or 0)
+        except (TypeError, ValueError):
+            preview_office_id = 0
+        groups: dict[str, list[dict]] = {}
+        group_order: list[str] = []
+        for office in office_rows:
+            if office.pk == preview_office_id:
+                selected_office = office
+            group = office.region_name()
+            if group not in groups:
+                groups[group] = []
+                group_order.append(group)
+            groups[group].append(
+                {
+                    "id": office.pk,
+                    "name": office.name,
+                    "city": office.city,
+                    "state": office.state,
+                    "region": office.region_name(),
+                }
+            )
+        offices = [{"label": label, "offices": groups[label]} for label in group_order]
+    elif getattr(user, "office_id", None):
+        selected_office = user.office
+    case = getattr(user, "onboarding_case", None)
+    office_is_confirmed = bool(
+        context.office_confirmed
+        and case
+        and case.office_confirmed_for_id == getattr(selected_office, "pk", None)
+    )
+
     return {
         "profileFlow": {
             "onboardingVersion": user.onboarding_version,
@@ -709,8 +899,12 @@ def onboarding_profile_page_props(
         "initial": initial,
         "saved": saved,
         "validation": errors or empty_validation_errors(),
-        "offices": Office.grouped_choices() if context.office_editable else [],
+        "offices": offices,
         "officeLabel": user.office.path_label() if user.office else "",
+        "officeSelection": (
+            office_confirmation_payload(selected_office) if selected_office else None
+        ),
+        "officeConfirmed": office_is_confirmed,
         "states": [{"code": code, "name": name} for code, name in US_STATE_CHOICES],
         "languageOptions": language_options(),
         "contactMethods": contact_method_options(),

@@ -51,6 +51,7 @@ from .views.onboarding_administration_views import (
 )
 from .views.onboarding_profile_views import (
     onboarding,
+    onboarding_office_preview,
     onboarding_profile_finalize,
     onboarding_profile_save,
 )
@@ -65,6 +66,11 @@ urlpatterns = [
     path("login", RedirectView.as_view(pattern_name="login", query_string=True)),
     path("logout", logout, name="logout"),
     path("onboarding", onboarding, name="onboarding"),
+    path(
+        "onboarding/offices/<int:office_id>/preview",
+        onboarding_office_preview,
+        name="onboarding_office_preview",
+    ),
     path(
         "onboarding/profile/sections/<slug:section>",
         onboarding_profile_save,

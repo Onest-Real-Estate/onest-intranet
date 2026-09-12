@@ -179,9 +179,13 @@ def test_activation_is_derived_only_when_every_required_source_is_ready(monkeypa
     UserOnboardingCase.objects.create(
         user=user,
         office_confirmed_at=now,
+        office_confirmed_for=user.office,
+        office_confirmation_version=user.onboarding_version,
         required_setup_completed_at=now,
         office_handoff_state=UserOnboardingCase.OfficeHandoffState.NOTIFIED,
         office_handoff_updated_at=now,
+        office_handoff_office=user.office,
+        office_handoff_onboarding_version=user.onboarding_version,
     )
 
     journey = journey_for_user(user)
@@ -222,6 +226,12 @@ def test_required_setup_is_stale_safe_idempotent_and_audited():
         complete_required_setup(user=user, expected_version="stale")
     assert not UserOnboardingCase.objects.filter(user=user).exists()
 
+    UserOnboardingCase.objects.create(
+        user=user,
+        office_confirmed_at=timezone.now(),
+        office_confirmed_for=user.office,
+        office_confirmation_version=user.onboarding_version,
+    )
     assert complete_required_setup(user=user) is True
     assert complete_required_setup(user=user) is False
     assert (

@@ -154,10 +154,16 @@ def complete_required_setup(
         .filter(user=locked_user)
         .first()
     )
+    confirmation_is_current = bool(
+        case
+        and case.office_confirmed_at
+        and getattr(case, "office_confirmed_for_id", None)
+        == getattr(locked_user, "office_id", None)
+        and case.office_confirmation_version == locked_user.onboarding_version
+    )
     if (
         locked_user.profile_completed
-        and case
-        and case.office_confirmed_at
+        and confirmation_is_current
         and case.required_setup_completed_at
     ):
         return False
@@ -169,11 +175,13 @@ def complete_required_setup(
         raise ValidationError({"profile": "Complete the required profile details."})
     if locked_user.office_id is None:
         raise ValidationError({"office": "Choose an office before continuing."})
+    if not confirmation_is_current:
+        raise ValidationError(
+            {"office": "Review and explicitly confirm your selected office."}
+        )
 
     now = timezone.now()
-    if case is None:
-        case = UserOnboardingCase(user=locked_user)
-    case.office_confirmed_at = case.office_confirmed_at or now
+    assert case is not None
     case.required_setup_completed_at = case.required_setup_completed_at or now
     case.updated_by = locked_user
     case.save()
@@ -219,9 +227,15 @@ def transition_office_handoff(
         .filter(user=locked_user)
         .first()
     )
+    handoff_is_current = bool(
+        case
+        and getattr(case, "office_handoff_office_id", None)
+        == getattr(locked_user, "office_id", None)
+        and case.office_handoff_onboarding_version == locked_user.onboarding_version
+    )
     current = UserOnboardingCase.OfficeHandoffState(
         case.office_handoff_state
-        if case
+        if case and handoff_is_current
         else UserOnboardingCase.OfficeHandoffState.PENDING
     )
     if current == next_state:
@@ -237,6 +251,8 @@ def transition_office_handoff(
         case = UserOnboardingCase(user=locked_user)
     case.office_handoff_state = next_state
     case.office_handoff_updated_at = now
+    case.office_handoff_office = locked_user.office
+    case.office_handoff_onboarding_version = locked_user.onboarding_version
     case.updated_by = actor
     case.save()
     log_event(
@@ -283,11 +299,15 @@ def reset_required_setup(*, actor: User, user: User) -> None:
     )
     if case:
         case.office_confirmed_at = None
+        case.office_confirmed_for = None
+        case.office_confirmation_version = None
         case.required_setup_completed_at = None
         case.updated_by = actor
         case.save(
             update_fields=[
                 "office_confirmed_at",
+                "office_confirmed_for",
+                "office_confirmation_version",
                 "required_setup_completed_at",
                 "updated_by",
                 "updated_at",

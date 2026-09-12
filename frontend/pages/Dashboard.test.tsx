@@ -199,6 +199,56 @@ describe("Dashboard shell", () => {
     );
   });
 
+  it("names the office administrator only after the handoff is recorded", () => {
+    setPage({
+      onboardingJourney: {
+        schemaVersion: 1,
+        profile: { state: "complete", label: "Complete", updatedAt: null },
+        office: { state: "confirmed", label: "Confirmed", updatedAt: null },
+        officeHandoff: {
+          state: "notified",
+          label: "Notified",
+          updatedAt: null,
+          recipient: { name: "Avery Admin" },
+          message: "We notified Avery Admin. Their onboarding workspace is ready.",
+          delivery: {
+            state: "queued",
+            label: "Outbound delivery queued",
+            channels: [
+              {
+                channel: "email",
+                state: "pending",
+                label: "Queued",
+                retryable: true,
+              },
+            ],
+          },
+        },
+        contract: { state: "generated", label: "Generated", updatedAt: null },
+        toolsSource: "available",
+        tools: [],
+        requiredSetupComplete: true,
+        activationComplete: false,
+        strictGateActive: false,
+        currentStep: { code: "activation", label: "Activation" },
+        nextAction: {
+          code: "wait_for_activation",
+          label: "Your activation is still in progress",
+          href: null,
+          method: null,
+        },
+        version: "0:now",
+        updatedAt: "2026-08-19T09:00:00-04:00",
+        blockers: [],
+      },
+    });
+
+    render(<Dashboard />);
+
+    expect(screen.getByText(/We notified Avery Admin/)).toBeVisible();
+    expect(screen.getByText(/activation is still in progress/)).toBeVisible();
+  });
+
   it("leads with the metrics row, then brokerage news", () => {
     render(<Dashboard />);
     const titles = widgetTitles();

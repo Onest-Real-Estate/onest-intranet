@@ -18,8 +18,10 @@ write supports `expected_version`; they must never parse or manufacture it.
 | Profile details and compatibility completion flag | `User` | No |
 | Microsoft identity | django-allauth `SocialAccount` | No |
 | Selected office | `User.office` and office hierarchy | No |
-| Office confirmation checkpoint | onboarding composition | Yes |
+| Office confirmation checkpoint (office, onboarding version, timestamp) | onboarding composition | Yes |
 | Office handoff delivery outcome | onboarding composition | Yes |
+| Office administrator and public office details | `OfficeContactAssignment` and `Office` | No |
+| In-app and outbound delivery attempts | notifications domain | No |
 | Contract generation, delivery, signature, activation | contract domain | No |
 | Required training progress | training domain | No |
 | Applicable tools and provisioning progress | onboarding-tools domain | No |
@@ -53,9 +55,10 @@ business wording.
 | From | Action | To | Preconditions and effects |
 | --- | --- | --- | --- |
 | Profile `not_started`/`in_progress` | Save one profile section | Profile `in_progress` or unchanged | Valid section values, current `onboarding_version` and section revision. Never sets the compatibility flag. See [profile.md](profile.md#first-login-onboarding). |
-| Profile `not_started`/`in_progress` | Confirm the reviewed profile | Profile `complete`; office `confirmed` | Explicit review confirmation, every required field valid under today's rules, a headshot present in storage, a selected office, current `onboarding_version`. Sets the compatibility flag and required-setup checkpoint atomically and publishes `user.onboarded` once. |
-| Office handoff `pending` | Record successful notification | `notified` | Authorized scoped administrator and current version. |
-| Office handoff `pending` | Record delivery failure | `notification_failed` | Authorized scoped administrator and current version. |
+| Office `selected` | Confirm the office | Office `confirmed` | The office is still active and assignable, the confirmation names that exact office, and the onboarding version is current. Changing the selection or resetting onboarding invalidates confirmation. The office address never writes to home/mailing fields. |
+| Profile `not_started`/`in_progress` | Confirm the reviewed profile | Profile `complete`; office remains `confirmed` | Explicit review confirmation, every required field valid under today's rules, a stored headshot, and an office confirmation for the current office/version. Sets the compatibility flag and required-setup checkpoint, creates/reuses the case, preserves an explicit owner, and publishes `user.onboarded` plus the handoff intent once. |
+| Office handoff `pending` | Notification consumer records the in-app handoff | `notified` | The resolved recipient still has server-side scope to the case. The notification dedupe key is user/onboarding-version/office. Outbound providers record queued, sent, retryable, suppressed, and terminal outcomes in the notification ledger. |
+| Office handoff `pending` | Recipient is unavailable or no longer authorized | `notification_failed` | The outbox consumer records the failure and retries. The agent sees support escalation copy, never a false delivery claim. |
 | Office handoff `notification_failed` | Retry successfully | `notified` | Authorized scoped administrator and current version. |
 | Office handoff `notified` | Any handoff transition | — | Rejected; delivered history is not rewound. |
 | Any required-setup state | Administrative reset | Correct derived profile/office step | Staff or superuser. Increments `User.onboarding_version`; clears only the profile compatibility flag and this cycle's required-setup checkpoints. |
@@ -64,6 +67,34 @@ Repeating a completed transition is a no-op: it produces no duplicate audit
 event or domain event. A stale token is rejected before lifecycle state is
 committed. Reset preserves contract, training, tool, handoff, task, and audit
 history; the composer re-enters the earliest incomplete required step.
+
+## Office administrator resolution
+
+`apps.user.services.onboarding_office` is the reusable office-summary and
+contact-role adapter. It lists only active, assignable offices in configured
+hierarchy order and exposes only public office fields. Parking, access, and
+other internal instructions never enter onboarding.
+
+For the selected office, one current Branch Admin is resolved in this
+product-owned order:
+
+1. primary current Branch Admin on the selected office;
+2. first current Branch Admin there, ordered deterministically by email and id;
+3. primary/first current Branch Admin on the selected office's region;
+4. primary/first current Branch Admin on the company/head-office node.
+
+Future, expired, inactive-user, unrelated-office, and non-Branch-Admin
+assignments are excluded in the query. There is no separate out-of-office
+availability source today; a future source plugs into this adapter rather than
+being copied onto the case. With no valid recipient, required setup still
+completes, the handoff becomes `notification_failed`, and the payload gives an
+honest IT Support escalation path.
+
+The default-owner policy is `resolved_office_admin`: it assigns the resolved
+recipient only when the case has no owner. An existing explicit owner is never
+replaced. The notification uses the typed scoped onboarding-workspace action;
+that destination rechecks capability and office scope, so the link grants no
+access by itself.
 
 ## Derived completion
 

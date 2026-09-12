@@ -89,6 +89,19 @@ ROUTE_POLICIES: dict[str, AuthorizationPolicy] = {
         allow_incomplete_profile=True,
         scope_rule="self_only",
     ),
+    "onboarding_office_preview": AuthorizationPolicy(
+        key="onboarding_office_preview",
+        access="onboarding_only",
+        description=(
+            "Return the public confirmation card and current resolved Branch Admin "
+            "for one active, assignable office."
+        ),
+        methods=("GET",),
+        route_names=("onboarding_office_preview",),
+        allow_incomplete_profile=True,
+        scope_rule="self_only",
+        auth_behavior="json",
+    ),
     "onboarding_profile_finalize": AuthorizationPolicy(
         key="onboarding_profile_finalize",
         access="onboarding_only",

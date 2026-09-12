@@ -37,6 +37,15 @@ export function reviewProblems(page: OnboardingPageProps): ProblemItem[] {
     if (field === CONFIRMATION_FIELD || messages.length === 0) {
       continue;
     }
+    if (field === "confirm_office") {
+      problems.set(field, {
+        field,
+        label: "Office confirmation",
+        message: messages[0],
+        section: "credentials",
+      });
+      continue;
+    }
     const policy = policyFor(fields, field);
     problems.set(field, {
       field,

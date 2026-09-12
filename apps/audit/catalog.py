@@ -83,6 +83,21 @@ registry.register(
 )
 
 registry.register(
+    name="user.onboarding.office_handoff_requested",
+    version=1,
+    required_payload_keys={
+        "user_id",
+        "office_id",
+        "recipient_id",
+        "onboarding_version",
+    },
+    description=(
+        "A confirmed agent profile requested one idempotent handoff to the "
+        "resolved office administrator."
+    ),
+)
+
+registry.register(
     name="user.onboarding.task_changed",
     version=1,
     required_payload_keys={"user_id", "task_id", "status"},
