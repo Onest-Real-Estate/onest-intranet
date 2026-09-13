@@ -409,7 +409,7 @@ DJANGO_VITE = {
 # ---------------------------------------------------------------------------
 INERTIA_LAYOUT = "layout.html"
 # Bump whenever the frontend bundle changes so stale clients get a full reload.
-INERTIA_VERSION = "39"
+INERTIA_VERSION = "40"
 
 # Optional external help centre. The shell exposes it only when it is an
 # absolute, credential-free HTTPS URL; an empty or unsafe value leaves the
@@ -499,6 +499,9 @@ DEFAULT_USER_GROUP = "Users"
 # Sentry SDK events are ingested by sentry.io, or by PostHog's error tracking
 # feature (it accepts the same Sentry DSN format — see PostHog docs). Leave
 # SENTRY_DSN empty to disable the SDK entirely.
+# Default window for mandatory policy acknowledgements created on publish.
+COMPLIANCE_ACK_DUE_DAYS = config("COMPLIANCE_ACK_DUE_DAYS", default=14, cast=int)
+
 SENTRY_DSN = config("SENTRY_DSN", default="")
 SENTRY_ENVIRONMENT = config(
     "SENTRY_ENVIRONMENT", default="development" if DEBUG else "production"

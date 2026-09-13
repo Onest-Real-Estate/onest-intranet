@@ -79,6 +79,7 @@ EVENT_PRODUCERS = {
     "contract.generation_error": contract_generation_error,
     "contract.signature_reminder": contract_signature_reminder,
     "contract.expiration_warning": contract_expiration_warning,
+    "policy.ack_reminder": policy_ack_reminder,
 }
 ```
 

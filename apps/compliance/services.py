@@ -271,6 +271,8 @@ def library_payload(
         "required": ack["required"],
         "dueAt": ack["dueAt"],
         "canAcknowledge": ack["canAcknowledge"],
+        "mustOpenDocument": ack.get("mustOpenDocument", False),
+        "documentAccessed": ack.get("documentAccessed", False),
     }
 
 
@@ -296,6 +298,8 @@ def detail_payload(version: PolicyVersion, *, actor: User) -> dict[str, Any]:
         "canAcknowledge": ack["canAcknowledge"],
         "waived": ack["waived"],
         "acknowledgedAt": ack.get("acknowledgedAt"),
+        "mustOpenDocument": ack.get("mustOpenDocument", False),
+        "documentAccessed": ack.get("documentAccessed", False),
     }
 
 

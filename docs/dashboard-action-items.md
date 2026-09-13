@@ -44,10 +44,11 @@ registry. Today:
 | Key | Status | What it emits |
 | --- | --- | --- |
 | `profile` | Live | Incomplete professional profile; expired or soon-to-expire licence |
+| `compliance` | Live | Open mandatory policy acknowledgements (pending high, overdue critical) |
 
 Contract, inventory, transaction, document/checklist, training, lead,
-commission, and compliance modules register collectors here as they ship. An
-`available=False` row is skipped and never invents placeholders.
+commission, and remaining domain modules register collectors here as they
+ship. An `available=False` row is skipped and never invents placeholders.
 
 ## Permissions and stale CTAs
 

@@ -317,6 +317,64 @@ def training_completion(context: ReportContext) -> ReportResult:
     )
 
 
+def compliance_open_items(context: ReportContext) -> ReportResult:
+    """Open mandatory acknowledgement obligations in effective scope.
+
+    Inclusion rules:
+    - Population is audience ∩ jurisdiction ∩ ``scoped_users``.
+    - Optional ``office`` intersects; out-of-scope keys empty the set.
+    - Optional ``status`` keeps pending or overdue rows.
+    - Aggregates use the same filtered rows. No prior-period comparison in v1.
+    """
+    from apps.compliance.acknowledgements import open_item_rows
+
+    filters = dict(context.filters)
+    rows, truncated = open_item_rows(
+        context.user, filters=filters, row_limit=context.row_limit
+    )
+    projected = [
+        {
+            "title": f"{row['policyTitle']} · {row['userName']}",
+            "dueDate": row["dueAt"] or "",
+            "status": row["status"],
+            "userId": row["userId"],
+            "policyId": row["policyId"],
+            "office": row.get("officeName") or "",
+        }
+        for row in rows
+    ]
+    counts = Counter(row["status"] for row in projected)
+    series = tuple(
+        ReportSeriesPoint(key=key, label=label, value=counts.get(key, 0))
+        for key, label in (("overdue", "Overdue"), ("pending", "Pending"))
+    )
+    empty = None
+    if not projected:
+        empty = (
+            "No open acknowledgement items match these filters in your scope."
+            if context.filters
+            else "No open acknowledgement items are in your scope right now."
+        )
+    return ReportResult(
+        aggregates={
+            "total": len(projected),
+            "overdue": counts.get("overdue", 0),
+            "pending": counts.get("pending", 0),
+            "truncated": truncated,
+            "syncRowLimit": context.row_limit,
+        },
+        rows=tuple(projected),
+        series=series,
+        chart_kind="bar",
+        empty_reason=empty,
+        data_as_of=context.now,
+        comparison_note=(
+            "Open items are a live acknowledgement snapshot with no prior-period "
+            "comparison in calculation version 1."
+        ),
+    )
+
+
 def _status_label(status: str) -> str:
     return {
         OverallStatus.NOT_STARTED: "Not started",

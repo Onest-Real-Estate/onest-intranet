@@ -10,7 +10,12 @@ from django.shortcuts import get_object_or_404, redirect
 from django.views.decorators.http import require_GET, require_POST
 from inertia import inertia, render
 
-from apps.compliance.acknowledgements import scoped_report, waive
+from apps.compliance.acknowledgements import (
+    correct_acknowledgement,
+    report_filter_options,
+    scoped_report,
+    waive,
+)
 from apps.compliance.administration import (
     StalePolicyVersion,
     TransitionRefused,
@@ -27,6 +32,7 @@ from apps.compliance.administration import (
     update_draft,
 )
 from apps.compliance.forms import (
+    PolicyCorrectionForm,
     PolicyDuplicateForm,
     PolicyTransitionForm,
     PolicyVersionForm,
@@ -50,6 +56,8 @@ REPORT_PAGE = "ComplianceAckReport"
 
 MANAGE_PERMISSION = "web.manage_policies"
 VIEW_PERMISSION = "web.view_compliance"
+VIEW_ACK_PERMISSION = "web.view_policy_acknowledgements"
+WAIVE_PERMISSION = "web.waive_policy_acknowledgements"
 
 
 def _require_view(actor: User) -> None:
@@ -58,6 +66,20 @@ def _require_view(actor: User) -> None:
         or has_effective_permission(actor, MANAGE_PERMISSION)
     ):
         raise PermissionDenied("You cannot view compliance.")
+
+
+def _require_ack_view(actor: User) -> None:
+    if not (
+        has_effective_permission(actor, VIEW_PERMISSION)
+        or has_effective_permission(actor, MANAGE_PERMISSION)
+        or has_effective_permission(actor, VIEW_ACK_PERMISSION)
+    ):
+        raise PermissionDenied("You cannot view acknowledgement reports.")
+
+
+def _require_waive(actor: User) -> None:
+    if not has_effective_permission(actor, WAIVE_PERMISSION):
+        raise PermissionDenied("You cannot waive policy acknowledgements.")
 
 
 def _require_manage(actor: User) -> None:
@@ -249,6 +271,7 @@ def policy_admin_lifecycle(request: HttpRequest, policy_id: int):
             version=policy,
             action=form.cleaned_data["action"],
             expected_version=form.cleaned_data.get("expected_version", ""),
+            ack_due_at=form.cleaned_data.get("ack_due_at"),
         )
     except StalePolicyVersion as exc:
         return _lifecycle_failure(request, policy, exc.message, 409)
@@ -346,9 +369,20 @@ def policy_admin_file_remove(request: HttpRequest, file_id: int):
 @inertia(REPORT_PAGE)
 def policy_ack_report(request: HttpRequest):
     actor = cast(User, request.user)
-    _require_view(actor)
+    _require_ack_view(actor)
     return {
         "report": scoped_report(actor, request.GET),
+        "filterOptions": report_filter_options(actor),
+        "filters": {
+            "policy": request.GET.get("policy") or "",
+            "office": request.GET.get("office") or "",
+            "region": request.GET.get("region") or "",
+            "role": request.GET.get("role") or "",
+            "dueFrom": request.GET.get("dueFrom") or "",
+            "dueTo": request.GET.get("dueTo") or "",
+            "status": request.GET.get("status") or "",
+            "q": request.GET.get("q") or "",
+        },
         "capabilities": capabilities(actor).payload(),
         "errors": empty_validation_errors(),
     }
@@ -358,7 +392,7 @@ def policy_ack_report(request: HttpRequest):
 @require_POST
 def policy_ack_waive(request: HttpRequest, policy_id: int):
     actor = cast(User, request.user)
-    _require_manage(actor)
+    _require_waive(actor)
     policy = _target(request, policy_id)
     form = PolicyWaiverForm(request.POST, actor=actor)
     if not form.is_valid():
@@ -367,6 +401,8 @@ def policy_ack_waive(request: HttpRequest, policy_id: int):
             REPORT_PAGE,
             {
                 "report": scoped_report(actor, {"policy": str(policy_id)}),
+                "filterOptions": report_filter_options(actor),
+                "filters": {"policy": str(policy_id)},
                 "capabilities": capabilities(actor).payload(),
                 "errors": validation_errors(form),
             },
@@ -386,6 +422,54 @@ def policy_ack_waive(request: HttpRequest, policy_id: int):
             REPORT_PAGE,
             {
                 "report": scoped_report(actor, {"policy": str(policy_id)}),
+                "filterOptions": report_filter_options(actor),
+                "filters": {"policy": str(policy_id)},
+                "capabilities": capabilities(actor).payload(),
+                "errors": _validation_payload(exc),
+            },
+        )
+        response.status_code = 422
+        return response
+    return redirect("policy_ack_report")
+
+
+@enforce_policy("policy_ack_correct")
+@require_POST
+def policy_ack_correct(request: HttpRequest, policy_id: int):
+    actor = cast(User, request.user)
+    _require_waive(actor)
+    policy = _target(request, policy_id)
+    form = PolicyCorrectionForm(request.POST, actor=actor)
+    if not form.is_valid():
+        response = render(
+            request,
+            REPORT_PAGE,
+            {
+                "report": scoped_report(actor, {"policy": str(policy_id)}),
+                "filterOptions": report_filter_options(actor),
+                "filters": {"policy": str(policy_id)},
+                "capabilities": capabilities(actor).payload(),
+                "errors": validation_errors(form),
+            },
+        )
+        response.status_code = 422
+        return response
+    try:
+        correct_acknowledgement(
+            actor,
+            user_id=form.cleaned_data["user"].pk,
+            version_id=policy.pk,
+            kind=form.cleaned_data["kind"],
+            reason=form.cleaned_data["reason"],
+        )
+    except ValidationError as exc:
+        response = render(
+            request,
+            REPORT_PAGE,
+            {
+                "report": scoped_report(actor, {"policy": str(policy_id)}),
+                "filterOptions": report_filter_options(actor),
+                "filters": {"policy": str(policy_id)},
                 "capabilities": capabilities(actor).payload(),
                 "errors": _validation_payload(exc),
             },

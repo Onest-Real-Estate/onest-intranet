@@ -31,6 +31,8 @@ const { pageProps, routerGet } = vi.hoisted(() => {
     required: true,
     dueAt: "2026-01-15T00:00:00Z",
     canAcknowledge: true,
+    mustOpenDocument: false,
+    documentAccessed: false,
   };
 
   return {

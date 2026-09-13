@@ -51,6 +51,8 @@ const { pageProps, routerPost } = vi.hoisted(() => {
         expiresAt: null as string | null,
         waived: false,
         acknowledgedAt: null as string | null,
+        mustOpenDocument: false,
+        documentAccessed: true,
       },
       errors: { fields: {}, form: [] as string[] },
     },
@@ -66,7 +68,7 @@ vi.mock("@inertiajs/react", async () => {
     Link: ({ href, children }: { href: string; children: React.ReactNode }) => (
       <a href={href}>{children}</a>
     ),
-    router: { post: routerPost, get: vi.fn() },
+    router: { post: routerPost, get: vi.fn(), reload: vi.fn() },
     usePage: () => ({ props: pageProps }),
   };
 });
@@ -77,6 +79,9 @@ describe("PolicyDetail", () => {
   beforeEach(() => {
     pageProps.policy.canAcknowledge = true;
     pageProps.policy.acknowledged = false;
+    pageProps.policy.mustOpenDocument = false;
+    pageProps.policy.documentAccessed = true;
+    pageProps.policy.documents = [];
     routerPost.mockClear();
   });
 
@@ -91,15 +96,46 @@ describe("PolicyDetail", () => {
     ).toBeInTheDocument();
   });
 
-  it("shows the acknowledge button when canAcknowledge is true", async () => {
+  it("keeps acknowledgement disabled until the reader confirms", async () => {
     const user = userEvent.setup();
     render(<PolicyDetail />);
     const button = screen.getByRole("button", {
       name: "I acknowledge this policy",
     });
-    expect(button).toBeInTheDocument();
+    expect(button).toBeDisabled();
+    await user.click(
+      screen.getByRole("checkbox", {
+        name: /I have read this version and confirm the disclosure/i,
+      }),
+    );
+    expect(button).toBeEnabled();
     await user.click(button);
     expect(routerPost).toHaveBeenCalled();
+  });
+
+  it("asks the reader to open the document before acknowledging", () => {
+    pageProps.policy.mustOpenDocument = true;
+    pageProps.policy.documentAccessed = false;
+    pageProps.policy.documents = [
+      {
+        id: 9,
+        role: "document",
+        displayName: "Handbook.pdf",
+        mediaType: "application/pdf",
+        byteSize: 1024,
+        url: "/policies-compliance/files/9",
+        isReadable: true,
+      },
+    ];
+    render(<PolicyDetail />);
+    expect(
+      screen.getByText(
+        "Download the current policy document before acknowledging this version.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "I acknowledge this policy" }),
+    ).toBeDisabled();
   });
 
   it("hides the acknowledge button when canAcknowledge is false", () => {

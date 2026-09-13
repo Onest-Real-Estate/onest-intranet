@@ -251,6 +251,7 @@ function ComplianceWorkspacePage() {
   );
   const [submitting, setSubmitting] = useState(false);
   const [pendingAction, setPendingAction] = useState<string | null>(null);
+  const [ackDueAt, setAckDueAt] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const statusCode = policy?.statusCode ?? "";
@@ -302,7 +303,11 @@ function ComplianceWorkspacePage() {
     setPendingAction(null);
     router.post(
       routes.policy_admin_lifecycle(policy?.id ?? 0),
-      toFormData({ action, expected_version: policy?.version ?? "" }),
+      toFormData({
+        action,
+        expected_version: policy?.version ?? "",
+        ...(action === "publish" && ackDueAt ? { ack_due_at: ackDueAt } : {}),
+      }),
       { onFinish: () => setSubmitting(false) },
     );
   }
@@ -939,6 +944,22 @@ function ComplianceWorkspacePage() {
               {pendingAction ? ACTION_COPY[pendingAction].description : ""}
             </DialogDescription>
           </DialogHeader>
+          {pendingAction === "publish" && policy?.isMandatory ? (
+            <FormField>
+              <FormLabel htmlFor="ack_due_at" optional>
+                Acknowledgement due
+              </FormLabel>
+              <Input
+                id="ack_due_at"
+                type="datetime-local"
+                value={ackDueAt}
+                onChange={(event) => setAckDueAt(event.target.value)}
+              />
+              <FormDescription>
+                Leave blank to use the default acknowledgement window.
+              </FormDescription>
+            </FormField>
+          ) : null}
           <DialogFooter>
             <DialogClose asChild>
               <Button type="button" variant="outline" disabled={submitting}>
