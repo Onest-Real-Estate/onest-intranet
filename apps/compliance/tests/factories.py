@@ -92,6 +92,7 @@ def publish_policy(
     is_mandatory: bool = False,
     jurisdiction_state_codes: list[str] | None = None,
     actor: User | None = None,
+    effective_at=None,
 ) -> PolicyVersion:
     from apps.compliance.administration import (
         create_draft,
@@ -112,6 +113,7 @@ def publish_policy(
             "category": category(),
             "jurisdiction_state_codes": jurisdiction_state_codes or [],
             "is_mandatory": is_mandatory,
+            "effective_at": effective_at,
             "reacknowledge_on_supersede": True,
             "acknowledgement_disclosure": "I acknowledge this policy.",
             "disclosure_version": 1,

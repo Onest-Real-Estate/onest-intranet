@@ -465,6 +465,12 @@ def _update(
             before={"is_required": was_required},
             after={"is_required": locked.is_required},
         )
+        _emit_lifecycle(
+            "training.required_changed",
+            actor=actor,
+            content=locked,
+            now=timezone.now(),
+        )
     return locked
 
 
@@ -782,6 +788,7 @@ def _emit_lifecycle(name: str, *, actor: User, content: TrainingContent, now) ->
             "status": content.status,
             "version_number": content.version_number,
             "version_family": str(content.version_family),
+            "is_required": content.is_required,
             "occurred_at": now.isoformat(),
         },
     )

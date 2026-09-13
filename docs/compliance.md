@@ -74,8 +74,25 @@ idempotent per `(user, policy_version)`. Scoped waivers are admin-only with a
 required reason.
 
 Overdue mandatory acks surface as dashboard action items
-(`apps.compliance.action_items`) and optional reminder notifications via Celery
-task `send_policy_ack_reminders`.
+(`apps.compliance.action_items`) and as mandatory reminder notifications via
+Celery task `send_policy_ack_reminders`.
+
+## Notifications
+
+Mandatory published policies fan out through `apps.notifications` as
+`administrative` rows (there is no separate compliance type). Optional
+policies stay in the library only.
+
+| Event | Notifies |
+| --- | --- |
+| `policy.published` | Audience ∩ jurisdiction of a **mandatory** version that is in window, except the publisher and people who already acknowledged or were waived |
+| future `effective_at` | Nobody until Celery task `release_effective_mandatory_policies` |
+| `policy.ack_reminder` | Overdue mandatory acks that are still required of the reader |
+
+Publish notices are mandatory, high priority, and open `policy_detail`.
+Detail is re-checked on every inbox read through `visible_policies` plus
+jurisdiction; a reminder fails closed once the reader has acknowledged or
+been waived. Mark-all-read cannot clear a mandatory ack.
 
 ## Files
 

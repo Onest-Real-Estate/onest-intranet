@@ -73,6 +73,9 @@ def send_policy_ack_reminders() -> int:
                     dedupe_key=f"policy-ack-reminder:{version.pk}:{user.pk}:{due_key}",
                     priority=NotificationPriority.HIGH,
                     is_mandatory=True,
+                    source_module="compliance",
+                    source_record_type="policy_version",
+                    source_record_id=str(version.pk),
                     action_key="open_policy_detail",
                     action_args=(version.pk,),
                 ),
@@ -81,3 +84,13 @@ def send_policy_ack_reminders() -> int:
             if row is not None:
                 delivered += 1
     return delivered
+
+
+@shared_task
+def release_effective_mandatory_policies() -> int:
+    """Fan out mandatory policies whose effective window just opened."""
+    from apps.compliance.notification_schedule import (
+        release_effective_mandatory_policies as release,
+    )
+
+    return release()

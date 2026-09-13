@@ -79,6 +79,9 @@ EVENT_PRODUCERS = {
     "contract.generation_error": contract_generation_error,
     "contract.signature_reminder": contract_signature_reminder,
     "contract.expiration_warning": contract_expiration_warning,
+    "training.published": training_published,
+    "training.required_changed": training_required_changed,
+    "policy.published": policy_published,
 }
 ```
 
@@ -140,6 +143,8 @@ Shipped resolvers:
 | --- | --- | --- |
 | `onboarding` | `web.view_new_agents` and the agent is still in the reader's administrative scope | "Onboarding for <name>" and the case destination |
 | `contract` | Reader still reaches the contract via `accessible_contract_queryset`; signature reminders fail closed once the row is no longer signable | Status-derived detail and My Contract / workspace action |
+| `training` | Reader still matches `visible_training_content` | Content title and training detail action |
+| `compliance` | Reader still matches audience + jurisdiction; ack reminders fail closed once the requirement is gone | Policy title and policy detail action |
 | *(none)* | Self-contained notification about the reader themselves | Title only; action still re-authorizes at the destination |
 
 The unavailable copy is deliberately identical for a lost grant, an
