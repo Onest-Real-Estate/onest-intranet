@@ -724,6 +724,25 @@ registry.register(
     ),
 )
 
+registry.register(
+    name="training.required_changed",
+    version=1,
+    required_payload_keys={
+        "content_id",
+        "owner_office_id",
+        "scope_level",
+        "status",
+        "version_number",
+        "version_family",
+        "is_required",
+        "occurred_at",
+    },
+    description=(
+        "Required-training state changed on a content row. Notify learners "
+        "only when is_required is true and the row is currently visible."
+    ),
+)
+
 # ---------------------------------------------------------------------------
 # marketing domain  (publisher: apps.marketing.administration)
 # ---------------------------------------------------------------------------

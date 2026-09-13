@@ -95,6 +95,7 @@ def publish_policy(
     reacknowledge_on_supersede: bool = True,
     jurisdiction_state_codes: list[str] | None = None,
     actor: User | None = None,
+    effective_at=None,
     ack_due_at=None,
     with_document: bool = False,
 ) -> PolicyVersion:
@@ -117,6 +118,7 @@ def publish_policy(
             "category": category(),
             "jurisdiction_state_codes": jurisdiction_state_codes or [],
             "is_mandatory": is_mandatory,
+            "effective_at": effective_at,
             "reacknowledge_on_supersede": reacknowledge_on_supersede,
             "acknowledgement_disclosure": "I acknowledge this policy.",
             "disclosure_version": 1,

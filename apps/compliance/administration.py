@@ -631,6 +631,7 @@ def _emit_lifecycle(name: str, *, actor: User, version: PolicyVersion, now) -> N
             "status": version.status,
             "version_number": version.version_number,
             "version_family": str(version.version_family),
+            "is_mandatory": version.is_mandatory,
             "occurred_at": now.isoformat(),
         },
     )

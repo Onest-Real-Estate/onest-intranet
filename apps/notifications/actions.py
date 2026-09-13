@@ -105,6 +105,12 @@ ACTION_DEFINITIONS: tuple[NotificationAction, ...] = (
         label="Open policy",
         arg_types=(int,),
     ),
+    NotificationAction(
+        key="open_training_detail",
+        route_name="training_detail",
+        label="Open training",
+        arg_types=(int,),
+    ),
 )
 
 ACTION_BY_KEY: dict[str, NotificationAction] = {

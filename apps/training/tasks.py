@@ -1,4 +1,4 @@
-"""Background processing for training media."""
+"""Background processing for training media and scheduled assignment notices."""
 
 from __future__ import annotations
 
@@ -93,3 +93,13 @@ def _fail(media, state: str, note: str) -> str:
     media.save(update_fields=["processing_state", "processing_note", "updated_at"])
     logger.warning("training: media %s -> %s (%s)", media.pk, state, note)
     return state
+
+
+@shared_task
+def release_scheduled_required_training() -> int:
+    """Fan out required training whose scheduled publish window just opened."""
+    from apps.training.notification_schedule import (
+        release_scheduled_required_training as release,
+    )
+
+    return release()

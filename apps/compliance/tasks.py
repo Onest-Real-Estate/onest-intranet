@@ -1,4 +1,4 @@
-"""Celery tasks for compliance acknowledgement reminders."""
+"""Celery tasks for compliance acknowledgement reminders and delayed publish."""
 
 from __future__ import annotations
 
@@ -14,3 +14,13 @@ def send_policy_ack_reminders() -> int:
     from apps.compliance.notification_schedule import publish_ack_reminders
 
     return publish_ack_reminders()
+
+
+@shared_task
+def release_effective_mandatory_policies() -> int:
+    """Fan out mandatory policies whose effective window just opened."""
+    from apps.compliance.notification_schedule import (
+        release_effective_mandatory_policies as release,
+    )
+
+    return release()

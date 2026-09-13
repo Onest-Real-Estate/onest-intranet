@@ -589,6 +589,27 @@ def inventory_lost_damaged_escalation(
     )
 
 
+def training_published(envelope: EventEnvelope) -> list[NotificationRequest]:
+    """Fan out required training that is live now. Scheduled stays silent."""
+    from apps.training.notifications import requests_for_event
+
+    return requests_for_event(envelope)
+
+
+def training_required_changed(envelope: EventEnvelope) -> list[NotificationRequest]:
+    """Notify when an already-live row is marked required."""
+    from apps.training.notifications import requests_for_event
+
+    return requests_for_event(envelope)
+
+
+def policy_published(envelope: EventEnvelope) -> list[NotificationRequest]:
+    """Fan out a mandatory policy the moment it is visible."""
+    from apps.compliance.notifications import requests_for_event
+
+    return requests_for_event(envelope)
+
+
 def policy_ack_reminder(envelope: EventEnvelope) -> list[NotificationRequest]:
     """Overdue mandatory policy acknowledgement — collapses per user+version."""
     recipient_id = _int_or_none(envelope.payload.get("recipient_id"))
@@ -636,6 +657,9 @@ EVENT_PRODUCERS: dict[str, EventBuilder] = {
     "inventory.reservation.return_overdue": inventory_return_overdue,
     "inventory.reservation.return_overdue_staff": inventory_return_overdue_staff,
     "inventory.reservation.lost_damaged_escalation": inventory_lost_damaged_escalation,
+    "training.published": training_published,
+    "training.required_changed": training_required_changed,
+    "policy.published": policy_published,
     "policy.ack_reminder": policy_ack_reminder,
 }
 

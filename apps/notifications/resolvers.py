@@ -110,30 +110,46 @@ COMPLIANCE_MODULE = "compliance"
 def resolve_compliance_policies(
     user, notifications: Sequence
 ) -> dict[UUID, SourceResolution]:
-    """Detail only while the reader still owes that policy version."""
+    """Detail while the reader may still open that policy version.
+
+    Reminder rows fail closed once the family is satisfied. Publish notices
+    stay visible for as long as the library would show the policy.
+    """
     from apps.compliance.acknowledgements import family_satisfaction_counts
-    from apps.compliance.audience import visible_to
-    from apps.compliance.models import PolicyVersion
+    from apps.compliance.audience import visible_policies
+    from apps.compliance.services import apply_jurisdiction_visibility
 
     ids = _record_ids(notifications)
     if not ids:
         return {}
     versions = {
         version.pk: version
-        for version in PolicyVersion.objects.filter(pk__in=set(ids.values()))
+        for version in apply_jurisdiction_visibility(
+            visible_policies(user).filter(pk__in=set(ids.values())), user
+        )
+    }
+    event_by_id = {
+        notification.public_id: str(getattr(notification, "event_key", "") or "")
+        for notification in notifications
     }
     resolutions: dict[UUID, SourceResolution] = {}
     for public_id, record_id in ids.items():
         version = versions.get(record_id)
-        if version is None or version.status != PolicyVersion.Status.PUBLISHED:
+        if version is None:
             continue
-        if not visible_to(user, version):
+        event_key = event_by_id.get(public_id, "")
+        if event_key == "policy.ack_reminder" and family_satisfaction_counts(
+            user, version
+        ):
             continue
-        if family_satisfaction_counts(user, version):
-            continue
+        detail = (
+            f"Acknowledge {version.title}"
+            if event_key == "policy.ack_reminder"
+            else version.title
+        )
         resolutions[public_id] = SourceResolution(
             available=True,
-            detail=f"Acknowledge {version.title}",
+            detail=detail,
             action_available=True,
         )
     return resolutions

@@ -108,6 +108,23 @@ A waiver stores a reason and does not delete acknowledgements. A correction is
 append-only (`clerical` or `revoke_waiver`). Revoking a waiver sets
 `is_active=False` on the existing row. Django admin cannot delete evidence.
 
+## Notifications
+
+Mandatory published policies also fan out through `apps.notifications` as
+`administrative` rows (there is no separate compliance type). Optional
+policies stay in the library only.
+
+| Event | Notifies |
+| --- | --- |
+| `policy.published` | Audience ∩ jurisdiction of a **mandatory** version that is in window, except the publisher and people who already satisfied the family |
+| future `effective_at` | Nobody until Celery task `release_effective_mandatory_policies` |
+| `policy.ack_reminder` | Overdue mandatory acks that are still required of the reader |
+
+Publish notices are mandatory, high priority, and open `policy_detail`.
+Detail is re-checked on every inbox read through `visible_policies` plus
+jurisdiction; a reminder fails closed once the reader has acknowledged or
+been waived. Mark-all-read cannot clear a mandatory ack.
+
 ## Files
 
 Document files use private storage and are streamed through

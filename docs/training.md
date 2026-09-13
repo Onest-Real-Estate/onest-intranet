@@ -111,4 +111,22 @@ Scoped publishers manage drafts at `/operations/training`:
   audience, required-state, version-created, progress, attendance, and quiz
   submission changes are audited. Lifecycle go-live also emits catalogued
   domain events (`training.published`, `.scheduled`, `.unpublished`,
-  `.archived`, `.restored`).
+  `.archived`, `.restored`). Marking a row required emits
+  `training.required_changed`.
+
+## Notifications
+
+Required training that is **live** fans out through `apps.notifications`
+(`NotificationType.TRAINING`). Optional content stays in the library only.
+
+| Event | Notifies |
+| --- | --- |
+| `training.published` | Audience of required content that is in window, except the publisher and learners who already satisfy the version policy |
+| `training.scheduled` | Nobody. Catalog forbids notifying about a window that has not opened |
+| `training.required_changed` | Same as publish when `is_required` is true and the row is live |
+
+Scheduled required rows become `training.published` via Celery task
+`release_scheduled_required_training` the first time `publish_at` has passed.
+The producer uses a stable dedupe key (`training.assigned:{id}:{version}`), so
+a replay or a later required-toggle does not create a second row for the same
+version. Detail is resolved through `visible_training_content` on every read.
