@@ -4942,6 +4942,11 @@ export interface MarketingLibraryFilters {
 
 export interface MarketingResourcesPageProps extends PageProps {
   library: ListResponse<MarketingLibraryRow, MarketingLibraryFilters>;
+  summary: {
+    published: number;
+    logos: number;
+    templates: number;
+  };
   filterOptions: {
     categories: FilterOption[];
     assetTypes: FilterOption[];
@@ -5190,6 +5195,11 @@ export interface ComplianceLibraryFilters {
 
 export interface PoliciesCompliancePageProps extends PageProps {
   library: ListResponse<ComplianceLibraryRow, ComplianceLibraryFilters>;
+  summary: {
+    published: number;
+    outstanding: number;
+    overdue: number;
+  };
   filterOptions: {
     categories: FilterOption[];
   };

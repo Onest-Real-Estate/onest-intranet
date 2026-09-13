@@ -6,8 +6,11 @@ import {
   EmptyState,
   FilterControls,
   FilterField,
+  MetricCard,
+  MetricStrip,
   PageHeader,
   Pagination,
+  PanelHeader,
   SearchControl,
   StatusBadge,
   SurfaceCard,
@@ -15,6 +18,7 @@ import {
   toStatusTone,
 } from "@/components/design-system";
 import { HubLayout } from "@/components/HubLayout";
+import { IconWell } from "@/components/IconWell";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -35,13 +39,9 @@ import type {
 const ANY = "__any__";
 
 function activeFilterCount(filters: MarketingLibraryFilters): number {
-  return [
-    filters.category,
-    filters.type,
-    filters.jurisdiction,
-    filters.brand,
-    filters.q,
-  ].filter(Boolean).length;
+  return [filters.category, filters.type, filters.jurisdiction, filters.brand].filter(
+    Boolean,
+  ).length;
 }
 
 function rejectedFilterMessage(filters: MarketingLibraryFilters): string | null {
@@ -49,6 +49,16 @@ function rejectedFilterMessage(filters: MarketingLibraryFilters): string | null 
     return null;
   }
   return "Some filters were ignored because they are not valid for this library.";
+}
+
+function formatDay(value: string | null): string {
+  if (!value) {
+    return "recently";
+  }
+  return new Date(value).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
 }
 
 function FilterSelect({
@@ -68,7 +78,7 @@ function FilterSelect({
         value={value || ANY}
         onValueChange={(next) => onChange(next === ANY ? "" : next)}
       >
-        <SelectTrigger size="sm" aria-label={label}>
+        <SelectTrigger size="sm" aria-label={label} className="w-full sm:w-44">
           <SelectValue placeholder={`Any ${label.toLowerCase()}`} />
         </SelectTrigger>
         <SelectContent>
@@ -84,84 +94,86 @@ function FilterSelect({
   );
 }
 
-function ResourceCard({ row }: { row: MarketingLibraryRow }) {
+function ResourceRow({ row }: { row: MarketingLibraryRow }) {
   const titleId = `marketing-${row.id}-title`;
-  const assetTone = toStatusTone(row.assetType.tone);
 
   return (
-    <article aria-labelledby={titleId}>
-      <SurfaceCard interactive className="group relative">
-        <SurfaceCardContent className="flex min-w-0 items-start gap-4">
-          {row.previewUrl ? (
-            <img
-              src={row.previewUrl}
-              alt=""
-              className="border-border size-16 shrink-0 rounded-md border object-cover"
-            />
-          ) : (
-            <div className="bg-muted text-muted-foreground flex size-16 shrink-0 items-center justify-center rounded-md">
-              <Megaphone className="size-5" aria-hidden />
-            </div>
-          )}
-          <div className="grid min-w-0 flex-1 gap-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <StatusBadge status={{ label: row.assetType.label, tone: assetTone }} />
-              {row.category ? (
-                <StatusBadge
-                  status={{
-                    label: row.category.label,
-                    tone: toStatusTone(row.category.tone),
-                  }}
-                />
-              ) : null}
-              <span className="text-muted-foreground text-xs">
-                {row.versionLabel} · {row.scope.label} · {row.scope.officeName}
-              </span>
-              {row.exportCount > 0 ? (
-                <span className="text-muted-foreground text-xs tabular-nums">
-                  {row.exportCount} {row.exportCount === 1 ? "file" : "files"}
-                </span>
-              ) : null}
-            </div>
-            <h2
-              id={titleId}
-              className="text-base leading-snug font-semibold text-balance"
-            >
-              <Link
-                href={routes.marketing_resource_detail(row.id)}
-                className="group-hover:text-primary focus-visible:ring-ring rounded-sm transition-colors duration-(--motion-fast) focus-visible:ring-2 focus-visible:outline-none"
-              >
-                <span className="absolute inset-0" aria-hidden />
-                {row.title}
-              </Link>
-            </h2>
-            {row.description ? (
-              <p className="text-muted-foreground line-clamp-2 text-sm leading-6">
-                {row.description}
-              </p>
-            ) : null}
-            <div className="text-muted-foreground flex items-center gap-1.5 text-xs">
-              <CalendarClock className="size-3.5 shrink-0" aria-hidden />
-              Published{" "}
-              {row.publishedAt
-                ? new Date(row.publishedAt).toLocaleDateString()
-                : "recently"}
-            </div>
-          </div>
-          <ChevronRight
-            aria-hidden
-            className="text-muted-foreground/60 group-hover:text-foreground mt-2 hidden size-4 shrink-0 transition-colors duration-(--motion-fast) sm:block"
+    <li className="bg-card hover:border-border-strong relative flex items-start gap-3 rounded-lg border border-border/70 p-4 transition-colors duration-(--motion-fast)">
+      {row.previewUrl ? (
+        <img
+          src={row.previewUrl}
+          alt=""
+          className="border-border mt-0.5 hidden size-9 shrink-0 rounded-md border object-cover sm:block"
+        />
+      ) : (
+        <IconWell
+          icon={Megaphone}
+          tone="muted"
+          className="mt-0.5 hidden size-9 sm:grid"
+        />
+      )}
+      <div className="grid min-w-0 flex-1 gap-1.5">
+        <div className="flex flex-wrap items-center gap-2">
+          <StatusBadge
+            status={{
+              label: row.assetType.label,
+              tone: toStatusTone(row.assetType.tone),
+            }}
           />
-        </SurfaceCardContent>
-      </SurfaceCard>
-    </article>
+          {row.category ? (
+            <StatusBadge
+              status={{
+                label: row.category.label,
+                tone: toStatusTone(row.category.tone),
+              }}
+            />
+          ) : null}
+        </div>
+        <h2 id={titleId} className="text-sm leading-snug font-medium text-balance">
+          <Link
+            href={routes.marketing_resource_detail(row.id)}
+            className="focus-visible:outline-ring rounded-sm focus-visible:outline-2 focus-visible:-outline-offset-2"
+          >
+            <span className="absolute inset-0" aria-hidden />
+            {row.title}
+          </Link>
+        </h2>
+        {row.description ? (
+          <p className="text-muted-foreground line-clamp-2 text-sm leading-6">
+            {row.description}
+          </p>
+        ) : null}
+        <p className="text-muted-foreground flex flex-wrap items-center gap-x-2 text-xs">
+          <CalendarClock className="size-3.5 shrink-0" aria-hidden />
+          <span>Published {formatDay(row.publishedAt)}</span>
+          <span aria-hidden>·</span>
+          <span>
+            {row.versionLabel} · {row.scope.label} · {row.scope.officeName}
+          </span>
+          {row.exportCount > 0 ? (
+            <>
+              <span aria-hidden>·</span>
+              <span className="tabular-nums">
+                {row.exportCount} {row.exportCount === 1 ? "file" : "files"}
+              </span>
+            </>
+          ) : null}
+        </p>
+      </div>
+      <ChevronRight
+        aria-hidden
+        className="text-muted-foreground/60 mt-2 hidden size-4 shrink-0 sm:block"
+      />
+    </li>
   );
 }
 
 export default function MarketingResources() {
-  const { library, filterOptions } = usePage<MarketingResourcesPageProps>().props;
+  const { library, filterOptions, summary } =
+    usePage<MarketingResourcesPageProps>().props;
   const filters = library.filters as MarketingLibraryFilters;
   const notice = rejectedFilterMessage(filters);
+  const [query, setQuery] = useState(filters.q ?? "");
   const [jurisdiction, setJurisdiction] = useState(filters.jurisdiction);
   const [brand, setBrand] = useState(filters.brand);
 
@@ -169,125 +181,143 @@ export default function MarketingResources() {
     router.get(
       buildListUrl(routes.marketing_resources(), window.location.search, {
         page,
-        filters: { ...filters, ...next, rejected: undefined },
+        filters: { ...filters, q: query, ...next, rejected: undefined },
       }),
       {},
       { preserveState: true, preserveScroll: true, replace: true },
     );
   }
 
+  const activeCount = activeFilterCount(filters);
+
   return (
     <>
-      <Head title="Marketing resources" />
+      <Head title="Marketing" />
       <div className="grid gap-8">
         <PageHeader
-          title="Marketing resources"
-          description="Approved logos, templates, flyers, and collateral for your role and office."
+          title="Marketing"
+          description="Approved logos, templates, and collateral for your role and office."
         />
 
-        <FilterControls
-          activeCount={activeFilterCount(filters)}
-          onReset={() => {
-            setJurisdiction("");
-            setBrand("");
-            visit({
-              category: "",
-              type: "",
-              jurisdiction: "",
-              brand: "",
-              q: "",
-            });
-          }}
-        >
-          <SearchControl
-            value={filters.q}
-            onSearch={(next) => visit({ q: next })}
-            label="Search marketing resources"
-            placeholder="Search title or description"
-          />
-          <FilterSelect
-            label="Category"
-            value={filters.category}
-            options={filterOptions.categories}
-            onChange={(next) => visit({ category: next })}
-          />
-          <FilterSelect
-            label="Type"
-            value={filters.type}
-            options={filterOptions.assetTypes}
-            onChange={(next) => visit({ type: next })}
-          />
-          <FilterField label="Jurisdiction" hideLabel>
-            <Input
-              aria-label="Jurisdiction state code"
-              value={jurisdiction}
-              maxLength={2}
-              placeholder="State"
-              className="h-8 w-20 uppercase"
-              onChange={(event) => setJurisdiction(event.target.value.toUpperCase())}
-              onBlur={() => {
-                if (jurisdiction !== filters.jurisdiction) {
-                  visit({ jurisdiction });
-                }
+        <MetricStrip>
+          <MetricCard label="Published" value={summary.published} />
+          <MetricCard label="Logos" value={summary.logos} />
+          <MetricCard label="Templates" value={summary.templates} />
+        </MetricStrip>
+
+        <SurfaceCard>
+          <PanelHeader divided title="Library" />
+          <SurfaceCardContent className="grid gap-4">
+            <FilterControls
+              activeCount={activeCount}
+              onReset={() => {
+                setQuery("");
+                setJurisdiction("");
+                setBrand("");
+                visit(
+                  { category: "", type: "", jurisdiction: "", brand: "", q: "" },
+                  1,
+                );
               }}
-            />
-          </FilterField>
-          <FilterField label="Brand" hideLabel>
-            <Input
-              aria-label="Brand code"
-              value={brand}
-              placeholder="Brand"
-              className="h-8 w-28"
-              onChange={(event) => setBrand(event.target.value)}
-              onBlur={() => {
-                if (brand !== filters.brand) {
-                  visit({ brand });
+              leading={
+                <SearchControl
+                  label="Search marketing resources"
+                  value={query}
+                  onValueChange={setQuery}
+                  onSearch={(q) => visit({ q }, 1)}
+                  onClear={() => {
+                    setQuery("");
+                    visit({ q: "" }, 1);
+                  }}
+                  placeholder="Title or description"
+                />
+              }
+            >
+              <FilterSelect
+                label="Category"
+                value={filters.category}
+                options={filterOptions.categories}
+                onChange={(category) => visit({ category }, 1)}
+              />
+              <FilterSelect
+                label="Type"
+                value={filters.type}
+                options={filterOptions.assetTypes}
+                onChange={(type) => visit({ type }, 1)}
+              />
+              <FilterField label="Jurisdiction" hideLabel>
+                <Input
+                  aria-label="Jurisdiction"
+                  value={jurisdiction}
+                  maxLength={2}
+                  placeholder="State"
+                  className="h-8 w-20 uppercase"
+                  onChange={(event) =>
+                    setJurisdiction(event.target.value.toUpperCase())
+                  }
+                  onBlur={() => {
+                    if (jurisdiction !== filters.jurisdiction) {
+                      visit({ jurisdiction }, 1);
+                    }
+                  }}
+                />
+              </FilterField>
+              <FilterField label="Brand" hideLabel>
+                <Input
+                  aria-label="Brand"
+                  value={brand}
+                  placeholder="Brand"
+                  className="h-8 w-28"
+                  onChange={(event) => setBrand(event.target.value)}
+                  onBlur={() => {
+                    if (brand !== filters.brand) {
+                      visit({ brand }, 1);
+                    }
+                  }}
+                />
+              </FilterField>
+            </FilterControls>
+
+            {notice ? (
+              <p
+                role="status"
+                className="text-muted-foreground flex items-start gap-2 text-sm"
+              >
+                <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
+                {notice}
+              </p>
+            ) : null}
+
+            {library.items.length === 0 ? (
+              <EmptyState
+                icon={Megaphone}
+                title={
+                  activeCount > 0
+                    ? "No marketing resources match these filters"
+                    : "No marketing resources published yet"
                 }
-              }}
-            />
-          </FilterField>
-        </FilterControls>
+                description={
+                  activeCount > 0
+                    ? "Reset the filters to see everything available to you."
+                    : "Assets published to your role and office will appear here."
+                }
+              />
+            ) : (
+              <ul aria-label="Marketing resource library" className="grid gap-3">
+                {library.items.map((row) => (
+                  <ResourceRow key={row.id} row={row} />
+                ))}
+              </ul>
+            )}
 
-        {notice ? (
-          <p
-            role="status"
-            className="text-muted-foreground flex items-start gap-2 text-sm"
-          >
-            <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
-            {notice}
-          </p>
-        ) : null}
-
-        {library.items.length === 0 ? (
-          <SurfaceCard>
-            <EmptyState
-              icon={Megaphone}
-              title={
-                activeFilterCount(filters) > 0
-                  ? "No marketing resources match these filters"
-                  : "No marketing resources published yet"
-              }
-              description={
-                activeFilterCount(filters) > 0
-                  ? "Reset the filters to see everything available to you."
-                  : "Assets published to your role and office will appear here."
-              }
-            />
-          </SurfaceCard>
-        ) : (
-          <section aria-label="Marketing resource library" className="grid gap-3">
-            {library.items.map((row) => (
-              <ResourceCard key={row.id} row={row} />
-            ))}
-          </section>
-        )}
-
-        {library.pagination.totalPages > 1 ? (
-          <Pagination
-            pagination={library.pagination}
-            onPageChange={(page) => visit({}, page)}
-          />
-        ) : null}
+            {library.pagination.totalPages > 1 ? (
+              <Pagination
+                pagination={library.pagination}
+                onPageChange={(page) => visit({}, page)}
+              />
+            ) : null}
+          </SurfaceCardContent>
+        </SurfaceCard>
       </div>
     </>
   );
@@ -298,11 +328,12 @@ MarketingResources.layout = () =>
     HubLayout,
     {
       context: {
-        title: "Marketing resources",
+        title: "Marketing",
         breadcrumbs: [
           { label: "Dashboard", href: routes.dashboard() },
-          { label: "Marketing resources" },
+          { label: "Marketing" },
         ],
       },
+      variant: "wide",
     },
   ] as const;

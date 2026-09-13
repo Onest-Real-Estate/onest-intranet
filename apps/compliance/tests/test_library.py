@@ -16,6 +16,7 @@ from apps.compliance.audience import AudienceSelector
 from apps.compliance.services import (
     LibraryFilters,
     library_queryset,
+    library_summary,
     resolve_consumer_policy,
 )
 from apps.compliance.tests.factories import (
@@ -151,3 +152,12 @@ def test_published_policy_cannot_be_edited(seeded):
             selectors=[AudienceSelector(kind="company")],
             expected_version=policy_version_token(row),
         )
+
+
+def test_library_summary_counts_visible_policies(seeded):
+    publish_policy(title="Handbook", is_mandatory=True)
+    reader = agent()
+    summary = library_summary(reader)
+    assert summary["published"] >= 1
+    assert summary["outstanding"] >= 1
+    assert summary["overdue"] >= 0

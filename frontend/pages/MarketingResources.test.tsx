@@ -56,6 +56,11 @@ const { pageProps, routerGet } = vi.hoisted(() => {
         categories: [{ value: "logos", label: "Logos" }],
         assetTypes: [{ value: "logo", label: "Logo" }],
       },
+      summary: {
+        published: 1,
+        logos: 1,
+        templates: 0,
+      },
     },
   };
 });
@@ -100,12 +105,9 @@ describe("MarketingResources", () => {
 
   it("renders library rows and filter controls", () => {
     render(<MarketingResources />);
-    expect(
-      screen.getByRole("heading", { name: "Marketing resources" }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Marketing" })).toBeInTheDocument();
     expect(screen.getByText("Primary brand logo")).toBeInTheDocument();
-    expect(screen.getByLabelText("Category")).toBeInTheDocument();
-    expect(screen.getByLabelText("Type")).toBeInTheDocument();
+    expect(screen.getByText("Published")).toBeInTheDocument();
     expect(screen.getByLabelText("Search marketing resources")).toBeInTheDocument();
   });
 
@@ -122,6 +124,7 @@ describe("MarketingResources", () => {
   it("requests a filtered visit through Inertia", async () => {
     const user = userEvent.setup();
     render(<MarketingResources />);
+    await user.click(screen.getByRole("button", { name: /filters/i }));
     await user.click(screen.getByLabelText("Category"));
     await user.click(screen.getByRole("option", { name: "Logos" }));
     expect(routerGet).toHaveBeenCalled();
