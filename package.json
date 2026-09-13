@@ -8,6 +8,8 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build && touch assets/.gitkeep",
     "typecheck": "tsc --noEmit",
+    "lint": "biome check .",
+    "format": "biome check --write .",
     "routes:generate": "uv run python manage.py generate_typescript_routes --urlconf config.urls --ignore admin > frontend/types/routes.ts",
     "test": "vitest run",
     "prepare": "husky"

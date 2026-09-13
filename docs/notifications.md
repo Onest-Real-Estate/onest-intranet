@@ -82,6 +82,7 @@ EVENT_PRODUCERS = {
     "training.published": training_published,
     "training.required_changed": training_required_changed,
     "policy.published": policy_published,
+    "policy.ack_reminder": policy_ack_reminder,
 }
 ```
 

@@ -251,6 +251,7 @@ class PolicyTransitionForm(forms.Form):
         ]
     )
     expected_version = forms.CharField(required=False)
+    ack_due_at = forms.DateTimeField(required=False)
 
 
 class PolicyDuplicateForm(forms.Form):
@@ -266,3 +267,12 @@ class PolicyWaiverForm(forms.Form):
         super().__init__(*args, **kwargs)
         field = cast(forms.ModelChoiceField, self.fields["user"])
         field.queryset = targetable_user_queryset(actor)
+
+
+class PolicyCorrectionForm(PolicyWaiverForm):
+    kind = forms.ChoiceField(
+        choices=[
+            ("clerical", "clerical"),
+            ("revoke_waiver", "revoke_waiver"),
+        ]
+    )

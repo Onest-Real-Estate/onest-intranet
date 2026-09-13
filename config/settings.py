@@ -409,7 +409,7 @@ DJANGO_VITE = {
 # ---------------------------------------------------------------------------
 INERTIA_LAYOUT = "layout.html"
 # Bump whenever the frontend bundle changes so stale clients get a full reload.
-INERTIA_VERSION = "39"
+INERTIA_VERSION = "40"
 
 # Optional external help centre. The shell exposes it only when it is an
 # absolute, credential-free HTTPS URL; an empty or unsafe value leaves the
@@ -449,6 +449,15 @@ ACCOUNT_USER_MODEL_USERNAME_FIELD = None
 ACCOUNT_USER_MODEL_EMAIL_FIELD = "email"
 ACCOUNT_SIGNUP_FIELDS = ["email*", "password1*", "password2*"]
 ACCOUNT_UNIQUE_EMAIL = True
+# allauth's SOCIALACCOUNT_ONLY check fails unless this is "none". Microsoft
+# is the identity proof; local password signup (when the escape hatch is on)
+# does not send confirmation mail either.
+ACCOUNT_EMAIL_VERIFICATION = "none"
+
+# Deployed processes are Microsoft-only. DEBUG keeps allauth's email/password
+# views so local onboarding can use a seeded password account without Entra.
+ALLOW_PASSWORD_LOGIN = config("ALLOW_PASSWORD_LOGIN", default=DEBUG, cast=bool)
+SOCIALACCOUNT_ONLY = not ALLOW_PASSWORD_LOGIN
 
 # "common" (personal + work/school), "organizations", "consumers", or a
 # specific tenant id.
@@ -490,6 +499,9 @@ DEFAULT_USER_GROUP = "Users"
 # Sentry SDK events are ingested by sentry.io, or by PostHog's error tracking
 # feature (it accepts the same Sentry DSN format — see PostHog docs). Leave
 # SENTRY_DSN empty to disable the SDK entirely.
+# Default window for mandatory policy acknowledgements created on publish.
+COMPLIANCE_ACK_DUE_DAYS = config("COMPLIANCE_ACK_DUE_DAYS", default=14, cast=int)
+
 SENTRY_DSN = config("SENTRY_DSN", default="")
 SENTRY_ENVIRONMENT = config(
     "SENTRY_ENVIRONMENT", default="development" if DEBUG else "production"

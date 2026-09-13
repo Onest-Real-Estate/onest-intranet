@@ -9,9 +9,13 @@ from django.utils import timezone
 
 from apps.audit.events import EventEnvelope
 from apps.audit.models import DomainEvent
-from apps.compliance.acknowledgements import acknowledge
+from apps.compliance.acknowledgements import acknowledge, record_access
 from apps.compliance.administration import policy_version_token, transition
-from apps.compliance.models import PolicyRequirement, PolicyVersion
+from apps.compliance.models import (
+    PolicyRequirement,
+    PolicyVersion,
+    PolicyVersionAccess,
+)
 from apps.compliance.notification_schedule import release_effective_mandatory_policies
 from apps.compliance.tasks import send_policy_ack_reminders
 from apps.compliance.tests.factories import agent, publish_policy, publisher
@@ -43,6 +47,16 @@ def _from_event(event: DomainEvent) -> EventEnvelope:
         correlation_id=event.correlation_id,
         causation_id=event.causation_id,
         payload=event.payload,
+    )
+
+
+def _ack(user, version):
+    record_access(user, version, kind=PolicyVersionAccess.Kind.DETAIL)
+    return acknowledge(
+        user,
+        version.pk,
+        expected_checksum=version.content_checksum,
+        disclosure_version=version.disclosure_version,
     )
 
 
@@ -101,12 +115,7 @@ def test_jurisdiction_and_ack_skip_recipients(seeded):
         jurisdiction_state_codes=["VA"],
         actor=actor,
     )
-    acknowledge(
-        already,
-        version.pk,
-        expected_checksum=version.content_checksum,
-        disclosure_version=version.disclosure_version,
-    )
+    _ack(already, version)
     event = DomainEvent.objects.get(name="policy.published", subject=str(version.pk))
     deliver_for_event(_from_event(event))
 
@@ -154,18 +163,15 @@ def test_overdue_reminder_resolves_until_acknowledged(seeded):
         due_at=timezone.now() - timedelta(days=1)
     )
     assert send_policy_ack_reminders() >= 1
+    for event in DomainEvent.objects.filter(name="policy.ack_reminder"):
+        deliver_for_event(_from_event(event))
     row = Notification.objects.get(recipient=learner, event_key="policy.ack_reminder")
     assert row.source_module == "compliance"
     before = resolve_sources(learner, [row])[row.public_id]
     assert before.available is True
-    assert before.detail == "Ack overdue"
+    assert before.detail == "Acknowledge Ack overdue"
 
-    acknowledge(
-        learner,
-        version.pk,
-        expected_checksum=version.content_checksum,
-        disclosure_version=version.disclosure_version,
-    )
+    _ack(learner, version)
     after = resolve_sources(learner, [row])[row.public_id]
     assert after.available is False
 

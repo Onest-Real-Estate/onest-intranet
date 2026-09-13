@@ -112,12 +112,16 @@ class Capabilities:
     can_author: bool
     can_approve: bool
     can_publish: bool
+    can_view_acks: bool
+    can_waive: bool
 
     def payload(self) -> dict[str, bool]:
         return {
             "canAuthor": self.can_author,
             "canApprove": self.can_approve,
             "canPublish": self.can_publish,
+            "canViewAcks": self.can_view_acks,
+            "canWaive": self.can_waive,
         }
 
 
@@ -126,6 +130,15 @@ def capabilities(actor: User) -> Capabilities:
         can_author=has_effective_permission(actor, MANAGE_PERMISSION),
         can_approve=has_effective_permission(actor, APPROVE_PERMISSION),
         can_publish=has_effective_permission(actor, PUBLISH_PERMISSION),
+        can_view_acks=any(
+            has_effective_permission(actor, code)
+            for code in (
+                MANAGE_PERMISSION,
+                "web.view_compliance",
+                "web.view_policy_acknowledgements",
+            )
+        ),
+        can_waive=has_effective_permission(actor, "web.waive_policy_acknowledgements"),
     )
 
 
@@ -168,6 +181,8 @@ def publication_queryset(actor: User) -> QuerySet[PolicyVersion]:
     if not (
         has_effective_permission(actor, MANAGE_PERMISSION)
         or has_effective_permission(actor, "web.view_compliance")
+        or has_effective_permission(actor, "web.view_policy_acknowledgements")
+        or has_effective_permission(actor, "web.waive_policy_acknowledgements")
     ):
         return base.none()
     access = get_effective_access(actor)
@@ -349,6 +364,16 @@ def _update(
             str(_("Published policies cannot be edited. Duplicate as a new version."))
         )
     before = snapshot(locked)
+    if "acknowledgement_disclosure" in cleaned:
+        previous = locked.acknowledgement_disclosure
+        incoming = cleaned.get("acknowledgement_disclosure") or ""
+        if incoming != previous:
+            current = locked.disclosure_version or 1
+            requested = cleaned.get("disclosure_version") or current
+            cleaned = {
+                **cleaned,
+                "disclosure_version": max(int(requested), current + 1),
+            }
     _apply_fields(locked, cleaned, fields=DRAFT_EDITABLE_FIELDS)
     locked.updated_by = actor
     locked.full_clean(exclude=["owner_office"])
@@ -372,6 +397,7 @@ def transition(
     action: str,
     expected_version: str,
     now=None,
+    ack_due_at=None,
 ) -> PolicyVersion:
     if action not in TRANSITIONS:
         raise TransitionRefused(str(_("That is not a compliance action.")))
@@ -381,6 +407,7 @@ def transition(
         action=action,
         expected_version=expected_version,
         now=now,
+        ack_due_at=ack_due_at,
     )
 
 
@@ -392,6 +419,7 @@ def _transition(
     action: str,
     expected_version: str,
     now=None,
+    ack_due_at=None,
 ) -> PolicyVersion:
     moment = now or timezone.now()
     locked = _lock(version.pk)
@@ -412,7 +440,13 @@ def _transition(
         event_name = "policy.approved"
     elif action == "publish":
         assert_can_publish(actor, locked)
-        return _publish(actor=actor, locked=locked, before=before, now=moment)
+        return _publish(
+            actor=actor,
+            locked=locked,
+            before=before,
+            now=moment,
+            ack_due_at=ack_due_at,
+        )
     elif action == "retire":
         assert_can_publish(actor, locked)
         if locked.status != PolicyVersion.Status.PUBLISHED:
@@ -459,7 +493,12 @@ def _stored_selectors(version: PolicyVersion) -> list[AudienceSelector]:
 
 
 def _publish(
-    *, actor: User, locked: PolicyVersion, before: dict[str, Any], now
+    *,
+    actor: User,
+    locked: PolicyVersion,
+    before: dict[str, Any],
+    now,
+    ack_due_at=None,
 ) -> PolicyVersion:
     from apps.compliance.acknowledgements import on_policy_published
     from apps.compliance.audience import assert_can_target
@@ -482,7 +521,7 @@ def _publish(
     locked.full_clean()
     locked.save()
 
-    on_policy_published(locked, actor, now=now)
+    on_policy_published(locked, actor, now=now, due_at=ack_due_at)
 
     _log(
         "policy.published",

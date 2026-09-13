@@ -1,9 +1,23 @@
 from django.conf import settings
 from django.contrib import admin
 from django.urls import URLPattern, URLResolver, include, path
+from django.views.generic import RedirectView
 
 urlpatterns: list[URLPattern | URLResolver] = [
     path("admin/", admin.site.urls),
+]
+
+# SOCIALACCOUNT_ONLY still serves GET /accounts/login/ as allauth's password
+# form. Intercept it first so the hub Login page is the only sign-in chrome.
+if settings.SOCIALACCOUNT_ONLY:
+    urlpatterns.append(
+        path(
+            "accounts/login/",
+            RedirectView.as_view(pattern_name="login", query_string=True),
+        )
+    )
+
+urlpatterns += [
     path("accounts/", include("allauth.urls")),
     path("", include("apps.user.urls")),
     # Inventory hub routes must beat ``hub/<slug>`` in web.urls (coming_soon).

@@ -15,6 +15,7 @@ const URLS = {
     'room_reservation_new': () => `/rooms/reservations/new`,
     'room_availability': () => `/rooms`,
     'activity_timeline': (record_type: string, record_id: string) => `/activity/${record_type}/${record_id}`,
+    'policy_ack_correct': (policy_id: number) => `/operations/compliance/${policy_id}/correct`,
     'policy_ack_waive': (policy_id: number) => `/operations/compliance/${policy_id}/waive`,
     'policy_ack_report': () => `/operations/compliance/acknowledgements`,
     'policy_admin_file_remove': (file_id: number) => `/operations/compliance/files/${file_id}/remove`,

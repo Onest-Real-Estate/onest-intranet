@@ -472,6 +472,70 @@ class PolicyFile(models.Model):
         )
 
 
+class PolicyVersionAccess(models.Model):
+    """Evidence that a user opened the current policy version or document."""
+
+    class Kind(models.TextChoices):
+        DETAIL = "detail", _("Policy detail")
+        DOCUMENT = "document", _("Policy document")
+
+    user = models.ForeignKey(
+        "user.User",
+        verbose_name=_("user"),
+        related_name="policy_version_accesses",
+        on_delete=models.CASCADE,
+    )
+    policy_version = models.ForeignKey(
+        PolicyVersion,
+        verbose_name=_("policy version"),
+        related_name="accesses",
+        on_delete=models.CASCADE,
+    )
+    policy_file = models.ForeignKey(
+        PolicyFile,
+        verbose_name=_("policy file"),
+        related_name="accesses",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+    )
+    kind = models.CharField(_("kind"), max_length=16, choices=Kind.choices)
+    content_checksum = models.CharField(_("content checksum"), max_length=64)
+    accessed_at = models.DateTimeField(_("accessed at"), auto_now=True)
+
+    class Meta:
+        verbose_name = _("policy version access")
+        verbose_name_plural = _("policy version accesses")
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "policy_version"],
+                condition=Q(kind="detail"),
+                name="compliance_access_unique_detail",
+            ),
+            models.UniqueConstraint(
+                fields=["user", "policy_version", "policy_file"],
+                condition=Q(kind="document"),
+                name="compliance_access_unique_document",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    Q(kind="detail", policy_file__isnull=True)
+                    | Q(kind="document", policy_file__isnull=False)
+                ),
+                name="compliance_access_kind_file",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["user", "policy_version", "kind"],
+                name="compliance_access_lookup",
+            ),
+        ]
+
+    def __str__(self):
+        return f"Access {self.user} / {self.policy_version} / {self.kind}"
+
+
 class PolicyRequirement(models.Model):
     """Acknowledgement obligation for one published policy version."""
 
@@ -489,6 +553,13 @@ class PolicyRequirement(models.Model):
         ordering = ["-created_at"]
         verbose_name = _("policy requirement")
         verbose_name_plural = _("policy requirements")
+        constraints = [
+            models.UniqueConstraint(
+                fields=["policy_version"],
+                condition=Q(is_active=True),
+                name="compliance_one_active_requirement",
+            ),
+        ]
         indexes = [
             models.Index(
                 fields=["is_active", "due_at"],
@@ -517,6 +588,7 @@ class PolicyAcknowledgement(models.Model):
     )
     content_checksum = models.CharField(_("content checksum"), max_length=64)
     disclosure_version = models.PositiveIntegerField(_("disclosure version"))
+    disclosure_text = models.TextField(_("disclosure text"), blank=True)
     acknowledged_at = models.DateTimeField(_("acknowledged at"), auto_now_add=True)
     request_meta = models.JSONField(_("request metadata"), default=dict, blank=True)
 
@@ -563,6 +635,7 @@ class PolicyAcknowledgementWaiver(models.Model):
         on_delete=models.PROTECT,
     )
     waived_at = models.DateTimeField(_("waived at"), auto_now_add=True)
+    is_active = models.BooleanField(_("active"), default=True)
 
     class Meta:
         verbose_name = _("policy acknowledgement waiver")
@@ -582,3 +655,47 @@ class PolicyAcknowledgementWaiver(models.Model):
 
     def __str__(self):
         return f"Waiver {self.user} / {self.policy_version}"
+
+
+class PolicyAcknowledgementCorrection(models.Model):
+    """Append-only clerical correction. Never deletes acknowledgement evidence."""
+
+    class Kind(models.TextChoices):
+        CLERICAL = "clerical", _("Clerical note")
+        REVOKE_WAIVER = "revoke_waiver", _("Revoke waiver")
+
+    user = models.ForeignKey(
+        "user.User",
+        verbose_name=_("user"),
+        related_name="policy_acknowledgement_corrections",
+        on_delete=models.CASCADE,
+    )
+    policy_version = models.ForeignKey(
+        PolicyVersion,
+        verbose_name=_("policy version"),
+        related_name="acknowledgement_corrections",
+        on_delete=models.PROTECT,
+    )
+    kind = models.CharField(_("kind"), max_length=16, choices=Kind.choices)
+    reason = models.TextField(_("reason"))
+    corrected_by = models.ForeignKey(
+        "user.User",
+        verbose_name=_("corrected by"),
+        related_name="policy_acknowledgement_corrections_made",
+        on_delete=models.PROTECT,
+    )
+    created_at = models.DateTimeField(_("created at"), auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name = _("policy acknowledgement correction")
+        verbose_name_plural = _("policy acknowledgement corrections")
+        indexes = [
+            models.Index(
+                fields=["policy_version", "created_at"],
+                name="compliance_correction_version",
+            ),
+        ]
+
+    def __str__(self):
+        return f"Correction {self.user} / {self.policy_version}"

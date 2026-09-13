@@ -5,6 +5,8 @@ import { type FormEvent, useState } from "react";
 import {
   DataTable,
   EmptyState,
+  FilterControls,
+  FilterField,
   FormErrorSummary,
   FormField,
   FormFieldError,
@@ -12,6 +14,7 @@ import {
   fieldA11yProps,
   PageHeader,
   PanelHeader,
+  SearchControl,
   StatusBadge,
   SurfaceCard,
   SurfaceCardContent,
@@ -21,13 +24,32 @@ import { HubLayout } from "@/components/HubLayout";
 import { PermissionRequired } from "@/components/PermissionRequired";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { toFormData } from "@/lib/form-data";
 import { routes } from "@/lib/routes";
 import { firstFieldError } from "@/lib/validation";
-import type { ComplianceAckReportPageProps, ComplianceAckReportRow } from "@/types";
+import type {
+  ComplianceAckReportFilters,
+  ComplianceAckReportPageProps,
+  ComplianceAckReportRow,
+  FilterOption,
+} from "@/types";
 
-const MANAGE = { all: ["web.manage_policies"] };
+const VIEW = {
+  any: [
+    "web.view_policy_acknowledgements",
+    "web.view_compliance",
+    "web.manage_policies",
+  ],
+};
+const ANY = "__any__";
 
 const STATUS_TONE: Record<string, string> = {
   pending: "warning",
@@ -47,32 +69,84 @@ function formatDate(value: string | null): string {
   });
 }
 
+function FilterSelect({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: FilterOption[];
+  onChange: (next: string) => void;
+}) {
+  return (
+    <FilterField label={label} hideLabel>
+      <Select
+        value={value || ANY}
+        onValueChange={(next) => onChange(next === ANY ? "" : next)}
+      >
+        <SelectTrigger size="sm" aria-label={label}>
+          <SelectValue placeholder={`Any ${label.toLowerCase()}`} />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={ANY}>Any {label.toLowerCase()}</SelectItem>
+          {options.map((option) => (
+            <SelectItem key={option.value} value={option.value}>
+              {option.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </FilterField>
+  );
+}
+
 function ComplianceAckReportPage() {
-  const { report, capabilities, errors } =
+  const { report, filterOptions, filters, capabilities, errors } =
     usePage<ComplianceAckReportPageProps>().props;
+  const [query, setQuery] = useState(filters.q ?? "");
   const [waiveUserId, setWaiveUserId] = useState("");
   const [waivePolicyId, setWaivePolicyId] = useState("");
   const [reason, setReason] = useState("");
+  const [correcting, setCorrecting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  function startWaive(row: ComplianceAckReportRow) {
+  function visit(patch: Partial<ComplianceAckReportFilters>) {
+    router.get(
+      routes.policy_ack_report(),
+      {
+        ...filters,
+        q: query,
+        ...patch,
+      },
+      { preserveState: true, preserveScroll: true, replace: true },
+    );
+  }
+
+  function startWaive(row: ComplianceAckReportRow, revoke = false) {
     setWaiveUserId(String(row.userId));
     setWaivePolicyId(String(row.policyId));
     setReason("");
+    setCorrecting(revoke);
   }
 
-  function submitWaive(event: FormEvent<HTMLFormElement>) {
+  function submitAction(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const policyId = Number(waivePolicyId);
     if (!policyId) {
       return;
     }
     setSubmitting(true);
+    const href = correcting
+      ? routes.policy_ack_correct(policyId)
+      : routes.policy_ack_waive(policyId);
     router.post(
-      routes.policy_ack_waive(policyId),
+      href,
       toFormData({
         user: waiveUserId,
         reason,
+        ...(correcting ? { kind: "revoke_waiver" } : {}),
       }),
       {
         onFinish: () => setSubmitting(false),
@@ -80,6 +154,7 @@ function ComplianceAckReportPage() {
           setWaiveUserId("");
           setWaivePolicyId("");
           setReason("");
+          setCorrecting(false);
         },
       },
     );
@@ -103,6 +178,87 @@ function ComplianceAckReportPage() {
 
       <FormErrorSummary errors={errors} />
 
+      <FilterControls
+        activeCount={
+          [
+            filters.policy,
+            filters.office,
+            filters.region,
+            filters.role,
+            filters.dueFrom,
+            filters.dueTo,
+            filters.status,
+            filters.q,
+          ].filter(Boolean).length
+        }
+        onReset={() => {
+          setQuery("");
+          visit({
+            policy: "",
+            office: "",
+            region: "",
+            role: "",
+            dueFrom: "",
+            dueTo: "",
+            status: "",
+            q: "",
+          });
+        }}
+      >
+        <SearchControl
+          value={query}
+          onValueChange={setQuery}
+          onSearch={(value) => visit({ q: value })}
+          placeholder="Search people"
+        />
+        <FilterSelect
+          label="Policy"
+          value={filters.policy}
+          options={filterOptions.policies}
+          onChange={(policy) => visit({ policy })}
+        />
+        <FilterSelect
+          label="Office"
+          value={filters.office}
+          options={filterOptions.offices}
+          onChange={(office) => visit({ office })}
+        />
+        <FilterSelect
+          label="Region"
+          value={filters.region}
+          options={filterOptions.regions}
+          onChange={(region) => visit({ region })}
+        />
+        <FilterSelect
+          label="Role"
+          value={filters.role}
+          options={filterOptions.roles}
+          onChange={(role) => visit({ role })}
+        />
+        <FilterSelect
+          label="Status"
+          value={filters.status}
+          options={filterOptions.statuses}
+          onChange={(status) => visit({ status })}
+        />
+        <FilterField label="Due from">
+          <Input
+            type="date"
+            aria-label="Due from"
+            value={filters.dueFrom}
+            onChange={(event) => visit({ dueFrom: event.target.value })}
+          />
+        </FilterField>
+        <FilterField label="Due to">
+          <Input
+            type="date"
+            aria-label="Due to"
+            value={filters.dueTo}
+            onChange={(event) => visit({ dueTo: event.target.value })}
+          />
+        </FilterField>
+      </FilterControls>
+
       <SurfaceCard>
         <PanelHeader
           divided
@@ -119,7 +275,7 @@ function ComplianceAckReportPage() {
             <EmptyState
               icon={ClipboardList}
               title="No acknowledgement rows"
-              description="Mandatory published policies with people in your scope will appear here."
+              description="Mandatory published policies with people in the effective audience will appear here."
             />
           ) : (
             <DataTable
@@ -186,15 +342,17 @@ function ComplianceAckReportPage() {
                   id: "actions",
                   header: <span className="sr-only">Actions</span>,
                   cell: (row) =>
-                    capabilities.canAuthor &&
-                    (row.status === "pending" || row.status === "overdue") ? (
+                    capabilities.canWaive &&
+                    (row.status === "pending" ||
+                      row.status === "overdue" ||
+                      row.status === "waived") ? (
                       <Button
                         type="button"
                         variant="outline"
                         size="sm"
-                        onClick={() => startWaive(row)}
+                        onClick={() => startWaive(row, row.status === "waived")}
                       >
-                        Waive
+                        {row.status === "waived" ? "Revoke waiver" : "Waive"}
                       </Button>
                     ) : null,
                   className: "text-right",
@@ -206,15 +364,15 @@ function ComplianceAckReportPage() {
         </SurfaceCardContent>
       </SurfaceCard>
 
-      {capabilities.canAuthor && waivePolicyId ? (
+      {capabilities.canWaive && waivePolicyId ? (
         <SurfaceCard>
           <PanelHeader
             divided
-            title="Waive acknowledgement"
-            description="Explain why this person does not need to acknowledge. At least 8 characters."
+            title={correcting ? "Revoke waiver" : "Waive acknowledgement"}
+            description="Explain why in at least 8 characters. Evidence is kept."
           />
           <SurfaceCardContent>
-            <form className="grid max-w-xl gap-4" onSubmit={submitWaive} noValidate>
+            <form className="grid max-w-xl gap-4" onSubmit={submitAction} noValidate>
               <input type="hidden" name="user" value={waiveUserId} />
               <FormField>
                 <FormLabel htmlFor="waive_user">User id</FormLabel>
@@ -235,7 +393,7 @@ function ComplianceAckReportPage() {
               </FormField>
               <div className="flex flex-wrap gap-2">
                 <Button type="submit" disabled={submitting || reason.trim().length < 8}>
-                  Confirm waiver
+                  {correcting ? "Confirm revocation" : "Confirm waiver"}
                 </Button>
                 <Button
                   type="button"
@@ -245,6 +403,7 @@ function ComplianceAckReportPage() {
                     setWaiveUserId("");
                     setWaivePolicyId("");
                     setReason("");
+                    setCorrecting(false);
                   }}
                 >
                   Cancel
@@ -260,7 +419,7 @@ function ComplianceAckReportPage() {
 
 export default function ComplianceAckReport() {
   return (
-    <PermissionRequired permission={MANAGE}>
+    <PermissionRequired permission={VIEW}>
       <ComplianceAckReportPage />
     </PermissionRequired>
   );

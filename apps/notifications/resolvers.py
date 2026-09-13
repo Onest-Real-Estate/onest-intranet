@@ -104,6 +104,55 @@ def resolve_onboarding_tools(
 
 
 CONTRACT_MODULE = "contract"
+COMPLIANCE_MODULE = "compliance"
+
+
+def resolve_compliance_policies(
+    user, notifications: Sequence
+) -> dict[UUID, SourceResolution]:
+    """Detail while the reader may still open that policy version.
+
+    Reminder rows fail closed once the family is satisfied. Publish notices
+    stay visible for as long as the library would show the policy.
+    """
+    from apps.compliance.acknowledgements import family_satisfaction_counts
+    from apps.compliance.audience import visible_policies
+    from apps.compliance.services import apply_jurisdiction_visibility
+
+    ids = _record_ids(notifications)
+    if not ids:
+        return {}
+    versions = {
+        version.pk: version
+        for version in apply_jurisdiction_visibility(
+            visible_policies(user).filter(pk__in=set(ids.values())), user
+        )
+    }
+    event_by_id = {
+        notification.public_id: str(getattr(notification, "event_key", "") or "")
+        for notification in notifications
+    }
+    resolutions: dict[UUID, SourceResolution] = {}
+    for public_id, record_id in ids.items():
+        version = versions.get(record_id)
+        if version is None:
+            continue
+        event_key = event_by_id.get(public_id, "")
+        if event_key == "policy.ack_reminder" and family_satisfaction_counts(
+            user, version
+        ):
+            continue
+        detail = (
+            f"Acknowledge {version.title}"
+            if event_key == "policy.ack_reminder"
+            else version.title
+        )
+        resolutions[public_id] = SourceResolution(
+            available=True,
+            detail=detail,
+            action_available=True,
+        )
+    return resolutions
 
 
 def resolve_contracts(user, notifications: Sequence) -> dict[UUID, SourceResolution]:
@@ -193,3 +242,5 @@ def register_default_resolvers() -> None:
         register_resolver(ONBOARDING_TOOL_MODULE, resolve_onboarding_tools)
     if CONTRACT_MODULE not in registered_modules():
         register_resolver(CONTRACT_MODULE, resolve_contracts)
+    if COMPLIANCE_MODULE not in registered_modules():
+        register_resolver(COMPLIANCE_MODULE, resolve_compliance_policies)
