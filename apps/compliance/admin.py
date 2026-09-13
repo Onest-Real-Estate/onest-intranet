@@ -4,12 +4,19 @@ from django.contrib import admin
 
 from apps.compliance.models import (
     PolicyAcknowledgement,
+    PolicyAcknowledgementCorrection,
     PolicyAcknowledgementWaiver,
     PolicyCategory,
     PolicyFile,
     PolicyRequirement,
     PolicyVersion,
+    PolicyVersionAccess,
 )
+
+
+class EvidenceAdmin(admin.ModelAdmin):
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(PolicyCategory)
@@ -72,8 +79,23 @@ class PolicyRequirementAdmin(admin.ModelAdmin):
     list_filter = ("is_active",)
 
 
+@admin.register(PolicyVersionAccess)
+class PolicyVersionAccessAdmin(EvidenceAdmin):
+    list_display = ("user", "policy_version", "kind", "accessed_at")
+    list_filter = ("kind",)
+    search_fields = ("user__email", "content_checksum")
+    readonly_fields = (
+        "user",
+        "policy_version",
+        "policy_file",
+        "kind",
+        "content_checksum",
+        "accessed_at",
+    )
+
+
 @admin.register(PolicyAcknowledgement)
-class PolicyAcknowledgementAdmin(admin.ModelAdmin):
+class PolicyAcknowledgementAdmin(EvidenceAdmin):
     list_display = (
         "user",
         "policy_version",
@@ -86,13 +108,37 @@ class PolicyAcknowledgementAdmin(admin.ModelAdmin):
         "policy_version",
         "content_checksum",
         "disclosure_version",
+        "disclosure_text",
         "acknowledged_at",
         "request_meta",
     )
 
 
 @admin.register(PolicyAcknowledgementWaiver)
-class PolicyAcknowledgementWaiverAdmin(admin.ModelAdmin):
-    list_display = ("user", "policy_version", "waived_by", "waived_at")
+class PolicyAcknowledgementWaiverAdmin(EvidenceAdmin):
+    list_display = ("user", "policy_version", "waived_by", "waived_at", "is_active")
+    list_filter = ("is_active",)
     search_fields = ("user__email", "reason")
-    readonly_fields = ("waived_at",)
+    readonly_fields = (
+        "user",
+        "policy_version",
+        "reason",
+        "waived_by",
+        "waived_at",
+        "is_active",
+    )
+
+
+@admin.register(PolicyAcknowledgementCorrection)
+class PolicyAcknowledgementCorrectionAdmin(EvidenceAdmin):
+    list_display = ("user", "policy_version", "kind", "corrected_by", "created_at")
+    list_filter = ("kind",)
+    search_fields = ("user__email", "reason")
+    readonly_fields = (
+        "user",
+        "policy_version",
+        "kind",
+        "reason",
+        "corrected_by",
+        "created_at",
+    )

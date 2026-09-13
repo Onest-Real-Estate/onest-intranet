@@ -2,6 +2,7 @@ from django.urls import path
 
 from .administration_views import (
     admin_compliance,
+    policy_ack_correct,
     policy_ack_report,
     policy_ack_waive,
     policy_admin_create,
@@ -87,6 +88,11 @@ urlpatterns = [
         "operations/compliance/<int:policy_id>/waive",
         policy_ack_waive,
         name="policy_ack_waive",
+    ),
+    path(
+        "operations/compliance/<int:policy_id>/correct",
+        policy_ack_correct,
+        name="policy_ack_correct",
     ),
 ]
 

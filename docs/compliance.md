@@ -67,15 +67,46 @@ sibling when the reader still matches audience and jurisdiction; otherwise they
 
 ## Acknowledgements
 
-Mandatory published policies create a `PolicyRequirement` (default due in 14
-days, overridable via `COMPLIANCE_ACK_DUE_DAYS`). Readers acknowledge on the
-detail page with checksum + disclosure version binding. Acknowledgements are
-idempotent per `(user, policy_version)`. Scoped waivers are admin-only with a
-required reason.
+Mandatory published policies create one active `PolicyRequirement` (default due
+in `COMPLIANCE_ACK_DUE_DAYS`, 14 unless overridden on publish). Audience is the
+published `PolicyAudience` set plus jurisdiction. There is no per-user
+assignment table.
 
-Overdue mandatory acks surface as dashboard action items
-(`apps.compliance.action_items`) and optional reminder notifications via Celery
-task `send_policy_ack_reminders`.
+Readers must open the current version (detail visit records
+`PolicyVersionAccess`) and, when ready document-role files exist, download at
+least one of those files. They then confirm the disclosure and post checksum +
+disclosure version. The acknowledgement row stores the authenticated user, the
+immutable policy version, sealed `content_checksum`, `disclosure_version`, a
+snapshot of `disclosure_text`, `acknowledged_at`, and request metadata
+(`ip`, `userAgent`, `requestId`). Replayed posts return the same row.
+
+**Re-acknowledgement.** `reacknowledge_on_supersede` is read from the
+superseded sibling. When it is true (default), every current audience member
+must acknowledge the new version. When it is false, people who already
+acknowledged or hold an active waiver on a prior family sibling are treated as
+satisfied; people who never completed the family still must acknowledge. Old
+evidence stays on the old version (`PROTECT`). There is no purge: rows are
+retained for the life of the family and after retirement.
+
+**Reminders and action items.** Open mandatory requirements appear on the
+dashboard (`apps.compliance.action_items`): pending is high priority, overdue
+is critical. Completion is omission. The beat task
+`send_policy_ack_reminders` publishes `policy.ack_reminder` until the reader
+acknowledges or is waived; deliveries use `dedupe_key`
+`policy-ack-reminder:{version_id}:{user_id}` and `is_mandatory=True`. Completing
+the requirement expires outstanding reminder rows without deleting them.
+
+**Reporting.** `/operations/compliance/acknowledgements` intersects
+`recipients_for` ∩ jurisdiction ∩ the actor's office scope, then applies
+filters (`policy`, `office`, `region`, `role`, `dueFrom`, `dueTo`, `status`,
+`q`). View permission is `web.view_policy_acknowledgements` **or**
+`web.view_compliance` **or** `web.manage_policies`. The operational report
+`complianceOpenItems` uses the same open-item query.
+
+**Waivers and corrections.** `web.waive_policy_acknowledgements` is required.
+A waiver stores a reason and does not delete acknowledgements. A correction is
+append-only (`clerical` or `revoke_waiver`). Revoking a waiver sets
+`is_active=False` on the existing row. Django admin cannot delete evidence.
 
 ## Files
 

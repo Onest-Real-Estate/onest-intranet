@@ -97,7 +97,7 @@ SOURCE_MODULE_AVAILABILITY: dict[str, bool] = {
     SourceModule.TASKS: False,
     SourceModule.LEADS: False,
     SourceModule.CONTRACTS: False,
-    SourceModule.COMPLIANCE: False,
+    SourceModule.COMPLIANCE: True,
     SourceModule.INVENTORY: True,
     SourceModule.RESERVATIONS: False,
     SourceModule.TRAINING: True,
@@ -112,7 +112,7 @@ SOURCE_MODULE_UNAVAILABLE_REASON: dict[str, str] = {
     SourceModule.TASKS: "Tasks are not connected to the hub yet.",
     SourceModule.LEADS: "Leads are not connected to the hub yet.",
     SourceModule.CONTRACTS: "Agent contracts are not connected to the hub yet.",
-    SourceModule.COMPLIANCE: "Compliance tracking is not connected to the hub yet.",
+    SourceModule.COMPLIANCE: "Compliance tracking is connected.",
     SourceModule.INVENTORY: "Inventory is not connected to the hub yet.",
     SourceModule.RESERVATIONS: "Reservations are not connected to the hub yet.",
     SourceModule.TRAINING: "Training progress is connected.",
@@ -420,6 +420,23 @@ def calculate_team_overdue_inventory(context: MetricContext) -> MetricValue:
     )
 
 
+def calculate_team_compliance_exceptions(context: MetricContext) -> MetricValue:
+    """Open mandatory acknowledgements in the caller's office scope."""
+    from apps.compliance.acknowledgements import open_item_rows
+
+    rows, _truncated = open_item_rows(context.user, row_limit=None)
+    count = len(rows)
+    tone = "destructive" if count else "neutral"
+    return MetricValue(
+        value=format_count(count),
+        hint="Open acknowledgements in your scope",
+        tone=tone,
+        trend="flat",
+        raw_value=count,
+        unit="count",
+    )
+
+
 def calculate_new_agents(context: MetricContext) -> MetricValue:
     """Agents who joined the caller's scope inside the trailing window.
 
@@ -696,7 +713,7 @@ METRIC_DEFINITIONS: tuple[MetricDefinition, ...] = (
         order=170,
         scopes=MANAGED_SCOPES,
         source_module=SourceModule.COMPLIANCE,
-        calculator=pending_source,
+        calculator=calculate_team_compliance_exceptions,
         all_permissions=("web.view_compliance",),
         drill_down=MetricDrillDown(
             route_name="admin_compliance",

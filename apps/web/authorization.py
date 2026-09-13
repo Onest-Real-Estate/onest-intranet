@@ -1598,7 +1598,11 @@ ROUTE_POLICIES: dict[str, AuthorizationPolicy] = {
         description="Scoped acknowledgement status report for mandatory policies.",
         methods=("GET",),
         route_names=("policy_ack_report",),
-        any_permissions=("web.view_compliance", "web.manage_policies"),
+        any_permissions=(
+            "web.view_compliance",
+            "web.manage_policies",
+            "web.view_policy_acknowledgements",
+        ),
         scope_rule="publication_scope",
     ),
     "policy_ack_waive": AuthorizationPolicy(
@@ -1607,7 +1611,18 @@ ROUTE_POLICIES: dict[str, AuthorizationPolicy] = {
         description="Waive one person's acknowledgement requirement in scope.",
         methods=("POST",),
         route_names=("policy_ack_waive",),
-        all_permissions=("web.manage_policies",),
+        all_permissions=("web.waive_policy_acknowledgements",),
+        scope_rule="publication_scope",
+    ),
+    "policy_ack_correct": AuthorizationPolicy(
+        key="policy_ack_correct",
+        access="permission_protected",
+        description=(
+            "Record a reasoned acknowledgement correction without deleting evidence."
+        ),
+        methods=("POST",),
+        route_names=("policy_ack_correct",),
+        all_permissions=("web.waive_policy_acknowledgements",),
         scope_rule="publication_scope",
     ),
     "office_resource_download": AuthorizationPolicy(

@@ -49,7 +49,8 @@ result without revealing whether the office exists.
 
 ## Aggregate reconciliation
 
-Connected calculators (`onboardingProgress`, `officeHeadcount`) build
+Connected calculators (`onboardingProgress`, `officeHeadcount`,
+`complianceOpenItems`) build
 aggregates and chart series from the **same** filtered row set (via
 `Counter` / per-office buckets). Drill-down rows therefore sum to the chart
 and the reported total under the documented inclusion rules.

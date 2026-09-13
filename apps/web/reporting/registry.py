@@ -24,6 +24,7 @@ from apps.web.metrics import (
     resolve_scope,
 )
 from apps.web.reporting.calculators import (
+    compliance_open_items,
     office_headcount,
     onboarding_progress,
     pending_source,
@@ -164,16 +165,32 @@ REPORT_DEFINITIONS: tuple[ReportDefinition, ...] = (
         order=50,
         scopes=(MetricScope.OFFICE, MetricScope.REGION, MetricScope.COMPANY),
         source_module=SourceModule.COMPLIANCE,
-        calculator=pending_source,
+        calculator=compliance_open_items,
         columns=(
             ReportColumn(key="title", label="Item"),
             ReportColumn(key="dueDate", label="Due"),
             ReportColumn(key="status", label="Status"),
         ),
-        filters=(),
+        filters=(
+            ReportFilterSpec(key="office", label="Office", kind="office"),
+            ReportFilterSpec(
+                key="status",
+                label="Status",
+                kind="select",
+                options=(("pending", "Pending"), ("overdue", "Overdue")),
+            ),
+        ),
         time_grain="week",
-        definition="Compliance items in effective office scope; pending source.",
-        all_permissions=("web.view_compliance",),
+        definition=(
+            "Open mandatory acknowledgements for audience members in effective "
+            "office scope. Timezone: project TIME_ZONE; no comparison in v1."
+        ),
+        all_permissions=(
+            "web.view_compliance",
+            "web.view_policy_acknowledgements",
+            "web.manage_policies",
+        ),
+        any_permission=True,
     ),
     ReportDefinition(
         key="onboardingProgress",
