@@ -220,8 +220,10 @@ indent. Types: `ty` on the backend, `tsc --noEmit` on the frontend — both must
 
 ## Gotchas
 
-- **SSO only.** There is no password login. Auth flows through allauth's
-  `microsoft_login`; don't add a local login form.
+- **SSO only.** Auth flows through allauth's `microsoft_login`; don't add a
+  local login form. `ALLOW_PASSWORD_LOGIN` (defaults to `DEBUG`) keeps
+  allauth's email/password views for local onboarding; production must leave
+  it off.
 - **Onboarding middleware.** `ProfileCompletionMiddleware` redirects incomplete
   profiles to `/onboarding`. A new page that must be reachable before onboarding
   has to be added to the exempt list in `apps/user/middleware.py`.

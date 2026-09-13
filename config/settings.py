@@ -449,6 +449,15 @@ ACCOUNT_USER_MODEL_USERNAME_FIELD = None
 ACCOUNT_USER_MODEL_EMAIL_FIELD = "email"
 ACCOUNT_SIGNUP_FIELDS = ["email*", "password1*", "password2*"]
 ACCOUNT_UNIQUE_EMAIL = True
+# allauth's SOCIALACCOUNT_ONLY check fails unless this is "none". Microsoft
+# is the identity proof; local password signup (when the escape hatch is on)
+# does not send confirmation mail either.
+ACCOUNT_EMAIL_VERIFICATION = "none"
+
+# Deployed processes are Microsoft-only. DEBUG keeps allauth's email/password
+# views so local onboarding can use a seeded password account without Entra.
+ALLOW_PASSWORD_LOGIN = config("ALLOW_PASSWORD_LOGIN", default=DEBUG, cast=bool)
+SOCIALACCOUNT_ONLY = not ALLOW_PASSWORD_LOGIN
 
 # "common" (personal + work/school), "organizations", "consumers", or a
 # specific tenant id.

@@ -24,3 +24,8 @@ CACHES = {
 }
 
 EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
+
+# Always exercise the deployed SSO-only contract, even when a developer's
+# .env leaves ALLOW_PASSWORD_LOGIN on for runserver.
+ALLOW_PASSWORD_LOGIN = False
+SOCIALACCOUNT_ONLY = True
