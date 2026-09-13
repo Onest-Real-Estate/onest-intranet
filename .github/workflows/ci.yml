@@ -5,15 +5,55 @@ on:
     branches: [main, staging, development]
   pull_request:
 
+permissions:
+  contents: read
+  pull-requests: read
+
 # Pre-commit (.husky/pre-commit) runs lint, types, and migration drift only.
 # This workflow adds the slow suites that stay out of the local hook:
 #   uv run pytest   # -n auto --reuse-db via pyproject.toml addopts
 #   pnpm test
 # Plus the same lint/type/migration checks as pre-commit (minus lint-staged).
+#
+# Backend runs only when Python (or its toolchain) changes.
+# Frontend runs only when TypeScript (or its toolchain) changes.
+# Editing this workflow re-runs both so the new gates stay covered.
 
 jobs:
+  changes:
+    name: Detect file changes
+    runs-on: ubuntu-latest
+    outputs:
+      python: ${{ steps.filter.outputs.python }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: dorny/paths-filter@v4
+        id: filter
+        with:
+          filters: |
+            python:
+              - '**/*.py'
+              - 'pyproject.toml'
+              - 'uv.lock'
+              - '.python-version'
+              - '.github/workflows/ci.yml'
+            frontend:
+              - '**/*.ts'
+              - '**/*.tsx'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - 'pnpm-workspace.yaml'
+              - 'tsconfig.json'
+              - 'biome.json'
+              - 'components.json'
+              - '.github/workflows/ci.yml'
+
   backend:
     name: Backend (ruff · ty · pytest · migrations)
+    needs: changes
+    if: needs.changes.outputs.python == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -44,6 +84,8 @@ jobs:
 
   frontend:
     name: Frontend (typecheck · biome)
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -70,3 +112,26 @@ jobs:
 
       - name: Lint + format (biome)
         run: pnpm exec biome check .
+
+  ci:
+    name: CI
+    needs: [changes, backend, frontend]
+    if: ${{ always() && !cancelled() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check job results
+        run: |
+          if [ "${{ needs.changes.result }}" != "success" ]; then
+            echo "Change detection failed: ${{ needs.changes.result }}"
+            exit 1
+          fi
+          if [ "${{ needs.backend.result }}" != "success" ] \
+            && [ "${{ needs.backend.result }}" != "skipped" ]; then
+            echo "Backend failed: ${{ needs.backend.result }}"
+            exit 1
+          fi
+          if [ "${{ needs.frontend.result }}" != "success" ] \
+            && [ "${{ needs.frontend.result }}" != "skipped" ]; then
+            echo "Frontend failed: ${{ needs.frontend.result }}"
+            exit 1
+          fi
