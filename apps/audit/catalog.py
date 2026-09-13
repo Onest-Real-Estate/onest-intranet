@@ -1068,3 +1068,46 @@ registry.register(
     },
     description="A published policy was retired and left the consumer library.",
 )
+
+registry.register(
+    name="policy.ack_reminder",
+    version=1,
+    required_payload_keys={
+        "policy_id",
+        "recipient_id",
+        "due_at",
+        "occurred_at",
+    },
+    description=(
+        "Emitted for an overdue mandatory policy acknowledgement. "
+        "Beat tasks skip users who have already acknowledged or been waived."
+    ),
+)
+
+registry.register(
+    name="compliance.acknowledged",
+    version=1,
+    required_payload_keys={"policy_id", "recipient_id", "occurred_at"},
+    description="A user acknowledged one immutable policy version.",
+)
+
+registry.register(
+    name="compliance.waived",
+    version=1,
+    required_payload_keys={"policy_id", "recipient_id", "occurred_at"},
+    description="An authorized actor waived one acknowledgement requirement.",
+)
+
+registry.register(
+    name="compliance.requirement_created",
+    version=1,
+    required_payload_keys={"policy_id", "occurred_at"},
+    description="A mandatory acknowledgement requirement was created on publish.",
+)
+
+registry.register(
+    name="compliance.corrected",
+    version=1,
+    required_payload_keys={"policy_id", "recipient_id", "kind", "occurred_at"},
+    description="An authorized actor recorded a correction without deleting evidence.",
+)

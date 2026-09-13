@@ -104,6 +104,39 @@ def resolve_onboarding_tools(
 
 
 CONTRACT_MODULE = "contract"
+COMPLIANCE_MODULE = "compliance"
+
+
+def resolve_compliance_policies(
+    user, notifications: Sequence
+) -> dict[UUID, SourceResolution]:
+    """Detail only while the reader still owes that policy version."""
+    from apps.compliance.acknowledgements import family_satisfaction_counts
+    from apps.compliance.audience import visible_to
+    from apps.compliance.models import PolicyVersion
+
+    ids = _record_ids(notifications)
+    if not ids:
+        return {}
+    versions = {
+        version.pk: version
+        for version in PolicyVersion.objects.filter(pk__in=set(ids.values()))
+    }
+    resolutions: dict[UUID, SourceResolution] = {}
+    for public_id, record_id in ids.items():
+        version = versions.get(record_id)
+        if version is None or version.status != PolicyVersion.Status.PUBLISHED:
+            continue
+        if not visible_to(user, version):
+            continue
+        if family_satisfaction_counts(user, version):
+            continue
+        resolutions[public_id] = SourceResolution(
+            available=True,
+            detail=f"Acknowledge {version.title}",
+            action_available=True,
+        )
+    return resolutions
 
 
 def resolve_contracts(user, notifications: Sequence) -> dict[UUID, SourceResolution]:
@@ -193,3 +226,5 @@ def register_default_resolvers() -> None:
         register_resolver(ONBOARDING_TOOL_MODULE, resolve_onboarding_tools)
     if CONTRACT_MODULE not in registered_modules():
         register_resolver(CONTRACT_MODULE, resolve_contracts)
+    if COMPLIANCE_MODULE not in registered_modules():
+        register_resolver(COMPLIANCE_MODULE, resolve_compliance_policies)

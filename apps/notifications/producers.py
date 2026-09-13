@@ -589,6 +589,30 @@ def inventory_lost_damaged_escalation(
     )
 
 
+def policy_ack_reminder(envelope: EventEnvelope) -> list[NotificationRequest]:
+    """Overdue mandatory policy acknowledgement — collapses per user+version."""
+    recipient_id = _int_or_none(envelope.payload.get("recipient_id"))
+    policy_id = _int_or_none(envelope.payload.get("policy_id"))
+    if recipient_id is None or policy_id is None:
+        return []
+    return [
+        NotificationRequest(
+            recipient_id=recipient_id,
+            notification_type=NotificationType.ADMINISTRATIVE,
+            event_key=envelope.name,
+            title="A required policy acknowledgement is overdue",
+            dedupe_key=f"policy-ack-reminder:{policy_id}:{recipient_id}",
+            priority=NotificationPriority.HIGH,
+            is_mandatory=True,
+            source_module="compliance",
+            source_record_type="policy_version",
+            source_record_id=str(policy_id),
+            action_key="open_policy_detail",
+            action_args=(policy_id,),
+        )
+    ]
+
+
 EventBuilder = Callable[[EventEnvelope], list[NotificationRequest]]
 
 EVENT_PRODUCERS: dict[str, EventBuilder] = {
@@ -612,6 +636,7 @@ EVENT_PRODUCERS: dict[str, EventBuilder] = {
     "inventory.reservation.return_overdue": inventory_return_overdue,
     "inventory.reservation.return_overdue_staff": inventory_return_overdue_staff,
     "inventory.reservation.lost_damaged_escalation": inventory_lost_damaged_escalation,
+    "policy.ack_reminder": policy_ack_reminder,
 }
 
 
