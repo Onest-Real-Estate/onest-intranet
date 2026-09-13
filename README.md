@@ -107,8 +107,15 @@ dev server, so no build step is needed while developing.
 
 ### How auth works
 
-- The **Login** page posts a plain form (with the shared `csrfToken` prop) to
-  `microsoft_login` — the allauth endpoint that kicks off the OAuth2 handshake.
+- Deployed environments are **Microsoft SSO only**. allauth's email/password
+  login and signup (`/accounts/login/`, `/accounts/signup/`) are disabled when
+  `ALLOW_PASSWORD_LOGIN` is off, which is the default whenever
+  `DJANGO_DEBUG=0`. Local development keeps those views so a seeded password
+  account can exercise onboarding without Entra; set `ALLOW_PASSWORD_LOGIN=0`
+  to match production.
+- The **Login** page at `/` posts a plain form (with the shared `csrfToken`
+  prop) to `microsoft_login` — the allauth endpoint that kicks off the OAuth2
+  handshake. Do not send people to `/accounts/login/`.
 - On callback, allauth creates/logs in the user and redirects to
   `LOGIN_REDIRECT_URL` (`/dashboard`).
 - The **Dashboard** view is `login_required`; unauthenticated Inertia requests
