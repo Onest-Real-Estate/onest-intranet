@@ -1,7 +1,8 @@
 #!/bin/sh
 set -e
 
-uv run python manage.py migrate --noinput
+# Migrations are applied by the one-shot `migrate` service; this container
+# starts only after it completes (depends_on: service_completed_successfully).
 uv run python manage.py collectstatic --noinput
 uv run python manage.py generate_typescript_routes --urlconf config.urls > frontend/types/routes.ts
 

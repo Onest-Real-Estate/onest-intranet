@@ -48,6 +48,24 @@ def _coerce_now(at=None):
     return at or timezone.now()
 
 
+# Per-instance memoization of the effective-access resolution chain. Resolving
+# once means walking assignments, user/group permissions, and hierarchy — and
+# a single admin page used to re-run that walk dozens of times per request
+# (measured: 37 resolutions, ~300 queries, on one marketing index load). The
+# cache lives on the user instance (Django's own `_perm_cache` pattern), so it
+# is naturally request-scoped. Every write path below must call
+# clear_effective_cache() for the user whose assignments it mutated.
+_MEMO_ATTR = "_effective_access_memo"
+
+
+def _memo(user: User) -> dict:
+    return user.__dict__.setdefault(_MEMO_ATTR, {})
+
+
+def clear_effective_cache(user: User) -> None:
+    user.__dict__.pop(_MEMO_ATTR, None)
+
+
 def _region_scope_key(scope_type: str, scope_office: Office | None) -> str:
     if scope_type == ScopeType.REGION and scope_office is not None:
         return scope_office.stable_key
@@ -88,8 +106,12 @@ def active_assignment_queryset(user: User, *, at=None):
 def get_effective_assignments(user: User, *, at=None) -> list[UserRoleAssignment]:
     if getattr(user, "is_anonymous", False):
         return []
-    sync_assignment_statuses(user, at=at)
-    return list(active_assignment_queryset(user, at=at))
+    memo = _memo(user)
+    key = ("assignments", at)
+    if key not in memo:
+        sync_assignment_statuses(user, at=at)
+        memo[key] = tuple(active_assignment_queryset(user, at=at))
+    return list(memo[key])
 
 
 def get_effective_role_keys(
@@ -98,6 +120,10 @@ def get_effective_role_keys(
     at=None,
     assignments: Sequence[UserRoleAssignment] | None = None,
 ) -> list[str]:
+    memo = _memo(user) if assignments is None else None
+    key = ("role_keys", at)
+    if memo is not None and key in memo:
+        return list(memo[key])
     seen: set[str] = set()
     role_keys: list[str] = []
     effective_assignments = (
@@ -125,6 +151,8 @@ def get_effective_role_keys(
         role_keys.extend(extras)
     rank = {name: index for index, name in enumerate(ROLE_PRIORITY)}
     role_keys.sort(key=lambda name: rank.get(name, 999))
+    if memo is not None:
+        memo[key] = tuple(role_keys)
     return role_keys
 
 
@@ -141,6 +169,10 @@ def get_effective_permissions(
 ) -> set[str]:
     if getattr(user, "is_anonymous", False):
         return set()
+    memo = _memo(user) if assignments is None else None
+    key = ("permissions", at)
+    if memo is not None and key in memo:
+        return set(memo[key])
     if getattr(user, "is_superuser", False):
         return set(user.get_all_permissions())
 
@@ -176,6 +208,8 @@ def get_effective_permissions(
             for app_label, codename in rows
             if app_label and codename
         )
+    if memo is not None:
+        memo[key] = frozenset(normalized)
     return normalized
 
 
@@ -202,6 +236,10 @@ def has_effective_permissions(
 def get_effective_access(user: User, *, at=None) -> EffectiveAccess:
     from apps.web.permission_catalog import filter_to_catalog
 
+    memo = _memo(user)
+    key = ("access", at)
+    if key in memo:
+        return memo[key]
     assignments = tuple(get_effective_assignments(user, at=at))
     role_keys = tuple(get_effective_role_keys(user, at=at, assignments=assignments))
     permissions = filter_to_catalog(
@@ -241,7 +279,7 @@ def get_effective_access(user: User, *, at=None) -> EffectiveAccess:
                 office_keys.add(office.stable_key)
             if REGION_MANAGER in role_keys and office.region is not None:
                 region_keys.add(office.region.stable_key)
-    return EffectiveAccess(
+    access = EffectiveAccess(
         assignments=assignments,
         role_keys=role_keys,
         permissions=permissions,
@@ -250,6 +288,8 @@ def get_effective_access(user: User, *, at=None) -> EffectiveAccess:
         company_wide=company_wide,
         assigned_record=assigned_record,
     )
+    memo[key] = access
+    return access
 
 
 def actor_can_manage_assignments(
@@ -449,6 +489,7 @@ def create_role_assignment(
         assignment.refresh_status()
         assignment.full_clean()
         assignment.save()
+        clear_effective_cache(target_user)
         log_event(
             "user.role_assignment.created",
             actor=actor_from_user(actor),
@@ -533,6 +574,7 @@ def _apply_revocation(
                 "updated_at",
             ]
         )
+        clear_effective_cache(assignment.user)
         log_event(
             "user.role_assignment.revoked",
             actor=actor_from_user(actor),
@@ -590,6 +632,7 @@ def update_role_assignment(
                 "updated_at",
             ]
         )
+        clear_effective_cache(assignment.user)
         log_event(
             "user.role_assignment.updated",
             actor=actor_from_user(actor),
@@ -683,6 +726,7 @@ def sync_default_agent_assignment(
     assignment.refresh_status()
     assignment.full_clean()
     assignment.save()
+    clear_effective_cache(user)
     log_event(
         "user.role_assignment.created",
         actor=actor_from_user(actor),

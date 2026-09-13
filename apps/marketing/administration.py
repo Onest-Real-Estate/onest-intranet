@@ -172,8 +172,22 @@ def publishable_office_queryset(actor: User) -> QuerySet[Office]:
 
 
 def manageable_queryset(actor: User) -> QuerySet[MarketingAsset]:
-    base = MarketingAsset.objects.select_related(
-        "owner_office", "category", "created_by", "updated_by"
+    from django.db.models import Prefetch
+
+    from apps.marketing.models import MarketingAudience
+
+    base = (
+        MarketingAsset.objects.select_related(
+            "owner_office", "category", "created_by", "updated_by"
+        )
+        # admin_row() describes each row's audience; prefetch it once for the
+        # page instead of one query per row.
+        .prefetch_related(
+            Prefetch(
+                "audiences",
+                queryset=MarketingAudience.objects.select_related("office", "user"),
+            )
+        )
     )
     if not has_effective_permission(actor, MANAGE_PERMISSION):
         return base.none()

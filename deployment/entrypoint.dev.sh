@@ -5,6 +5,7 @@ set -e
 # pyproject/uv.lock are bind-mounted).
 uv sync --frozen
 
-uv run python manage.py migrate --noinput
+# Migrations are applied by the one-shot `migrate` service; this container
+# starts only after it completes (depends_on: service_completed_successfully).
 
 exec uv run python manage.py runserver 0.0.0.0:8000

@@ -802,6 +802,9 @@ def test_workspace_detail_query_cost_does_not_grow_per_tool():
             for index in range(12)
         ]
     )
+    # Fresh actor instance ≈ fresh request: effective access is memoized on the
+    # user instance, so baseline's resolution must not leak into this capture.
+    actor = User.objects.get(pk=actor.pk)
     expanded_target = _prefetched_queryset(actor).get(pk=target.pk)
     with CaptureQueriesContext(connection) as expanded:
         _detail_props(actor, expanded_target)

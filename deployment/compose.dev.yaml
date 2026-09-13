@@ -57,8 +57,29 @@ x-celery-service: &celery-service
       condition: service_healthy
     redis:
       condition: service_healthy
+    migrate:
+      condition: service_completed_successfully
 
 services:
+  # One-shot: the ONLY service that applies migrations. web, celery, and
+  # celery-beat wait for it instead of each running migrate themselves —
+  # concurrent migrates race on unapplied migrations and crash the losers
+  # with DuplicateColumn. Shares web's venv volume: web starts strictly
+  # after this service exits, so `uv sync` never runs on it concurrently.
+  migrate:
+    build:
+      context: ..
+      dockerfile: deployment/Containerfile.dev
+    command: ./deployment/entrypoint.migrate.sh
+    restart: "no"
+    volumes:
+      - ..:/app
+      - venv:/app/.venv
+    environment: *celery-env
+    depends_on:
+      db:
+        condition: service_healthy
+
   web:
     build:
       context: ..
@@ -126,6 +147,8 @@ services:
       redis:
         condition: service_healthy
       minio-init:
+        condition: service_completed_successfully
+      migrate:
         condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8000/"]

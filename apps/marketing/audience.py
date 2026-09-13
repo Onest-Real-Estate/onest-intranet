@@ -72,6 +72,11 @@ RECIPIENT_SEARCH_LIMIT = 20
 
 def selectors_for(asset: MarketingAsset) -> QuerySet[MarketingAudience]:
     """The stored selectors for one asset, targets already joined."""
+    # Use the prefetch cache when the asset came from a prefetched queryset
+    # (list pages); otherwise fall back to a targeted select_related query.
+    cache = getattr(asset, "_prefetched_objects_cache", {})
+    if "audiences" in cache:
+        return cache["audiences"].all()
     return MarketingAudience.objects.filter(asset=asset).select_related(
         "office", "user"
     )

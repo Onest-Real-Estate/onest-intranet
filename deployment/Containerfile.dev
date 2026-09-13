@@ -20,7 +20,7 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-install-project
 
 COPY . .
-RUN chmod +x deployment/entrypoint.dev.sh deployment/entrypoint.celery.sh
+RUN chmod +x deployment/entrypoint.dev.sh deployment/entrypoint.celery.sh deployment/entrypoint.migrate.sh
 
 EXPOSE 8000
 CMD ["./deployment/entrypoint.dev.sh"]
