@@ -5283,6 +5283,11 @@ export interface ComplianceWorkspaceFilters {
 
 export interface ComplianceAdministrationPageProps extends PageProps {
   policies: ListResponse<ComplianceAdminRow, ComplianceWorkspaceFilters>;
+  summary: {
+    draft: number;
+    inReview: number;
+    published: number;
+  };
   filterOptions: {
     categories: FilterOption[];
     statuses: FilterOption[];
@@ -5340,6 +5345,12 @@ export interface ComplianceAckReportPageProps extends PageProps {
   report: {
     items: ComplianceAckReportRow[];
     totalItems: number;
+    summary: {
+      pending: number;
+      acknowledged: number;
+      waived: number;
+      overdue: number;
+    };
   };
   filterOptions: {
     policies: FilterOption[];

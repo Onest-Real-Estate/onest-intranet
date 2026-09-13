@@ -21,12 +21,14 @@ from apps.compliance.acknowledgements import (
     on_policy_published,
     open_requirements_for,
     record_access,
+    report_filter_options,
     scoped_report,
     user_ack_status,
     waive,
 )
 from apps.compliance.action_items import collect_compliance_actions
 from apps.compliance.administration import (
+    build_admin_index,
     duplicate_version,
     policy_version_token,
     transition,
@@ -393,6 +395,16 @@ def test_waive_and_revoke_keep_evidence(seeded):
     assert user_ack_status(target, version)["required"] is True
 
 
+def test_report_summary_counts_before_status_filter(seeded):
+    version = publish_policy(title="Handbook", is_mandatory=True)
+    person = agent()
+    actor = publisher()
+    _ack(person, version)
+    report = scoped_report(actor, {"policy": str(version.pk), "status": "pending"})
+    assert report["summary"]["acknowledged"] >= 1
+    assert all(row["status"] == "pending" for row in report["items"])
+
+
 def test_report_excludes_users_outside_audience(seeded):
     version = publish_policy(
         title="Office only",
@@ -407,6 +419,25 @@ def test_report_excludes_users_outside_audience(seeded):
     ids = {row["userId"] for row in report["items"]}
     assert insider.pk in ids
     assert outsider.pk not in ids
+
+
+def test_admin_index_summary_counts_scoped_policies(seeded):
+    actor = publisher()
+    publish_policy(title="Live one", is_mandatory=True)
+    payload = build_admin_index(actor, params={}, page=1)
+    assert payload["summary"]["published"] >= 1
+    assert "draft" in payload["summary"]
+    assert "inReview" in payload["summary"]
+
+
+def test_report_filter_options_include_scoped_offices_and_regions(seeded):
+    actor = publisher()
+    options = report_filter_options(actor)
+    office_values = {row["value"] for row in options["offices"]}
+    region_values = {row["value"] for row in options["regions"]}
+    assert "fairfax-va" in office_values
+    assert region_values
+    assert all(row["label"] for row in options["regions"])
 
 
 def test_json_acknowledge_post_is_idempotent(seeded, client):

@@ -1,10 +1,10 @@
 import { Head, Link, router, usePage } from "@inertiajs/react";
-import { ArrowLeft, ClipboardList } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { type FormEvent, useState } from "react";
 
 import {
   DataTable,
-  EmptyState,
+  type DataTableColumn,
   FilterControls,
   FilterField,
   FormErrorSummary,
@@ -12,6 +12,8 @@ import {
   FormFieldError,
   FormLabel,
   fieldA11yProps,
+  MetricCard,
+  MetricStrip,
   PageHeader,
   PanelHeader,
   SearchControl,
@@ -33,6 +35,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { toFormData } from "@/lib/form-data";
+import { buildListUrl } from "@/lib/list-query";
 import { routes } from "@/lib/routes";
 import { firstFieldError } from "@/lib/validation";
 import type {
@@ -58,12 +61,11 @@ const STATUS_TONE: Record<string, string> = {
   overdue: "destructive",
 };
 
-function formatDate(value: string | null): string {
+function formatDay(value: string | null): string {
   if (!value) {
     return "—";
   }
   return new Date(value).toLocaleDateString(undefined, {
-    year: "numeric",
     month: "short",
     day: "numeric",
   });
@@ -86,7 +88,7 @@ function FilterSelect({
         value={value || ANY}
         onValueChange={(next) => onChange(next === ANY ? "" : next)}
       >
-        <SelectTrigger size="sm" aria-label={label}>
+        <SelectTrigger size="sm" aria-label={label} className="w-full sm:w-44">
           <SelectValue placeholder={`Any ${label.toLowerCase()}`} />
         </SelectTrigger>
         <SelectContent>
@@ -112,14 +114,12 @@ function ComplianceAckReportPage() {
   const [correcting, setCorrecting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  function visit(patch: Partial<ComplianceAckReportFilters>) {
+  function visit(next: Partial<ComplianceAckReportFilters>) {
     router.get(
-      routes.policy_ack_report(),
-      {
-        ...filters,
-        q: query,
-        ...patch,
-      },
+      buildListUrl(routes.policy_ack_report(), window.location.search, {
+        filters: { ...filters, q: query, ...next },
+      }),
+      {},
       { preserveState: true, preserveScroll: true, replace: true },
     );
   }
@@ -160,12 +160,102 @@ function ComplianceAckReportPage() {
     );
   }
 
+  const activeCount = [
+    filters.policy,
+    filters.office,
+    filters.region,
+    filters.role,
+    filters.dueFrom,
+    filters.dueTo,
+    filters.status,
+  ].filter(Boolean).length;
+
+  const columns: DataTableColumn<ComplianceAckReportRow>[] = [
+    {
+      id: "person",
+      header: "Person",
+      cell: (row) => (
+        <span className="grid min-w-0 gap-0.5">
+          <span className="truncate font-medium">{row.userName}</span>
+          <span className="text-muted-foreground truncate text-xs">
+            {row.email}
+            {row.officeName ? ` · ${row.officeName}` : ""}
+          </span>
+        </span>
+      ),
+    },
+    {
+      id: "policy",
+      header: "Policy",
+      cell: (row) => (
+        <Link
+          href={routes.policy_admin_edit(row.policyId)}
+          className="hover:text-primary focus-visible:ring-ring truncate rounded-sm text-sm font-medium focus-visible:ring-2 focus-visible:outline-none"
+        >
+          {row.policyTitle}
+        </Link>
+      ),
+    },
+    {
+      id: "status",
+      header: "Status",
+      cell: (row) => (
+        <StatusBadge
+          status={{
+            label: row.status,
+            tone: toStatusTone(STATUS_TONE[row.status] ?? "neutral"),
+          }}
+        />
+      ),
+    },
+    {
+      id: "due",
+      header: "Due",
+      cell: (row) => (
+        <span className="text-muted-foreground text-xs tabular-nums">
+          {formatDay(row.dueAt)}
+        </span>
+      ),
+      hideBelow: "3xl",
+    },
+    {
+      id: "acked",
+      header: "Acknowledged",
+      cell: (row) => (
+        <span className="text-muted-foreground text-xs tabular-nums">
+          {formatDay(row.acknowledgedAt)}
+        </span>
+      ),
+      hideBelow: "4xl",
+    },
+    {
+      id: "actions",
+      header: <span className="sr-only">Actions</span>,
+      cell: (row) =>
+        capabilities.canWaive &&
+        (row.status === "pending" ||
+          row.status === "overdue" ||
+          row.status === "waived") ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => startWaive(row, row.status === "waived")}
+          >
+            {row.status === "waived" ? "Revoke waiver" : "Waive"}
+          </Button>
+        ) : null,
+      className: "text-right",
+      headerClassName: "text-right",
+    },
+  ];
+
   return (
     <div className="grid gap-8">
-      <Head title="Acknowledgement report" />
+      <Head title="Acknowledgements" />
       <PageHeader
-        title="Acknowledgement report"
-        description="Who still needs to acknowledge mandatory published policies in your scope."
+        title="Acknowledgements"
+        description="Who still needs to acknowledge mandatory policies in your scope."
         actions={
           <Button variant="outline" size="sm" asChild>
             <Link href={routes.admin_compliance()}>
@@ -178,189 +268,115 @@ function ComplianceAckReportPage() {
 
       <FormErrorSummary errors={errors} />
 
-      <FilterControls
-        activeCount={
-          [
-            filters.policy,
-            filters.office,
-            filters.region,
-            filters.role,
-            filters.dueFrom,
-            filters.dueTo,
-            filters.status,
-            filters.q,
-          ].filter(Boolean).length
-        }
-        onReset={() => {
-          setQuery("");
-          visit({
-            policy: "",
-            office: "",
-            region: "",
-            role: "",
-            dueFrom: "",
-            dueTo: "",
-            status: "",
-            q: "",
-          });
-        }}
-      >
-        <SearchControl
-          value={query}
-          onValueChange={setQuery}
-          onSearch={(value) => visit({ q: value })}
-          placeholder="Search people"
+      <MetricStrip>
+        <MetricCard label="Pending" value={report.summary.pending} />
+        <MetricCard
+          label="Overdue"
+          value={report.summary.overdue}
+          tone={report.summary.overdue > 0 ? "destructive" : "neutral"}
         />
-        <FilterSelect
-          label="Policy"
-          value={filters.policy}
-          options={filterOptions.policies}
-          onChange={(policy) => visit({ policy })}
-        />
-        <FilterSelect
-          label="Office"
-          value={filters.office}
-          options={filterOptions.offices}
-          onChange={(office) => visit({ office })}
-        />
-        <FilterSelect
-          label="Region"
-          value={filters.region}
-          options={filterOptions.regions}
-          onChange={(region) => visit({ region })}
-        />
-        <FilterSelect
-          label="Role"
-          value={filters.role}
-          options={filterOptions.roles}
-          onChange={(role) => visit({ role })}
-        />
-        <FilterSelect
-          label="Status"
-          value={filters.status}
-          options={filterOptions.statuses}
-          onChange={(status) => visit({ status })}
-        />
-        <FilterField label="Due from">
-          <Input
-            type="date"
-            aria-label="Due from"
-            value={filters.dueFrom}
-            onChange={(event) => visit({ dueFrom: event.target.value })}
-          />
-        </FilterField>
-        <FilterField label="Due to">
-          <Input
-            type="date"
-            aria-label="Due to"
-            value={filters.dueTo}
-            onChange={(event) => visit({ dueTo: event.target.value })}
-          />
-        </FilterField>
-      </FilterControls>
+        <MetricCard label="Acknowledged" value={report.summary.acknowledged} />
+        <MetricCard label="Waived" value={report.summary.waived} />
+      </MetricStrip>
 
       <SurfaceCard>
-        <PanelHeader
-          divided
-          title="Requirements"
-          description="Pending and overdue rows are actionable. Waivers need a short reason."
-          meta={
-            <span className="text-muted-foreground text-xs font-medium tabular-nums">
-              {report.totalItems} {report.totalItems === 1 ? "row" : "rows"}
-            </span>
-          }
-        />
+        <PanelHeader divided title="Queue" />
         <SurfaceCardContent className="grid gap-4">
-          {report.items.length === 0 ? (
-            <EmptyState
-              icon={ClipboardList}
-              title="No acknowledgement rows"
-              description="Mandatory published policies with people in the effective audience will appear here."
+          <FilterControls
+            activeCount={activeCount}
+            onReset={() => {
+              setQuery("");
+              visit({
+                policy: "",
+                office: "",
+                region: "",
+                role: "",
+                dueFrom: "",
+                dueTo: "",
+                status: "",
+                q: "",
+              });
+            }}
+            leading={
+              <SearchControl
+                label="Search people"
+                value={query}
+                onValueChange={setQuery}
+                onSearch={(q) => visit({ q })}
+                onClear={() => {
+                  setQuery("");
+                  visit({ q: "" });
+                }}
+                placeholder="Search people"
+              />
+            }
+          >
+            <FilterSelect
+              label="Policy"
+              value={filters.policy}
+              options={filterOptions.policies}
+              onChange={(policy) => visit({ policy })}
             />
-          ) : (
-            <DataTable
-              frame="bleed"
-              caption="Acknowledgement status by person and policy"
-              rows={report.items}
-              rowKey={(row) => `${row.policyId}-${row.userId}`}
-              emptyTitle="No rows"
-              emptyDescription="Nothing to show."
-              columns={[
-                {
-                  id: "person",
-                  header: "Person",
-                  cell: (row) => (
-                    <div className="grid min-w-40 gap-0.5">
-                      <span className="truncate font-semibold">{row.userName}</span>
-                      <span className="text-muted-foreground truncate text-xs">
-                        {row.email}
-                        {row.officeName ? ` · ${row.officeName}` : ""}
-                      </span>
-                    </div>
-                  ),
-                },
-                {
-                  id: "policy",
-                  header: "Policy",
-                  cell: (row) => (
-                    <span className="truncate text-sm">{row.policyTitle}</span>
-                  ),
-                },
-                {
-                  id: "status",
-                  header: "Status",
-                  cell: (row) => (
-                    <StatusBadge
-                      status={{
-                        label: row.status,
-                        tone: toStatusTone(STATUS_TONE[row.status] ?? "neutral"),
-                      }}
-                    />
-                  ),
-                },
-                {
-                  id: "due",
-                  header: "Due",
-                  cell: (row) => (
-                    <span className="text-sm tabular-nums">
-                      {formatDate(row.dueAt)}
-                    </span>
-                  ),
-                  hideBelow: "3xl",
-                },
-                {
-                  id: "acked",
-                  header: "Acknowledged",
-                  cell: (row) => (
-                    <span className="text-sm tabular-nums">
-                      {formatDate(row.acknowledgedAt)}
-                    </span>
-                  ),
-                  hideBelow: "4xl",
-                },
-                {
-                  id: "actions",
-                  header: <span className="sr-only">Actions</span>,
-                  cell: (row) =>
-                    capabilities.canWaive &&
-                    (row.status === "pending" ||
-                      row.status === "overdue" ||
-                      row.status === "waived") ? (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => startWaive(row, row.status === "waived")}
-                      >
-                        {row.status === "waived" ? "Revoke waiver" : "Waive"}
-                      </Button>
-                    ) : null,
-                  className: "text-right",
-                  headerClassName: "text-right",
-                },
-              ]}
+            <FilterSelect
+              label="Office"
+              value={filters.office}
+              options={filterOptions.offices}
+              onChange={(office) => visit({ office })}
             />
-          )}
+            <FilterSelect
+              label="Region"
+              value={filters.region}
+              options={filterOptions.regions}
+              onChange={(region) => visit({ region })}
+            />
+            <FilterSelect
+              label="Role"
+              value={filters.role}
+              options={filterOptions.roles}
+              onChange={(role) => visit({ role })}
+            />
+            <FilterSelect
+              label="Status"
+              value={filters.status}
+              options={filterOptions.statuses}
+              onChange={(status) => visit({ status })}
+            />
+            <FilterField label="Due from" hideLabel>
+              <Input
+                type="date"
+                aria-label="Due from"
+                value={filters.dueFrom}
+                onChange={(event) => visit({ dueFrom: event.target.value })}
+              />
+            </FilterField>
+            <FilterField label="Due to" hideLabel>
+              <Input
+                type="date"
+                aria-label="Due to"
+                value={filters.dueTo}
+                onChange={(event) => visit({ dueTo: event.target.value })}
+              />
+            </FilterField>
+          </FilterControls>
+
+          <DataTable
+            frame="bleed"
+            caption="Acknowledgement status by person and policy"
+            rows={report.items}
+            rowKey={(row) => `${row.policyId}-${row.userId}`}
+            getRowLabel={(row) => `${row.userName} · ${row.policyTitle}`}
+            emptyTitle={
+              activeCount > 0
+                ? "No rows match these filters"
+                : "No acknowledgement rows"
+            }
+            emptyDescription={
+              activeCount > 0
+                ? "Reset the filters to see everything in your scope."
+                : "Mandatory published policies with people in the audience will appear here."
+            }
+            columns={columns}
+          />
         </SurfaceCardContent>
       </SurfaceCard>
 
@@ -430,16 +446,13 @@ ComplianceAckReport.layout = () =>
     HubLayout,
     {
       context: {
-        title: "Acknowledgement report",
+        title: "Acknowledgements",
         breadcrumbs: [
           { label: "Dashboard", href: routes.dashboard() },
-          {
-            label: "Compliance administration",
-            href: routes.admin_compliance(),
-          },
+          { label: "Compliance", href: routes.admin_compliance() },
           { label: "Acknowledgements" },
         ],
       },
-      variant: "standard",
+      variant: "wide",
     },
   ] as const;
