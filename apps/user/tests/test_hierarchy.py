@@ -202,7 +202,10 @@ def test_inconsistent_scope_office_fails_closed(branch):
     broken = Office.objects.select_related("region", "parent").get(pk=branch.pk)
     assert not is_hierarchy_consistent(broken)
     assert hierarchy_inconsistency(broken) is not None
-    access_after = get_effective_access(user)
+    # Fresh instance ≈ fresh request: effective access is memoized on the user
+    # instance for the request's lifetime, so re-resolving after the hierarchy
+    # break must go through a newly fetched user.
+    access_after = get_effective_access(User.objects.get(pk=user.pk))
     assert branch.stable_key not in access_after.office_keys
     # Restore for other tests sharing the DB.
     Office.objects.filter(pk=branch.pk).update(

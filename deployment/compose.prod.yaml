@@ -38,8 +38,23 @@ x-celery-service: &celery-service
   depends_on:
     redis:
       condition: service_healthy
+    migrate:
+      condition: service_completed_successfully
 
 services:
+  # One-shot: the ONLY service that applies migrations. web, celery, and
+  # celery-beat wait for it instead of each running migrate themselves —
+  # concurrent migrates race on unapplied migrations and crash the losers
+  # with DuplicateColumn. The database is external, so retry a few times in
+  # case it is not yet reachable.
+  migrate:
+    build:
+      context: ..
+      dockerfile: deployment/Containerfile.prod
+    command: ./deployment/entrypoint.migrate.sh
+    restart: on-failure:5
+    environment: *celery-env
+
   web:
     build:
       context: ..
@@ -96,6 +111,8 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8000/"]
       interval: 30s

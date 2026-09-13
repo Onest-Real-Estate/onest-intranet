@@ -1070,6 +1070,9 @@ def test_the_index_cost_does_not_grow_with_the_number_of_rows():
 
     make_link("tool-0", offices=(home,), sort_order=0)
     make_link("tool-1", offices=(home,), sort_order=10)
+    # Access resolution is memoized on the user instance; warm it so both
+    # measurements are steady-state row cost.
+    cost()
     two_rows = cost()
     for index in range(2, 8):
         make_link(f"tool-{index}", offices=(home,), sort_order=index * 10)

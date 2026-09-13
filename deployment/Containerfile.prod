@@ -32,7 +32,7 @@ RUN uv sync --frozen --no-install-project
 
 COPY . .
 COPY --from=frontend /build/assets ./assets
-RUN chmod +x deployment/entrypoint.prod.sh deployment/entrypoint.celery.sh
+RUN chmod +x deployment/entrypoint.prod.sh deployment/entrypoint.celery.sh deployment/entrypoint.migrate.sh
 
 EXPOSE 8000
 CMD ["./deployment/entrypoint.prod.sh"]

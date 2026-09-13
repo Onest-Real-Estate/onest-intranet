@@ -57,6 +57,7 @@ from apps.web.contracts import empty_validation_errors, list_response, validatio
 INDEX_PAGE = "MarketingAdministration"
 WORKSPACE_PAGE = "MarketingWorkspace"
 
+
 MANAGE_PERMISSION = "web.manage_marketing_resources"
 
 _SHEET_DRAFT_FIELDS: tuple[str, ...] = (
@@ -137,6 +138,8 @@ def index_props(
         {"value": office.pk, "label": office.name}
         for office in publishable_office_queryset(actor)
     ]
+    audience = audience_choice_payload(actor)
+    caps = capabilities(actor).payload()
     return {
         "assets": list_response(
             items,
@@ -156,10 +159,10 @@ def index_props(
             "offices": offices,
             "categories": category_options(),
             "assetTypes": asset_type_filter_options(),
-            "audience": audience_choice_payload(actor),
+            "audience": audience,
         },
         "createSheet": create_sheet,
-        "capabilities": capabilities(actor).payload(),
+        "capabilities": caps,
         "errors": errors or empty_validation_errors(),
     }
 
