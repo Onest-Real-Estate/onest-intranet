@@ -58,6 +58,8 @@ def publisher(*, email: str | None = None) -> User:
         "approve_policies",
         "publish_policies",
         "view_compliance",
+        "view_policy_acknowledgements",
+        "waive_policy_acknowledgements",
     ):
         user.user_permissions.add(
             Permission.objects.get(content_type__app_label="web", codename=codename)
@@ -90,8 +92,11 @@ def publish_policy(
     owner_office: Office | None = None,
     audience: tuple[AudienceSelector, ...] | None = None,
     is_mandatory: bool = False,
+    reacknowledge_on_supersede: bool = True,
     jurisdiction_state_codes: list[str] | None = None,
     actor: User | None = None,
+    ack_due_at=None,
+    with_document: bool = False,
 ) -> PolicyVersion:
     from apps.compliance.administration import (
         create_draft,
@@ -112,19 +117,25 @@ def publish_policy(
             "category": category(),
             "jurisdiction_state_codes": jurisdiction_state_codes or [],
             "is_mandatory": is_mandatory,
-            "reacknowledge_on_supersede": True,
+            "reacknowledge_on_supersede": reacknowledge_on_supersede,
             "acknowledgement_disclosure": "I acknowledge this policy.",
             "disclosure_version": 1,
             "display_order": 100,
         },
         selectors=selectors,
     )
+    if with_document:
+        attach_ready_document(draft)
     for action in ("submit", "approve", "publish"):
+        kwargs = {}
+        if action == "publish" and ack_due_at is not None:
+            kwargs["ack_due_at"] = ack_due_at
         transition(
             actor=actor,
             version=draft,
             action=action,
             expected_version=policy_version_token(draft),
+            **kwargs,
         )
         draft.refresh_from_db()
     return draft

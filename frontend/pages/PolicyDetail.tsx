@@ -14,12 +14,19 @@ import {
 } from "@/components/design-system";
 import { HubLayout } from "@/components/HubLayout";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { formatBytes } from "@/lib/announcements";
 import { toFormData } from "@/lib/form-data";
 import { routes } from "@/lib/routes";
 import type { ComplianceFileItem, PolicyDetailPageProps } from "@/types";
 
-function DocumentRow({ file }: { file: ComplianceFileItem }) {
+function DocumentRow({
+  file,
+  onOpened,
+}: {
+  file: ComplianceFileItem;
+  onOpened: () => void;
+}) {
   const href = file.url || routes.policy_document_file(file.id);
   return (
     <li className="border-border grid gap-2 rounded-lg border p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:gap-4">
@@ -39,7 +46,16 @@ function DocumentRow({ file }: { file: ComplianceFileItem }) {
       <Button type="button" variant="outline" size="sm" asChild>
         {/* Plain anchor: an Inertia visit would XHR the bytes instead of
             triggering the browser's download flow. */}
-        <a href={href} download>
+        <a
+          href={href}
+          download
+          onClick={() => {
+            onOpened();
+            window.setTimeout(() => {
+              router.reload({ only: ["policy"] });
+            }, 400);
+          }}
+        >
           <Download className="size-3.5 shrink-0" aria-hidden />
           Download
         </a>
@@ -51,8 +67,17 @@ function DocumentRow({ file }: { file: ComplianceFileItem }) {
 export default function PolicyDetail() {
   const { policy, errors } = usePage<PolicyDetailPageProps>().props;
   const [submitting, setSubmitting] = useState(false);
+  const [confirmed, setConfirmed] = useState(false);
+  const [localDocumentOpened, setLocalDocumentOpened] = useState(false);
+
+  const documentReady =
+    policy.documentAccessed || localDocumentOpened || !policy.mustOpenDocument;
+  const canSubmit = policy.canAcknowledge && documentReady && confirmed && !submitting;
 
   function acknowledge() {
+    if (!canSubmit) {
+      return;
+    }
     setSubmitting(true);
     router.post(
       routes.policy_acknowledge(policy.id),
@@ -185,7 +210,11 @@ export default function PolicyDetail() {
             ) : (
               <ul className="grid gap-3" aria-label="Policy documents">
                 {policy.documents.map((file) => (
-                  <DocumentRow key={file.id} file={file} />
+                  <DocumentRow
+                    key={file.id}
+                    file={file}
+                    onOpened={() => setLocalDocumentOpened(true)}
+                  />
                 ))}
               </ul>
             )}
@@ -226,16 +255,47 @@ export default function PolicyDetail() {
                   Acknowledgement was waived for your account.
                 </p>
               ) : null}
+              {policy.canAcknowledge && policy.mustOpenDocument && !documentReady ? (
+                <p className="text-muted-foreground text-sm" role="status">
+                  Download the current policy document before acknowledging this
+                  version.
+                </p>
+              ) : null}
               {policy.canAcknowledge ? (
-                <Button
-                  type="button"
-                  disabled={submitting}
-                  aria-busy={submitting || undefined}
-                  onClick={acknowledge}
-                >
-                  <ShieldCheck className="size-4" aria-hidden />I acknowledge this
-                  policy
-                </Button>
+                <>
+                  <div className="flex items-start gap-3">
+                    <Checkbox
+                      id="confirm_acknowledgement"
+                      checked={confirmed}
+                      disabled={!documentReady || submitting}
+                      onCheckedChange={(next) => setConfirmed(next === true)}
+                      aria-describedby="confirm_acknowledgement_help"
+                    />
+                    <label
+                      htmlFor="confirm_acknowledgement"
+                      className="grid cursor-pointer gap-1 text-sm"
+                    >
+                      <span className="font-medium">
+                        I have read this version and confirm the disclosure.
+                      </span>
+                      <span
+                        id="confirm_acknowledgement_help"
+                        className="text-muted-foreground"
+                      >
+                        Confirmation is bound to you and this exact policy version.
+                      </span>
+                    </label>
+                  </div>
+                  <Button
+                    type="button"
+                    disabled={!canSubmit}
+                    aria-busy={submitting || undefined}
+                    onClick={acknowledge}
+                  >
+                    <ShieldCheck className="size-4" aria-hidden />I acknowledge this
+                    policy
+                  </Button>
+                </>
               ) : null}
             </SurfaceCardContent>
           </SurfaceCard>

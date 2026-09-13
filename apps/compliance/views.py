@@ -10,9 +10,9 @@ from django.shortcuts import get_object_or_404, redirect
 from django.views.decorators.http import require_GET, require_POST
 from inertia import inertia, render
 
-from apps.compliance.acknowledgements import acknowledge
+from apps.compliance.acknowledgements import acknowledge, record_access
 from apps.compliance.media_service import assert_readable_document, stream_file
-from apps.compliance.models import PolicyFile
+from apps.compliance.models import PolicyFile, PolicyVersionAccess
 from apps.compliance.services import (
     build_library,
     category_filter_options,
@@ -59,6 +59,7 @@ def policy_detail(request: HttpRequest, policy_id: int):
     outcome, version = resolve_consumer_policy(actor, policy_id)
     if outcome == "redirect":
         return redirect("policy_detail", policy_id=version.pk)
+    record_access(actor, version, kind=PolicyVersionAccess.Kind.DETAIL)
     return {
         "policy": detail_payload(version, actor=actor),
         "errors": empty_validation_errors(),
@@ -122,4 +123,11 @@ def policy_document_file(request: HttpRequest, file_id: int) -> HttpResponse:
         pk=file_id,
     )
     assert_readable_document(actor, row)
+    if row.role == PolicyFile.Role.DOCUMENT:
+        record_access(
+            actor,
+            row.policy_version,
+            kind=PolicyVersionAccess.Kind.DOCUMENT,
+            policy_file=row,
+        )
     return stream_file(request, row, as_attachment=True)

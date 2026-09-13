@@ -5164,6 +5164,8 @@ export interface ComplianceLibraryRow {
   required: boolean;
   dueAt: string | null;
   canAcknowledge: boolean;
+  mustOpenDocument: boolean;
+  documentAccessed: boolean;
 }
 
 export interface CompliancePolicyDetail extends ComplianceLibraryRow {
@@ -5203,6 +5205,8 @@ export interface ComplianceCapabilities {
   canAuthor: boolean;
   canApprove: boolean;
   canPublish: boolean;
+  canViewAcks: boolean;
+  canWaive: boolean;
 }
 
 export interface ComplianceAdminRow {
@@ -5320,11 +5324,31 @@ export interface ComplianceAckReportRow {
   acknowledgedAt: string | null;
 }
 
+export interface ComplianceAckReportFilters {
+  policy: string;
+  office: string;
+  region: string;
+  role: string;
+  dueFrom: string;
+  dueTo: string;
+  status: string;
+  q: string;
+  [key: string]: string;
+}
+
 export interface ComplianceAckReportPageProps extends PageProps {
   report: {
     items: ComplianceAckReportRow[];
     totalItems: number;
   };
+  filterOptions: {
+    policies: FilterOption[];
+    offices: FilterOption[];
+    regions: FilterOption[];
+    roles: FilterOption[];
+    statuses: FilterOption[];
+  };
+  filters: ComplianceAckReportFilters;
   capabilities: ComplianceCapabilities;
   errors: ValidationErrors;
 }
