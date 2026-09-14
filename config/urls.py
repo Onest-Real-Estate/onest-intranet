@@ -33,6 +33,7 @@ urlpatterns += [
     path("", include("apps.training.urls")),
     path("", include("apps.marketing.urls")),
     path("", include("apps.compliance.urls")),
+    path("", include("apps.documents.urls")),
     path("", include("apps.audit.urls")),
     path("", include("apps.reservations.urls")),
 ]

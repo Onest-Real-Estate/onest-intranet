@@ -61,6 +61,7 @@ INSTALLED_APPS = [
     "apps.training",
     "apps.marketing",
     "apps.compliance",
+    "apps.documents",
 ]
 
 # Silk (SQL profiling, N+1 detection) is dev-only: its web UI lives at
@@ -347,7 +348,7 @@ CONTRACT_SIGNING_CERT_PASSPHRASE = config(
 CONTRACT_SIGNING_ALLOW_UNSIGNED_DEV = config(
     "CONTRACT_SIGNING_ALLOW_UNSIGNED_DEV", default=True, cast=bool
 )
-# Azure OpenAI / OpenAI-compatible vision for field suggestions (optional).
+# Azure OpenAI / OpenAI / Gemini vision for field suggestions (optional).
 CONTRACT_FIELD_AI_ENDPOINT = config("CONTRACT_FIELD_AI_ENDPOINT", default="")
 CONTRACT_FIELD_AI_API_KEY = config("CONTRACT_FIELD_AI_API_KEY", default="")
 CONTRACT_FIELD_AI_DEPLOYMENT = config("CONTRACT_FIELD_AI_DEPLOYMENT", default="")

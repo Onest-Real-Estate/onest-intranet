@@ -1482,6 +1482,40 @@ ROUTE_POLICIES: dict[str, AuthorizationPolicy] = {
         all_permissions=("web.manage_marketing_resources",),
         scope_rule="publication_scope",
     ),
+    "documents_forms": AuthorizationPolicy(
+        key="documents_forms",
+        access="authenticated",
+        description=(
+            "Documents and forms library for the signed-in user. Audience and "
+            "jurisdiction are resolved server-side; filters can only narrow "
+            "the visible set."
+        ),
+        methods=("GET",),
+        route_names=("documents_forms",),
+        scope_rule="self_only",
+    ),
+    "document_detail": AuthorizationPolicy(
+        key="document_detail",
+        access="authenticated",
+        description=(
+            "One document version by id. Authorized by the same audience "
+            "predicate as the library; superseded versions redirect to current."
+        ),
+        methods=("GET",),
+        route_names=("document_detail",),
+        scope_rule="self_only",
+    ),
+    "document_file": AuthorizationPolicy(
+        key="document_file",
+        access="authenticated",
+        description=(
+            "Stream one approved document file from protected storage after "
+            "re-checking current-version visibility."
+        ),
+        methods=("GET",),
+        route_names=("document_file",),
+        scope_rule="self_only",
+    ),
     "policies_compliance": AuthorizationPolicy(
         key="policies_compliance",
         access="authenticated",

@@ -23,6 +23,52 @@ from apps.contract.field_layout import (
 logger = logging.getLogger(__name__)
 
 _ALLOWED_TYPES = frozenset(member.value for member in FieldType)
+_GEMINI_HOST = "generativelanguage.googleapis.com"
+_GEMINI_DEFAULT_MODEL = "gemini-2.5-flash"
+_OPENAI_DEFAULT_MODEL = "gpt-4o"
+
+
+def _chat_completions_target(
+    *,
+    endpoint: str,
+    api_key: str,
+    deployment: str = "",
+    api_version: str = "2024-08-01-preview",
+    model: str = _OPENAI_DEFAULT_MODEL,
+) -> tuple[str, dict[str, str], str]:
+    """Return (url, headers, model) for Azure OpenAI, OpenAI, or Gemini."""
+    endpoint = endpoint.rstrip("/")
+    deployment = (deployment or "").strip()
+    model = (model or "").strip() or _OPENAI_DEFAULT_MODEL
+
+    if deployment:
+        url = (
+            f"{endpoint}/openai/deployments/{deployment}/chat/completions"
+            f"?api-version={api_version or '2024-08-01-preview'}"
+        )
+        headers = {"api-key": api_key, "Content-Type": "application/json"}
+        return url, headers, deployment
+
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    lowered = endpoint.lower()
+    if _GEMINI_HOST in lowered:
+        url = (
+            f"{endpoint}/chat/completions"
+            if lowered.endswith("/openai")
+            else f"{endpoint}/v1beta/openai/chat/completions"
+        )
+        if model == _OPENAI_DEFAULT_MODEL:
+            model = _GEMINI_DEFAULT_MODEL
+        return url, headers, model
+
+    if lowered.endswith("/v1") or lowered.endswith("/openai"):
+        url = f"{endpoint}/chat/completions"
+    else:
+        url = f"{endpoint}/v1/chat/completions"
+    return url, headers, model
 
 
 def field_ai_configured() -> bool:
@@ -157,7 +203,7 @@ def _parse_suggestions(
 def suggest_fields_for_pdf(
     pdf_bytes: bytes, *, max_pages: int = 8
 ) -> list[dict[str, Any]]:
-    """Call Azure OpenAI-compatible vision chat to propose field boxes."""
+    """Call Azure OpenAI, OpenAI, or Gemini vision chat to propose field boxes."""
     if not field_ai_configured():
         raise ValidationError(
             {"form": ["Field AI is not configured (endpoint and API key required)."]}
@@ -167,28 +213,15 @@ def suggest_fields_for_pdf(
 
     reader = PdfReader(io.BytesIO(pdf_bytes))
     page_count = min(len(reader.pages), max(1, max_pages))
-    endpoint = (settings.CONTRACT_FIELD_AI_ENDPOINT or "").rstrip("/")
-    api_key = settings.CONTRACT_FIELD_AI_API_KEY
-    deployment = (getattr(settings, "CONTRACT_FIELD_AI_DEPLOYMENT", "") or "").strip()
-    api_version = (
-        getattr(settings, "CONTRACT_FIELD_AI_API_VERSION", "") or "2024-08-01-preview"
+    url, headers, model = _chat_completions_target(
+        endpoint=settings.CONTRACT_FIELD_AI_ENDPOINT or "",
+        api_key=settings.CONTRACT_FIELD_AI_API_KEY,
+        deployment=getattr(settings, "CONTRACT_FIELD_AI_DEPLOYMENT", "") or "",
+        api_version=getattr(settings, "CONTRACT_FIELD_AI_API_VERSION", "")
+        or "2024-08-01-preview",
+        model=getattr(settings, "CONTRACT_FIELD_AI_MODEL", _OPENAI_DEFAULT_MODEL)
+        or _OPENAI_DEFAULT_MODEL,
     )
-
-    # Azure OpenAI chat completions path when deployment is set; else OpenAI-style.
-    if deployment:
-        url = (
-            f"{endpoint}/openai/deployments/{deployment}/chat/completions"
-            f"?api-version={api_version}"
-        )
-        headers = {"api-key": api_key, "Content-Type": "application/json"}
-        model = deployment
-    else:
-        url = f"{endpoint}/v1/chat/completions"
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-        }
-        model = getattr(settings, "CONTRACT_FIELD_AI_MODEL", "gpt-4o") or "gpt-4o"
 
     import urllib.error
     import urllib.request

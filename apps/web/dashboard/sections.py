@@ -46,6 +46,7 @@ LIVE_SECTION_ROUTES: dict[str, str] = {
     "office-inventory": "office_inventory",
     "room-availability": "room_availability",
     "training-learning": "training_learning",
+    "documents-forms": "documents_forms",
     "marketing-resources": "marketing_resources",
     "policies-compliance": "policies_compliance",
     "agent-directory": "agent_directory",

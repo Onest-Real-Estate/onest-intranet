@@ -329,14 +329,14 @@ export const HUB_NAV_REGISTRY: HubNavItem[] = [
   {
     key: "documents-forms",
     label: "Documents & forms",
-    route: route("coming_soon", routes.coming_soon("documents-forms")),
+    route: route("documents_forms", routes.documents_forms()),
     icon: FolderOpen,
     group: "tools",
     order: 20,
     access: "authenticated",
     permissions: {},
     feature: "documents-forms",
-    activeMatch: active(routes.coming_soon("documents-forms")),
+    activeMatch: active(routes.documents_forms()),
   },
   {
     key: "marketing-resources",

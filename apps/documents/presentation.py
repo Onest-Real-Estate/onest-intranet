@@ -1,0 +1,36 @@
+"""Presentation adapters for document taxonomy codes."""
+
+from __future__ import annotations
+
+from typing import Any
+
+from apps.documents.models import DocumentCategory, DocumentVersion
+
+_STATUS_TONE = {
+    DocumentVersion.Status.DRAFT: "neutral",
+    DocumentVersion.Status.PUBLISHED: "success",
+    DocumentVersion.Status.SUPERSEDED: "warning",
+    DocumentVersion.Status.RETIRED: "neutral",
+}
+
+_STATUS_LABEL = dict(DocumentVersion.Status.choices)
+
+
+def present_category(category: DocumentCategory | None) -> dict[str, Any] | None:
+    if category is None:
+        return None
+    return {
+        "code": category.code,
+        "label": category.label,
+        "tone": "neutral",
+        "known": True,
+    }
+
+
+def present_status(code: str) -> dict[str, Any]:
+    return {
+        "code": code,
+        "label": _STATUS_LABEL.get(code, code),
+        "tone": _STATUS_TONE.get(code, "neutral"),
+        "known": code in _STATUS_LABEL,
+    }
