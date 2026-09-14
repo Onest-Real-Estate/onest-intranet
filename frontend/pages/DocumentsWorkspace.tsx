@@ -1045,6 +1045,7 @@ DocumentsWorkspace.layout = () =>
   [
     HubLayout,
     {
+      variant: "wide",
       context: {
         title: "Documents",
         breadcrumbs: [
@@ -1052,6 +1053,5 @@ DocumentsWorkspace.layout = () =>
           { label: "Documents", href: routes.admin_documents() },
         ],
       },
-      variant: "standard",
     },
   ] as const;

@@ -449,13 +449,13 @@ DocumentsAdministration.layout = () =>
   [
     HubLayout,
     {
+      variant: "wide",
       context: {
         title: "Documents",
         breadcrumbs: [
           { label: "Dashboard", href: routes.dashboard() },
-          { label: "Documents" },
+          { label: "Documents", href: routes.admin_documents() },
         ],
       },
-      variant: "standard",
     },
   ] as const;

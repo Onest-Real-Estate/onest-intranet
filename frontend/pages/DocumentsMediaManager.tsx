@@ -259,6 +259,7 @@ DocumentsMediaManager.layout = () =>
   [
     HubLayout,
     {
+      variant: "wide",
       context: {
         title: "Document files",
         breadcrumbs: [
