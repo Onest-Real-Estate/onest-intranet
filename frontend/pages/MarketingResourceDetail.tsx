@@ -91,7 +91,7 @@ export default function MarketingResourceDetail() {
             <Button variant="outline" size="sm" asChild>
               <Link href={routes.marketing_resources()}>
                 <ArrowLeft className="size-4" aria-hidden />
-                All resources
+                Back to marketing
               </Link>
             </Button>
           }
@@ -170,14 +170,12 @@ MarketingResourceDetail.layout = () =>
     HubLayout,
     {
       context: {
-        title: "Marketing resources",
+        title: "Marketing",
         breadcrumbs: [
           { label: "Dashboard", href: routes.dashboard() },
-          {
-            label: "Marketing resources",
-            href: routes.marketing_resources(),
-          },
+          { label: "Marketing", href: routes.marketing_resources() },
         ],
       },
+      variant: "standard",
     },
   ] as const;

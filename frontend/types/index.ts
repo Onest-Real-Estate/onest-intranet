@@ -4942,6 +4942,11 @@ export interface MarketingLibraryFilters {
 
 export interface MarketingResourcesPageProps extends PageProps {
   library: ListResponse<MarketingLibraryRow, MarketingLibraryFilters>;
+  summary: {
+    published: number;
+    logos: number;
+    templates: number;
+  };
   filterOptions: {
     categories: FilterOption[];
     assetTypes: FilterOption[];
@@ -5190,6 +5195,11 @@ export interface ComplianceLibraryFilters {
 
 export interface PoliciesCompliancePageProps extends PageProps {
   library: ListResponse<ComplianceLibraryRow, ComplianceLibraryFilters>;
+  summary: {
+    published: number;
+    outstanding: number;
+    overdue: number;
+  };
   filterOptions: {
     categories: FilterOption[];
   };
@@ -5283,6 +5293,11 @@ export interface ComplianceWorkspaceFilters {
 
 export interface ComplianceAdministrationPageProps extends PageProps {
   policies: ListResponse<ComplianceAdminRow, ComplianceWorkspaceFilters>;
+  summary: {
+    draft: number;
+    inReview: number;
+    published: number;
+  };
   filterOptions: {
     categories: FilterOption[];
     statuses: FilterOption[];
@@ -5340,6 +5355,12 @@ export interface ComplianceAckReportPageProps extends PageProps {
   report: {
     items: ComplianceAckReportRow[];
     totalItems: number;
+    summary: {
+      pending: number;
+      acknowledged: number;
+      waived: number;
+      overdue: number;
+    };
   };
   filterOptions: {
     policies: FilterOption[];

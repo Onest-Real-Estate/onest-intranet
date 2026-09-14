@@ -8,7 +8,7 @@ from uuid import uuid4
 
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
-from django.db.models import Max, Q, QuerySet
+from django.db.models import Count, Max, Q, QuerySet
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
@@ -822,7 +822,18 @@ def build_admin_index(actor: User, *, params, page: int = 1) -> dict[str, Any]:
         {"value": office.pk, "label": office.name}
         for office in publishable_office_queryset(actor)
     ]
+    scoped = publication_queryset(actor)
+    counts = scoped.aggregate(
+        draft=Count("pk", filter=Q(status=PolicyVersion.Status.DRAFT)),
+        in_review=Count("pk", filter=Q(status=PolicyVersion.Status.IN_REVIEW)),
+        published=Count("pk", filter=Q(status=PolicyVersion.Status.PUBLISHED)),
+    )
     return {
+        "summary": {
+            "draft": counts["draft"],
+            "inReview": counts["in_review"],
+            "published": counts["published"],
+        },
         "policies": list_response(
             items,
             page=current,

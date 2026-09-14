@@ -334,6 +334,19 @@ def build_library(
     return payload
 
 
+def library_summary(user: User) -> dict[str, int]:
+    from apps.compliance.acknowledgements import (
+        open_requirements_for,
+        overdue_requirements_for,
+    )
+
+    return {
+        "published": library_queryset(user, LibraryFilters()).count(),
+        "outstanding": len(open_requirements_for(user)),
+        "overdue": len(overdue_requirements_for(user)),
+    }
+
+
 def category_filter_options(*, include_codes=()) -> list[dict[str, str]]:
     codes = set(include_codes)
     rows = PolicyCategory.objects.filter(

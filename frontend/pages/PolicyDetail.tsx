@@ -134,7 +134,7 @@ export default function PolicyDetail() {
             <Button variant="outline" size="sm" asChild>
               <Link href={routes.policies_compliance()}>
                 <ArrowLeft className="size-4" aria-hidden />
-                All policies
+                Back to policies
               </Link>
             </Button>
           }
@@ -310,14 +310,12 @@ PolicyDetail.layout = () =>
     HubLayout,
     {
       context: {
-        title: "Policies & compliance",
+        title: "Policies",
         breadcrumbs: [
           { label: "Dashboard", href: routes.dashboard() },
-          {
-            label: "Policies & compliance",
-            href: routes.policies_compliance(),
-          },
+          { label: "Policies", href: routes.policies_compliance() },
         ],
       },
+      variant: "standard",
     },
   ] as const;

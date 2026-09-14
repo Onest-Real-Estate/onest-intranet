@@ -56,6 +56,11 @@ const { pageProps, routerGet } = vi.hoisted(() => {
       filterOptions: {
         categories: [{ value: "conduct", label: "Conduct" }],
       },
+      summary: {
+        published: 1,
+        outstanding: 1,
+        overdue: 0,
+      },
       errors: { fields: {}, form: [] as string[] },
     },
   };
@@ -99,11 +104,9 @@ describe("PoliciesCompliance", () => {
 
   it("renders library rows and filter controls", () => {
     render(<PoliciesCompliance />);
-    expect(
-      screen.getByRole("heading", { name: "Policies & compliance" }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Policies" })).toBeInTheDocument();
     expect(screen.getByText("Code of conduct")).toBeInTheDocument();
-    expect(screen.getByLabelText("Category")).toBeInTheDocument();
+    expect(screen.getByText("Outstanding")).toBeInTheDocument();
     expect(screen.getByLabelText("Search policies")).toBeInTheDocument();
   });
 
@@ -118,6 +121,7 @@ describe("PoliciesCompliance", () => {
   it("requests a filtered visit through Inertia", async () => {
     const user = userEvent.setup();
     render(<PoliciesCompliance />);
+    await user.click(screen.getByRole("button", { name: /filters/i }));
     await user.click(screen.getByLabelText("Category"));
     await user.click(screen.getByRole("option", { name: "Conduct" }));
     expect(routerGet).toHaveBeenCalled();

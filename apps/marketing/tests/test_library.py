@@ -19,6 +19,7 @@ from apps.marketing.services import (
     LibraryFilters,
     detail_payload,
     library_queryset,
+    library_summary,
     resolve_consumer_asset,
 )
 from apps.marketing.tests.factories import (
@@ -226,3 +227,17 @@ def test_library_inertia_page(seeded, client):
     payload = json.loads(response.content)
     assert payload["component"] == "MarketingResources"
     assert payload["props"]["library"]["items"]
+    assert payload["props"]["summary"]["published"] >= 1
+
+
+def test_library_summary_counts_visible_assets(seeded):
+    publish_asset(
+        slug="primary-logo",
+        title="Primary logo",
+        owner_office=office("onest-head-office"),
+        asset_type="logo",
+    )
+    summary = library_summary(agent())
+    assert summary["published"] >= 1
+    assert summary["logos"] >= 1
+    assert summary["templates"] >= 0

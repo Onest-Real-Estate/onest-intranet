@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
-from django.db.models import Q, QuerySet
+from django.db.models import Count, Q, QuerySet
 from django.http import Http404
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
@@ -14,7 +14,12 @@ from apps.marketing.audience import visible_assets, visible_to
 from apps.marketing.media_service import export_files_payload, media_publish_debt
 from apps.marketing.models import MarketingAsset, MarketingCategory, MarketingFile
 from apps.marketing.presentation import present_asset_type, present_category
-from apps.marketing.taxonomy import ASSET_TYPE_CHOICES, ASSET_TYPE_CODES
+from apps.marketing.taxonomy import (
+    ASSET_TYPE_CHOICES,
+    ASSET_TYPE_CODES,
+    ASSET_TYPE_LOGO,
+    ASSET_TYPE_TEMPLATE,
+)
 from apps.user.models import User
 from apps.web.contracts import list_response
 
@@ -313,6 +318,19 @@ def category_filter_options(*, include_codes=()) -> list[dict[str, str]]:
     return [{"value": row.code, "label": row.label} for row in rows]
 
 
+def library_summary(user: User) -> dict[str, int]:
+    counts = library_queryset(user, LibraryFilters()).aggregate(
+        published=Count("pk"),
+        logos=Count("pk", filter=Q(asset_type=ASSET_TYPE_LOGO)),
+        templates=Count("pk", filter=Q(asset_type=ASSET_TYPE_TEMPLATE)),
+    )
+    return {
+        "published": counts["published"],
+        "logos": counts["logos"],
+        "templates": counts["templates"],
+    }
+
+
 def asset_type_filter_options() -> list[dict[str, str]]:
     return [{"value": code, "label": label} for code, label in ASSET_TYPE_CHOICES]
 
@@ -327,6 +345,7 @@ __all__ = [
     "detail_payload",
     "library_payload",
     "library_queryset",
+    "library_summary",
     "resolve_consumer_asset",
     "validation_debt",
     "validation_debt_payload",
