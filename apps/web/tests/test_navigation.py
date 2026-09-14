@@ -90,6 +90,7 @@ def test_only_the_live_destinations_are_enabled():
             "my-contract": True,
             "my-tools": True,
             "training-learning": True,
+            "documents-forms": True,
             "marketing-resources": True,
             "policies-compliance": True,
             "reports": True,
@@ -120,6 +121,7 @@ def test_only_the_live_destinations_are_enabled():
     assert HUB_FEATURES["my-contract"] is True
     assert HUB_FEATURES["my-tools"] is True
     assert HUB_FEATURES["training-learning"] is True
+    assert HUB_FEATURES["documents-forms"] is True
     assert HUB_FEATURES["marketing-resources"] is True
     assert HUB_FEATURES["policies-compliance"] is True
     assert HUB_FEATURES["reports"] is True
@@ -155,6 +157,7 @@ def test_unauthorized_administrative_feature_keys_are_not_shared(client):
         "my-contract": True,
         "my-tools": True,
         "training-learning": True,
+        "documents-forms": True,
         "marketing-resources": True,
         "policies-compliance": True,
         "agent-directory": True,
@@ -258,6 +261,7 @@ def test_shared_props_carry_feature_state_and_office(client):
         "my-contract": True,
         "my-tools": True,
         "training-learning": True,
+        "documents-forms": True,
         "marketing-resources": True,
         "policies-compliance": True,
         "agent-directory": True,

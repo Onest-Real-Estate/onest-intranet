@@ -5352,3 +5352,77 @@ export interface ComplianceAckReportPageProps extends PageProps {
   capabilities: ComplianceCapabilities;
   errors: ValidationErrors;
 }
+
+/* -------------------------------------------------------------------------- */
+/* Documents & forms                                                          */
+/* -------------------------------------------------------------------------- */
+
+export interface DocumentsPresentationBadge {
+  code: string;
+  label: string;
+  tone: string;
+  known: boolean;
+}
+
+export interface DocumentsScope {
+  level: string;
+  label: string;
+  officeName: string;
+  officeId: string;
+}
+
+export interface DocumentsFileItem {
+  id: number;
+  displayName: string;
+  mediaType: string;
+  byteSize: number;
+  checksum: string;
+  url: string;
+  isReadable: boolean;
+}
+
+export interface DocumentsLibraryRow {
+  id: number;
+  key: string;
+  name: string;
+  description: string;
+  status: DocumentsPresentationBadge;
+  category: DocumentsPresentationBadge | null;
+  scope: DocumentsScope;
+  jurisdictionStateCodes: string[];
+  versionNumber: number;
+  versionLabel: string;
+  effectiveAt: string | null;
+  expiresAt: string | null;
+  publishedAt: string | null;
+  fileCount: number;
+  detailUrl: string;
+}
+
+export interface DocumentsDetail extends DocumentsLibraryRow {
+  files: DocumentsFileItem[];
+  superseded: boolean;
+}
+
+export interface DocumentsLibraryFilters {
+  category: string;
+  jurisdiction: string;
+  office: string;
+  role: string;
+  q: string;
+  rejected: string[];
+  [key: string]: string | string[];
+}
+
+export interface DocumentsFormsPageProps extends PageProps {
+  library: ListResponse<DocumentsLibraryRow, DocumentsLibraryFilters>;
+  filterOptions: {
+    categories: FilterOption[];
+    offices: FilterOption[];
+    roles: FilterOption[];
+  };
+}
+
+export interface DocumentDetailPageProps extends PageProps {
+  document: DocumentsDetail;
+}

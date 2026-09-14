@@ -1124,6 +1124,48 @@ registry.register(
     description="A mandatory acknowledgement requirement was created on publish.",
 )
 
+# ---------------------------------------------------------------------------
+# documents domain  (publisher: apps.documents.services)
+# ---------------------------------------------------------------------------
+
+registry.register(
+    name="document.published",
+    version=1,
+    required_payload_keys={
+        "document_id",
+        "family_id",
+        "family_key",
+        "owner_office_id",
+        "scope_level",
+        "status",
+        "version_number",
+        "occurred_at",
+    },
+    description=(
+        "A document version became published. Consumers holding derived "
+        "library state should re-evaluate visibility from this moment."
+    ),
+)
+
+registry.register(
+    name="document.superseded",
+    version=1,
+    required_payload_keys={
+        "document_id",
+        "family_id",
+        "family_key",
+        "owner_office_id",
+        "scope_level",
+        "status",
+        "version_number",
+        "occurred_at",
+    },
+    description=(
+        "A published document was superseded by a newer family sibling. "
+        "It is no longer the current library version."
+    ),
+)
+
 registry.register(
     name="compliance.corrected",
     version=1,
