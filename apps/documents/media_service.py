@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from django.core.exceptions import PermissionDenied, ValidationError
+from django.core.exceptions import ValidationError
 from django.core.files.base import ContentFile
 from django.db import transaction
 from django.http import FileResponse, Http404
@@ -19,7 +19,6 @@ from apps.documents.media import (
 )
 from apps.documents.models import DocumentFile, DocumentVersion
 from apps.user.models import User
-from apps.user.services.role_assignments import has_effective_permission
 
 State = DocumentFile.ProcessingState
 
@@ -27,10 +26,9 @@ MANAGE_PERMISSION = "web.manage_documents"
 
 
 def assert_can_manage_media(actor: User, version: DocumentVersion) -> None:
-    if getattr(actor, "is_superuser", False):
-        return
-    if not has_effective_permission(actor, MANAGE_PERMISSION):
-        raise PermissionDenied("You cannot manage document files.")
+    from apps.documents.administration import assert_can_author
+
+    assert_can_author(actor, version.owner_office)
 
 
 def assert_can_mutate_media(actor: User, version: DocumentVersion) -> None:
@@ -221,3 +219,147 @@ def media_publish_debt(version: DocumentVersion) -> list[tuple[str, Any]]:
             _(f"Remove or replace the files that failed checks: {names}."),
         )
     ]
+
+
+def admin_file_url(row: DocumentFile) -> str:
+    return reverse("document_admin_file", args=[row.pk])
+
+
+def admin_file_payload(row: DocumentFile) -> dict[str, Any]:
+    url = admin_file_url(row) if row.is_readable else ""
+    return {
+        "id": row.pk,
+        "displayName": row.display_name,
+        "mediaType": row.media_type,
+        "byteSize": row.byte_size,
+        "checksum": row.checksum,
+        "url": url,
+        "isReadable": row.is_readable,
+        "processingState": row.processing_state,
+        "isActive": row.is_active,
+        "sortOrder": row.sort_order,
+    }
+
+
+def admin_files_payload(
+    version: DocumentVersion, *, actor: User | None = None
+) -> list[dict[str, Any]]:
+    del actor
+    rows = DocumentFile.objects.filter(
+        document_version=version, is_active=True
+    ).order_by("sort_order", "pk")
+    return [admin_file_payload(row) for row in rows]
+
+
+def allowed_matrix_payload() -> dict[str, Any]:
+    from apps.documents.media import DOCUMENT_ALLOWED_MEDIA, MAX_DOCUMENT_FILES
+
+    return {
+        "document": {
+            "extensions": sorted(DOCUMENT_ALLOWED_MEDIA.keys()),
+            "maxBytes": max(rule.max_bytes for rule in DOCUMENT_ALLOWED_MEDIA.values()),
+            "maxCount": MAX_DOCUMENT_FILES,
+        }
+    }
+
+
+def assert_admin_readable(actor: User, row: DocumentFile) -> None:
+    assert_can_manage_media(actor, row.document_version)
+    if not row.is_readable:
+        log_file_denial(actor, str(row.pk), reason="file_not_ready")
+        raise Http404("No document matches that id.")
+
+
+def _deactivate_file(actor: User, row: DocumentFile, *, reason: str) -> None:
+    before = _snapshot(row)
+    row.is_active = False
+    row.save(update_fields=["is_active", "updated_at"])
+    log_event(
+        "document.file_retired",
+        actor=actor_from_user(actor),
+        target=_target(row),
+        before=before,
+        after=_snapshot(row),
+        reason=reason,
+        metadata={"document_version_id": row.document_version.pk},
+    )
+
+
+@transaction.atomic
+def remove_file(actor: User, row: DocumentFile) -> None:
+    assert_can_mutate_media(actor, row.document_version)
+    _deactivate_file(actor, row, reason="removed_by_admin")
+
+
+@transaction.atomic
+def replace_file(actor: User, row: DocumentFile, uploaded) -> DocumentFile:
+    assert_can_mutate_media(actor, row.document_version)
+    inspected, data = inspect_document_upload(uploaded)
+    before = _snapshot(row)
+    row.display_name = inspected.display_name
+    row.media_type = inspected.media_type
+    row.byte_size = inspected.byte_size
+    row.checksum = inspected.checksum
+    row.processing_state = State.READY
+    row.processing_note = ""
+    row.file.save(inspected.display_name, ContentFile(data), save=False)
+    row.full_clean(exclude={"uploaded_by"})
+    row.save()
+    log_event(
+        "document.file_replaced",
+        actor=actor_from_user(actor),
+        target=_target(row),
+        before=before,
+        after=_snapshot(row),
+        metadata={"document_version_id": row.document_version.pk},
+    )
+    return row
+
+
+@transaction.atomic
+def reorder_files(
+    actor: User, version: DocumentVersion, ordered_ids: list[int]
+) -> None:
+    assert_can_mutate_media(actor, version)
+    rows = {
+        item.pk: item
+        for item in DocumentFile.objects.filter(
+            document_version=version, is_active=True
+        )
+    }
+    seen: list[int] = []
+    for candidate in ordered_ids:
+        if candidate in rows and candidate not in seen:
+            seen.append(candidate)
+    seen.extend(pk for pk in rows if pk not in seen)
+    for index, pk in enumerate(seen):
+        item = rows[pk]
+        if item.sort_order != index:
+            item.sort_order = index
+            item.save(update_fields=["sort_order", "updated_at"])
+
+
+def clone_files_to(
+    actor: User, source: DocumentVersion, target: DocumentVersion
+) -> None:
+    for row in DocumentFile.objects.filter(
+        document_version=source, is_active=True
+    ).order_by("sort_order", "pk"):
+        storage = row.file.storage
+        if not row.file or not storage.exists(row.file.name):
+            continue
+        with storage.open(row.file.name, "rb") as handle:
+            data = handle.read()
+        clone = DocumentFile(
+            document_version=target,
+            display_name=row.display_name,
+            media_type=row.media_type,
+            byte_size=len(data),
+            checksum=row.checksum,
+            processing_state=State.READY,
+            sort_order=row.sort_order,
+            uploaded_by=actor,
+        )
+        clone.file.save(row.display_name, ContentFile(data), save=False)
+        clone.full_clean(exclude={"uploaded_by"})
+        clone.save()

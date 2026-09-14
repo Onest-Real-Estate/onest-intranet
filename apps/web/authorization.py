@@ -1516,6 +1516,145 @@ ROUTE_POLICIES: dict[str, AuthorizationPolicy] = {
         route_names=("document_file",),
         scope_rule="self_only",
     ),
+    "document_admin_new": AuthorizationPolicy(
+        key="document_admin_new",
+        access="permission_protected",
+        description="Open an empty document workspace within the actor's grant.",
+        methods=("GET",),
+        route_names=("document_admin_new",),
+        all_permissions=("web.manage_documents",),
+        scope_rule="publication_scope",
+    ),
+    "document_admin_edit": AuthorizationPolicy(
+        key="document_admin_edit",
+        access="permission_protected",
+        description=(
+            "Open one document version in the workspace. Loaded through the "
+            "actor's scoped queryset, so an out-of-scope id is a 404."
+        ),
+        methods=("GET",),
+        route_names=("document_admin_edit",),
+        all_permissions=("web.manage_documents",),
+        scope_rule="publication_scope",
+    ),
+    "document_admin_create": AuthorizationPolicy(
+        key="document_admin_create",
+        access="permission_protected",
+        description="Create one document family and first draft version.",
+        methods=("POST",),
+        route_names=("document_admin_create",),
+        all_permissions=("web.manage_documents",),
+        scope_rule="publication_scope",
+    ),
+    "document_admin_update": AuthorizationPolicy(
+        key="document_admin_update",
+        access="permission_protected",
+        description=(
+            "Save document copy, window, applicability, and audience. "
+            "Guarded by an update-timestamp token."
+        ),
+        methods=("POST",),
+        route_names=("document_admin_update",),
+        all_permissions=("web.manage_documents",),
+        scope_rule="publication_scope",
+    ),
+    "document_admin_lifecycle": AuthorizationPolicy(
+        key="document_admin_lifecycle",
+        access="permission_protected",
+        description=(
+            "Publish, schedule, or retire one document version. Publish and "
+            "retire are re-checked in the service against their own grants."
+        ),
+        methods=("POST",),
+        route_names=("document_admin_lifecycle",),
+        any_permissions=("web.publish_documents", "web.retire_documents"),
+        scope_rule="publication_scope",
+    ),
+    "document_admin_duplicate": AuthorizationPolicy(
+        key="document_admin_duplicate",
+        access="permission_protected",
+        description=(
+            "Fork a new draft version of a document family so published "
+            "files stay available for audit."
+        ),
+        methods=("POST",),
+        route_names=("document_admin_duplicate",),
+        all_permissions=("web.manage_documents",),
+        scope_rule="publication_scope",
+    ),
+    "document_admin_recipient_search": AuthorizationPolicy(
+        key="document_admin_recipient_search",
+        access="permission_protected",
+        description=(
+            "Typeahead for individual document recipients, bounded by the "
+            "actor's administered users."
+        ),
+        methods=("GET",),
+        route_names=("document_admin_recipient_search",),
+        all_permissions=("web.manage_documents",),
+        scope_rule="delegated_user_scope",
+        auth_behavior="json",
+    ),
+    "document_admin_media": AuthorizationPolicy(
+        key="document_admin_media",
+        access="permission_protected",
+        description="Manage one document version's protected files.",
+        methods=("GET",),
+        route_names=("document_admin_media",),
+        all_permissions=("web.manage_documents",),
+        scope_rule="publication_scope",
+    ),
+    "document_admin_media_upload": AuthorizationPolicy(
+        key="document_admin_media_upload",
+        access="permission_protected",
+        description="Upload a file to a draft document version.",
+        methods=("POST",),
+        route_names=("document_admin_media_upload",),
+        all_permissions=("web.manage_documents",),
+        scope_rule="publication_scope",
+        auth_behavior="json",
+    ),
+    "document_admin_media_replace": AuthorizationPolicy(
+        key="document_admin_media_replace",
+        access="permission_protected",
+        description="Replace one stored file on a draft document.",
+        methods=("POST",),
+        route_names=("document_admin_media_replace",),
+        all_permissions=("web.manage_documents",),
+        scope_rule="publication_scope",
+        auth_behavior="json",
+    ),
+    "document_admin_media_remove": AuthorizationPolicy(
+        key="document_admin_media_remove",
+        access="permission_protected",
+        description="Deactivate one draft document file without deleting storage.",
+        methods=("POST",),
+        route_names=("document_admin_media_remove",),
+        all_permissions=("web.manage_documents",),
+        scope_rule="publication_scope",
+    ),
+    "document_admin_media_reorder": AuthorizationPolicy(
+        key="document_admin_media_reorder",
+        access="permission_protected",
+        description="Set the display order of one document version's files.",
+        methods=("POST",),
+        route_names=("document_admin_media_reorder",),
+        all_permissions=("web.manage_documents",),
+        scope_rule="publication_scope",
+    ),
+    "document_admin_file": AuthorizationPolicy(
+        key="document_admin_file",
+        access="permission_protected",
+        description=(
+            "Stream one document file for administrators after re-checking "
+            "manage scope. Uses the same protected storage as consumer "
+            "downloads."
+        ),
+        methods=("GET",),
+        route_names=("document_admin_file",),
+        all_permissions=("web.manage_documents",),
+        scope_rule="publication_scope",
+    ),
     "policies_compliance": AuthorizationPolicy(
         key="policies_compliance",
         access="authenticated",

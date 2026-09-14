@@ -1,5 +1,20 @@
 from django.urls import path
 
+from .administration_views import (
+    document_admin_create,
+    document_admin_duplicate,
+    document_admin_edit,
+    document_admin_file,
+    document_admin_lifecycle,
+    document_admin_media,
+    document_admin_media_remove,
+    document_admin_media_reorder,
+    document_admin_media_replace,
+    document_admin_media_upload,
+    document_admin_new,
+    document_admin_recipient_search,
+    document_admin_update,
+)
 from .views import document_detail, document_file, documents_forms
 
 urlpatterns = [
@@ -13,5 +28,70 @@ urlpatterns = [
         "documents-forms/files/<int:file_id>",
         document_file,
         name="document_file",
+    ),
+    path(
+        "operations/documents/recipients",
+        document_admin_recipient_search,
+        name="document_admin_recipient_search",
+    ),
+    path(
+        "operations/documents/new",
+        document_admin_new,
+        name="document_admin_new",
+    ),
+    path(
+        "operations/documents/create",
+        document_admin_create,
+        name="document_admin_create",
+    ),
+    path(
+        "operations/documents/<int:document_id>/edit",
+        document_admin_edit,
+        name="document_admin_edit",
+    ),
+    path(
+        "operations/documents/<int:document_id>/save",
+        document_admin_update,
+        name="document_admin_update",
+    ),
+    path(
+        "operations/documents/<int:document_id>/lifecycle",
+        document_admin_lifecycle,
+        name="document_admin_lifecycle",
+    ),
+    path(
+        "operations/documents/<int:document_id>/duplicate-version",
+        document_admin_duplicate,
+        name="document_admin_duplicate",
+    ),
+    path(
+        "operations/documents/<int:document_id>/media",
+        document_admin_media,
+        name="document_admin_media",
+    ),
+    path(
+        "operations/documents/<int:document_id>/media/upload",
+        document_admin_media_upload,
+        name="document_admin_media_upload",
+    ),
+    path(
+        "operations/documents/<int:document_id>/media/reorder",
+        document_admin_media_reorder,
+        name="document_admin_media_reorder",
+    ),
+    path(
+        "operations/documents/media/<int:file_id>/replace",
+        document_admin_media_replace,
+        name="document_admin_media_replace",
+    ),
+    path(
+        "operations/documents/media/<int:file_id>/remove",
+        document_admin_media_remove,
+        name="document_admin_media_remove",
+    ),
+    path(
+        "operations/documents/files/<int:file_id>",
+        document_admin_file,
+        name="document_admin_file",
     ),
 ]

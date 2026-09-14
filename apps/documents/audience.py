@@ -26,6 +26,8 @@ from apps.user.services.role_assignments import get_effective_access
 Kind = DocumentAudience.Kind
 
 MANAGE_PERMISSION = "web.manage_documents"
+MIN_RECIPIENT_QUERY = 2
+RECIPIENT_SEARCH_LIMIT = 20
 
 
 def selectors_for(version: DocumentVersion) -> QuerySet[DocumentAudience]:
@@ -282,3 +284,71 @@ def replace_audience(actor, version: DocumentVersion, selectors) -> None:
         ],
         ignore_conflicts=True,
     )
+
+
+def describe_audience(version: DocumentVersion) -> list[dict[str, Any]]:
+    """camelCase summary of the selectors, in a stable order."""
+    order = {
+        Kind.COMPANY: 0,
+        Kind.ROLE: 1,
+        Kind.REGION: 2,
+        Kind.OFFICE: 3,
+        Kind.USER: 4,
+    }
+    rows = [
+        {
+            "kind": selector.kind,
+            "label": _selector_label(selector),
+            "code": selector.role or "",
+            "officeId": selector.office.pk if selector.office else None,
+            "userId": selector.user.pk if selector.user else None,
+        }
+        for selector in selectors_for(version)
+    ]
+    return sorted(rows, key=lambda row: (order.get(row["kind"], 9), row["label"]))
+
+
+def _selector_label(selector: DocumentAudience) -> str:
+    if selector.kind == Kind.COMPANY:
+        return "Everyone at oNEST"
+    if selector.kind == Kind.ROLE:
+        definition = ROLE_BY_KEY.get(selector.role)
+        return definition.label if definition else selector.role
+    if selector.kind == Kind.REGION and selector.office is not None:
+        return f"{selector.office.name} and offices under it"
+    if selector.office is not None:
+        return selector.office.name
+    if selector.user is not None:
+        return selector.user.get_full_name() or selector.user.email
+    return ""
+
+
+def search_recipients(actor, query: str, *, limit: int = RECIPIENT_SEARCH_LIMIT):
+    """Look up individual recipients inside the actor's own grant."""
+    from apps.user.services.role_assignments import has_effective_permission
+
+    if not has_effective_permission(actor, MANAGE_PERMISSION):
+        _deny(actor, reason="missing_permission")
+        raise PermissionDenied("You cannot address documents.")
+
+    term = (query or "").strip()[:120]
+    if len(term) < MIN_RECIPIENT_QUERY:
+        return []
+    rows = (
+        targetable_user_queryset(actor)
+        .filter(
+            Q(first_name__icontains=term)
+            | Q(last_name__icontains=term)
+            | Q(email__icontains=term)
+        )
+        .filter(is_active=True)[: max(1, min(limit, RECIPIENT_SEARCH_LIMIT))]
+    )
+    return [
+        {
+            "id": row.pk,
+            "name": row.get_full_name() or row.email,
+            "email": row.email,
+            "officeName": row.office.name if row.office is not None else "",
+        }
+        for row in rows
+    ]

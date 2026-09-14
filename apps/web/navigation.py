@@ -49,6 +49,7 @@ HUB_FEATURES["marketing-resources"] = True
 HUB_FEATURES["admin-marketing-resources"] = True
 HUB_FEATURES["policies-compliance"] = True
 HUB_FEATURES["documents-forms"] = True
+HUB_FEATURES["admin-documents"] = True
 HUB_FEATURES["admin-rooms"] = True
 HUB_FEATURES["my-reservations"] = True
 HUB_FEATURES["agent-directory"] = True

@@ -98,7 +98,7 @@ who can read a notice, which is why it is neither of the other two. Every one
 of the three is still bounded by the actor's office scope. See
 `docs/announcements.md`.
 
-### Training and marketing resources
+### Training, marketing, and documents
 
 Training authoring uses a single manage grant (`web.manage_training`). Marketing
 resources split three ways, like announcements:
@@ -111,6 +111,19 @@ resources split three ways, like announcements:
 
 Export downloads use audience visibility alone. See
 `docs/marketing-resources.md` and `docs/training.md`.
+
+Documents & forms split authoring, publication, and retirement:
+
+| Codename | What it gates |
+| --- | --- |
+| `web.manage_documents` | Draft, upload, audience, duplicate version within publication scope |
+| `web.publish_documents` | Publish / schedule / supersede |
+| `web.retire_documents` | Retire a published version after usage review |
+
+A draft reaches nobody, so authoring is the cheap grant. Publication puts a
+form in the library and supersedes the previous current sibling.
+Retirement removes it from the library while keeping files and history.
+See [documents-forms.md](documents-forms.md).
 
 ### Reading a record vs ending its access
 
