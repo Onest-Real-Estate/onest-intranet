@@ -5447,3 +5447,168 @@ export interface DocumentsFormsPageProps extends PageProps {
 export interface DocumentDetailPageProps extends PageProps {
   document: DocumentsDetail;
 }
+
+export interface DocumentsLifecycle {
+  code: string;
+  label: string;
+  tone: StatusTone;
+}
+
+export interface DocumentsAdminRow {
+  id: number;
+  key: string;
+  name: string;
+  description: string;
+  lifecycle: DocumentsLifecycle;
+  status: DocumentsPresentationBadge;
+  category: DocumentsPresentationBadge | null;
+  versionNumber: number;
+  versionLabel: string;
+  ownerOffice: { id: number; name: string };
+  scope: DocumentsScope;
+  audience: AnnouncementAudienceEntry[];
+  jurisdictionStateCodes: string[];
+  effectiveAt: string | null;
+  expiresAt: string | null;
+  publishedAt: string | null;
+  updatedAt: string | null;
+  updatedBy: string;
+  createdBy: string;
+  version: string;
+}
+
+export interface DocumentsValidationItem {
+  field: string;
+  message: string;
+}
+
+export interface DocumentsValidation {
+  isPublishable: boolean;
+  items: DocumentsValidationItem[];
+}
+
+export interface DocumentsHistoryEntry {
+  id: string;
+  action: string;
+  label: string;
+  tone: StatusTone;
+  actor: string;
+  occurredAt: string;
+}
+
+export interface DocumentsAdminFileItem extends DocumentsFileItem {
+  processingState: "pending" | "ready" | "quarantined" | "failed";
+  isActive: boolean;
+  sortOrder: number;
+}
+
+export interface DocumentsRetirementUsage {
+  isCurrent: boolean;
+  familyKey: string;
+  versionNumber: number;
+  siblingCount: number;
+  publishedSiblingCount: number;
+  fileCount: number;
+  downloadCount: number;
+  wouldLeaveFamilyWithoutCurrent: boolean;
+}
+
+export interface DocumentsAdminDetail extends DocumentsAdminRow {
+  categoryCode: string;
+  displayOrder: number;
+  validation: DocumentsValidation;
+  history: DocumentsHistoryEntry[];
+  files: DocumentsAdminFileItem[];
+  mediaHref: string;
+  usage: DocumentsRetirementUsage;
+  familyId: number;
+}
+
+export interface DocumentsCapabilities {
+  canAuthor: boolean;
+  canPublish: boolean;
+  canRetire: boolean;
+}
+
+export interface DocumentsWorkspaceFilters {
+  q: string;
+  lifecycle: string;
+  category: string;
+  audience: string;
+  author: string;
+  office: string;
+  publishedFrom: string;
+  publishedTo: string;
+  [key: string]: string | string[];
+}
+
+export interface DocumentsCreateSheet {
+  open: boolean;
+  draft: Record<string, string | string[]>;
+}
+
+export interface DocumentsAdministrationPageProps extends PageProps {
+  documents: ListResponse<DocumentsAdminRow, DocumentsWorkspaceFilters>;
+  filterOptions: {
+    categories: FilterOption[];
+    offices: AnnouncementOfficeOption[];
+  };
+  createOptions: {
+    offices: AnnouncementOfficeOption[];
+    categories: FilterOption[];
+    audience: AnnouncementAudienceOptions;
+  };
+  createSheet: DocumentsCreateSheet | null;
+  capabilities: DocumentsCapabilities;
+  errors: ValidationErrors;
+}
+
+export interface DocumentsPreviewReach {
+  chosen: boolean;
+  matched: boolean;
+  officeId: number | null;
+  officeName: string;
+  roleCode: string;
+  hasNamedRecipients: boolean;
+}
+
+export interface DocumentsPreviewArticle extends DocumentsDetail {
+  audience: AnnouncementAudienceEntry[];
+}
+
+export interface DocumentsPreview {
+  article: DocumentsPreviewArticle;
+  reach: DocumentsPreviewReach;
+  roleCode: string;
+  officeId: number | null;
+}
+
+export interface DocumentsWorkspacePageProps extends PageProps {
+  document: DocumentsAdminDetail | null;
+  officeOptions: AnnouncementOfficeOption[];
+  categoryOptions: FilterOption[];
+  audienceOptions: AnnouncementAudienceOptions;
+  capabilities: DocumentsCapabilities;
+  preview: DocumentsPreview | null;
+  errors: ValidationErrors;
+  posted: Record<string, string[]> | null;
+}
+
+export interface DocumentsRecipientResult {
+  id: number;
+  name: string;
+  email: string;
+  officeName: string;
+}
+
+export interface DocumentsMediaLimits {
+  document: { extensions: string[]; maxBytes: number; maxCount: number };
+}
+
+export interface DocumentsMediaManagerPageProps extends PageProps {
+  document: { id: number; name: string; status: string; version: string };
+  files: DocumentsAdminFileItem[];
+  limits: DocumentsMediaLimits;
+  capabilities: DocumentsCapabilities;
+  validation: ValidationErrors;
+}

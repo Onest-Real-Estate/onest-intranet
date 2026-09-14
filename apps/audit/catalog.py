@@ -1167,6 +1167,44 @@ registry.register(
 )
 
 registry.register(
+    name="document.scheduled",
+    version=1,
+    required_payload_keys={
+        "document_id",
+        "family_id",
+        "family_key",
+        "owner_office_id",
+        "scope_level",
+        "status",
+        "version_number",
+        "occurred_at",
+    },
+    description=(
+        "A document version was published with a future effective time. "
+        "It becomes current when that window opens."
+    ),
+)
+
+registry.register(
+    name="document.retired",
+    version=1,
+    required_payload_keys={
+        "document_id",
+        "family_id",
+        "family_key",
+        "owner_office_id",
+        "scope_level",
+        "status",
+        "version_number",
+        "occurred_at",
+    },
+    description=(
+        "A published document was retired. History and files are retained; "
+        "it leaves the consumer library."
+    ),
+)
+
+registry.register(
     name="compliance.corrected",
     version=1,
     required_payload_keys={"policy_id", "recipient_id", "kind", "occurred_at"},

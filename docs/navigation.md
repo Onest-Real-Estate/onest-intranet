@@ -82,6 +82,10 @@ revoked items and emptied groups disappear immediately.
 They resolve to the real library and operations workspace behind audience and
 `web.manage_marketing_resources` respectively.
 
+`documents-forms` and `admin-documents` are **live** the same way. The
+library is audience-scoped; the operations workspace is
+`web.manage_documents`, with publication and retirement on separate grants.
+
 Unknown permission names, absent permission data, missing feature keys, and missing
 required office context fail closed. A current deep link can therefore have no
 visible parent after a revocation; the route still returns the backend's 403 page.

@@ -576,7 +576,11 @@ PERMISSION_DEFINITIONS: tuple[PermissionDefinition, ...] = (
         name="Can manage documents",
         domain="content",
         action="manage",
-        description="Manage shared documents for offices in scope.",
+        description=(
+            "Create, edit, target audiences, upload files, and draft new "
+            "versions of documents for offices in scope. Publication and "
+            "retirement are separate grants."
+        ),
         default_roles=(
             *_MANAGERS,
             BRANCH_ADMIN,
@@ -586,6 +590,38 @@ PERMISSION_DEFINITIONS: tuple[PermissionDefinition, ...] = (
             MARKETING_TEAM,
             COMPLIANCE,
         ),
+    ),
+    PermissionDefinition(
+        codename="web.publish_documents",
+        name="Can publish, schedule, and supersede documents",
+        domain="content",
+        action="approve",
+        description=(
+            "Publish or schedule a draft document version and supersede the "
+            "previous current sibling in the family. Scoped publishers cannot "
+            "widen audience or jurisdiction beyond their grant."
+        ),
+        default_roles=(
+            *_MANAGERS,
+            BRANCH_ADMIN,
+            REGIONAL_ADMIN,
+            MARKETING_TEAM,
+            COMPLIANCE,
+        ),
+        risk="high",
+    ),
+    PermissionDefinition(
+        codename="web.retire_documents",
+        name="Can retire published documents",
+        domain="content",
+        action="manage",
+        description=(
+            "Retire a published document version after reviewing usage. "
+            "Files and history are retained."
+        ),
+        default_roles=(*_MANAGERS, REGIONAL_ADMIN, COMPLIANCE),
+        risk="high",
+        sensitive=True,
     ),
     # --- Governance ---
     PermissionDefinition(
@@ -1071,7 +1107,7 @@ PERMISSION_BY_CODENAME: dict[str, PermissionDefinition] = {
     item.codename: item for item in PERMISSION_DEFINITIONS
 }
 CATALOG_CODENAMES: frozenset[str] = frozenset(PERMISSION_BY_CODENAME)
-CATALOG_VERSION = "p1-agent-contract-model-v1"
+CATALOG_VERSION = "p1-document-version-admin-v1"
 
 
 def is_cataloged_permission(codename: str) -> bool:

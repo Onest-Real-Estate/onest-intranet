@@ -161,6 +161,7 @@ DocumentDetail.layout = () =>
   [
     HubLayout,
     {
+      variant: "wide",
       context: {
         title: "Documents & forms",
         breadcrumbs: [

@@ -16,7 +16,6 @@ from django.utils.translation import gettext_lazy as _
 from apps.audit.events import publish as publish_event
 from apps.audit.service import AuditTarget, actor_from_user, log_event
 from apps.documents.audience import (
-    MANAGE_PERMISSION,
     selectors_for,
     visible_documents,
     visible_to,
@@ -281,6 +280,16 @@ def validation_debt(version: DocumentVersion) -> list[tuple[str, Any]]:
     return debt
 
 
+def validation_debt_payload(version: DocumentVersion) -> dict[str, Any]:
+    debt = validation_debt(version)
+    return {
+        "isPublishable": not debt,
+        "items": [
+            {"field": field_name, "message": str(msg)} for field_name, msg in debt
+        ],
+    }
+
+
 def _scope_payload(version: DocumentVersion) -> dict[str, str]:
     level = version.scope_level
     return {
@@ -432,7 +441,7 @@ def _log_lifecycle(
 def publish_version(actor: User, version: DocumentVersion) -> DocumentVersion:
     if not (
         getattr(actor, "is_superuser", False)
-        or has_effective_permission(actor, MANAGE_PERMISSION)
+        or has_effective_permission(actor, "web.publish_documents")
     ):
         raise PermissionDenied("You cannot publish documents.")
 

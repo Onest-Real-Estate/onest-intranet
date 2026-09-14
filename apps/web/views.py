@@ -9,6 +9,7 @@ from apps.announcements.administration_views import (
 from apps.compliance.administration_views import admin_compliance
 from apps.contract.views.administration_views import contract_template_index
 from apps.contract.views.agent_contract_views import agent_contract_index
+from apps.documents.administration_views import documents_administration_index
 from apps.feedback.views import feedback_inbox
 from apps.inventory.views.administration_views import inventory_admin_index
 from apps.inventory.views.reservation_admin_views import admin_reservations_index
@@ -145,6 +146,7 @@ OPERATIONS_VIEWS["admin_announcements"] = announcement_administration_index
 OPERATIONS_VIEWS["admin_training"] = training_administration_index
 OPERATIONS_VIEWS["admin_marketing_resources"] = marketing_administration_index
 OPERATIONS_VIEWS["admin_compliance"] = admin_compliance
+OPERATIONS_VIEWS["admin_documents"] = documents_administration_index
 OPERATIONS_VIEWS["admin_contract_templates"] = contract_template_index
 OPERATIONS_VIEWS["admin_agent_contracts"] = agent_contract_index
 OPERATIONS_VIEWS["admin_users"] = user_directory

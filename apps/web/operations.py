@@ -283,6 +283,7 @@ OPERATIONS_FEATURES["admin-announcements"] = True
 OPERATIONS_FEATURES["admin-training"] = True
 OPERATIONS_FEATURES["admin-marketing-resources"] = True
 OPERATIONS_FEATURES["admin-compliance"] = True
+OPERATIONS_FEATURES["admin-documents"] = True
 OPERATIONS_FEATURES["admin-contract-templates"] = True
 OPERATIONS_FEATURES["admin-operational-tasks"] = True
 OPERATIONS_FEATURES["admin-feedback"] = True

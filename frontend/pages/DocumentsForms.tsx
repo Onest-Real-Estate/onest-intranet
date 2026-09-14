@@ -279,11 +279,12 @@ DocumentsForms.layout = () =>
   [
     HubLayout,
     {
+      variant: "wide",
       context: {
         title: "Documents & forms",
         breadcrumbs: [
           { label: "Dashboard", href: routes.dashboard() },
-          { label: "Documents & forms" },
+          { label: "Documents & forms", href: routes.documents_forms() },
         ],
       },
     },
