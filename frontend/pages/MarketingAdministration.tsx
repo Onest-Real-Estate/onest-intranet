@@ -476,6 +476,6 @@ MarketingAdministration.layout = () =>
           { label: "Marketing resources" },
         ],
       },
-      variant: "standard",
+      variant: "wide",
     },
   ] as const;

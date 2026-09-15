@@ -201,6 +201,7 @@ AdminReservations.layout = () =>
   [
     HubLayout,
     {
+      variant: "wide",
       context: {
         title: "Reservations",
         breadcrumbs: [

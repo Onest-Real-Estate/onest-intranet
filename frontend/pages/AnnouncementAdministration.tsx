@@ -536,6 +536,6 @@ AnnouncementAdministration.layout = () =>
           { label: "Announcements", href: routes.admin_announcements() },
         ],
       },
-      variant: "standard",
+      variant: "wide",
     },
   ] as const;

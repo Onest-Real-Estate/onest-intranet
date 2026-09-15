@@ -641,6 +641,7 @@ OnboardingToolCatalog.layout = () =>
   [
     HubLayout,
     {
+      variant: "wide",
       context: {
         title: "Tool catalog",
         breadcrumbs: [
