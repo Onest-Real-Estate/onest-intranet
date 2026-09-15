@@ -410,7 +410,7 @@ MyReservations.layout = () =>
   [
     HubLayout,
     {
-      variant: "standard",
+      variant: "wide",
       context: {
         title: "My reservations",
         breadcrumbs: [
