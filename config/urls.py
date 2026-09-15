@@ -4,6 +4,10 @@ from django.urls import URLPattern, URLResolver, include, path
 from django.views.generic import RedirectView
 
 urlpatterns: list[URLPattern | URLResolver] = [
+    path(
+        "favicon.ico",
+        RedirectView.as_view(url="/static/favicon.ico", permanent=True),
+    ),
     path("admin/", admin.site.urls),
 ]
 

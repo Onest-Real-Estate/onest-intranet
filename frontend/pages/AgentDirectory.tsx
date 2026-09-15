@@ -102,15 +102,16 @@ function PersonHeadshot({ person }: { person: AgentDirectoryPerson }) {
 
 function ContactActions({ person }: { person: AgentDirectoryPerson }) {
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="flex min-w-0 flex-wrap gap-2">
       {person.workPhone ? (
         <Button type="button" variant="outline" size="sm" asChild>
           <a
             href={`tel:${person.workPhone}`}
             aria-label={`Call work phone for ${person.preferredName}`}
+            title={person.workPhone}
           >
             <Phone className="size-3.5" aria-hidden />
-            Call work phone
+            Call
           </a>
         </Button>
       ) : null}
@@ -119,6 +120,7 @@ function ContactActions({ person }: { person: AgentDirectoryPerson }) {
           <a
             href={`mailto:${person.workEmail}`}
             aria-label={`Email ${person.preferredName} at work`}
+            title={person.workEmail}
           >
             <Mail className="size-3.5" aria-hidden />
             Email
@@ -139,10 +141,10 @@ function PersonCard({ person, view }: { person: AgentDirectoryPerson; view: stri
   return (
     <li
       className={cn(
-        "border-border overflow-hidden rounded-lg border",
+        "border-border rounded-lg border",
         isList
-          ? "grid gap-3 p-3 sm:grid-cols-[5rem_minmax(0,1fr)_auto] sm:items-center"
-          : "grid grid-rows-[9rem_minmax(0,1fr)]",
+          ? "grid min-w-0 gap-3 p-3 sm:grid-cols-[5rem_minmax(0,1fr)_minmax(0,11rem)] sm:items-center"
+          : "grid min-w-0 grid-rows-[9rem_minmax(0,1fr)] overflow-hidden",
       )}
     >
       <div
@@ -184,7 +186,7 @@ function PersonCard({ person, view }: { person: AgentDirectoryPerson; view: stri
       </div>
       <div
         className={cn(
-          "flex flex-col gap-2",
+          "flex min-w-0 flex-col gap-2",
           isList ? "sm:items-end" : "border-border border-t px-3 py-2",
         )}
       >
@@ -270,19 +272,20 @@ export default function AgentDirectory() {
                 language: "",
               });
             }}
+            leading={
+              <SearchControl
+                value={query}
+                onValueChange={setQuery}
+                onSearch={(next) => visit({ q: next }, 1)}
+                onClear={() => {
+                  setQuery("");
+                  visit({ q: "" }, 1);
+                }}
+                label="Search the directory"
+                placeholder="Search by name or office"
+              />
+            }
           >
-            <SearchControl
-              value={query}
-              onValueChange={setQuery}
-              onSearch={(next) => visit({ q: next }, 1)}
-              onClear={() => {
-                setQuery("");
-                visit({ q: "" }, 1);
-              }}
-              label="Search the directory"
-              placeholder="Search by name or office"
-              className="min-w-56"
-            />
             <FilterSelect
               label="Office"
               value={filters.office}
@@ -411,6 +414,7 @@ AgentDirectory.layout = () =>
   [
     HubLayout,
     {
+      variant: "wide",
       context: {
         title: "Agent directory",
         breadcrumbs: [

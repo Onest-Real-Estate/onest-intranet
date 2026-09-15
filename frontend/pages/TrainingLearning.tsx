@@ -213,13 +213,15 @@ export default function TrainingLearning() {
               q: "",
             })
           }
+          leading={
+            <SearchControl
+              value={filters.q}
+              onSearch={(next) => visit({ q: next })}
+              label="Search training"
+              placeholder="Search training"
+            />
+          }
         >
-          <SearchControl
-            value={filters.q}
-            onSearch={(next) => visit({ q: next })}
-            label="Search training"
-            placeholder="Search training"
-          />
           <FilterSelect
             label="Category"
             value={filters.category}
@@ -308,6 +310,7 @@ TrainingLearning.layout = () =>
   [
     HubLayout,
     {
+      variant: "wide",
       context: {
         title: "Training & learning",
         breadcrumbs: [

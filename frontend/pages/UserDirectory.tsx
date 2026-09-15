@@ -472,6 +472,6 @@ UserDirectory.layout = () =>
           { label: "Users", href: routes.admin_users() },
         ],
       },
-      variant: "standard",
+      variant: "wide",
     },
   ] as const;

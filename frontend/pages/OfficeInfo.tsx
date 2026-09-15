@@ -46,6 +46,7 @@ OfficeInfo.layout = () =>
   [
     HubLayout,
     {
+      variant: "wide",
       context: {
         title: "Office info",
         breadcrumbs: [

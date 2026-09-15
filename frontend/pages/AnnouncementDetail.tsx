@@ -64,6 +64,7 @@ AnnouncementDetail.layout = () =>
   [
     HubLayout,
     {
+      variant: "wide",
       context: {
         title: "Announcements",
         breadcrumbs: [

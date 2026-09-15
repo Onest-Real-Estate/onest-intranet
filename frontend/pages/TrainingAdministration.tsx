@@ -515,6 +515,6 @@ TrainingAdministration.layout = () =>
           { label: "Training", href: routes.admin_training() },
         ],
       },
-      variant: "standard",
+      variant: "wide",
     },
   ] as const;

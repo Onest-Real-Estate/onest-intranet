@@ -189,6 +189,6 @@ AgentContractAdministration.layout = () =>
           { label: "Agent Contracts", href: routes.admin_agent_contracts() },
         ],
       },
-      variant: "standard",
+      variant: "wide",
     },
   ] as const;

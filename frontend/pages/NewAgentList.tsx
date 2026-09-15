@@ -366,6 +366,6 @@ NewAgentList.layout = () =>
           { label: "New Agent List", href: routes.admin_new_agents() },
         ],
       },
-      variant: "standard",
+      variant: "wide",
     },
   ] as const;
