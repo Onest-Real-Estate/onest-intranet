@@ -238,8 +238,8 @@ ready keeps its guide replayable.
 | `locked` | This tool's invitation is not recorded as sent | No button, and a line saying what unlocks it |
 | `available` | Unlocked, with a visible playable guide | "Watch how to activate X" → `training_detail` |
 | `completed` | The agent finished it | "Watch again", plus a finished note |
-| `unavailable` | Unlocked, no offerable guide | Vendor help, else the tool's request path |
-| `not_applicable` | Somebody switched the tool off for this agent | Nothing |
+| `unavailable` | An invitation was sent, but no offerable guide | Vendor help, else the tool's request path |
+| `not_applicable` | The tool is switched off for this agent, or it is self-serve with no guide published | Nothing |
 
 `apps.training.tool_guides` resolves a guide from `content_type=tool_onboarding`
 matched on the catalog's stable `tool_code`, through the same

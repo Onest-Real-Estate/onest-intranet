@@ -192,6 +192,21 @@ def test_an_unlocked_tool_with_no_guide_falls_back_rather_than_breaking(agent):
 
 
 @pytest.mark.django_db
+def test_a_self_serve_tool_with_no_guide_says_nothing_rather_than_sending_them_chasing(
+    agent,
+):
+    """OneDrive has setup steps, not an activation video.
+
+    Saying "no activation guide is published" on two dozen self-serve rows is
+    noise that points nowhere: the fallback exists for an invitation somebody
+    actually sent.
+    """
+    assert tool("onedrive").provisioning == Provisioning.SELF_SERVE
+
+    assert guides_for(agent)["onedrive"] == {"state": str(GuideState.NOT_APPLICABLE)}
+
+
+@pytest.mark.django_db
 @pytest.mark.parametrize(
     "fields",
     [
