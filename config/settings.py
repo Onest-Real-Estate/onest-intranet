@@ -336,6 +336,12 @@ DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default="Onest <noreply@onest.
 # this must point at the hub itself and never at a storage or document host.
 SITE_BASE_URL = config("SITE_BASE_URL", default="http://localhost:8000").rstrip("/")
 
+# HMAC key for training certificate signatures (QR verification). Empty falls
+# back to a purpose-bound derivation of DJANGO_SECRET_KEY.
+TRAINING_CERTIFICATE_SIGNING_KEY = config(
+    "TRAINING_CERTIFICATE_SIGNING_KEY", default=""
+)
+
 # Hub-native agent contract e-sign (PKCS#12 org seal + ceremony TTL).
 CONTRACT_SIGNING_INTENT_TTL_SECONDS = config(
     "CONTRACT_SIGNING_INTENT_TTL_SECONDS", default=900, cast=int

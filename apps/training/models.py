@@ -841,6 +841,14 @@ class TrainingCertificate(models.Model):
         APPROVED = "approved", _("Approved")
         REVOKED = "revoked", _("Revoked")
 
+    public_id = models.UUIDField(
+        _("public id"),
+        default=uuid.uuid4,
+        unique=True,
+        editable=False,
+        db_index=True,
+        help_text=_("Opaque id embedded in the certificate QR for verification."),
+    )
     user = models.ForeignKey(
         "user.User",
         verbose_name=_("user"),
@@ -865,6 +873,19 @@ class TrainingCertificate(models.Model):
         storage=private_storage,
         upload_to=_certificate_upload_to,
         blank=True,
+    )
+    signature = models.CharField(
+        _("signature"),
+        max_length=128,
+        blank=True,
+        help_text=_("HMAC-SHA256 hex digest of the canonical certificate payload."),
+    )
+    signature_algorithm = models.CharField(
+        _("signature algorithm"),
+        max_length=32,
+        blank=True,
+        default="",
+        help_text=_("e.g. hmac-sha256-v1"),
     )
     approved_by = models.ForeignKey(
         "user.User",
