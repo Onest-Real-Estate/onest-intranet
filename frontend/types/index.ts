@@ -1276,6 +1276,10 @@ export interface DashboardPageProps extends PageProps {
   greeting: DashboardGreeting;
   /** Present only for ordinary users with an effective Agent role. */
   onboardingJourney?: AgentOnboardingJourney;
+  /** Strict gate only: the profile flow the setup dialog renders. */
+  onboardingProfile?: OnboardingProfileProps;
+  /** Released Agent journey only: the activation center's open policy. */
+  onboardingActivation?: OnboardingActivation;
   /** Absent until the assignment model ships; resolution falls back to roles. */
   assignment?: DashboardAssignment;
   scope?: DashboardScope;
@@ -1553,7 +1557,21 @@ export interface OnboardingOfficeSelection {
   support: { available: boolean; message: string };
 }
 
-export interface OnboardingPageProps extends PageProps {
+/** The released activation center. `autoOpen` is decided server-side. */
+export interface OnboardingActivation {
+  /** Asked for by link, or the first dashboard visit this login while activation is incomplete. */
+  autoOpen: boolean;
+  /** Public facts for the agent's office; null when none is set or activation is complete. */
+  office: OnboardingOfficeSelection | null;
+}
+
+export interface OnboardingPageProps extends PageProps, OnboardingProfileProps {
+  /** Present for the Agent journey; omitted by the explicit non-Agent policy. */
+  onboardingJourney?: AgentOnboardingJourney;
+}
+
+/** The profile flow's own props, carried by the dashboard as `onboardingProfile`. */
+export interface OnboardingProfileProps {
   profileFlow: OnboardingProfileFlow;
   identity: OnboardingIdentity;
   /** Values to show: what was just submitted after a 422 or 409, else `saved`. */
@@ -1572,8 +1590,6 @@ export interface OnboardingPageProps extends PageProps {
   contactMethods: ContactMethodOption[];
   socialPlatforms: SocialPlatformOption[];
   limits: OnboardingLimits;
-  /** Present for the Agent journey; omitted by the explicit non-Agent policy. */
-  onboardingJourney?: AgentOnboardingJourney;
 }
 
 export interface ProfilePageProps extends PageProps {

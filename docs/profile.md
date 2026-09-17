@@ -101,8 +101,9 @@ Normalization happens in `clean_fields()` rather than `clean()` because
 Onboarding collects the same profile in four short sections — identity and
 photo, contact and home address, professional credentials, review — through
 `apps/user/services/onboarding_profile.py` and
-`frontend/components/onboarding/profile/`. It shares this page's contract
-rather than keeping its own:
+`frontend/components/onboarding/profile/`, hosted by the dashboard's setup
+dialog (see [onboarding-operations.md](onboarding-operations.md#dashboard-setup-dialog)).
+It shares this page's contract rather than keeping its own:
 
 - **One allowlist.** `OnboardingProfileSectionForm` subclasses
   `SelfProfileForm` and removes every bound field outside the section, so the
@@ -123,8 +124,9 @@ Endpoints, all `self_only` and guarded by the same `_PROTECTED_FIELDS` 403:
 
 | Route | Does |
 | --- | --- |
-| `GET onboarding?section=` | Resumes at the requested section, else the first unfinished one |
-| `POST onboarding_profile_save` (`/onboarding/profile/sections/<section>`) | Validates and saves one section; never sets `profile_completed`. 422 re-renders with the posted values |
+| `GET dashboard?section=` | Under the strict gate, renders the setup dialog at the requested section, else the first unfinished one |
+| `GET onboarding?section=` | Compatibility link: redirects to `dashboard?onboarding=open`, keeping a valid `section` |
+| `POST onboarding_profile_save` (`/onboarding/profile/sections/<section>`) | Validates and saves one section, then redirects to `dashboard?section=<next>`; never sets `profile_completed`. 422 re-renders the dashboard dialog with the posted values |
 | `POST onboarding_profile_finalize` | Requires `confirm_review`, re-validates everything stored against today's rules, checks the headshot exists in storage, then completes atomically |
 
 Concurrency without a new column: every write carries

@@ -864,10 +864,12 @@ def test_a_change_administrator_still_reads_the_notes(client):
 
 @pytest.mark.django_db
 def test_a_new_user_starts_active_and_unverified(client, settings, tmp_path):
+    from apps.user.tests.test_onboarding import make_agent
     from apps.user.tests.test_onboarding_profile import complete_profile
 
     settings.MEDIA_ROOT = str(tmp_path)
-    user = User.objects.create_user(email="new@example.com")
+    # Onboarding is the Agent journey; only Agents are given the setup dialog.
+    user = make_agent(User.objects.create_user(email="new@example.com"))
     client.force_login(user)
     complete_profile(client)
     user.refresh_from_db()

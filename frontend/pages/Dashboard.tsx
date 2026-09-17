@@ -1,13 +1,14 @@
-import { Head, Link, router, usePage } from "@inertiajs/react";
-import { useMemo, useState } from "react";
+import { Head, router, usePage } from "@inertiajs/react";
+import { useMemo, useRef, useState } from "react";
 
 import { DashboardGreeting } from "@/components/dashboard/DashboardGreeting";
 import { DashboardProfileSwitcher } from "@/components/dashboard/DashboardProfileSwitcher";
 import { DashboardScopeSelector } from "@/components/dashboard/DashboardScopeSelector";
 import { DashboardWidgetSlot } from "@/components/dashboard/DashboardWidgetSlot";
 import { PendingModules } from "@/components/dashboard/PendingModules";
-import { Callout } from "@/components/design-system/callout";
 import { HubLayout } from "@/components/HubLayout";
+import { OnboardingDialog } from "@/components/onboarding/OnboardingDialog";
+import { OnboardingStatusEntry } from "@/components/onboarding/OnboardingStatusEntry";
 import { Button } from "@/components/ui/button";
 import { useAuthorizationStaleness } from "@/hooks/use-authorization-staleness";
 import {
@@ -37,7 +38,23 @@ import type { DashboardPageProps, MetricScopeLevel } from "@/types";
  */
 export default function Dashboard() {
   const page = usePage<DashboardPageProps>().props;
-  const { user, greeting, shell, assignment, scope, onboardingJourney } = page;
+  const {
+    user,
+    greeting,
+    shell,
+    assignment,
+    scope,
+    onboardingJourney,
+    onboardingActivation,
+  } = page;
+
+  // The server decides the first open: always under the strict gate, else once
+  // per login or when a link asks. Kept across section visits (preserveState),
+  // so finishing review turns the open setup dialog into the activation center.
+  const [onboardingOpen, setOnboardingOpen] = useState(() =>
+    Boolean(onboardingJourney?.strictGateActive || onboardingActivation?.autoOpen),
+  );
+  const statusEntryRef = useRef<HTMLButtonElement>(null);
 
   // Null means "no remembered choice"; the reader's assigned profile wins.
   const [chosenProfileId, setChosenProfileId] = useState<string | null>(() =>
@@ -90,28 +107,27 @@ export default function Dashboard() {
     return null;
   }
 
+  const onboardingDialog = onboardingJourney ? (
+    <OnboardingDialog
+      page={page}
+      journey={onboardingJourney}
+      open={onboardingOpen}
+      onOpenChange={setOnboardingOpen}
+      returnFocusRef={statusEntryRef}
+    />
+  ) : null;
+
+  // Both returns put the dialog first in a fragment, so releasing the gate
+  // re-renders the same dialog instead of remounting it.
   if (onboardingJourney?.strictGateActive) {
-    const action = onboardingJourney.nextAction;
+    // Shell only. The server sent no widget data, so the dialog hides nothing.
     return (
-      <div className="flex flex-1 flex-col gap-8">
-        <Head title="Welcome to ONEST HUB" />
-        <DashboardGreeting greeting={greeting} user={user} />
-        <Callout
-          tone="info"
-          title={`${onboardingJourney.currentStep.label} setup is required`}
-          action={
-            action.href ? (
-              <Button asChild size="sm">
-                <Link href={action.href}>{action.label}</Link>
-              </Button>
-            ) : null
-          }
-        >
-          Finish your required profile and office setup to unlock the dashboard. Your
-          progress is saved, so you can safely return later or continue in another
-          browser.
-        </Callout>
-      </div>
+      <>
+        {onboardingDialog}
+        <div className="flex flex-1 flex-col gap-8">
+          <DashboardGreeting greeting={greeting} user={user} />
+        </div>
+      </>
     );
   }
 
@@ -128,80 +144,69 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="flex flex-1 flex-col gap-8">
-      <Head title="Dashboard" />
+    <>
+      {onboardingDialog}
+      <div className="flex flex-1 flex-col gap-8">
+        <Head title="Dashboard" />
 
-      {onboardingJourney && !onboardingJourney.activationComplete ? (
-        <Callout
-          tone={
-            onboardingJourney.officeHandoff.state === "notification_failed"
-              ? "warning"
-              : "info"
-          }
-          title="Your office activation is in progress"
-          action={
-            onboardingJourney.officeHandoff.state === "notification_failed" ? (
-              <Button asChild size="sm" variant="outline">
-                <Link href={routes.it_support()}>Contact IT Support</Link>
-              </Button>
-            ) : null
-          }
-        >
-          {onboardingJourney.officeHandoff.message} {onboardingJourney.nextAction.label}
-          .
-        </Callout>
-      ) : null}
-
-      {/* Orientation is one masthead: identity, the qualifiers that affect
+        {/* Orientation is one masthead: identity, the qualifiers that affect
           every figure below, and a rule closing the block. The controls ride
           inside the header rather than beside it, so the rule spans the page
           and the title has something to sit on. */}
-      <div className="grid gap-4">
-        <DashboardGreeting
-          greeting={greeting}
-          user={user}
-          actions={
-            showsScopeControl || showsProfileControl ? (
-              <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center">
-                <DashboardScopeSelector
-                  options={scopeOptions}
-                  selectedKey={serverScope ? serverScope.selectedKey : null}
-                  reloadProps={widgets.map((widget) => widget.definition.prop)}
-                />
-                <DashboardProfileSwitcher
-                  profiles={resolved.available}
-                  activeId={resolved.profile.id}
-                  onSelect={selectProfile}
-                />
-              </div>
-            ) : null
-          }
-        />
+        <div className="grid gap-4">
+          <DashboardGreeting
+            greeting={greeting}
+            user={user}
+            actions={
+              showsScopeControl || showsProfileControl ? (
+                <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center">
+                  <DashboardScopeSelector
+                    options={scopeOptions}
+                    selectedKey={serverScope ? serverScope.selectedKey : null}
+                    reloadProps={widgets.map((widget) => widget.definition.prop)}
+                  />
+                  <DashboardProfileSwitcher
+                    profiles={resolved.available}
+                    activeId={resolved.profile.id}
+                    onSelect={selectProfile}
+                  />
+                </div>
+              ) : null
+            }
+          />
 
-        {/* One announcement for a page-wide condition. Individual panels carry
+          {/* One announcement for a page-wide condition. Individual panels carry
             a quiet stale mark; the action to fix it lives here, once. */}
-        {stale ? (
-          <div
-            role="status"
-            className="border-chip-warning-edge bg-chip-warning text-warning-ink flex flex-wrap items-center gap-3 rounded-lg border px-4 py-3 text-sm"
-          >
-            <span>
-              Your roles or scope changed while this page was open. Refresh to see the
-              dashboard you are entitled to now.
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              className="ms-auto"
-              onClick={refreshAll}
+          {stale ? (
+            <div
+              role="status"
+              className="border-chip-warning-edge bg-chip-warning text-warning-ink flex flex-wrap items-center gap-3 rounded-lg border px-4 py-3 text-sm"
             >
-              Refresh
-            </Button>
-          </div>
-        ) : null}
-      </div>
+              <span>
+                Your roles or scope changed while this page was open. Refresh to see the
+                dashboard you are entitled to now.
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                className="ms-auto"
+                onClick={refreshAll}
+              >
+                Refresh
+              </Button>
+            </div>
+          ) : null}
+        </div>
 
-      {/* One grid, packed into full rows.
+        {onboardingJourney && !onboardingJourney.activationComplete ? (
+          <OnboardingStatusEntry
+            ref={statusEntryRef}
+            journey={onboardingJourney}
+            onOpen={() => setOnboardingOpen(true)}
+          />
+        ) : null}
+
+        {/* One grid, packed into full rows.
           The page used to run a wide reading column beside a narrow rail, each
           stacking until its own contents ran out — which left the shorter of
           the two ending in blank canvas whenever a role resolved to an uneven
@@ -215,25 +220,26 @@ export default function Dashboard() {
           make the same choice or the two disagree. Without it a narrow widget
           later in the DOM cannot back-fill the gap beside a wide one, and the
           row the packer treated as closed renders with a hole in it. */}
-      {placed.length > 0 ? (
-        <div className="grid grid-flow-row-dense items-stretch gap-6 xl:grid-cols-12">
-          {placed.map(({ item, span }) => (
-            <div
-              key={item.definition.id}
-              data-dashboard-slot={item.definition.column}
-              // `grid` rather than `block`: the panel inside is a single child
-              // and stretches to the row's height instead of leaving the
-              // shorter card floating against the top of a tall row.
-              className={cn("grid", spanClass(span))}
-            >
-              <DashboardWidgetSlot resolved={item} page={page} stale={stale} />
-            </div>
-          ))}
-        </div>
-      ) : null}
+        {placed.length > 0 ? (
+          <div className="grid grid-flow-row-dense items-stretch gap-6 xl:grid-cols-12">
+            {placed.map(({ item, span }) => (
+              <div
+                key={item.definition.id}
+                data-dashboard-slot={item.definition.column}
+                // `grid` rather than `block`: the panel inside is a single child
+                // and stretches to the row's height instead of leaving the
+                // shorter card floating against the top of a tall row.
+                className={cn("grid", spanClass(span))}
+              >
+                <DashboardWidgetSlot resolved={item} page={page} stale={stale} />
+              </div>
+            ))}
+          </div>
+        ) : null}
 
-      <PendingModules modules={pending} />
-    </div>
+        <PendingModules modules={pending} />
+      </div>
+    </>
   );
 }
 

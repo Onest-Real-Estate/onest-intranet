@@ -164,10 +164,12 @@ def test_permission_denial_writes_audit_event(rf):
 
 @pytest.mark.django_db
 def test_onboarding_completion_writes_audit_event(client, settings, tmp_path):
+    from apps.user.tests.test_onboarding import make_agent
     from apps.user.tests.test_onboarding_profile import complete_profile
 
     settings.MEDIA_ROOT = str(tmp_path)
-    user = User.objects.create_user(email="bob@example.com")
+    # Onboarding is the Agent journey; only Agents are given the setup dialog.
+    user = make_agent(User.objects.create_user(email="bob@example.com"))
     client.force_login(user)
     complete_profile(client)
     event = AuditEvent.objects.get(action="user.onboarding.completed")

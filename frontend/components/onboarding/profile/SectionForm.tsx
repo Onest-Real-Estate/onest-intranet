@@ -120,6 +120,9 @@ export function SectionForm({
     setSubmitting(true);
     router.post(action, new FormData(event.currentTarget), {
       preserveScroll: true,
+      // The setup dialog stays mounted across the redirect to the next section,
+      // so it can move focus and announce the change instead of reopening.
+      preserveState: true,
       onSuccess: () => onDirtyChange(false),
       onFinish: () => {
         inFlight.current = false;

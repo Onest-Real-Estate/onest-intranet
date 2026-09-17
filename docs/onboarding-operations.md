@@ -155,8 +155,8 @@ and do not infer them from individual milestones.
 
 | User | Dashboard | Other protected routes | Journey dialog |
 | --- | --- | --- | --- |
-| Incomplete ordinary Agent | Shell, greeting, and journey only | Redirect to dashboard, except onboarding self-service, headshot, and logout | Required |
-| Completed Agent | Full authorized dashboard | Normal route policies | Not required; activation progress remains available |
+| Incomplete ordinary Agent | Shell, greeting, journey, and setup-dialog profile props only | Redirect to dashboard, except onboarding self-service, headshot, and logout | Required, non-dismissible |
+| Completed Agent | Full authorized dashboard | Normal route policies | Activation center: opens once per login while activation is incomplete, or on request |
 | Administratively reset Agent | Same as incomplete Agent at the correctly derived step | Same strict gate | Required |
 | Staff or superuser | Normal route policies | Normal route policies | Never forced |
 | User without an effective Agent role | Normal route policies | Normal route policies | Never forced |
@@ -167,6 +167,42 @@ same policy on direct URLs. While the strict gate is active, the dashboard view
 does not register deferred widget props and shared Inertia data substitutes
 empty navigation features plus null office and notification state. Logout stays
 available through the shell and posts through Inertia.
+
+## Dashboard setup dialog
+
+Onboarding is a dialog over `/dashboard`, owned by
+`frontend/components/onboarding/OnboardingDialog.tsx`. The server decides what
+it may show; the dialog renders `onboardingJourney` and never infers progress.
+
+| Dashboard prop | Present when | Contents |
+| --- | --- | --- |
+| `onboardingJourney` | Agent journey applies | The canonical journey payload above |
+| `onboardingProfile` | Strict gate active | The profile flow at `?section=` (validated), else the first unfinished section |
+| `onboardingActivation` | Gate released | Lazy: `autoOpen` and the public office summary |
+
+- **Strict.** No close button, Escape, or outside click. Sign out stays in the
+  dialog header and warns over unsaved edits. No deferred widget provider is
+  registered, so neither a full visit nor a partial reload can serialize widget
+  data. Section saves redirect to `dashboard?section=<next>` and 409/422
+  responses re-render the dashboard with the dialog, so the dialog stays
+  mounted (`preserveState`) and moves focus to the new section heading.
+- **Released.** The same dialog becomes the dismissible activation center.
+  `autoOpen` is true when `?onboarding=open` is requested, or on the first
+  full dashboard visit of a login session while activation is incomplete. The
+  session key `onboarding_activation_prompted_version` stores the onboarding
+  cycle that already prompted, so an administrative reset or new login prompts
+  once more and ordinary navigation never does. The prop is lazy, so a partial
+  reload that does not request it cannot spend the prompt. A persistent
+  dashboard status entry reopens the center and receives focus when it closes.
+- **Compatibility.** `GET /onboarding` redirects to `dashboard?onboarding=open`,
+  carrying a valid `section` for incomplete Agents. Users outside the Agent
+  journey go to their profile (or the dashboard once complete).
+- **Copy.** Dialog wording lives in `frontend/lib/onboarding/copy.ts`. Status
+  wording about handoff, contract, tools, and blockers comes from the journey
+  payload, so the client never claims delivery the server has not recorded.
+- **Next steps.** `frontend/lib/onboarding/stages.ts` composes the list from
+  `NEXT_STEP_SOURCES`. A new milestone adds one source function over the
+  journey payload; the profile form and access policy do not change.
 
 ## Query and privacy contract
 

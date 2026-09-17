@@ -6,6 +6,7 @@ crafted identifier before any form is bound.
 """
 
 from typing import cast
+from urllib.parse import urlencode
 
 from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import redirect
@@ -30,10 +31,7 @@ from ..services.onboarding_profile import (
     StaleOnboardingVersion,
     StaleProfileSection,
     finalize_profile,
-    flow_context,
     next_section,
-    onboarding_profile_page_props,
-    resolve_section,
     save_profile_section,
 )
 from ..services.profile import HeadshotStorageUnavailable, OnboardingSection
@@ -75,27 +73,38 @@ def _render_flow(
     errors: dict | None = None,
     posted=None,
 ) -> HttpResponse:
+    """Re-render the dashboard's setup dialog after a write that did not advance.
+
+    The same props the dashboard view builds for the strict gate, so a 409 or
+    422 keeps the agent inside the dialog with what they typed.
+    """
     from apps.user.services.onboarding_state import (
         agent_journey_payload,
         journey_applies_to,
         journey_for_user,
     )
+    from apps.web.dashboard import greeting_payload
+    from apps.web.dashboard.onboarding import setup_dialog_props
 
     user = cast(User, request.user)
-    props = onboarding_profile_page_props(
-        user,
-        request=request,
-        section=section,
-        context=context,
-        errors=errors,
-        posted=posted,
-    )
+    props = {
+        "greeting": greeting_payload(user),
+        "onboardingProfile": setup_dialog_props(
+            request,
+            user,
+            section=section,
+            context=context,
+            errors=errors,
+            posted=posted,
+        ),
+    }
     if journey_applies_to(user):
         journey = getattr(request, "_onboarding_journey", None) or journey_for_user(
             user
         )
         props["onboardingJourney"] = agent_journey_payload(journey)
-    response = render(request, "Onboarding", props)
+        request._onboarding_strict_gate = True  # ty: ignore[unresolved-attribute]
+    response = render(request, "Dashboard", props)
     response.status_code = status
     return response
 
@@ -111,13 +120,29 @@ def _protected_field_denial(request: HttpRequest) -> HttpResponse | None:
 @enforce_policy("onboarding")
 @require_GET
 def onboarding(request: HttpRequest) -> HttpResponse:
-    """The resumable profile flow. Completed users go to the dashboard."""
+    """Compatibility entry: bookmarks and reset links open the dashboard dialog.
+
+    Onboarding lives in a dialog over the dashboard. This URL keeps working by
+    asking for that dialog, carrying a valid ``section`` along; the dashboard
+    still decides server-side what the dialog may show.
+    """
+    from apps.user.services.onboarding_state import journey_applies_to
+    from apps.web.dashboard.onboarding import (
+        ONBOARDING_DIALOG_PARAM,
+        SECTION_PARAM,
+        OnboardingDialogRequest,
+    )
+
     user = cast(User, request.user)
-    if user.profile_completed:
-        return redirect("dashboard")
-    context = flow_context(user)
-    section = resolve_section(context, request.GET.get("section"))
-    return _render_flow(request, section=section, context=context)
+    if not journey_applies_to(user):
+        # Nobody outside the Agent journey is shown the dialog; their profile
+        # page is the useful destination for the same details.
+        return redirect("dashboard" if user.profile_completed else "profile")
+    query = {ONBOARDING_DIALOG_PARAM: str(OnboardingDialogRequest.OPEN)}
+    requested = request.GET.get(SECTION_PARAM, "")
+    if not user.profile_completed and requested in set(OnboardingSection):
+        query[SECTION_PARAM] = requested
+    return redirect(f"{reverse('dashboard')}?{urlencode(query)}")
 
 
 @enforce_policy("onboarding_profile_save")
@@ -190,7 +215,8 @@ def onboarding_profile_save(request: HttpRequest, section: str) -> HttpResponse:
             errors=result.errors,
             posted=request.POST,
         )
-    return redirect(f"{reverse('onboarding')}?section={next_section(target)}")
+    query = urlencode({"section": str(next_section(target))})
+    return redirect(f"{reverse('dashboard')}?{query}")
 
 
 @enforce_policy("onboarding_profile_finalize")

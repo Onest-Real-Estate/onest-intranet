@@ -77,13 +77,21 @@ def link_microsoft(user: User, **names) -> SocialAccount:
     )
 
 
+def dialog_props(body: dict) -> dict:
+    """The dashboard's setup-dialog props, flattened over the page's own props."""
+    props = body["props"]
+    return {**props, **props.get("onboardingProfile", {})}
+
+
 def flow(client, section: str | None = None) -> dict:
-    url = reverse("onboarding")
+    url = reverse("dashboard")
     if section:
         url = f"{url}?section={section}"
     response = client.get(url, **INERTIA)
     assert response.status_code == 200, response.content[:300]
-    return json.loads(response.content)["props"]
+    body = json.loads(response.content)
+    assert body["component"] == "Dashboard"
+    return dialog_props(body)
 
 
 def revision(props: dict, section: str) -> str:
@@ -150,7 +158,7 @@ def complete_profile(client) -> None:
 
 
 def page(response) -> dict:
-    return json.loads(response.content)["props"]
+    return dialog_props(json.loads(response.content))
 
 
 # ---------------------------------------------------------------------------
@@ -176,7 +184,7 @@ def test_new_agent_starts_at_identity_and_resumes_where_they_left_off(
     upload_headshot(client)
     response = save(client, "identity", IDENTITY)
     assert response.status_code == 302
-    assert response.url == f"{reverse('onboarding')}?section=contact"
+    assert response.url == f"{reverse('dashboard')}?section=contact"
 
     # A fresh visit, as after closing the tab or signing in again, resumes here.
     resumed = flow(client)
@@ -305,7 +313,7 @@ def test_contact_section_saves_normalized_values_through_inertia_json(client):
 
     response = save(client, "contact", CONTACT, json_body=True)
     assert response.status_code == 302
-    assert response.url == f"{reverse('onboarding')}?section=credentials"
+    assert response.url == f"{reverse('dashboard')}?section=credentials"
     user.refresh_from_db()
     assert user.phone_number == "(202) 555-0100"
     assert user.preferred_contact_method == "text"
@@ -406,8 +414,9 @@ def test_invalid_section_returns_validation_shape_and_keeps_typed_values(client)
     )
     assert response.status_code == 422
     body = json.loads(response.content)
-    assert body["component"] == "Onboarding"
-    validation = body["props"]["validation"]
+    assert body["component"] == "Dashboard"
+    props = dialog_props(body)
+    validation = props["validation"]
     assert set(validation) == {"fields", "form"}
     assert {
         "nrds_number",
@@ -416,9 +425,9 @@ def test_invalid_section_returns_validation_shape_and_keeps_typed_values(client)
         "languages",
         "office",
     } <= set(validation["fields"])
-    assert body["props"]["profileFlow"]["currentSection"] == "credentials"
-    assert body["props"]["initial"]["nrdsNumber"] == "12"
-    assert body["props"]["initial"]["linkedinUrl"] == "https://evil.example.com/bob"
+    assert props["profileFlow"]["currentSection"] == "credentials"
+    assert props["initial"]["nrdsNumber"] == "12"
+    assert props["initial"]["linkedinUrl"] == "https://evil.example.com/bob"
     user.refresh_from_db()
     assert user.nrds_number == ""
     assert user.office is None
@@ -708,7 +717,7 @@ def test_props_and_events_never_carry_storage_paths_or_original_filenames(
     client.force_login(agent())
     upload_headshot(client, name="Vacation Selfie.jpg")
 
-    body = client.get(reverse("onboarding"), **INERTIA).content.decode()
+    body = client.get(reverse("dashboard"), **INERTIA).content.decode()
     assert "headshots/" not in body
     assert "Vacation" not in body
     event = AuditEvent.objects.get(action="user.headshot.updated")

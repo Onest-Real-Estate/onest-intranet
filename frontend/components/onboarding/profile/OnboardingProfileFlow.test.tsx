@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { axe } from "vitest-axe";
 
-import Onboarding from "@/pages/Onboarding";
+import { OnboardingProfileFlow } from "@/components/onboarding/profile/OnboardingProfileFlow";
 import type {
   OnboardingFieldPolicy,
   OnboardingPageProps,
@@ -40,7 +40,7 @@ const transport = vi.hoisted(() => ({
 vi.mock("@inertiajs/react", async () => {
   const { useState } = await import("react");
   return {
-    usePage: () => ({ props: inertia.props, url: "/onboarding" }),
+    usePage: () => ({ props: inertia.props, url: "/dashboard" }),
     Head: () => null,
     Link: ({ href, children }: { href: string; children: ReactNode }) => (
       <a href={href}>{children}</a>
@@ -73,6 +73,11 @@ vi.mock(
 const { HeadshotRequestError } = await import(
   "@/components/onboarding/profile/headshot-transport"
 );
+
+/** The flow as the setup dialog hosts it, on the current test props. */
+function Onboarding() {
+  return <OnboardingProfileFlow page={inertia.props} />;
+}
 
 function policy(
   label: string,
@@ -408,7 +413,7 @@ describe("Onboarding profile flow", () => {
   it("shows Microsoft-owned identity as read-only values, never as controls", () => {
     render(<Onboarding />);
     expect(
-      screen.getByRole("heading", { level: 1, name: "Set up your agent profile" }),
+      screen.getByRole("heading", { level: 3, name: "Identity and photo" }),
     ).toBeVisible();
     expect(screen.getByText("bob@onest.realestate")).toBeInTheDocument();
     expect(screen.getByText("Bob Lee")).toBeInTheDocument();
@@ -544,7 +549,11 @@ describe("Onboarding profile flow", () => {
     const user = userEvent.setup();
     render(<Onboarding />);
     await user.click(screen.getByRole("button", { name: /Contact and home address/ }));
-    expect(router.get).toHaveBeenCalledWith("/onboarding", { section: "contact" });
+    expect(router.get).toHaveBeenCalledWith(
+      "/dashboard",
+      { section: "contact" },
+      { preserveState: true },
+    );
   });
 
   it("gives every step an accessible name that carries its position and status", () => {
@@ -569,7 +578,7 @@ describe("Onboarding profile flow", () => {
 
     const handler = inertia.beforeHandlers.at(-1);
     expect(handler).toBeDefined();
-    const url = new URL("http://localhost/onboarding?section=identity");
+    const url = new URL("http://localhost/dashboard?section=identity");
     // A partial reload (after a photo upload) is never held.
     expect(
       handler?.({ detail: { visit: { method: "get", only: ["profileFlow"], url } } }),
@@ -738,7 +747,7 @@ describe("Onboarding profile flow", () => {
 
     expect(await screen.findByText("Photo saved")).toBeVisible();
     expect(router.reload).toHaveBeenCalledWith({
-      only: ["profileFlow", "saved", "user"],
+      only: ["onboardingProfile", "onboardingJourney", "user"],
     });
     expect(screen.getByLabelText(/^Preferred name/)).toHaveValue("Bobby");
   });
@@ -789,10 +798,18 @@ describe("Onboarding profile flow", () => {
     await user.click(
       screen.getByRole("button", { name: "Edit Contact and home address" }),
     );
-    expect(router.get).toHaveBeenCalledWith("/onboarding", { section: "contact" });
+    expect(router.get).toHaveBeenCalledWith(
+      "/dashboard",
+      { section: "contact" },
+      { preserveState: true },
+    );
 
     await user.click(screen.getByRole("button", { name: /Profile photo: Required/ }));
-    expect(router.get).toHaveBeenCalledWith("/onboarding", { section: "identity" });
+    expect(router.get).toHaveBeenCalledWith(
+      "/dashboard",
+      { section: "identity" },
+      { preserveState: true },
+    );
   });
 
   it("finishes with an explicit confirmation through the finalize endpoint", async () => {
@@ -831,14 +848,11 @@ describe("Onboarding profile flow", () => {
         name: /Office: That office is no longer available/,
       }),
     );
-    expect(router.get).toHaveBeenCalledWith("/onboarding", { section: "credentials" });
-  });
-
-  it("keeps a working sign-out action on every section", async () => {
-    const user = userEvent.setup();
-    render(<Onboarding />);
-    await user.click(screen.getByRole("button", { name: "Sign out" }));
-    expect(router.post).toHaveBeenCalledWith("/logout");
+    expect(router.get).toHaveBeenCalledWith(
+      "/dashboard",
+      { section: "credentials" },
+      { preserveState: true },
+    );
   });
 
   it("moves through the editable fields in order with the keyboard", async () => {

@@ -75,34 +75,67 @@ def test_onboarding_requires_login(client):
 
 
 @pytest.mark.django_db
-def test_onboarding_renders_page_with_initial_values(client):
-    user = User.objects.create_user(
-        email="bob@example.com",
-        first_name="Bob",
-        last_name="Lee",
-        phone_number="(202) 555-0100",
+def test_onboarding_link_opens_the_dashboard_dialog_with_initial_values(client):
+    user = make_agent(
+        User.objects.create_user(
+            email="bob@example.com",
+            first_name="Bob",
+            last_name="Lee",
+            phone_number="(202) 555-0100",
+        )
     )
-    client.force_login(user)
-    response = client.get(reverse("onboarding"), HTTP_X_INERTIA="true")
-    assert response.status_code == 200
-    data = json.loads(response.content)
-    assert data["component"] == "Onboarding"
-    assert data["props"]["initial"]["firstName"] == "Bob"
-    assert data["props"]["initial"]["lastName"] == "Lee"
-    assert data["props"]["initial"]["phoneNumber"] == "(202) 555-0100"
-    assert data["props"]["validation"] == {"fields": {}, "form": []}
-    group_labels = [group["label"] for group in data["props"]["offices"]]
-    assert "Mid-Atlantic" in group_labels
-    assert any(state["code"] == "VA" for state in data["props"]["states"])
-
-
-@pytest.mark.django_db
-def test_completed_profile_redirects_from_onboarding(client):
-    user = User.objects.create_user(email="bob@example.com", profile_completed=True)
     client.force_login(user)
     response = client.get(reverse("onboarding"))
     assert response.status_code == 302
-    assert response.url == reverse("dashboard")
+    assert response.url == f"{reverse('dashboard')}?onboarding=open"
+
+    response = client.get(response.url, HTTP_X_INERTIA="true")
+    assert response.status_code == 200
+    data = json.loads(response.content)
+    assert data["component"] == "Dashboard"
+    setup = data["props"]["onboardingProfile"]
+    assert setup["initial"]["firstName"] == "Bob"
+    assert setup["initial"]["lastName"] == "Lee"
+    assert setup["initial"]["phoneNumber"] == "(202) 555-0100"
+    assert setup["validation"] == {"fields": {}, "form": []}
+    group_labels = [group["label"] for group in setup["offices"]]
+    assert "Mid-Atlantic" in group_labels
+    assert any(state["code"] == "VA" for state in setup["states"])
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("query", "expected"),
+    [
+        ("?section=contact", "?onboarding=open&section=contact"),
+        ("?section=../admin", "?onboarding=open"),
+        ("", "?onboarding=open"),
+    ],
+)
+def test_onboarding_link_keeps_only_a_valid_section(client, query, expected):
+    client.force_login(make_agent(User.objects.create_user(email="bob@example.com")))
+    response = client.get(f"{reverse('onboarding')}{query}")
+    assert response.status_code == 302
+    assert response.url == f"{reverse('dashboard')}{expected}"
+
+
+@pytest.mark.django_db
+def test_completed_agent_onboarding_link_opens_the_activation_center(client):
+    user = make_agent(
+        User.objects.create_user(email="bob@example.com", profile_completed=True)
+    )
+    client.force_login(user)
+    response = client.get(f"{reverse('onboarding')}?section=contact")
+    assert response.status_code == 302
+    assert response.url == f"{reverse('dashboard')}?onboarding=open"
+
+
+@pytest.mark.django_db
+def test_incomplete_non_agent_onboarding_link_goes_to_their_profile(client):
+    client.force_login(User.objects.create_user(email="operations@example.com"))
+    response = client.get(reverse("onboarding"))
+    assert response.status_code == 302
+    assert response.url == reverse("profile")
 
 
 @pytest.mark.django_db
@@ -248,7 +281,9 @@ def test_incomplete_agent_loads_dashboard_shell_with_strict_gate(client):
     client.force_login(user)
     response = client.get(reverse("dashboard"))
     assert response.status_code == 200
-    props = inertia_page_script(response)["props"]
+    page = inertia_page_script(response)
+    assert "deferredProps" not in page
+    props = page["props"]
     assert props["onboardingJourney"]["strictGateActive"] is True
     assert props["onboardingJourney"]["currentStep"]["code"] == "profile"
     assert props["features"] == {}
@@ -266,7 +301,10 @@ def test_incomplete_agent_loads_dashboard_shell_with_strict_gate(client):
         "contractsAwaitingSignature",
     }
     assert protected_widget_keys.isdisjoint(props)
-    serialized = json.dumps(props)
+    # The agent's own values reach them only inside their own setup form.
+    assert "41 Private Lane" in json.dumps(props["onboardingProfile"])
+    shell = {key: value for key, value in props.items() if key != "onboardingProfile"}
+    serialized = json.dumps(shell)
     assert "2025550199" not in serialized
     assert "41 Private Lane" not in serialized
 
