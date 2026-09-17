@@ -96,6 +96,8 @@ export interface DashboardAnnouncement {
   /** Detail route; the destination re-checks the audience on arrival. */
   href: string;
   imageUrl?: string;
+  /** Publisher attribution when the notice links a source article. */
+  publisher?: string;
 }
 
 export interface DashboardAnnouncements {
@@ -2932,6 +2934,43 @@ export interface AnnouncementCta {
   url: string;
 }
 
+/** Linked public article attribution. Separate from the optional CTA button. */
+export interface AnnouncementSource {
+  url: string;
+  publisher: string;
+  retrievedAt?: string | null;
+}
+
+/**
+ * Ephemeral Open Graph / page metadata returned by Fetch article details.
+ * Not saved until the author applies values into the draft and saves.
+ */
+export interface AnnouncementArticleSuggestions {
+  sourceUrl: string;
+  publisher: string;
+  title: string;
+  description: string;
+  imageUrl: string | null;
+  hasExtractableText: boolean;
+  extractToken: string;
+  textBasis: "extract" | "metadata" | "none";
+  retrievedAt: string;
+  limitations: string[];
+  aiConfigured: boolean;
+}
+
+export interface AnnouncementArticleAiSummary {
+  teaser: string;
+  digest: string;
+  textBasis: "extract";
+  label: string;
+  guides: {
+    teaserChars: number;
+    teaserGuide: string;
+    digestWords: number;
+  };
+}
+
 /**
  * One inline run inside a body block.
  *
@@ -2973,6 +3012,7 @@ export interface AnnouncementRow {
   /** Promotes the row to the important tier when sorting. Never audience. */
   isPinned: boolean;
   cta: AnnouncementCta | null;
+  source: AnnouncementSource | null;
   /** The body as structured blocks. The only form a reader is shown. */
   bodyBlocks: AnnouncementBlock[];
 }
@@ -3531,6 +3571,8 @@ export interface AnnouncementAdminDetail extends AnnouncementAdminRow {
   categoryCode: string;
   priorityCode: string;
   cta: AnnouncementCta | null;
+  source: AnnouncementSource | null;
+  aiAssisted: { summary: boolean; body: boolean };
   validation: AnnouncementValidation;
   history: AnnouncementHistoryEntry[];
   mediaHref: string;
