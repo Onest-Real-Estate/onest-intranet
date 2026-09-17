@@ -48,6 +48,7 @@ function detail(
     scope: { level: "office", label: "Office", officeName: "Fairfax, VA" },
     isPinned: false,
     cta: null,
+    source: null,
     // Mirrors `body` above: the server derives the blocks from that source,
     // so a fixture where they disagree would be testing a payload that cannot
     // occur.

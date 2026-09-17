@@ -215,6 +215,17 @@ def _scope_payload(announcement: Announcement) -> dict[str, str]:
     }
 
 
+def source_payload(announcement: Announcement) -> dict[str, str] | None:
+    """Attribution for a linked article, or nothing when unset."""
+    url = (announcement.source_url or "").strip()
+    if not url:
+        return None
+    return {
+        "url": url,
+        "publisher": (announcement.source_publisher or "").strip(),
+    }
+
+
 def feed_row(announcement: Announcement) -> dict[str, Any]:
     """One camelCase feed entry. Codes and meanings only — no styling."""
     return {
@@ -234,6 +245,7 @@ def feed_row(announcement: Announcement) -> dict[str, Any]:
         "scope": _scope_payload(announcement),
         "isPinned": announcement.is_pinned,
         "cta": cta_payload(announcement),
+        "source": source_payload(announcement),
         # The body as a structured block tree. The raw source travels too, for
         # the workspace's editor; the reader-facing renderer only ever walks
         # ``bodyBlocks``, so no announcement text reaches the browser as markup.

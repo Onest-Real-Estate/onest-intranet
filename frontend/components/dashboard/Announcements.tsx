@@ -115,6 +115,16 @@ function Slide({
               {announcement.excerpt}
             </p>
           ) : null}
+          {announcement.publisher ? (
+            <p
+              className={cn(
+                "text-xs font-medium",
+                hasArtwork ? "opacity-90" : "text-muted-foreground",
+              )}
+            >
+              Via {announcement.publisher}
+            </p>
+          ) : null}
         </div>
       </div>
     </article>

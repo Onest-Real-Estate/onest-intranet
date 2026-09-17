@@ -46,6 +46,7 @@ function row(overrides: Partial<AnnouncementRow> = {}): AnnouncementRow {
     scope: { level: "office", label: "Office", officeName: "Fairfax, VA" },
     isPinned: false,
     cta: null,
+    source: null,
     bodyBlocks: [
       {
         type: "paragraph",

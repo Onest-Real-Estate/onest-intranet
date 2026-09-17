@@ -185,6 +185,7 @@ def announcements(context: DashboardContext) -> ProviderResult:
                 # ``card`` derivative degrades to the original when processing
                 # has not produced one, so a just-uploaded hero still renders.
                 "imageUrl": media_url(hero, variant="card") if hero else None,
+                "publisher": (row.source_publisher or "").strip() or None,
             }
         )
     return ready({"featured": cards[0], "items": cards[1:]})

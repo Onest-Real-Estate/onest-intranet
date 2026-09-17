@@ -11,6 +11,7 @@ import {
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 
 import { AnnouncementArticle } from "@/components/announcements/AnnouncementArticle";
+import { AnnouncementSourceArticlePanel } from "@/components/announcements/AnnouncementSourceArticlePanel";
 import {
   Dialog,
   DialogClose,
@@ -68,6 +69,8 @@ const FIELD_LABELS: Record<string, string> = {
   expires_at: "Expires at",
   cta_label: "Button text",
   cta_url: "Button link",
+  source_url: "Source article URL",
+  source_publisher: "Source publisher",
   audience_company: "Audience",
   audience_roles: "Roles",
   audience_regions: "Regions",
@@ -136,6 +139,11 @@ interface DraftState {
   expiresAt: string;
   ctaLabel: string;
   ctaUrl: string;
+  sourceUrl: string;
+  sourcePublisher: string;
+  sourceRetrievedAt: string;
+  aiAssistedSummary: boolean;
+  aiAssistedBody: boolean;
   company: boolean;
   roles: string[];
   regions: number[];
@@ -351,6 +359,11 @@ function AnnouncementWorkspacePage() {
       expires_at: draft.expiresAt,
       cta_label: draft.ctaLabel,
       cta_url: draft.ctaUrl,
+      source_url: draft.sourceUrl,
+      source_publisher: draft.sourcePublisher,
+      source_retrieved_at: draft.sourceRetrievedAt,
+      ai_assisted_summary: draft.aiAssistedSummary ? "1" : "false",
+      ai_assisted_body: draft.aiAssistedBody ? "1" : "false",
       audience_roles: draft.roles,
       audience_regions: draft.regions.map(String),
       audience_offices: draft.offices.map(String),
@@ -614,6 +627,23 @@ function AnnouncementWorkspacePage() {
               </FormField>
             </SurfaceCardContent>
           </SurfaceCard>
+
+          <AnnouncementSourceArticlePanel
+            announcementId={announcement?.id ?? null}
+            draft={{
+              sourceUrl: draft.sourceUrl,
+              sourcePublisher: draft.sourcePublisher,
+              sourceRetrievedAt: draft.sourceRetrievedAt,
+              title: draft.title,
+              summary: draft.summary,
+              body: draft.body,
+              ctaLabel: draft.ctaLabel,
+              ctaUrl: draft.ctaUrl,
+              aiAssistedSummary: draft.aiAssistedSummary,
+              aiAssistedBody: draft.aiAssistedBody,
+            }}
+            onChange={(patch) => setDraft({ ...draft, ...patch })}
+          />
 
           <SurfaceCard>
             <PanelHeader
@@ -1029,6 +1059,11 @@ function initialDraft(
     expiresAt: localDateTime(announcement?.expiresAt ?? null),
     ctaLabel: announcement?.cta?.label ?? "",
     ctaUrl: announcement?.cta?.url ?? "",
+    sourceUrl: announcement?.source?.url ?? "",
+    sourcePublisher: announcement?.source?.publisher ?? "",
+    sourceRetrievedAt: announcement?.source?.retrievedAt ?? "",
+    aiAssistedSummary: announcement?.aiAssisted?.summary ?? false,
+    aiAssistedBody: announcement?.aiAssisted?.body ?? false,
     company: audience.some((entry) => entry.kind === "company"),
     roles: audience.filter((entry) => entry.kind === "role").map((entry) => entry.code),
     regions: audience
