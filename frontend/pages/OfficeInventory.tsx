@@ -338,20 +338,21 @@ export default function OfficeInventory() {
                     view,
                   });
                 }}
+                leading={
+                  <SearchControl
+                    value={query}
+                    onValueChange={setQuery}
+                    onSearch={(next) => visit({ q: next }, 1)}
+                    onClear={() => visit({ q: "" }, 1)}
+                    label="Search inventory"
+                    placeholder={
+                      capabilities.canViewSensitive
+                        ? "Search name or asset id"
+                        : "Search by item name"
+                    }
+                  />
+                }
               >
-                <SearchControl
-                  value={query}
-                  onValueChange={setQuery}
-                  onSearch={(next) => visit({ q: next }, 1)}
-                  onClear={() => visit({ q: "" }, 1)}
-                  label="Search inventory"
-                  placeholder={
-                    capabilities.canViewSensitive
-                      ? "Search name or asset id"
-                      : "Search by item name"
-                  }
-                  className="min-w-56"
-                />
                 <FilterSelect
                   label="Category"
                   value={filters.category ?? ""}
@@ -506,6 +507,7 @@ OfficeInventory.layout = () =>
   [
     HubLayout,
     {
+      variant: "wide",
       context: {
         title: "Office inventory",
         breadcrumbs: [

@@ -61,6 +61,7 @@ INSTALLED_APPS = [
     "apps.training",
     "apps.marketing",
     "apps.compliance",
+    "apps.documents",
 ]
 
 # Silk (SQL profiling, N+1 detection) is dev-only: its web UI lives at
@@ -158,7 +159,7 @@ USE_TZ = True
 
 # Vite build output (frontend/ -> assets/ -> served by Django).
 STATIC_URL = "/static/"
-STATICFILES_DIRS = [BASE_DIR / "assets"]
+STATICFILES_DIRS = [BASE_DIR / "assets", BASE_DIR / "static"]
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
 # Local media (used when S3/MinIO is not configured).
@@ -347,7 +348,7 @@ CONTRACT_SIGNING_CERT_PASSPHRASE = config(
 CONTRACT_SIGNING_ALLOW_UNSIGNED_DEV = config(
     "CONTRACT_SIGNING_ALLOW_UNSIGNED_DEV", default=True, cast=bool
 )
-# Azure OpenAI / OpenAI-compatible vision for field suggestions (optional).
+# Azure OpenAI / OpenAI / Gemini vision for field suggestions (optional).
 CONTRACT_FIELD_AI_ENDPOINT = config("CONTRACT_FIELD_AI_ENDPOINT", default="")
 CONTRACT_FIELD_AI_API_KEY = config("CONTRACT_FIELD_AI_API_KEY", default="")
 CONTRACT_FIELD_AI_DEPLOYMENT = config("CONTRACT_FIELD_AI_DEPLOYMENT", default="")
@@ -409,7 +410,7 @@ DJANGO_VITE = {
 # ---------------------------------------------------------------------------
 INERTIA_LAYOUT = "layout.html"
 # Bump whenever the frontend bundle changes so stale clients get a full reload.
-INERTIA_VERSION = "41"
+INERTIA_VERSION = "48"
 
 # Optional external help centre. The shell exposes it only when it is an
 # absolute, credential-free HTTPS URL; an empty or unsafe value leaves the

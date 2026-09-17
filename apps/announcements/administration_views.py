@@ -20,7 +20,7 @@ from __future__ import annotations
 from typing import Any, cast
 
 from django.core.exceptions import ValidationError
-from django.http import HttpRequest, HttpResponse
+from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.views.decorators.http import require_GET, require_POST
 from inertia import inertia, render
@@ -46,6 +46,9 @@ from apps.announcements.administration import (
     transition,
     update_announcement,
 )
+from apps.announcements.article_ai import summarize_article
+from apps.announcements.article_fetch import fetch_article_suggestions
+from apps.announcements.article_image_import import import_article_hero
 from apps.announcements.forms import (
     AnnouncementForm,
     AnnouncementPinForm,
@@ -94,6 +97,8 @@ _SHEET_DRAFT_FIELDS: tuple[str, ...] = (
     "expires_at",
     "cta_label",
     "cta_url",
+    "source_url",
+    "source_publisher",
 )
 
 _SHEET_DRAFT_LISTS: tuple[str, ...] = (
@@ -510,6 +515,76 @@ def announcement_pin(request: HttpRequest, announcement_id: int):
     return redirect(INDEX_ROUTE)
 
 
+def _article_json_error(exc: ValidationError, status: int = 422) -> JsonResponse:
+    if hasattr(exc, "message_dict"):
+        data = exc.message_dict
+        form_messages = [
+            str(message)
+            for message in (list(data.get("__all__", [])) + list(data.get("form", [])))
+        ]
+        return JsonResponse(
+            {
+                "validation": {
+                    "fields": {
+                        field: [str(message) for message in messages]
+                        for field, messages in data.items()
+                        if field not in {"__all__", "form"}
+                    },
+                    "form": form_messages,
+                }
+            },
+            status=status,
+        )
+    return JsonResponse(
+        {
+            "validation": {
+                "fields": {},
+                "form": [str(message) for message in exc.messages],
+            }
+        },
+        status=status,
+    )
+
+
+@enforce_policy("announcement_article_fetch")
+@require_POST
+def announcement_article_fetch(request: HttpRequest):
+    """Fetch Open Graph / page metadata for a pasted article URL."""
+    actor = cast(User, request.user)
+    try:
+        suggestions = fetch_article_suggestions(actor, request.POST.get("url", ""))
+    except ValidationError as exc:
+        return _article_json_error(exc)
+    return JsonResponse({"suggestions": suggestions.as_payload()})
+
+
+@enforce_policy("announcement_article_summarize")
+@require_POST
+def announcement_article_summarize(request: HttpRequest):
+    """Opt-in AI teaser + digest from a prior fetch's extract token."""
+    actor = cast(User, request.user)
+    try:
+        summary = summarize_article(actor, request.POST.get("extract_token", ""))
+    except ValidationError as exc:
+        return _article_json_error(exc)
+    return JsonResponse({"summary": summary})
+
+
+@enforce_policy("announcement_article_import_hero")
+@require_POST
+def announcement_article_import_hero(request: HttpRequest, announcement_id: int):
+    """Import a remote image candidate through the hero media pipeline."""
+    actor = cast(User, request.user)
+    announcement = _target(request, announcement_id)
+    try:
+        media = import_article_hero(
+            actor, announcement, request.POST.get("image_url", "")
+        )
+    except ValidationError as exc:
+        return _article_json_error(exc)
+    return JsonResponse({"media": media}, status=201)
+
+
 __all__ = [
     "announcement_administration_index",
     "announcement_new",
@@ -518,6 +593,9 @@ __all__ = [
     "announcement_update",
     "announcement_lifecycle",
     "announcement_pin",
+    "announcement_article_fetch",
+    "announcement_article_summarize",
+    "announcement_article_import_hero",
     "announcement_version",
     "index_props",
     "workspace_props",

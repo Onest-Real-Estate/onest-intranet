@@ -662,15 +662,12 @@ def _apply_report_user_filters(users: QuerySet[User], filters) -> QuerySet[User]
 def report_filter_options(actor: User) -> dict[str, Any]:
     from apps.compliance.administration import publication_queryset
 
-    offices = (
-        Office.objects.filter(pk__in=scoped_users(actor).values("office_id"))
-        .order_by("sort_order", "name")
-        .distinct()
-    )
-    regions = offices.filter(
-        kind__in=[Office.Kind.HEAD_OFFICE, Office.Kind.REGION]
-    ) | Office.objects.filter(
-        pk__in=offices.exclude(region_id=None).values("region_id")
+    office_ids = scoped_users(actor).values("office_id")
+    offices = Office.objects.filter(pk__in=office_ids).order_by("sort_order", "name")
+    # One queryset, not ``distinct | non-distinct``: Django 6 refuses that OR.
+    regions = Office.objects.filter(
+        Q(pk__in=office_ids, kind__in=[Office.Kind.HEAD_OFFICE, Office.Kind.REGION])
+        | Q(pk__in=offices.exclude(region_id=None).values("region_id"))
     )
     policies = publication_queryset(actor).filter(
         status=PolicyVersion.Status.PUBLISHED, is_mandatory=True
@@ -721,6 +718,7 @@ def scoped_report(actor: User, filters) -> dict[str, Any]:
     status_filter = str(filters.get("status") or "").strip()
 
     rows: list[dict[str, Any]] = []
+    summary = {"pending": 0, "acknowledged": 0, "waived": 0, "overdue": 0}
     now = timezone.now()
     for version in versions.order_by("title", "pk")[:REPORT_POLICY_CAP]:
         requirement = _active_requirement(version)
@@ -762,6 +760,8 @@ def scoped_report(actor: User, filters) -> dict[str, Any]:
                 status = "acknowledged"
             elif requirement and requirement.due_at and requirement.due_at < now:
                 status = "overdue"
+            if status in summary:
+                summary[status] += 1
             if status_filter and status != status_filter:
                 continue
             rows.append(
@@ -784,7 +784,7 @@ def scoped_report(actor: User, filters) -> dict[str, Any]:
                     ),
                 }
             )
-    return {"items": rows, "totalItems": len(rows)}
+    return {"items": rows, "totalItems": len(rows), "summary": summary}
 
 
 def open_item_rows(actor: User, *, filters=None, row_limit: int | None = 500):

@@ -83,6 +83,8 @@ function detail(
     createdBy: "Ada Admin",
     version: "2026-08-02T09:00:00+00:00",
     cta: null,
+    source: null,
+    aiAssisted: { summary: false, body: false },
     validation: { isPublishable: true, items: [] },
     history: [
       {
@@ -118,6 +120,7 @@ function article(overrides: Partial<AnnouncementDetail> = {}): AnnouncementDetai
     scope: { level: "office", label: "Office", officeName: "Fairfax VA" },
     isPinned: false,
     cta: null,
+    source: null,
     bodyBlocks: [
       {
         type: "paragraph",

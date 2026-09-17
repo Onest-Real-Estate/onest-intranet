@@ -13,6 +13,8 @@ import { useState } from "react";
 
 import {
   EmptyState,
+  FilterControls,
+  FilterField,
   PageHeader,
   PanelHeader,
   SearchControl,
@@ -126,6 +128,7 @@ export default function OfficeResources() {
   }
 
   const filtered = Boolean(filters.q || filters.category);
+  const activeCount = Number(Boolean(filters.category)) + Number(Boolean(filters.q));
 
   return (
     <div className="grid gap-8">
@@ -172,36 +175,55 @@ export default function OfficeResources() {
         </SurfaceCard>
       ) : (
         <>
-          <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_13rem]">
-            <SearchControl
-              label="Search resources"
-              value={q}
-              onValueChange={setQ}
-              onSearch={(next) => visit({ q: next })}
-              onClear={() => visit({ q: "" })}
-              placeholder="Search instructions and procedures"
-            />
-            <Select
-              value={category || "all"}
-              onValueChange={(value) => {
-                const next = value === "all" ? "" : value;
-                setCategory(next);
-                visit({ category: next });
-              }}
-            >
-              <SelectTrigger aria-label="Filter by category">
-                <SelectValue placeholder="All categories" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All categories</SelectItem>
-                {categories.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          <FilterControls
+            activeCount={activeCount}
+            onReset={() => {
+              setQ("");
+              setCategory("");
+              router.get(
+                routes.office_resources(),
+                {},
+                {
+                  preserveState: true,
+                  preserveScroll: true,
+                  replace: true,
+                },
+              );
+            }}
+            leading={
+              <SearchControl
+                label="Search resources"
+                value={q}
+                onValueChange={setQ}
+                onSearch={(next) => visit({ q: next })}
+                onClear={() => visit({ q: "" })}
+                placeholder="Search instructions and procedures"
+              />
+            }
+          >
+            <FilterField label="Category" hideLabel>
+              <Select
+                value={category || "all"}
+                onValueChange={(value) => {
+                  const next = value === "all" ? "" : value;
+                  setCategory(next);
+                  visit({ category: next });
+                }}
+              >
+                <SelectTrigger size="sm" aria-label="Filter by category">
+                  <SelectValue placeholder="All categories" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All categories</SelectItem>
+                  {categories.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FilterField>
+          </FilterControls>
 
           {groups.length ? (
             <div className="grid gap-6">
@@ -232,6 +254,7 @@ OfficeResources.layout = () =>
   [
     HubLayout,
     {
+      variant: "wide",
       context: {
         title: "Office resources",
         breadcrumbs: [

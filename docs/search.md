@@ -15,6 +15,7 @@ provider starts from the domain's already-scoped queryset:
 | Office resources | `effective_resources_queryset(actor)` |
 | Offices | Active offices — brokerage-public name and city only |
 | Training | `visible_training_content(actor)` |
+| Documents & forms | `library_queryset(actor)` |
 | Marketing resources | `library_queryset(actor)` |
 
 Search is therefore exactly as permissive as the pages those functions already
@@ -137,11 +138,11 @@ measured bottleneck.
 
 ## Sources not yet registered
 
-Documents, transactions, CRM contacts, and policies have no model
-behind them. A provider over a table that does not exist would be a group
-heading that never returns anything, so they register with their domains.
-`test_search.py` asserts every registered provider's permission is catalogued
-and its "see all" route reverses.
+Transactions, CRM contacts, and policies have no search provider yet. A
+provider over a table that does not exist would be a group heading that never
+returns anything, so they register with their domains. `test_search.py`
+asserts every registered provider's permission is catalogued and its "see
+all" route reverses.
 
 ## The palette
 

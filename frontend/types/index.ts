@@ -96,6 +96,8 @@ export interface DashboardAnnouncement {
   /** Detail route; the destination re-checks the audience on arrival. */
   href: string;
   imageUrl?: string;
+  /** Publisher attribution when the notice links a source article. */
+  publisher?: string;
 }
 
 export interface DashboardAnnouncements {
@@ -2948,6 +2950,43 @@ export interface AnnouncementCta {
   url: string;
 }
 
+/** Linked public article attribution. Separate from the optional CTA button. */
+export interface AnnouncementSource {
+  url: string;
+  publisher: string;
+  retrievedAt?: string | null;
+}
+
+/**
+ * Ephemeral Open Graph / page metadata returned by Fetch article details.
+ * Not saved until the author applies values into the draft and saves.
+ */
+export interface AnnouncementArticleSuggestions {
+  sourceUrl: string;
+  publisher: string;
+  title: string;
+  description: string;
+  imageUrl: string | null;
+  hasExtractableText: boolean;
+  extractToken: string;
+  textBasis: "extract" | "metadata" | "none";
+  retrievedAt: string;
+  limitations: string[];
+  aiConfigured: boolean;
+}
+
+export interface AnnouncementArticleAiSummary {
+  teaser: string;
+  digest: string;
+  textBasis: "extract";
+  label: string;
+  guides: {
+    teaserChars: number;
+    teaserGuide: string;
+    digestWords: number;
+  };
+}
+
 /**
  * One inline run inside a body block.
  *
@@ -2989,6 +3028,7 @@ export interface AnnouncementRow {
   /** Promotes the row to the important tier when sorting. Never audience. */
   isPinned: boolean;
   cta: AnnouncementCta | null;
+  source: AnnouncementSource | null;
   /** The body as structured blocks. The only form a reader is shown. */
   bodyBlocks: AnnouncementBlock[];
 }
@@ -3547,6 +3587,8 @@ export interface AnnouncementAdminDetail extends AnnouncementAdminRow {
   categoryCode: string;
   priorityCode: string;
   cta: AnnouncementCta | null;
+  source: AnnouncementSource | null;
+  aiAssisted: { summary: boolean; body: boolean };
   validation: AnnouncementValidation;
   history: AnnouncementHistoryEntry[];
   mediaHref: string;
@@ -4958,6 +5000,11 @@ export interface MarketingLibraryFilters {
 
 export interface MarketingResourcesPageProps extends PageProps {
   library: ListResponse<MarketingLibraryRow, MarketingLibraryFilters>;
+  summary: {
+    published: number;
+    logos: number;
+    templates: number;
+  };
   filterOptions: {
     categories: FilterOption[];
     assetTypes: FilterOption[];
@@ -5206,6 +5253,11 @@ export interface ComplianceLibraryFilters {
 
 export interface PoliciesCompliancePageProps extends PageProps {
   library: ListResponse<ComplianceLibraryRow, ComplianceLibraryFilters>;
+  summary: {
+    published: number;
+    outstanding: number;
+    overdue: number;
+  };
   filterOptions: {
     categories: FilterOption[];
   };
@@ -5299,6 +5351,11 @@ export interface ComplianceWorkspaceFilters {
 
 export interface ComplianceAdministrationPageProps extends PageProps {
   policies: ListResponse<ComplianceAdminRow, ComplianceWorkspaceFilters>;
+  summary: {
+    draft: number;
+    inReview: number;
+    published: number;
+  };
   filterOptions: {
     categories: FilterOption[];
     statuses: FilterOption[];
@@ -5356,6 +5413,12 @@ export interface ComplianceAckReportPageProps extends PageProps {
   report: {
     items: ComplianceAckReportRow[];
     totalItems: number;
+    summary: {
+      pending: number;
+      acknowledged: number;
+      waived: number;
+      overdue: number;
+    };
   };
   filterOptions: {
     policies: FilterOption[];
@@ -5367,4 +5430,243 @@ export interface ComplianceAckReportPageProps extends PageProps {
   filters: ComplianceAckReportFilters;
   capabilities: ComplianceCapabilities;
   errors: ValidationErrors;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Documents & forms                                                          */
+/* -------------------------------------------------------------------------- */
+
+export interface DocumentsPresentationBadge {
+  code: string;
+  label: string;
+  tone: string;
+  known: boolean;
+}
+
+export interface DocumentsScope {
+  level: string;
+  label: string;
+  officeName: string;
+  officeId: string;
+}
+
+export interface DocumentsFileItem {
+  id: number;
+  displayName: string;
+  mediaType: string;
+  byteSize: number;
+  checksum: string;
+  url: string;
+  isReadable: boolean;
+}
+
+export interface DocumentsLibraryRow {
+  id: number;
+  key: string;
+  name: string;
+  description: string;
+  status: DocumentsPresentationBadge;
+  category: DocumentsPresentationBadge | null;
+  scope: DocumentsScope;
+  jurisdictionStateCodes: string[];
+  versionNumber: number;
+  versionLabel: string;
+  effectiveAt: string | null;
+  expiresAt: string | null;
+  publishedAt: string | null;
+  fileCount: number;
+  detailUrl: string;
+}
+
+export interface DocumentsDetail extends DocumentsLibraryRow {
+  files: DocumentsFileItem[];
+  superseded: boolean;
+}
+
+export interface DocumentsLibraryFilters {
+  category: string;
+  jurisdiction: string;
+  office: string;
+  role: string;
+  q: string;
+  rejected: string[];
+  [key: string]: string | string[];
+}
+
+export interface DocumentsFormsPageProps extends PageProps {
+  library: ListResponse<DocumentsLibraryRow, DocumentsLibraryFilters>;
+  filterOptions: {
+    categories: FilterOption[];
+    offices: FilterOption[];
+    roles: FilterOption[];
+  };
+}
+
+export interface DocumentDetailPageProps extends PageProps {
+  document: DocumentsDetail;
+}
+
+export interface DocumentsLifecycle {
+  code: string;
+  label: string;
+  tone: StatusTone;
+}
+
+export interface DocumentsAdminRow {
+  id: number;
+  key: string;
+  name: string;
+  description: string;
+  lifecycle: DocumentsLifecycle;
+  status: DocumentsPresentationBadge;
+  category: DocumentsPresentationBadge | null;
+  versionNumber: number;
+  versionLabel: string;
+  ownerOffice: { id: number; name: string };
+  scope: DocumentsScope;
+  audience: AnnouncementAudienceEntry[];
+  jurisdictionStateCodes: string[];
+  effectiveAt: string | null;
+  expiresAt: string | null;
+  publishedAt: string | null;
+  updatedAt: string | null;
+  updatedBy: string;
+  createdBy: string;
+  version: string;
+}
+
+export interface DocumentsValidationItem {
+  field: string;
+  message: string;
+}
+
+export interface DocumentsValidation {
+  isPublishable: boolean;
+  items: DocumentsValidationItem[];
+}
+
+export interface DocumentsHistoryEntry {
+  id: string;
+  action: string;
+  label: string;
+  tone: StatusTone;
+  actor: string;
+  occurredAt: string;
+}
+
+export interface DocumentsAdminFileItem extends DocumentsFileItem {
+  processingState: "pending" | "ready" | "quarantined" | "failed";
+  isActive: boolean;
+  sortOrder: number;
+}
+
+export interface DocumentsRetirementUsage {
+  isCurrent: boolean;
+  familyKey: string;
+  versionNumber: number;
+  siblingCount: number;
+  publishedSiblingCount: number;
+  fileCount: number;
+  downloadCount: number;
+  wouldLeaveFamilyWithoutCurrent: boolean;
+}
+
+export interface DocumentsAdminDetail extends DocumentsAdminRow {
+  categoryCode: string;
+  displayOrder: number;
+  validation: DocumentsValidation;
+  history: DocumentsHistoryEntry[];
+  files: DocumentsAdminFileItem[];
+  mediaHref: string;
+  usage: DocumentsRetirementUsage;
+  familyId: number;
+}
+
+export interface DocumentsCapabilities {
+  canAuthor: boolean;
+  canPublish: boolean;
+  canRetire: boolean;
+}
+
+export interface DocumentsWorkspaceFilters {
+  q: string;
+  lifecycle: string;
+  category: string;
+  audience: string;
+  author: string;
+  office: string;
+  publishedFrom: string;
+  publishedTo: string;
+  [key: string]: string | string[];
+}
+
+export interface DocumentsCreateSheet {
+  open: boolean;
+  draft: Record<string, string | string[]>;
+}
+
+export interface DocumentsAdministrationPageProps extends PageProps {
+  documents: ListResponse<DocumentsAdminRow, DocumentsWorkspaceFilters>;
+  filterOptions: {
+    categories: FilterOption[];
+    offices: AnnouncementOfficeOption[];
+  };
+  createOptions: {
+    offices: AnnouncementOfficeOption[];
+    categories: FilterOption[];
+    audience: AnnouncementAudienceOptions;
+  };
+  createSheet: DocumentsCreateSheet | null;
+  capabilities: DocumentsCapabilities;
+  errors: ValidationErrors;
+}
+
+export interface DocumentsPreviewReach {
+  chosen: boolean;
+  matched: boolean;
+  officeId: number | null;
+  officeName: string;
+  roleCode: string;
+  hasNamedRecipients: boolean;
+}
+
+export interface DocumentsPreviewArticle extends DocumentsDetail {
+  audience: AnnouncementAudienceEntry[];
+}
+
+export interface DocumentsPreview {
+  article: DocumentsPreviewArticle;
+  reach: DocumentsPreviewReach;
+  roleCode: string;
+  officeId: number | null;
+}
+
+export interface DocumentsWorkspacePageProps extends PageProps {
+  document: DocumentsAdminDetail | null;
+  officeOptions: AnnouncementOfficeOption[];
+  categoryOptions: FilterOption[];
+  audienceOptions: AnnouncementAudienceOptions;
+  capabilities: DocumentsCapabilities;
+  preview: DocumentsPreview | null;
+  errors: ValidationErrors;
+  posted: Record<string, string[]> | null;
+}
+
+export interface DocumentsRecipientResult {
+  id: number;
+  name: string;
+  email: string;
+  officeName: string;
+}
+
+export interface DocumentsMediaLimits {
+  document: { extensions: string[]; maxBytes: number; maxCount: number };
+}
+
+export interface DocumentsMediaManagerPageProps extends PageProps {
+  document: { id: number; name: string; status: string; version: string };
+  files: DocumentsAdminFileItem[];
+  limits: DocumentsMediaLimits;
+  capabilities: DocumentsCapabilities;
+  validation: ValidationErrors;
 }

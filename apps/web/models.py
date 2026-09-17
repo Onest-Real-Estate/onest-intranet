@@ -56,6 +56,11 @@ class OperationsPermission(models.Model):
                 _("Can download marketing source files"),
             ),
             ("manage_documents", _("Can manage documents")),
+            (
+                "publish_documents",
+                _("Can publish, schedule, and supersede documents"),
+            ),
+            ("retire_documents", _("Can retire published documents")),
             ("view_compliance", _("Can view scoped compliance items")),
             ("manage_policies", _("Can manage policies")),
             ("approve_policies", _("Can approve policies")),

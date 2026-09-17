@@ -197,7 +197,7 @@ function ContactRow({
         </p>
         <p className="text-muted-foreground truncate text-xs">{title}</p>
       </div>
-      <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+      <div className="flex min-w-0 flex-wrap items-center gap-1.5">
         <Button asChild variant="outline" size="sm" className="h-7 px-2 text-xs">
           <a href={`mailto:${person.email}`} title={person.email}>
             <Mail className="size-3.5" aria-hidden />
@@ -206,9 +206,13 @@ function ContactRow({
         </Button>
         {person.phoneNumber ? (
           <Button asChild variant="outline" size="sm" className="h-7 px-2 text-xs">
-            <a href={telHref(person.phoneNumber)} title={person.phoneNumber}>
+            <a
+              href={telHref(person.phoneNumber)}
+              title={person.phoneNumber}
+              aria-label={`Call ${person.displayName} at ${person.phoneNumber}`}
+            >
               <Phone className="size-3.5" aria-hidden />
-              <span className="tabular-nums">{person.phoneNumber}</span>
+              Call
             </a>
           </Button>
         ) : null}

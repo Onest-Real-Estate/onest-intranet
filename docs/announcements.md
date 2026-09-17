@@ -726,6 +726,51 @@ form reports the missing half by name instead of surfacing an `IntegrityError`.
 Pinning requires a published row, is removed automatically on archive, and
 appears in the audit trail as its own action.
 
+### Linked article previews and AI digests
+
+Authors may paste an optional **source article URL** on the workspace and click
+**Fetch article details**. The hub fetches the public HTTPS page server-side
+(never from the browser), prefers Open Graph then standard metadata, and returns
+reviewable suggestions. Nothing is written to published fields until the author
+explicitly applies a value and saves the draft.
+
+Persisted provenance on the announcement:
+
+| Field | Meaning |
+| --- | --- |
+| `source_url` / `source_publisher` / `source_retrieved_at` | Attribution for readers |
+| `ai_assisted_summary` / `ai_assisted_body` | Audit: author accepted AI text into that field |
+
+Fetched title, description, image URL, and extracted article text are **not**
+stored on the row. Extract text is held in a short-lived cache (~15 minutes)
+under an opaque `extractToken` scoped to the actor, then discarded.
+
+**Generate summary** is a separate opt-in action. It reuses the same
+`CONTRACT_FIELD_AI_*` settings as contract field placement (Azure OpenAI /
+OpenAI / Gemini OpenAI-compat). It runs only when enough readable extract text
+was retrieved; metadata-only fetches cannot claim the model “read the article.”
+AI is never called on paste, save, or publish.
+
+**Remote images** are candidates only. **Import as hero** re-validates the URL
+(SSRF), downloads bounded bytes, and runs them through the existing
+`inspect_upload` → `attach_media` → Celery processing path. Import failure never
+blocks text-only publication. Readers never receive a hotlinked remote image URL.
+
+SSRF contract (see OWASP): HTTPS only, no credentials, port 443, public DNS
+answers only, every redirect target re-validated (or refused), bounded timeouts
+and response sizes. Failures return user-safe messages — never upstream bodies
+or secrets.
+
+Endpoints (all require `web.manage_announcements`):
+
+* `POST /operations/announcements/article-fetch`
+* `POST /operations/announcements/article-summarize`
+* `POST /operations/announcements/<id>/article-import-hero`
+
+Readers see publisher attribution and an “Original article” link on the detail
+page when `source_url` is set. The dashboard News band may show the publisher
+label; it still uses Hub hero artwork only.
+
 ## Local demo data
 
 ```bash

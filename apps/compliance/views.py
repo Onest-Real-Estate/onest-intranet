@@ -17,6 +17,7 @@ from apps.compliance.services import (
     build_library,
     category_filter_options,
     detail_payload,
+    library_summary,
     resolve_consumer_policy,
 )
 from apps.user.models import User
@@ -44,6 +45,7 @@ def policies_compliance(request: HttpRequest):
     selected_category = library["filters"]["category"]
     return {
         "library": library,
+        "summary": library_summary(actor),
         "filterOptions": {
             "categories": category_filter_options(include_codes=(selected_category,)),
         },

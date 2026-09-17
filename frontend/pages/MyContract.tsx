@@ -101,7 +101,7 @@ function PdfPreview({ contract }: { contract: MyContractDetail }) {
       {contract.previewUrl && !embedFailed ? (
         <section
           key={previewKey}
-          className="border-border bg-muted/30 relative min-h-[28rem] overflow-hidden rounded-lg border"
+          className="border-border bg-muted/30 relative min-h-[28rem] min-w-0 overflow-hidden rounded-lg border"
           aria-labelledby={titleId}
         >
           <h3 id={titleId} className="sr-only">
@@ -595,8 +595,8 @@ export default function MyContract() {
           />
         </SurfaceCard>
       ) : (
-        <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_20rem]">
-          <div className="grid gap-6">
+        <div className="grid min-w-0 gap-8 lg:grid-cols-[minmax(0,1fr)_20rem]">
+          <div className="grid min-w-0 gap-6">
             {/*
               Four facts and a four-step progression. They were eight equal
               label/value pairs, three of which — Sent, Viewed, Signed — are one
@@ -718,6 +718,7 @@ MyContract.layout = () =>
   [
     HubLayout,
     {
+      variant: "wide",
       context: {
         title: "My contract",
         breadcrumbs: [

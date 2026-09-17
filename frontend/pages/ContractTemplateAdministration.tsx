@@ -308,6 +308,6 @@ ContractTemplateAdministration.layout = () =>
           { label: "Contract Templates", href: routes.admin_contract_templates() },
         ],
       },
-      variant: "standard",
+      variant: "wide",
     },
   ] as const;

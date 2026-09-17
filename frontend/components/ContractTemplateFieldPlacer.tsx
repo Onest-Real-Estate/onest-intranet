@@ -537,9 +537,9 @@ export function ContractTemplateFieldPlacer({
     <div
       onKeyDown={onWorkbenchKeyDown}
       className={cn(
-        "border-border bg-card grid overflow-hidden rounded-(--radius-card) border",
+        "border-border bg-card grid min-w-0 overflow-hidden rounded-(--radius-card) border",
         "lg:h-[calc(100dvh-25rem)] lg:max-h-[58rem] lg:min-h-[26rem]",
-        "lg:grid-cols-[13.5rem_minmax(0,1fr)_18rem] lg:grid-rows-[auto_minmax(0,1fr)]",
+        "lg:grid-cols-[17rem_minmax(0,1fr)_18rem] lg:grid-rows-[auto_minmax(0,1fr)]",
         className,
       )}
     >
@@ -561,22 +561,23 @@ export function ContractTemplateFieldPlacer({
 
       <aside
         aria-label="Field palette"
-        className="border-border grid max-h-[45vh] content-start gap-6 overflow-y-auto border-b p-5 lg:max-h-none lg:min-h-0 lg:border-r lg:border-b-0"
+        className="border-border grid min-w-0 max-h-[45vh] content-start gap-5 overflow-x-hidden overflow-y-auto border-b p-4 lg:max-h-none lg:min-h-0 lg:border-r lg:border-b-0"
       >
-        <fieldset className="grid gap-2">
+        <fieldset className="grid min-w-0 gap-2">
           <legend className="text-muted-foreground mb-2 text-xs font-semibold">
             Place fields for
           </legend>
-          <div className="bg-background border-border grid grid-cols-3 gap-1 rounded-md border p-1">
+          <div className="bg-background border-border flex min-w-0 flex-wrap gap-1 overflow-hidden rounded-md border p-1">
             {(["Prefill", "Company", "Agent"] as const).map((role) => (
               <button
                 key={role}
                 type="button"
                 aria-pressed={placeRole === role}
                 disabled={readOnly}
+                title={role}
                 onClick={() => setPlaceRoleSafe(role)}
                 className={cn(
-                  "focus-visible:ring-ring rounded-sm px-2 py-1.5 text-sm font-medium transition-colors duration-(--motion-fast) focus-visible:ring-3 focus-visible:outline-none disabled:opacity-50",
+                  "focus-visible:ring-ring min-w-0 flex-1 truncate rounded-sm px-2 py-1.5 text-sm font-medium transition-colors duration-(--motion-fast) focus-visible:ring-2 focus-visible:outline-none disabled:opacity-50",
                   placeRole === role
                     ? "bg-primary text-primary-foreground"
                     : "text-muted-foreground hover:bg-muted",
@@ -586,7 +587,7 @@ export function ContractTemplateFieldPlacer({
               </button>
             ))}
           </div>
-          <p className="text-muted-foreground flex items-start gap-2 text-xs leading-5">
+          <p className="text-muted-foreground flex min-w-0 items-start gap-2 text-xs leading-5">
             <span
               className={cn(
                 "mt-1 size-2 shrink-0 rounded-full",
@@ -594,13 +595,13 @@ export function ContractTemplateFieldPlacer({
               )}
               aria-hidden
             />
-            {ROLE_STYLES[placeRole].blurb}
+            <span className="min-w-0">{ROLE_STYLES[placeRole].blurb}</span>
           </p>
         </fieldset>
 
-        <div className="grid gap-2">
+        <div className="grid min-w-0 gap-2">
           <p className="text-muted-foreground text-xs font-semibold">Fields</p>
-          <div className="grid gap-1.5">
+          <div className="grid min-w-0 gap-1.5">
             {PALETTE.filter((item) => item.roles.includes(placeRole)).map((item) => {
               const Icon = item.icon;
               const armed = armedType === item.type;
@@ -622,7 +623,7 @@ export function ContractTemplateFieldPlacer({
                     )
                   }
                   className={cn(
-                    "bg-background focus-visible:ring-ring flex items-center gap-2.5 rounded-md border px-2.5 py-2 text-left transition-[background-color,border-color] duration-(--motion-fast) focus-visible:ring-3 focus-visible:outline-none",
+                    "bg-background focus-visible:ring-ring flex min-w-0 items-center gap-2.5 rounded-md border px-2.5 py-2 text-left transition-[background-color,border-color] duration-(--motion-fast) focus-visible:ring-3 focus-visible:outline-none",
                     armed
                       ? "border-ring bg-accent"
                       : "border-border hover:border-border-strong hover:bg-accent/40",
@@ -638,10 +639,8 @@ export function ContractTemplateFieldPlacer({
                     <Icon className="size-3.5" aria-hidden />
                   </span>
                   <span className="min-w-0">
-                    <span className="block truncate text-sm font-medium">
-                      {item.label}
-                    </span>
-                    <span className="text-muted-foreground block truncate text-xs">
+                    <span className="block text-sm font-medium">{item.label}</span>
+                    <span className="text-muted-foreground block text-xs leading-4">
                       {item.hint}
                     </span>
                   </span>
@@ -660,7 +659,7 @@ export function ContractTemplateFieldPlacer({
 
       <div
         ref={viewerRef}
-        className="bg-muted/35 relative max-h-[70vh] min-h-[20rem] overflow-auto p-6 lg:max-h-none lg:min-h-0"
+        className="bg-muted/35 relative max-h-[70vh] min-h-[20rem] min-w-0 overflow-auto p-6 lg:max-h-none lg:min-h-0"
       >
         {armedType && !readOnly ? (
           <p
@@ -724,7 +723,7 @@ export function ContractTemplateFieldPlacer({
 
       <aside
         aria-label="Field inspector"
-        className="border-border grid max-h-[55vh] content-start gap-5 overflow-y-auto border-t p-5 lg:max-h-none lg:min-h-0 lg:border-t-0 lg:border-l"
+        className="border-border grid min-w-0 max-h-[55vh] content-start gap-5 overflow-x-hidden overflow-y-auto border-t p-5 lg:max-h-none lg:min-h-0 lg:border-t-0 lg:border-l"
       >
         {selected ? (
           <div className="grid gap-3">
@@ -979,7 +978,7 @@ function PlacerToolbar({
   onSave?: () => void;
 }) {
   return (
-    <div className="border-border bg-card flex flex-wrap items-center gap-x-4 gap-y-2 border-b px-3 py-2 lg:col-span-3">
+    <div className="border-border bg-card flex flex-wrap items-center gap-x-4 gap-y-2 border-b px-3 py-2 lg:col-span-full">
       <div className="flex items-center gap-1">
         <Button
           type="button"

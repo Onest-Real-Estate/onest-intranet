@@ -138,6 +138,7 @@ def test_registry_has_exact_destinations_order_routes_and_permissions():
                 "admin_inventory",
                 "admin_reservations",
                 "admin_compliance",
+                "admin_documents",
             }
         )
 
@@ -321,6 +322,11 @@ def test_brokerage_admin_can_reach_every_registered_destination(client):
             assert "filterOptions" in props
             assert "capabilities" in props
             continue
+        if destination.route_name == "admin_documents":
+            assert "documents" in props
+            assert "filterOptions" in props
+            assert "capabilities" in props
+            continue
         assert "title" in props, (
             f"{destination.route_name} missing title; keys={sorted(props)}"
         )
@@ -433,19 +439,19 @@ def test_permission_revocation_takes_effect_on_the_next_nested_visit(client):
             "marketing",
             AGENT,
             ScopeType.OFFICE,
-            "web.manage_documents",
-            "admin_documents",
+            "web.add_users",
+            "admin_add_user",
         ),
         (
-            # IT Support and Reservations both have real workspaces now, so the
-            # specialty persona is checked against a destination that still
-            # renders the placeholder. Scoped queue access is covered by
-            # ``apps/it_support/tests/test_scope.py``.
+            # Documents has a real workspace now, so the specialty persona is
+            # checked against a destination that still renders the
+            # placeholder. Scoped document access is covered by
+            # ``apps/documents/tests/test_administration.py``.
             "it-support",
             AGENT,
             ScopeType.OFFICE,
-            "web.manage_documents",
-            "admin_documents",
+            "web.add_users",
+            "admin_add_user",
         ),
     ],
 )

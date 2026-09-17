@@ -6,8 +6,11 @@ import {
   EmptyState,
   FilterControls,
   FilterField,
+  MetricCard,
+  MetricStrip,
   PageHeader,
   Pagination,
+  PanelHeader,
   SearchControl,
   StatusBadge,
   SurfaceCard,
@@ -15,6 +18,7 @@ import {
   toStatusTone,
 } from "@/components/design-system";
 import { HubLayout } from "@/components/HubLayout";
+import { IconWell, type IconWellTone } from "@/components/IconWell";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -25,6 +29,7 @@ import {
 } from "@/components/ui/select";
 import { buildListUrl } from "@/lib/list-query";
 import { routes } from "@/lib/routes";
+import { cn } from "@/lib/utils";
 import type {
   ComplianceLibraryFilters,
   ComplianceLibraryRow,
@@ -35,7 +40,7 @@ import type {
 const ANY = "__any__";
 
 function activeFilterCount(filters: ComplianceLibraryFilters): number {
-  return [filters.category, filters.jurisdiction, filters.q].filter(Boolean).length;
+  return [filters.category, filters.jurisdiction].filter(Boolean).length;
 }
 
 function rejectedFilterMessage(filters: ComplianceLibraryFilters): string | null {
@@ -43,6 +48,29 @@ function rejectedFilterMessage(filters: ComplianceLibraryFilters): string | null
     return null;
   }
   return "Some filters were ignored because they are not valid for this library.";
+}
+
+function formatDay(value: string | null): string {
+  if (!value) {
+    return "recently";
+  }
+  return new Date(value).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function rowTone(row: ComplianceLibraryRow): IconWellTone {
+  if (row.acknowledged) {
+    return "success";
+  }
+  if (row.required && row.dueAt && new Date(row.dueAt).getTime() < Date.now()) {
+    return "destructive";
+  }
+  if (row.required) {
+    return "warning";
+  }
+  return "muted";
 }
 
 function FilterSelect({
@@ -62,7 +90,7 @@ function FilterSelect({
         value={value || ANY}
         onValueChange={(next) => onChange(next === ANY ? "" : next)}
       >
-        <SelectTrigger size="sm" aria-label={label}>
+        <SelectTrigger size="sm" aria-label={label} className="w-full sm:w-44">
           <SelectValue placeholder={`Any ${label.toLowerCase()}`} />
         </SelectTrigger>
         <SelectContent>
@@ -78,184 +106,208 @@ function FilterSelect({
   );
 }
 
-function PolicyCard({ row }: { row: ComplianceLibraryRow }) {
+function PolicyRow({ row }: { row: ComplianceLibraryRow }) {
+  const waiting = row.required && !row.acknowledged;
   const titleId = `policy-${row.id}-title`;
 
   return (
-    <article aria-labelledby={titleId}>
-      <SurfaceCard interactive className="group relative">
-        <SurfaceCardContent className="flex min-w-0 items-start gap-4">
-          <div className="bg-muted text-muted-foreground flex size-16 shrink-0 items-center justify-center rounded-md">
-            <ShieldCheck className="size-5" aria-hidden />
-          </div>
-          <div className="grid min-w-0 flex-1 gap-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <StatusBadge
-                status={{
-                  label: row.status.label,
-                  tone: toStatusTone(row.status.tone),
-                }}
-              />
-              {row.category ? (
-                <StatusBadge
-                  status={{
-                    label: row.category.label,
-                    tone: toStatusTone(row.category.tone),
-                  }}
-                />
-              ) : null}
-              {row.isMandatory ? (
-                <StatusBadge status={{ label: "Mandatory", tone: "warning" }} />
-              ) : null}
-              {row.acknowledged ? (
-                <StatusBadge status={{ label: "Acknowledged", tone: "success" }} />
-              ) : row.required ? (
-                <StatusBadge status={{ label: "Ack required", tone: "destructive" }} />
-              ) : null}
-              <span className="text-muted-foreground text-xs">
-                {row.versionLabel} · {row.scope.label} · {row.scope.officeName}
-              </span>
-            </div>
-            <h2
-              id={titleId}
-              className="text-base leading-snug font-semibold text-balance"
-            >
-              <Link
-                href={routes.policy_detail(row.id)}
-                className="group-hover:text-primary focus-visible:ring-ring rounded-sm transition-colors duration-(--motion-fast) focus-visible:ring-2 focus-visible:outline-none"
-              >
-                <span className="absolute inset-0" aria-hidden />
-                {row.title}
-              </Link>
-            </h2>
-            {row.summary ? (
-              <p className="text-muted-foreground line-clamp-2 text-sm leading-6">
-                {row.summary}
-              </p>
-            ) : null}
-            <div className="text-muted-foreground flex items-center gap-1.5 text-xs">
-              <CalendarClock className="size-3.5 shrink-0" aria-hidden />
-              Published{" "}
-              {row.publishedAt
-                ? new Date(row.publishedAt).toLocaleDateString()
-                : "recently"}
-              {row.dueAt && row.required
-                ? ` · Due ${new Date(row.dueAt).toLocaleDateString()}`
-                : ""}
-            </div>
-          </div>
-          <ChevronRight
-            aria-hidden
-            className="text-muted-foreground/60 group-hover:text-foreground mt-2 hidden size-4 shrink-0 transition-colors duration-(--motion-fast) sm:block"
-          />
-        </SurfaceCardContent>
-      </SurfaceCard>
-    </article>
+    <li
+      className={cn(
+        "bg-card hover:border-border-strong relative flex items-start gap-3 rounded-lg border p-4 transition-colors duration-(--motion-fast)",
+        waiting ? "border-chip-warning-edge" : "border-border/70",
+      )}
+    >
+      <IconWell
+        icon={ShieldCheck}
+        tone={rowTone(row)}
+        className="mt-0.5 hidden size-9 sm:grid"
+      />
+      <div className="grid min-w-0 flex-1 gap-1.5">
+        <div className="flex flex-wrap items-center gap-2">
+          {row.category ? (
+            <StatusBadge
+              status={{
+                label: row.category.label,
+                tone: toStatusTone(row.category.tone),
+              }}
+            />
+          ) : null}
+          {row.isMandatory ? (
+            <StatusBadge status={{ label: "Mandatory", tone: "warning" }} />
+          ) : null}
+          {row.acknowledged ? (
+            <StatusBadge status={{ label: "Acknowledged", tone: "success" }} />
+          ) : row.required ? (
+            <StatusBadge status={{ label: "Ack required", tone: "destructive" }} />
+          ) : null}
+        </div>
+        <h2 id={titleId} className="text-sm leading-snug font-medium text-balance">
+          <Link
+            href={routes.policy_detail(row.id)}
+            className="focus-visible:outline-ring rounded-sm focus-visible:outline-2 focus-visible:-outline-offset-2"
+          >
+            <span className="absolute inset-0" aria-hidden />
+            {row.title}
+          </Link>
+        </h2>
+        {row.summary ? (
+          <p className="text-muted-foreground line-clamp-2 text-sm leading-6">
+            {row.summary}
+          </p>
+        ) : null}
+        <p className="text-muted-foreground flex flex-wrap items-center gap-x-2 text-xs">
+          <CalendarClock className="size-3.5 shrink-0" aria-hidden />
+          <span>
+            Published {formatDay(row.publishedAt)}
+            {row.dueAt && row.required ? ` · Due ${formatDay(row.dueAt)}` : ""}
+          </span>
+          <span aria-hidden>·</span>
+          <span>
+            {row.versionLabel} · {row.scope.label} · {row.scope.officeName}
+          </span>
+        </p>
+      </div>
+      <ChevronRight
+        aria-hidden
+        className="text-muted-foreground/60 mt-2 hidden size-4 shrink-0 sm:block"
+      />
+    </li>
   );
 }
 
 export default function PoliciesCompliance() {
-  const { library, filterOptions } = usePage<PoliciesCompliancePageProps>().props;
+  const { library, filterOptions, summary } =
+    usePage<PoliciesCompliancePageProps>().props;
   const filters = library.filters as ComplianceLibraryFilters;
   const notice = rejectedFilterMessage(filters);
+  const [query, setQuery] = useState(filters.q ?? "");
   const [jurisdiction, setJurisdiction] = useState(filters.jurisdiction);
 
   function visit(next: Partial<ComplianceLibraryFilters>, page?: number) {
     router.get(
       buildListUrl(routes.policies_compliance(), window.location.search, {
         page,
-        filters: { ...filters, ...next, rejected: undefined },
+        filters: { ...filters, q: query, ...next, rejected: undefined },
       }),
       {},
       { preserveState: true, preserveScroll: true, replace: true },
     );
   }
 
+  const activeCount = activeFilterCount(filters);
+
   return (
     <>
-      <Head title="Policies & compliance" />
+      <Head title="Policies" />
       <div className="grid gap-8">
         <PageHeader
-          title="Policies & compliance"
-          description="Published policies for your role and office. Acknowledge mandatory ones before their due date."
+          title="Policies"
+          description="Published policies for your role and office."
         />
 
-        <FilterControls
-          activeCount={activeFilterCount(filters)}
-          onReset={() => {
-            setJurisdiction("");
-            visit({ category: "", jurisdiction: "", q: "" });
-          }}
-        >
-          <SearchControl
-            value={filters.q}
-            onSearch={(next) => visit({ q: next })}
-            label="Search policies"
-            placeholder="Search title or summary"
+        <MetricStrip>
+          <MetricCard label="Published" value={summary.published} />
+          <MetricCard
+            label="Outstanding"
+            value={summary.outstanding}
+            tone={summary.outstanding > 0 ? "warning" : "neutral"}
           />
-          <FilterSelect
-            label="Category"
-            value={filters.category}
-            options={filterOptions.categories}
-            onChange={(next) => visit({ category: next })}
+          <MetricCard
+            label="Overdue"
+            value={summary.overdue}
+            tone={summary.overdue > 0 ? "destructive" : "neutral"}
           />
-          <FilterField label="Jurisdiction" hideLabel>
-            <Input
-              aria-label="Jurisdiction state code"
-              value={jurisdiction}
-              maxLength={2}
-              placeholder="State"
-              className="h-8 w-20 uppercase"
-              onChange={(event) => setJurisdiction(event.target.value.toUpperCase())}
-              onBlur={() => {
-                if (jurisdiction !== filters.jurisdiction) {
-                  visit({ jurisdiction });
-                }
+        </MetricStrip>
+
+        <SurfaceCard>
+          <PanelHeader divided title="Library" />
+          <SurfaceCardContent className="grid gap-4">
+            <FilterControls
+              activeCount={activeCount}
+              onReset={() => {
+                setQuery("");
+                setJurisdiction("");
+                visit({ category: "", jurisdiction: "", q: "" }, 1);
               }}
-            />
-          </FilterField>
-        </FilterControls>
-
-        {notice ? (
-          <p
-            role="status"
-            className="text-muted-foreground flex items-start gap-2 text-sm"
-          >
-            <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
-            {notice}
-          </p>
-        ) : null}
-
-        {library.items.length === 0 ? (
-          <SurfaceCard>
-            <EmptyState
-              icon={ShieldCheck}
-              title={
-                activeFilterCount(filters) > 0
-                  ? "No policies match these filters"
-                  : "No policies published yet"
+              leading={
+                <SearchControl
+                  label="Search policies"
+                  value={query}
+                  onValueChange={setQuery}
+                  onSearch={(q) => visit({ q }, 1)}
+                  onClear={() => {
+                    setQuery("");
+                    visit({ q: "" }, 1);
+                  }}
+                  placeholder="Title or summary"
+                />
               }
-              description={
-                activeFilterCount(filters) > 0
-                  ? "Reset the filters to see everything available to you."
-                  : "Policies published to your role and office will appear here."
-              }
-            />
-          </SurfaceCard>
-        ) : (
-          <section aria-label="Policies library" className="grid gap-3">
-            {library.items.map((row) => (
-              <PolicyCard key={row.id} row={row} />
-            ))}
-          </section>
-        )}
+            >
+              <FilterSelect
+                label="Category"
+                value={filters.category}
+                options={filterOptions.categories}
+                onChange={(category) => visit({ category }, 1)}
+              />
+              <FilterField label="Jurisdiction" hideLabel>
+                <Input
+                  aria-label="Jurisdiction"
+                  value={jurisdiction}
+                  maxLength={2}
+                  placeholder="State"
+                  className="h-8 w-20 uppercase"
+                  onChange={(event) =>
+                    setJurisdiction(event.target.value.toUpperCase())
+                  }
+                  onBlur={() => {
+                    if (jurisdiction !== filters.jurisdiction) {
+                      visit({ jurisdiction }, 1);
+                    }
+                  }}
+                />
+              </FilterField>
+            </FilterControls>
 
-        {library.pagination.totalPages > 1 ? (
-          <Pagination
-            pagination={library.pagination}
-            onPageChange={(page) => visit({}, page)}
-          />
-        ) : null}
+            {notice ? (
+              <p
+                role="status"
+                className="text-muted-foreground flex items-start gap-2 text-sm"
+              >
+                <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
+                {notice}
+              </p>
+            ) : null}
+
+            {library.items.length === 0 ? (
+              <EmptyState
+                icon={ShieldCheck}
+                title={
+                  activeCount > 0
+                    ? "No policies match these filters"
+                    : "No policies published yet"
+                }
+                description={
+                  activeCount > 0
+                    ? "Reset the filters to see everything available to you."
+                    : "Policies published to your role and office will appear here."
+                }
+              />
+            ) : (
+              <ul aria-label="Policies library" className="grid gap-3">
+                {library.items.map((row) => (
+                  <PolicyRow key={row.id} row={row} />
+                ))}
+              </ul>
+            )}
+
+            {library.pagination.totalPages > 1 ? (
+              <Pagination
+                pagination={library.pagination}
+                onPageChange={(page) => visit({}, page)}
+              />
+            ) : null}
+          </SurfaceCardContent>
+        </SurfaceCard>
       </div>
     </>
   );
@@ -266,11 +318,12 @@ PoliciesCompliance.layout = () =>
     HubLayout,
     {
       context: {
-        title: "Policies & compliance",
+        title: "Policies",
         breadcrumbs: [
           { label: "Dashboard", href: routes.dashboard() },
-          { label: "Policies & compliance" },
+          { label: "Policies" },
         ],
       },
+      variant: "wide",
     },
   ] as const;

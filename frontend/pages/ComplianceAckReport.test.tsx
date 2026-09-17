@@ -66,6 +66,12 @@ function setPage(overrides: Partial<ComplianceAckReportPageProps> = {}) {
         },
       ],
       totalItems: 1,
+      summary: {
+        pending: 0,
+        acknowledged: 0,
+        waived: 0,
+        overdue: 1,
+      },
     },
     filterOptions: {
       policies: [{ value: "12", label: "Handbook" }],
@@ -109,8 +115,12 @@ describe("ComplianceAckReport", () => {
   it("renders acknowledgement rows and a waive action", async () => {
     const user = userEvent.setup();
     render(<ComplianceAckReport />);
+    expect(
+      screen.getByRole("heading", { name: "Acknowledgements" }),
+    ).toBeInTheDocument();
     expect(screen.getByText("Alex Agent")).toBeInTheDocument();
     expect(screen.getByText("Handbook")).toBeInTheDocument();
+    expect(screen.getByText("Overdue")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Waive" }));
     expect(
       screen.getByRole("heading", { name: "Waive acknowledgement" }),
@@ -121,6 +131,7 @@ describe("ComplianceAckReport", () => {
   it("visits with a status filter", async () => {
     const user = userEvent.setup();
     render(<ComplianceAckReport />);
+    await user.click(screen.getByRole("button", { name: /filters/i }));
     await user.click(screen.getByRole("combobox", { name: "Status" }));
     await user.click(screen.getByRole("option", { name: "Overdue" }));
     expect(routerGet).toHaveBeenCalled();

@@ -899,7 +899,7 @@ function ShellWorkspace({
         tabIndex={-1}
         aria-busy={navigating}
         className={cn(
-          "flex flex-1 flex-col py-6 outline-none lg:py-8",
+          "flex min-w-0 flex-1 flex-col overflow-x-hidden py-6 outline-none lg:py-8",
           "print:px-0 print:py-0",
           contentVariants[variant],
         )}

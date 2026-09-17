@@ -7,6 +7,8 @@ import io
 import json
 import logging
 import re
+import urllib.error
+import urllib.request
 from typing import Any
 
 from django.conf import settings
@@ -23,6 +25,75 @@ from apps.contract.field_layout import (
 logger = logging.getLogger(__name__)
 
 _ALLOWED_TYPES = frozenset(member.value for member in FieldType)
+_GEMINI_HOST = "generativelanguage.googleapis.com"
+_GEMINI_DEFAULT_MODEL = "gemini-3.6-flash"
+_OPENAI_DEFAULT_MODEL = "gpt-4o"
+# Gemini OpenAI-compat used to inherit gpt-4o, then gemini-2.5-flash. Google
+# returns 404 for those ids for new API keys.
+_GEMINI_LEGACY_MODELS = frozenset({_OPENAI_DEFAULT_MODEL, "gemini-2.5-flash"})
+
+
+def _chat_completions_target(
+    *,
+    endpoint: str,
+    api_key: str,
+    deployment: str = "",
+    api_version: str = "2024-08-01-preview",
+    model: str = _OPENAI_DEFAULT_MODEL,
+) -> tuple[str, dict[str, str], str]:
+    """Return (url, headers, model) for Azure OpenAI, OpenAI, or Gemini."""
+    endpoint = endpoint.rstrip("/")
+    deployment = (deployment or "").strip()
+    model = (model or "").strip() or _OPENAI_DEFAULT_MODEL
+
+    if deployment:
+        url = (
+            f"{endpoint}/openai/deployments/{deployment}/chat/completions"
+            f"?api-version={api_version or '2024-08-01-preview'}"
+        )
+        headers = {"api-key": api_key, "Content-Type": "application/json"}
+        return url, headers, deployment
+
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    lowered = endpoint.lower()
+    if _GEMINI_HOST in lowered:
+        url = (
+            f"{endpoint}/chat/completions"
+            if lowered.endswith("/openai")
+            else f"{endpoint}/v1beta/openai/chat/completions"
+        )
+        if model in _GEMINI_LEGACY_MODELS:
+            model = _GEMINI_DEFAULT_MODEL
+        return url, headers, model
+
+    if lowered.endswith("/v1") or lowered.endswith("/openai"):
+        url = f"{endpoint}/chat/completions"
+    else:
+        url = f"{endpoint}/v1/chat/completions"
+    return url, headers, model
+
+
+def _http_error_body(exc: urllib.error.HTTPError) -> str:
+    try:
+        return exc.read()[:400].decode("utf-8", errors="replace")
+    except (OSError, AttributeError, UnicodeError):
+        return ""
+
+
+def _field_ai_http_message(status: int) -> str:
+    if status in {401, 403}:
+        return "Field AI rejected the API key."
+    if status == 404:
+        return (
+            "Field AI model was not found. Set CONTRACT_FIELD_AI_MODEL to a "
+            "current model (for Gemini, gemini-3.6-flash)."
+        )
+    if status == 429:
+        return "Field AI is rate-limited. Try again in a moment."
+    return "Field AI request failed. Try again later."
 
 
 def field_ai_configured() -> bool:
@@ -157,7 +228,7 @@ def _parse_suggestions(
 def suggest_fields_for_pdf(
     pdf_bytes: bytes, *, max_pages: int = 8
 ) -> list[dict[str, Any]]:
-    """Call Azure OpenAI-compatible vision chat to propose field boxes."""
+    """Call Azure OpenAI, OpenAI, or Gemini vision chat to propose field boxes."""
     if not field_ai_configured():
         raise ValidationError(
             {"form": ["Field AI is not configured (endpoint and API key required)."]}
@@ -167,31 +238,15 @@ def suggest_fields_for_pdf(
 
     reader = PdfReader(io.BytesIO(pdf_bytes))
     page_count = min(len(reader.pages), max(1, max_pages))
-    endpoint = (settings.CONTRACT_FIELD_AI_ENDPOINT or "").rstrip("/")
-    api_key = settings.CONTRACT_FIELD_AI_API_KEY
-    deployment = (getattr(settings, "CONTRACT_FIELD_AI_DEPLOYMENT", "") or "").strip()
-    api_version = (
-        getattr(settings, "CONTRACT_FIELD_AI_API_VERSION", "") or "2024-08-01-preview"
+    url, headers, model = _chat_completions_target(
+        endpoint=settings.CONTRACT_FIELD_AI_ENDPOINT or "",
+        api_key=settings.CONTRACT_FIELD_AI_API_KEY,
+        deployment=getattr(settings, "CONTRACT_FIELD_AI_DEPLOYMENT", "") or "",
+        api_version=getattr(settings, "CONTRACT_FIELD_AI_API_VERSION", "")
+        or "2024-08-01-preview",
+        model=getattr(settings, "CONTRACT_FIELD_AI_MODEL", _OPENAI_DEFAULT_MODEL)
+        or _OPENAI_DEFAULT_MODEL,
     )
-
-    # Azure OpenAI chat completions path when deployment is set; else OpenAI-style.
-    if deployment:
-        url = (
-            f"{endpoint}/openai/deployments/{deployment}/chat/completions"
-            f"?api-version={api_version}"
-        )
-        headers = {"api-key": api_key, "Content-Type": "application/json"}
-        model = deployment
-    else:
-        url = f"{endpoint}/v1/chat/completions"
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-        }
-        model = getattr(settings, "CONTRACT_FIELD_AI_MODEL", "gpt-4o") or "gpt-4o"
-
-    import urllib.error
-    import urllib.request
 
     all_fields: list[dict[str, Any]] = []
     for page_number in range(1, page_count + 1):
@@ -234,8 +289,21 @@ def suggest_fields_for_pdf(
         try:
             with urllib.request.urlopen(request, timeout=60) as response:  # noqa: S310
                 payload = json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            detail = _http_error_body(exc)
+            logger.warning(
+                "field AI request failed page=%s status=%s body=%s",
+                page_number,
+                exc.code,
+                detail,
+            )
+            raise ValidationError({"form": [_field_ai_http_message(exc.code)]}) from exc
         except urllib.error.URLError as exc:
-            logger.warning("field AI request failed page=%s", page_number)
+            logger.warning(
+                "field AI request failed page=%s reason=%s",
+                page_number,
+                exc.reason,
+            )
             raise ValidationError(
                 {"form": ["Field AI request failed. Try again later."]}
             ) from exc

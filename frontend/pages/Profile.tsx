@@ -127,12 +127,12 @@ export default function Profile() {
         }
       />
 
-      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] lg:gap-x-8">
+      <div className="grid min-w-0 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] lg:gap-x-8">
         <form
           id="profile-form"
           method="post"
           action={routes.profile_submit()}
-          className="order-2 grid content-start gap-6 lg:order-1"
+          className="order-2 grid min-w-0 content-start gap-6 lg:order-1"
           // Delegated: every uncontrolled text input in the sections below
           // reports through here, so no field has to thread a callback.
           onInput={() => setDirty(true)}
@@ -204,7 +204,7 @@ export default function Profile() {
           </FormActionBar>
         </form>
 
-        <aside className="order-1 grid content-start gap-6 lg:order-2">
+        <aside className="order-1 grid min-w-0 content-start gap-6 lg:order-2">
           <div id={SECTION_ANCHORS.photo} className="scroll-mt-24">
             <ProfilePhotoPanel
               headshotUrl={initial.headshotUrl}
@@ -236,6 +236,6 @@ Profile.layout = () =>
           { label: "Your profile", href: routes.profile() },
         ],
       },
-      variant: "standard",
+      variant: "wide",
     },
   ] as const;

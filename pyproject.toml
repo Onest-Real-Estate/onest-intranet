@@ -28,11 +28,14 @@ dependencies = [
     "pyjwt>=2.13.0",
     "reportlab>=5.0.1",
     "pyhanko[opentype]>=0.36.2",
+    "httpx>=0.28.1",
+    "extruct>=0.18.0",
+    "trafilatura>=2.2.0",
 ]
 
 [dependency-groups]
 dev = [
-    "django-silk>=5.5.0",  # SQL profiling (N+1 detection); dev only, see config/settings.py
+    "django-silk>=5.5.0",   # SQL profiling (N+1 detection); dev only, see config/settings.py
     "django-types>=0.24.0",
     "faker>=40.36.0",
     "pytest>=8.3.0",

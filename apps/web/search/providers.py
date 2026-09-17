@@ -6,13 +6,12 @@ function the domain already uses to serve its pages — that is the property tha
 keeps search from becoming the surface where authorization is re-implemented
 slightly differently.
 
-Sources named in the specification that are absent — documents,
-transactions, CRM contacts, policies — have no model behind them yet. They are
-deliberately not registered: a provider over a table that does not exist would
-be a group heading that never returns anything, and inventing one to satisfy a
-checklist is how a registry stops describing reality. They register in the
-commit that ships their domain; ``test_search.py`` asserts every registered
-provider's permission is catalogued and its route reverses.
+Sources named in the specification that are absent — transactions and CRM
+contacts — have no model behind them yet. They are deliberately not
+registered: a provider over a table that does not exist would be a group
+heading that never returns anything. They register in the commit that ships
+their domain; ``test_search.py`` asserts every registered provider's
+permission is catalogued and its route reverses.
 """
 
 from __future__ import annotations
@@ -154,6 +153,29 @@ def search_training(actor: User, query: str, limit: int) -> list[SearchHit]:
     ]
 
 
+def search_documents(actor: User, query: str, limit: int) -> list[SearchHit]:
+    """Current approved documents addressed to this reader."""
+    from apps.documents.services import library_queryset
+
+    rows = search_ranked(
+        library_queryset(actor).select_related("category", "family"),
+        query,
+        fields=("name", "description", "family__key"),
+        trigram_field="name",
+        order=("display_order", "name"),
+    )[:limit]
+    return [
+        SearchHit(
+            id=str(row.pk),
+            title=row.name,
+            href=reverse("document_detail", args=[row.pk]),
+            snippet=snippet_from(row.description, query),
+            meta=row.category.label if row.category else "Documents",
+        )
+        for row in rows
+    ]
+
+
 def search_marketing(actor: User, query: str, limit: int) -> list[SearchHit]:
     """Current approved marketing assets addressed to this reader."""
     from apps.marketing.services import library_queryset
@@ -282,6 +304,15 @@ SEARCH_PROVIDERS: tuple[SearchProvider, ...] = (
         permission="",
         order=25,
         all_results_route="training_learning",
+    ),
+    SearchProvider(
+        key="documents",
+        label="Documents & forms",
+        icon="folder",
+        search=search_documents,
+        permission="",
+        order=26,
+        all_results_route="documents_forms",
     ),
     SearchProvider(
         key="marketing",

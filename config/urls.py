@@ -4,6 +4,10 @@ from django.urls import URLPattern, URLResolver, include, path
 from django.views.generic import RedirectView
 
 urlpatterns: list[URLPattern | URLResolver] = [
+    path(
+        "favicon.ico",
+        RedirectView.as_view(url="/static/favicon.ico", permanent=True),
+    ),
     path("admin/", admin.site.urls),
 ]
 
@@ -33,6 +37,7 @@ urlpatterns += [
     path("", include("apps.training.urls")),
     path("", include("apps.marketing.urls")),
     path("", include("apps.compliance.urls")),
+    path("", include("apps.documents.urls")),
     path("", include("apps.audit.urls")),
     path("", include("apps.reservations.urls")),
 ]

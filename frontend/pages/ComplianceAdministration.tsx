@@ -1,20 +1,15 @@
 import { Head, Link, router, usePage } from "@inertiajs/react";
-import {
-  BadgeCheck,
-  CalendarClock,
-  ClipboardList,
-  Pencil,
-  Plus,
-  ShieldCheck,
-  Tag,
-} from "lucide-react";
+import { ClipboardList, Plus, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 
 import {
   DataTable,
+  type DataTableColumn,
   FilterControls,
   FilterField,
   FormErrorSummary,
+  MetricCard,
+  MetricStrip,
   PageHeader,
   Pagination,
   PanelHeader,
@@ -35,21 +30,22 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { buildListUrl } from "@/lib/list-query";
 import { routes } from "@/lib/routes";
-import type { ComplianceAdministrationPageProps, ComplianceAdminRow } from "@/types";
+import type {
+  ComplianceAdministrationPageProps,
+  ComplianceAdminRow,
+  FilterOption,
+} from "@/types";
 
 const MANAGE = { all: ["web.manage_policies"] };
+const ANY = "__any__";
 
-const FILTER_KEYS = ["status", "category", "office"] as const;
-
-type FilterKey = (typeof FILTER_KEYS)[number];
-
-function formatDate(value: string | null): string {
+function formatDay(value: string | null): string {
   if (!value) {
     return "—";
   }
   return new Date(value).toLocaleDateString(undefined, {
-    year: "numeric",
     month: "short",
     day: "numeric",
   });
@@ -65,44 +61,129 @@ function audienceLabel(row: ComplianceAdminRow): string {
   return `${row.audience[0].label} + ${row.audience.length - 1} more`;
 }
 
+function FilterSelect({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: FilterOption[];
+  onChange: (next: string) => void;
+}) {
+  return (
+    <FilterField label={label} hideLabel>
+      <Select
+        value={value || ANY}
+        onValueChange={(next) => onChange(next === ANY ? "" : next)}
+      >
+        <SelectTrigger size="sm" aria-label={label} className="w-full sm:w-44">
+          <SelectValue placeholder={`Any ${label.toLowerCase()}`} />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={ANY}>Any {label.toLowerCase()}</SelectItem>
+          {options.map((option) => (
+            <SelectItem key={option.value} value={String(option.value)}>
+              {option.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </FilterField>
+  );
+}
+
 function ComplianceAdministrationPage() {
-  const { policies, filterOptions, capabilities, errors } =
+  const { policies, filterOptions, summary, capabilities, errors } =
     usePage<ComplianceAdministrationPageProps>().props;
   const filters = policies.filters;
   const [query, setQuery] = useState(filters.q ?? "");
 
-  function visit(patch: Partial<Record<FilterKey | "q", string>> & { page?: number }) {
+  function visit(next: Partial<typeof filters>, page?: number) {
     router.get(
-      routes.admin_compliance(),
-      {
-        q: query,
-        status: filters.status,
-        category: filters.category,
-        office: filters.office,
-        page: 1,
-        ...patch,
-      },
-      { preserveState: true, preserveScroll: true, replace: true },
-    );
-  }
-
-  function reset() {
-    setQuery("");
-    router.get(
-      routes.admin_compliance(),
+      buildListUrl(routes.admin_compliance(), window.location.search, {
+        page,
+        filters: { ...filters, q: query, ...next },
+      }),
       {},
       { preserveState: true, preserveScroll: true, replace: true },
     );
   }
 
-  const activeCount = FILTER_KEYS.filter((key) => Boolean(filters[key])).length;
+  const activeCount = [filters.status, filters.category, filters.office].filter(
+    Boolean,
+  ).length;
+
+  const columns: DataTableColumn<ComplianceAdminRow>[] = [
+    {
+      id: "title",
+      header: "Policy",
+      cell: (row) => (
+        <span className="grid min-w-0 gap-0.5">
+          <Link
+            href={routes.policy_admin_edit(row.id)}
+            className="hover:text-primary focus-visible:ring-ring truncate rounded-sm font-medium focus-visible:ring-2 focus-visible:outline-none"
+          >
+            {row.title}
+          </Link>
+          <span className="text-muted-foreground truncate text-xs">
+            {row.ownerOffice.name} · {audienceLabel(row)}
+          </span>
+        </span>
+      ),
+    },
+    {
+      id: "status",
+      header: "Status",
+      cell: (row) => (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <StatusBadge
+            status={{
+              label: row.status.label,
+              tone: toStatusTone(row.status.tone),
+            }}
+          />
+          {row.isMandatory ? <Badge variant="outline">Mandatory</Badge> : null}
+        </div>
+      ),
+    },
+    {
+      id: "classification",
+      header: "Classification",
+      cell: (row) => (
+        <span className="grid min-w-0 gap-0.5">
+          <span className="truncate text-sm">
+            {row.category?.label ?? "No category"}
+          </span>
+          <span className="text-muted-foreground text-xs">{row.versionLabel}</span>
+        </span>
+      ),
+      hideBelow: "3xl",
+    },
+    {
+      id: "updated",
+      header: "Edited",
+      cell: (row) => (
+        <span className="grid min-w-0 gap-0.5">
+          <span className="text-muted-foreground text-xs tabular-nums">
+            {formatDay(row.updatedAt)}
+          </span>
+          <span className="text-muted-foreground truncate text-xs">
+            {row.updatedBy || "—"}
+          </span>
+        </span>
+      ),
+      hideBelow: "5xl",
+    },
+  ];
 
   return (
     <div className="grid gap-8">
-      <Head title="Compliance administration" />
+      <Head title="Compliance" />
       <PageHeader
-        title="Compliance administration"
-        description="Draft, review, publish, and retire policies. Saving a draft never reaches anybody — publishing is a separate, deliberate step."
+        title="Compliance"
+        description="Policies in the offices you cover."
         actions={
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" size="sm" asChild>
@@ -125,197 +206,79 @@ function ComplianceAdministrationPage() {
 
       <FormErrorSummary errors={errors} />
 
+      <MetricStrip>
+        <MetricCard label="Draft" value={summary.draft} />
+        <MetricCard label="In review" value={summary.inReview} />
+        <MetricCard label="Published" value={summary.published} />
+      </MetricStrip>
+
       <SurfaceCard>
-        <PanelHeader
-          divided
-          title="Policies in your scope"
-          description="Most recently edited first."
-          meta={
-            <span className="text-muted-foreground text-xs font-medium tabular-nums">
-              {policies.pagination.totalItems}{" "}
-              {policies.pagination.totalItems === 1 ? "policy" : "policies"}
-            </span>
-          }
-        />
+        <PanelHeader divided title="Policies" />
         <SurfaceCardContent className="grid gap-4">
           <FilterControls
             activeCount={activeCount}
-            onReset={reset}
+            onReset={() => {
+              setQuery("");
+              visit({ q: "", status: "", category: "", office: "" }, 1);
+            }}
             leading={
               <SearchControl
                 label="Search policies"
                 value={query}
                 onValueChange={setQuery}
-                onSearch={(next) => visit({ q: next })}
-                onClear={() => visit({ q: "" })}
+                onSearch={(q) => visit({ q }, 1)}
+                onClear={() => {
+                  setQuery("");
+                  visit({ q: "" }, 1);
+                }}
                 placeholder="Title or summary"
               />
             }
           >
-            <FilterField label="Status">
-              <Select
-                value={filters.status || "all"}
-                onValueChange={(next) => visit({ status: next === "all" ? "" : next })}
-              >
-                <SelectTrigger aria-label="Filter by status">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Any status</SelectItem>
-                  {filterOptions.statuses.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </FilterField>
-
-            <FilterField label="Category">
-              <Select
-                value={filters.category || "all"}
-                onValueChange={(next) =>
-                  visit({ category: next === "all" ? "" : next })
-                }
-              >
-                <SelectTrigger aria-label="Filter by category">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Any category</SelectItem>
-                  {filterOptions.categories.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </FilterField>
-
-            <FilterField label="Owning office">
-              <Select
-                value={filters.office || "all"}
-                onValueChange={(next) => visit({ office: next === "all" ? "" : next })}
-              >
-                <SelectTrigger aria-label="Filter by owning office">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Any office</SelectItem>
-                  {filterOptions.offices.map((option) => (
-                    <SelectItem key={option.value} value={String(option.value)}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </FilterField>
+            <FilterSelect
+              label="Status"
+              value={filters.status}
+              options={filterOptions.statuses}
+              onChange={(status) => visit({ status }, 1)}
+            />
+            <FilterSelect
+              label="Category"
+              value={filters.category}
+              options={filterOptions.categories}
+              onChange={(category) => visit({ category }, 1)}
+            />
+            <FilterSelect
+              label="Office"
+              value={filters.office}
+              options={filterOptions.offices.map((option) => ({
+                value: String(option.value),
+                label: option.label,
+              }))}
+              onChange={(office) => visit({ office }, 1)}
+            />
           </FilterControls>
 
           <DataTable
             frame="bleed"
-            caption="Policies you may manage"
+            caption="Policies in your scope"
             rows={policies.items}
             rowKey={(row) => String(row.id)}
-            emptyTitle="No policies match"
-            emptyDescription="Nothing in your scope matches these filters. Clear them, or start a new draft."
-            columns={[
-              {
-                id: "title",
-                header: "Policy",
-                icon: ShieldCheck,
-                cell: (row) => (
-                  <div className="grid min-w-40 gap-0.5 sm:min-w-64">
-                    <span className="truncate font-semibold">{row.title}</span>
-                    <span className="text-muted-foreground truncate text-xs">
-                      {row.ownerOffice.name} · {audienceLabel(row)}
-                    </span>
-                  </div>
-                ),
-              },
-              {
-                id: "status",
-                header: "Status",
-                icon: BadgeCheck,
-                cell: (row) => (
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <StatusBadge
-                      status={{
-                        label: row.status.label,
-                        tone: toStatusTone(row.status.tone),
-                      }}
-                    />
-                    {row.isMandatory ? (
-                      <Badge variant="outline">Mandatory</Badge>
-                    ) : null}
-                  </div>
-                ),
-              },
-              {
-                id: "classification",
-                header: "Classification",
-                icon: Tag,
-                cell: (row) => (
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    {row.category ? (
-                      <Badge variant="outline">{row.category.label}</Badge>
-                    ) : (
-                      <span className="text-muted-foreground text-xs">No category</span>
-                    )}
-                    <span className="text-muted-foreground text-xs">
-                      {row.versionLabel}
-                    </span>
-                  </div>
-                ),
-                hideBelow: "4xl",
-              },
-              {
-                id: "updated",
-                header: "Last edited",
-                icon: CalendarClock,
-                cell: (row) => (
-                  <div className="grid gap-0.5">
-                    <span className="text-sm tabular-nums">
-                      {formatDate(row.updatedAt)}
-                    </span>
-                    <span className="text-muted-foreground truncate text-xs">
-                      {row.updatedBy || "—"}
-                    </span>
-                  </div>
-                ),
-                hideBelow: "5xl",
-              },
-              {
-                id: "actions",
-                header: <span className="sr-only">Actions</span>,
-                cell: (row) => (
-                  <div className="flex items-center justify-end gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      asChild
-                      className="size-8 px-0 sm:h-8 sm:w-auto sm:px-3"
-                    >
-                      <Link href={routes.policy_admin_edit(row.id)}>
-                        <span className="sr-only">Open {row.title}</span>
-                        <span className="hidden sm:inline" aria-hidden>
-                          Open
-                        </span>
-                        <Pencil className="size-3.5" aria-hidden />
-                      </Link>
-                    </Button>
-                  </div>
-                ),
-                className: "text-right",
-                headerClassName: "text-right",
-              },
-            ]}
+            getRowLabel={(row) => row.title}
+            emptyTitle={
+              activeCount > 0 ? "No policies match these filters" : "No policies yet"
+            }
+            emptyDescription={
+              activeCount > 0
+                ? "Reset the filters to see everything in your scope."
+                : "Draft a policy and publish it when it is ready."
+            }
+            columns={columns}
           />
 
           {policies.pagination.totalPages > 1 ? (
             <Pagination
               pagination={policies.pagination}
-              onPageChange={(page) => visit({ page })}
+              onPageChange={(page) => visit({}, page)}
             />
           ) : null}
         </SurfaceCardContent>
@@ -345,12 +308,12 @@ ComplianceAdministration.layout = () =>
     HubLayout,
     {
       context: {
-        title: "Compliance administration",
+        title: "Compliance",
         breadcrumbs: [
           { label: "Dashboard", href: routes.dashboard() },
-          { label: "Compliance administration" },
+          { label: "Compliance" },
         ],
       },
-      variant: "standard",
+      variant: "wide",
     },
   ] as const;
