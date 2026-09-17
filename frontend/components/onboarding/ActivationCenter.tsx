@@ -1,28 +1,16 @@
 import { Link } from "@inertiajs/react";
-import { AlertCircle, CheckCircle2, CircleDashed, CircleSlash } from "lucide-react";
 
 import { DialogFooter } from "@/components/design-system";
+import { NextSteps } from "@/components/onboarding/NextSteps";
 import { OfficeDetails } from "@/components/onboarding/OfficeDetails";
 import { Button } from "@/components/ui/button";
 import { ONBOARDING_COPY } from "@/lib/onboarding/copy";
-import { type NextStepState, nextStepItems } from "@/lib/onboarding/stages";
 import { routes } from "@/lib/routes";
-import { cn } from "@/lib/utils";
-import type { AgentOnboardingJourney, OnboardingOfficeSelection } from "@/types";
-
-const STATE_ICON = {
-  done: CheckCircle2,
-  waiting: CircleDashed,
-  attention: AlertCircle,
-  unavailable: CircleSlash,
-} satisfies Record<NextStepState, unknown>;
-
-const STATE_TONE: Record<NextStepState, string> = {
-  done: "text-success",
-  waiting: "text-muted-foreground",
-  attention: "text-warning-ink",
-  unavailable: "text-muted-foreground",
-};
+import type {
+  AgentActivationGuide,
+  AgentOnboardingJourney,
+  OnboardingOfficeSelection,
+} from "@/types";
 
 /**
  * The released dialog: what is confirmed, who has the case, and what is still
@@ -32,13 +20,15 @@ const STATE_TONE: Record<NextStepState, string> = {
 export function ActivationCenter({
   journey,
   office,
+  guides,
   onContinue,
 }: {
   journey: AgentOnboardingJourney;
   office: OnboardingOfficeSelection | null;
+  /** Per-tool activation guides, already gated server-side. */
+  guides: Record<string, AgentActivationGuide>;
   onContinue: () => void;
 }) {
-  const items = nextStepItems(journey);
   const action = journey.nextAction;
   const handoffFailed = journey.officeHandoff.state === "notification_failed";
 
@@ -53,31 +43,7 @@ export function ActivationCenter({
         </section>
       ) : null}
 
-      <section aria-labelledby="activation-next-heading" className="grid gap-2">
-        <h3 id="activation-next-heading" className="text-sm font-semibold">
-          {ONBOARDING_COPY.activation.nextStepsHeading}
-        </h3>
-        <ul className="divide-border border-border divide-y border-y">
-          {items.map((item) => {
-            const Icon = STATE_ICON[item.state];
-            return (
-              <li key={item.key} className="flex items-start gap-3 py-3">
-                <Icon
-                  aria-hidden
-                  className={cn("mt-0.5 size-4 shrink-0", STATE_TONE[item.state])}
-                />
-                <div className="grid min-w-0 flex-1 gap-0.5">
-                  <span className="text-sm font-medium">{item.label}</span>
-                  <span className="text-muted-foreground text-sm">{item.detail}</span>
-                </div>
-                <span className="text-muted-foreground shrink-0 text-xs font-medium">
-                  {ONBOARDING_COPY.nextSteps.state[item.state]}
-                </span>
-              </li>
-            );
-          })}
-        </ul>
-      </section>
+      <NextSteps journey={journey} guides={guides} />
 
       <DialogFooter>
         {handoffFailed ? (

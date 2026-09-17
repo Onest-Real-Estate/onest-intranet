@@ -178,7 +178,7 @@ it may show; the dialog renders `onboardingJourney` and never infers progress.
 | --- | --- | --- |
 | `onboardingJourney` | Agent journey applies | The canonical journey payload above |
 | `onboardingProfile` | Strict gate active | The profile flow at `?section=` (validated), else the first unfinished section |
-| `onboardingActivation` | Gate released | Lazy: `autoOpen` and the public office summary |
+| `onboardingActivation` | Gate released | Lazy: `autoOpen`, the public office summary, and one activation-guide block per tool |
 
 - **Strict.** No close button, Escape, or outside click. Sign out stays in the
   dialog header and warns over unsaved edits. No deferred widget provider is
@@ -200,9 +200,72 @@ it may show; the dialog renders `onboardingJourney` and never infers progress.
 - **Copy.** Dialog wording lives in `frontend/lib/onboarding/copy.ts`. Status
   wording about handoff, contract, tools, and blockers comes from the journey
   payload, so the client never claims delivery the server has not recorded.
-- **Next steps.** `frontend/lib/onboarding/stages.ts` composes the list from
-  `NEXT_STEP_SOURCES`. A new milestone adds one source function over the
-  journey payload; the profile form and access policy do not change.
+- **Next steps.** `frontend/lib/onboarding/next-steps.ts` composes the list from
+  `NEXT_STEP_SOURCES`; `stages.ts` keeps only the three-stage rail. A new
+  milestone adds one source function over the journey payload, and a new *tool*
+  adds nothing at all — it arrives as a catalog row. The profile form and
+  access policy do not change.
+
+## Next steps: inbox, contract, and activation guides
+
+The released dialog answers three questions: who has the case, what to watch
+for, and what the agent can do now.
+
+**The inbox.** `invitationInbox` carries the address invitations are sent to,
+the follow-up interval (`INVITATION_FOLLOW_UP_HOURS`, 48), whether one is
+overdue, and the support path. The Hub cannot see an Outlook mailbox, so it
+never says "you have received the link": it reports that an authorized
+administrator recorded a send, and offers a support path once a recorded send
+is older than the interval and the tool is still not ready. An invitation
+nobody has sent yet is never called overdue — that is the office's step. The
+guidance never asks for an invitation link, code, or password.
+
+**The contract.** `contract.state` is source-derived. `not_started` means the
+contract source answered and there is nothing yet ("Waiting for your office
+administrator"); `unavailable` is reserved for a source that could not answer,
+and only that one raises a blocker. `sent` offers `my_contract`; `blocked` and
+`unavailable` offer IT Support. The payload carries the agent's own half only —
+commission terms, internal notes, and template versions stay behind the
+contract page's field permissions.
+
+**Activation guides.** A tool's "Watch how to activate X" appears only when
+that tool's own invitation is recorded as sent — SkySlope's send never reveals
+the Lofty guide. A self-serve tool has nothing to wait for, and a tool already
+ready keeps its guide replayable.
+
+| Guide state | Means | Row shows |
+| --- | --- | --- |
+| `locked` | This tool's invitation is not recorded as sent | No button, and a line saying what unlocks it |
+| `available` | Unlocked, with a visible playable guide | "Watch how to activate X" → `training_detail` |
+| `completed` | The agent finished it | "Watch again", plus a finished note |
+| `unavailable` | Unlocked, no offerable guide | Vendor help, else the tool's request path |
+| `not_applicable` | Somebody switched the tool off for this agent | Nothing |
+
+`apps.training.tool_guides` resolves a guide from `content_type=tool_onboarding`
+matched on the catalog's stable `tool_code`, through the same
+`visible_training_content` predicate the library uses — published, inside its
+window, addressed to this reader. It must also be **playable** (a ready primary
+recording or an approved embed) and **current** (the highest visible version in
+the lowest-ordered family), so un-publishing a replacement falls back to the
+version before it rather than to nothing. `apps.user.services.onboarding_guides`
+applies the unlock and serializes id, wording, and the typed route — never a
+media URL, a storage key, or an audience.
+
+Guides resolve in `activation_center_props` only, for the one agent reading
+them. They are deliberately not on the journey payload: `journey_for_user` runs
+in middleware on every request, and a training query there would be paid by
+every page in the Hub.
+
+Finishing a guide writes `TrainingProgress` and means only that the agent
+watched it. A vendor account becomes ready when the tool lifecycle says so, and
+only an authorized administrator moves that.
+
+**Administering the content.** Nothing here is seeded with a video URL. An
+administrator creates a `tool_onboarding` item, picks the tool from the live
+catalog in the training workspace, and attaches a recording or embed; publishing
+one without either is refused. Transcripts and captions ride the existing
+training media contract, and a later version supersedes the guide it replaces
+under the documented version policy.
 
 ## Query and privacy contract
 

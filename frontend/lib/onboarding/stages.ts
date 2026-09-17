@@ -5,9 +5,7 @@ import type { AgentOnboardingJourney } from "@/types";
  * What the onboarding dialog shows, derived only from the canonical journey.
  *
  * Three stages summarize the server's milestones; nothing here decides a
- * milestone. `nextStepItems` reads a list of sources so a later module
- * (equipment, orientation, acknowledgements) adds one source function and
- * appears under Next steps without touching the profile form or access policy.
+ * milestone. The rows under the last stage live in `next-steps.ts`.
  */
 
 export type SetupStageCode = "profile" | "office" | "next_steps";
@@ -48,99 +46,4 @@ export function setupStages(journey: AgentOnboardingJourney): SetupStage[] {
     },
     { code: "next_steps", label: ONBOARDING_COPY.stages.nextSteps, ...nextSteps },
   ];
-}
-
-export type NextStepState = "done" | "waiting" | "attention" | "unavailable";
-
-export interface NextStepItem {
-  key: string;
-  label: string;
-  state: NextStepState;
-  detail: string;
-}
-
-export type NextStepSource = (journey: AgentOnboardingJourney) => NextStepItem[];
-
-const officeHandoff: NextStepSource = (journey) => {
-  const { state, message } = journey.officeHandoff;
-  return [
-    {
-      key: "office-handoff",
-      label: ONBOARDING_COPY.nextSteps.officeHandoff,
-      state:
-        state === "notified"
-          ? "done"
-          : state === "notification_failed"
-            ? "attention"
-            : "waiting",
-      detail: message,
-    },
-  ];
-};
-
-const contract: NextStepSource = (journey) => {
-  const { state, label } = journey.contract;
-  return [
-    {
-      key: "contract",
-      label: ONBOARDING_COPY.nextSteps.contract,
-      state:
-        state === "active" || state === "signed"
-          ? "done"
-          : state === "blocked"
-            ? "attention"
-            : state === "unavailable"
-              ? "unavailable"
-              : "waiting",
-      detail: label,
-    },
-  ];
-};
-
-const tools: NextStepSource = (journey) => {
-  if (journey.toolsSource === "unavailable") {
-    return [
-      {
-        key: "tools",
-        label: ONBOARDING_COPY.nextSteps.tools,
-        state: "unavailable",
-        detail: ONBOARDING_COPY.nextSteps.toolsUnavailable,
-      },
-    ];
-  }
-  // Catalog-driven: every tool renders the same way, whatever the vendor.
-  return journey.tools.map((tool) => ({
-    key: `tool-${tool.key}`,
-    label: tool.label,
-    state: tool.complete
-      ? "done"
-      : tool.status === "blocked"
-        ? "attention"
-        : tool.status === "unavailable"
-          ? "unavailable"
-          : "waiting",
-    detail: tool.invitationState === "sent" ? tool.invitationLabel : tool.statusLabel,
-  }));
-};
-
-const blockers: NextStepSource = (journey) =>
-  journey.blockers.map((blocker) => ({
-    key: `blocker-${blocker.key}`,
-    label: ONBOARDING_COPY.nextSteps.blocker,
-    state: "attention",
-    detail: blocker.message,
-  }));
-
-export const NEXT_STEP_SOURCES: readonly NextStepSource[] = [
-  officeHandoff,
-  contract,
-  tools,
-  blockers,
-];
-
-export function nextStepItems(
-  journey: AgentOnboardingJourney,
-  sources: readonly NextStepSource[] = NEXT_STEP_SOURCES,
-): NextStepItem[] {
-  return sources.flatMap((source) => source(journey));
 }

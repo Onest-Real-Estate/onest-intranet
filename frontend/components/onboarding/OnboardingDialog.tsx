@@ -177,6 +177,7 @@ export function OnboardingDialog({
           <ActivationCenter
             journey={journey}
             office={page.onboardingActivation?.office ?? null}
+            guides={page.onboardingActivation?.guides ?? {}}
             onContinue={() => onOpenChange(false)}
           />
         )}

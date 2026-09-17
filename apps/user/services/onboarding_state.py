@@ -31,6 +31,12 @@ from apps.user.services.role_assignments import (
     has_effective_permission,
 )
 
+#: How long an agent waits on a vendor invitation email before the Hub offers a
+#: support path. The Hub cannot see the agent's Outlook inbox, so this is the
+#: only honest trigger it has: the office recorded a send this long ago and the
+#: tool is still not ready.
+INVITATION_FOLLOW_UP_HOURS = 48
+
 VIEW_PERMISSION = "web.view_new_agents"
 MANAGE_PERMISSION = "web.manage_new_agent_onboarding"
 NEW_AGENT_WINDOW_DAYS = 90
@@ -71,6 +77,10 @@ class OfficeJourneyStatus(StrEnum):
 
 
 class ContractJourneyStatus(StrEnum):
+    #: The contract source answered, and there is no contract for this agent
+    #: yet. Distinct from ``UNAVAILABLE``: the office has work to do, and the
+    #: agent has somebody to chase rather than a broken integration.
+    NOT_STARTED = "not_started"
     GENERATED = "generated"
     SENT = "sent"
     SIGNED = "signed"
@@ -180,6 +190,16 @@ class JourneyToolState:
     #: fact activation and training read, rather than inferring it from a note.
     invitation_sent_at: datetime | None = None
     updated_by_label: str = ""
+    #: The catalog's own fallbacks, carried so a surface with no activation
+    #: guide still has somewhere to send the agent. Free from the tool row that
+    #: is already loaded; never a second query.
+    help_url: str = ""
+    request_path: str = ""
+    contact_label: str = ""
+    #: False when somebody switched this tool off for this agent. ``complete``
+    #: alone cannot say so — a not-needed tool counts as settled — and an
+    #: activation guide for a tool nobody will use is noise.
+    applicable: bool = True
 
 
 @dataclass(frozen=True)
@@ -202,6 +222,11 @@ class AgentOnboardingJourney:
     contract_status: ContractJourneyStatus
     contract_updated_at: datetime | None
     tools: ToolOnboardingState
+    #: Where vendor invitations are sent, and whether one is overdue enough to
+    #: offer a support path. The address travels because "check your inbox" is
+    #: useless without saying which inbox.
+    invitation_email: str
+    invitation_overdue: bool
     required_setup_complete: bool
     activation_complete: bool
     current_step: JourneyStep
@@ -855,6 +880,16 @@ def _compose_journey(
     required_tools_complete = all(
         item.complete for item in tools.items if item.required
     )
+    # Overdue keys off a *recorded send*, never off waiting in general. An
+    # invitation the office has not sent yet is the office's step, and telling
+    # the agent to chase their inbox for it would be a lie.
+    follow_up_before = timezone.now() - timedelta(hours=INVITATION_FOLLOW_UP_HOURS)
+    invitation_overdue = any(
+        item.invitation_sent_at is not None
+        and item.invitation_sent_at <= follow_up_before
+        and not item.complete
+        for item in tools.items
+    )
     activation_complete = bool(
         required_setup_complete
         and handoff_status == UserOnboardingCase.OfficeHandoffState.NOTIFIED
@@ -918,6 +953,8 @@ def _compose_journey(
         contract_status=contract.journey_status,
         contract_updated_at=contract.active.updated_at,
         tools=tools,
+        invitation_email=user.email,
+        invitation_overdue=invitation_overdue,
         required_setup_complete=required_setup_complete,
         activation_complete=activation_complete,
         current_step=current_step,
@@ -1225,17 +1262,7 @@ def agent_journey_payload(journey: AgentOnboardingJourney) -> dict[str, Any]:
             },
         },
         "contract": {
-            **_journey_status_payload(
-                journey.contract_status,
-                {
-                    ContractJourneyStatus.GENERATED: "Generated",
-                    ContractJourneyStatus.SENT: "Sent",
-                    ContractJourneyStatus.SIGNED: "Signed",
-                    ContractJourneyStatus.ACTIVE: "Active",
-                    ContractJourneyStatus.BLOCKED: "Blocked",
-                    ContractJourneyStatus.UNAVAILABLE: "Unavailable",
-                },
-            ),
+            **_contract_journey_payload(journey.contract_status),
             "updatedAt": (
                 journey.contract_updated_at.isoformat()
                 if journey.contract_updated_at
@@ -1264,10 +1291,24 @@ def agent_journey_payload(journey: AgentOnboardingJourney) -> dict[str, Any]:
                     else None
                 ),
                 "complete": item.complete,
+                "applicable": item.applicable,
                 "updatedAt": item.updated_at.isoformat() if item.updated_at else None,
+                # Fallbacks, for a row whose activation guide is missing.
+                "helpUrl": item.help_url,
+                "requestPath": item.request_path,
+                "contact": item.contact_label,
             }
             for item in journey.tools.items
         ],
+        # What the agent watches, and where. The Hub never claims a delivery it
+        # cannot see: it reports the address an invitation goes to and whether a
+        # recorded send is old enough to be worth chasing.
+        "invitationInbox": {
+            "email": journey.invitation_email,
+            "followUpHours": INVITATION_FOLLOW_UP_HOURS,
+            "overdue": journey.invitation_overdue,
+            "supportHref": reverse("it_support"),
+        },
         "requiredSetupComplete": journey.required_setup_complete,
         "activationComplete": journey.activation_complete,
         "strictGateActive": not journey.required_setup_complete,
@@ -1276,6 +1317,73 @@ def agent_journey_payload(journey: AgentOnboardingJourney) -> dict[str, Any]:
         "version": journey.version,
         "updatedAt": journey.updated_at.isoformat(),
         "blockers": list(journey.blockers),
+    }
+
+
+#: The agent's own half of the contract story: the state, wording that claims
+#: nothing the source has not recorded, and where to go about it. Admin-only
+#: detail — commission terms, internal notes, template versions — never appears
+#: here; the contract page applies its own field permissions.
+_CONTRACT_PRESENTATION: dict[
+    ContractJourneyStatus, tuple[str, str, str | None, str]
+] = {
+    ContractJourneyStatus.NOT_STARTED: (
+        "Waiting for your office administrator",
+        "Your office administrator prepares your agent contract after your "
+        "handoff. Nothing is needed from you yet.",
+        None,
+        "",
+    ),
+    ContractJourneyStatus.GENERATED: (
+        "Being prepared",
+        "Your contract has been drafted. Your office sends it for signature "
+        "once it is ready.",
+        None,
+        "",
+    ),
+    ContractJourneyStatus.SENT: (
+        "Ready for review and signature",
+        "Your agent contract is ready. Review it and sign in the Hub.",
+        "my_contract",
+        "Review and sign",
+    ),
+    ContractJourneyStatus.SIGNED: (
+        "Signed",
+        "You signed your contract. Your office activates it next.",
+        "my_contract",
+        "View your contract",
+    ),
+    ContractJourneyStatus.ACTIVE: (
+        "Active",
+        "Your agent contract is active.",
+        "my_contract",
+        "View your contract",
+    ),
+    ContractJourneyStatus.BLOCKED: (
+        "Needs attention",
+        "Your contract needs administrator attention. Raise a support request "
+        "so somebody can correct it.",
+        "it_support",
+        "Contact IT Support",
+    ),
+    ContractJourneyStatus.UNAVAILABLE: (
+        "Unavailable",
+        "Contract status is not available right now. Raise a support request "
+        "if this does not clear.",
+        "it_support",
+        "Contact IT Support",
+    ),
+}
+
+
+def _contract_journey_payload(status: ContractJourneyStatus) -> dict[str, Any]:
+    label, detail, route_name, action_label = _CONTRACT_PRESENTATION[status]
+    return {
+        "state": str(status),
+        "label": label,
+        "detail": detail,
+        "actionHref": reverse(route_name) if route_name else None,
+        "actionLabel": action_label or None,
     }
 
 

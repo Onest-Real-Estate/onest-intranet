@@ -34,6 +34,7 @@ from apps.training.taxonomy import (
     COMPLETION_FILTER_CODES,
     CONTENT_TYPE_CODES,
     CONTENT_TYPE_RECORDING,
+    CONTENT_TYPE_TOOL_ONBOARDING,
     CONTENT_TYPE_VIDEO,
     LIBRARY_VIEW_ALL,
     LIBRARY_VIEW_CODES,
@@ -53,7 +54,12 @@ _SCOPE_LABELS = {
     "office": "Office",
 }
 
-_VIDEO_TYPES = frozenset({CONTENT_TYPE_VIDEO, CONTENT_TYPE_RECORDING})
+#: Types whose whole point is something to watch. Publishing one without a
+#: ready recording or an approved embed ships a play button that opens
+#: nothing — and for a tool onboarding guide, an activation step that dead-ends.
+_VIDEO_TYPES = frozenset(
+    {CONTENT_TYPE_VIDEO, CONTENT_TYPE_RECORDING, CONTENT_TYPE_TOOL_ONBOARDING}
+)
 
 
 def visible_queryset(user: User, *, now=None) -> QuerySet[TrainingContent]:
@@ -219,7 +225,7 @@ def validation_debt(content: TrainingContent) -> list[tuple[str, Any]]:
                     _("Add a video embed or upload a recording before publishing."),
                 )
             )
-    if content.content_type == "tool_onboarding" and not content.tool_code:
+    if content.content_type == CONTENT_TYPE_TOOL_ONBOARDING and not content.tool_code:
         debt.append(("tool_code", _("Choose the tool this onboarding covers.")))
     if content.content_type == CONTENT_TYPE_QUIZ and not quiz_is_configured(content):
         debt.append(

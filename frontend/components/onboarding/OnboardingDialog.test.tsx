@@ -67,9 +67,22 @@ function strictJourney(): AgentOnboardingJourney {
       message: "We are recording the handoff to your office administrator.",
       delivery: { state: "pending", label: "Pending", channels: [] },
     },
-    contract: { state: "unavailable", label: "Unavailable", updatedAt: null },
+    contract: {
+      state: "unavailable",
+      label: "Unavailable",
+      detail: "Contract status is not available right now.",
+      actionHref: "/support/it",
+      actionLabel: "Contact IT Support",
+      updatedAt: null,
+    },
     toolsSource: "available",
     tools: [],
+    invitationInbox: {
+      email: "agent@onest.realestate",
+      followUpHours: 48,
+      overdue: false,
+      supportHref: "/support/it",
+    },
     requiredSetupComplete: false,
     activationComplete: false,
     strictGateActive: true,
@@ -103,7 +116,11 @@ function tool(overrides: Partial<AgentJourneyTool> = {}): AgentJourneyTool {
     invitationLabel: "Invitation sent by your office",
     invitationSentAt: "2026-08-19T10:00:00-04:00",
     complete: false,
+    applicable: true,
     updatedAt: null,
+    helpUrl: "",
+    requestPath: "",
+    contact: "IT support",
     ...overrides,
   };
 }
@@ -122,7 +139,14 @@ function releasedJourney(
       recipient: { name: "Avery Admin" },
       message: "We notified Avery Admin. Their onboarding workspace is ready.",
     },
-    contract: { state: "generated", label: "Generated", updatedAt: null },
+    contract: {
+      state: "generated",
+      label: "Being prepared",
+      detail: "Your contract has been drafted.",
+      actionHref: null,
+      actionLabel: null,
+      updatedAt: null,
+    },
     tools: [tool()],
     requiredSetupComplete: true,
     strictGateActive: false,
@@ -326,7 +350,7 @@ describe("Onboarding dialog under the strict gate", () => {
     const { rerender } = render(<Dashboard />);
     setPage({
       onboardingJourney: releasedJourney(),
-      onboardingActivation: { autoOpen: true, office: OFFICE },
+      onboardingActivation: { autoOpen: true, office: OFFICE, guides: {} },
     });
     rerender(<Dashboard />);
 
@@ -351,7 +375,7 @@ describe("Activation center after release", () => {
     const user = userEvent.setup();
     setPage({
       onboardingJourney: releasedJourney(),
-      onboardingActivation: { autoOpen: true, office: OFFICE },
+      onboardingActivation: { autoOpen: true, office: OFFICE, guides: {} },
     });
     render(<Dashboard />);
 
@@ -378,7 +402,7 @@ describe("Activation center after release", () => {
   it("stays closed when the server did not ask, leaving the quiet status entry", () => {
     setPage({
       onboardingJourney: releasedJourney(),
-      onboardingActivation: { autoOpen: false, office: OFFICE },
+      onboardingActivation: { autoOpen: false, office: OFFICE, guides: {} },
     });
     render(<Dashboard />);
 
@@ -401,7 +425,7 @@ describe("Activation center after release", () => {
           }),
         ],
       }),
-      onboardingActivation: { autoOpen: true, office: null },
+      onboardingActivation: { autoOpen: true, office: null, guides: {} },
     });
     render(<Dashboard />);
 
@@ -411,7 +435,7 @@ describe("Activation center after release", () => {
       .map((item) => item.textContent);
     expect(steps).toEqual([
       "Office handoffWe notified Avery Admin. Their onboarding workspace is ready.Done",
-      "Agent contractGeneratedWaiting",
+      "Agent contractBeing preparedYour contract has been drafted.Waiting",
       "Brokerage CRMInvitation sent by your officeWaiting",
       "Transaction platformWaiting for your officeWaiting",
     ]);
@@ -427,7 +451,7 @@ describe("Activation center after release", () => {
     };
     setPage({
       onboardingJourney: failed,
-      onboardingActivation: { autoOpen: true, office: null },
+      onboardingActivation: { autoOpen: true, office: null, guides: {} },
     });
     render(<Dashboard />);
 
@@ -444,7 +468,7 @@ describe("Activation center after release", () => {
   it("has no detectable accessibility violations", async () => {
     setPage({
       onboardingJourney: releasedJourney(),
-      onboardingActivation: { autoOpen: true, office: OFFICE },
+      onboardingActivation: { autoOpen: true, office: OFFICE, guides: {} },
     });
     render(<Dashboard />);
     expect(await axe(document.body)).toHaveNoViolations();
