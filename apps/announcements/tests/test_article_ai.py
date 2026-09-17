@@ -149,3 +149,38 @@ def test_article_ai_http_message_covers_busy_statuses():
     assert "busy" in _article_ai_http_message(503).lower()
     assert "rate-limited" in _article_ai_http_message(429).lower()
     assert "Field AI" not in _article_ai_http_message(500)
+
+
+def test_parse_json_payload_accepts_markdown_fences_and_aliases():
+    from apps.announcements.article_ai import _parse_json_payload
+
+    fenced = _parse_json_payload(
+        '```json\n{"teaser": "Rates held steady.", "digest": "Lenders paused."}\n```'
+    )
+    assert fenced["teaser"] == "Rates held steady."
+    assert fenced["digest"] == "Lenders paused."
+
+    aliased = _parse_json_payload(
+        '{"summary": "Rates held steady.", "body": "Lenders paused for now."}'
+    )
+    assert aliased["teaser"] == "Rates held steady."
+    assert aliased["digest"] == "Lenders paused for now."
+
+
+def test_message_content_joins_list_parts():
+    from apps.announcements.article_ai import _message_content
+
+    text = _message_content(
+        {
+            "choices": [
+                {
+                    "message": {
+                        "content": [
+                            {"type": "text", "text": '{"teaser":"A","digest":"B"}'}
+                        ]
+                    }
+                }
+            ]
+        }
+    )
+    assert '"teaser"' in text

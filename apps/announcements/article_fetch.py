@@ -12,6 +12,7 @@ import re
 import time
 import uuid
 from dataclasses import dataclass
+from html import unescape
 from typing import Any
 from urllib.parse import urlparse
 
@@ -282,7 +283,8 @@ def _first_str(*values: Any) -> str:
 
 
 def _truncate(text: str, limit: int) -> str:
-    cleaned = re.sub(r"\s+", " ", (text or "")).strip()
+    # Pages often store titles as HTML entities (Didn&#39;t); authors need plain text.
+    cleaned = re.sub(r"\s+", " ", unescape(text or "")).strip()
     if len(cleaned) <= limit:
         return cleaned
     return cleaned[: limit - 1].rstrip() + "…"

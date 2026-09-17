@@ -40,6 +40,18 @@ def test_rejects_http_and_credentials_and_private_hosts():
         validate_fetch_url("https://example.com:8443/story")
 
 
+def test_metadata_decodes_html_entities_for_authors():
+    from apps.announcements.article_fetch import _truncate
+
+    assert (
+        _truncate("No, The Fed Didn&#39;t Hike Mortgage Rates Today", 180)
+        == "No, The Fed Didn't Hike Mortgage Rates Today"
+    )
+    assert (
+        _truncate("Rates &amp; fees &#8220;held&#8221;", 180) == "Rates & fees “held”"
+    )
+
+
 def test_rejects_when_dns_returns_private_address():
     with (
         patch(

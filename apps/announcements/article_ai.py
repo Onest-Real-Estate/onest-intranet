@@ -125,6 +125,10 @@ def _parse_json_payload(raw: str) -> dict[str, str]:
     text = (raw or "").strip()
     if not text:
         return {}
+    # Models often wrap JSON in a markdown fence despite "JSON only".
+    fence = re.match(r"^```(?:json)?\s*(.*?)\s*```$", text, re.DOTALL | re.IGNORECASE)
+    if fence:
+        text = fence.group(1).strip()
     try:
         data = json.loads(text)
     except json.JSONDecodeError:
@@ -139,7 +143,33 @@ def _parse_json_payload(raw: str) -> dict[str, str]:
         return {}
     teaser = data.get("teaser") if isinstance(data.get("teaser"), str) else ""
     digest = data.get("digest") if isinstance(data.get("digest"), str) else ""
+    # Some providers use alternate keys; accept them rather than fail the author.
+    if not teaser and isinstance(data.get("summary"), str):
+        teaser = data["summary"]
+    if not digest and isinstance(data.get("body"), str):
+        digest = data["body"]
     return {"teaser": teaser.strip(), "digest": digest.strip()}
+
+
+def _message_content(payload: dict[str, Any]) -> str:
+    """Pull assistant text from OpenAI-compatible chat responses."""
+    try:
+        content = payload["choices"][0]["message"]["content"]
+    except (KeyError, IndexError, TypeError):
+        return ""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts: list[str] = []
+        for part in content:
+            if isinstance(part, str):
+                parts.append(part)
+            elif isinstance(part, dict):
+                text = part.get("text")
+                if isinstance(text, str):
+                    parts.append(text)
+        return "".join(parts)
+    return ""
 
 
 def _call_chat(extract_text: str, *, title: str, publisher: str) -> dict[str, str]:
@@ -160,7 +190,7 @@ def _call_chat(extract_text: str, *, title: str, publisher: str) -> dict[str, st
     body: dict[str, Any] = {
         "model": model,
         "temperature": 0.2,
-        "max_tokens": 500,
+        "max_tokens": 800,
         "messages": [
             {"role": "system", "content": _SYSTEM_PROMPT},
             {"role": "user", "content": user_content},
@@ -191,12 +221,14 @@ def _call_chat(extract_text: str, *, title: str, publisher: str) -> dict[str, st
             {"form": ["AI summary is unavailable right now. Try again later."]}
         ) from exc
 
-    content = ""
-    try:
-        content = payload["choices"][0]["message"]["content"]
-    except (KeyError, IndexError, TypeError):
-        content = ""
-    return _parse_json_payload(content if isinstance(content, str) else "")
+    content = _message_content(payload if isinstance(payload, dict) else {})
+    parsed = _parse_json_payload(content)
+    if not parsed.get("teaser") or not parsed.get("digest"):
+        logger.warning(
+            "announcement article AI returned unusable copy preview=%r",
+            (content or "")[:400],
+        )
+    return parsed
 
 
 def summarize_article(user, extract_token: str) -> dict[str, Any]:
