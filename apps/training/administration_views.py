@@ -212,7 +212,7 @@ def workspace_props(
         else ""
     )
     return {
-        "content": detail_payload(content) if content else None,
+        "content": detail_payload(content, actor=actor) if content else None,
         "officeOptions": [
             {"value": office_row.pk, "label": office_row.name}
             for office_row in publishable_office_queryset(actor)
@@ -716,6 +716,39 @@ def training_progress_correct(request: HttpRequest, content_id: int):
                 status=status_value,
                 reason=reason,
             )
+    except ValidationError as exc:
+        return _render_workspace(
+            request, content=content, errors=_validation_payload(exc), status=422
+        )
+    except PermissionDenied:
+        raise
+    return redirect("training_edit", content_id=content.pk)
+
+
+@enforce_policy("training_certificate_issue")
+@require_POST
+def training_certificate_issue(request: HttpRequest, content_id: int):
+    from apps.training.certificate_service import issue_certificate
+
+    actor = cast(User, request.user)
+    content = _target(request, content_id)
+    raw_learner = (request.POST.get("learnerId") or "").strip()
+    if not raw_learner.isdigit():
+        return _render_workspace(
+            request,
+            content=content,
+            errors={"fields": {"learnerId": ["Choose a learner."]}, "form": []},
+            status=422,
+        )
+    learner = get_object_or_404(User, pk=int(raw_learner))
+    force = (request.POST.get("force") or "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    try:
+        issue_certificate(actor=actor, content=content, learner=learner, force=force)
     except ValidationError as exc:
         return _render_workspace(
             request, content=content, errors=_validation_payload(exc), status=422

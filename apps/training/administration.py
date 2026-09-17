@@ -1030,7 +1030,10 @@ def admin_row(content: TrainingContent, *, now=None) -> dict[str, Any]:
     }
 
 
-def detail_payload(content: TrainingContent, *, now=None) -> dict[str, Any]:
+def detail_payload(
+    content: TrainingContent, *, actor: User, now=None
+) -> dict[str, Any]:
+    from apps.training.certificate_service import certificates_workspace_payload
     from apps.training.course_service import admin_modules_payload
     from apps.training.quiz_service import admin_quiz_payload
     from apps.training.session_service import admin_session_payload
@@ -1049,6 +1052,7 @@ def detail_payload(content: TrainingContent, *, now=None) -> dict[str, Any]:
         "validation": validation_debt_payload(content),
         "history": publication_history(content),
         "usage": usage_payload(content),
+        "certificates": certificates_workspace_payload(actor, content),
         "media": admin_media_payload(content),
         "mediaHref": f"/operations/training/{content.pk}/media",
         "versionFamily": str(content.version_family),

@@ -92,6 +92,12 @@ function detail(overrides: Partial<TrainingAdminDetail> = {}): TrainingAdminDeta
       inProgress: 0,
       notStarted: 0,
     },
+    certificates: {
+      learners: [],
+      eligibleCount: 0,
+      issuedCount: 0,
+      capped: false,
+    },
     mediaHref: "/operations/training/1/media",
   };
   return { ...base, ...overrides };
@@ -342,5 +348,69 @@ describe("TrainingWorkspace", () => {
 
     expect(screen.getByRole("heading", { name: "Quiz" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Save quiz" })).not.toBeInTheDocument();
+  });
+
+  it("shows certificates panel and posts Issue for a completed learner", async () => {
+    const user = userEvent.setup();
+    setPage({
+      content: detail({
+        certificates: {
+          eligibleCount: 1,
+          issuedCount: 0,
+          capped: false,
+          learners: [
+            {
+              id: 42,
+              name: "Alex Agent",
+              email: "alex@example.com",
+              officeName: "Fairfax VA",
+              completedAt: "2026-09-01T12:00:00Z",
+              certificate: null,
+            },
+          ],
+        },
+      }),
+    });
+    render(<TrainingWorkspace />);
+
+    expect(
+      screen.getByRole("heading", { name: "Certificates of completion" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Alex Agent")).toBeInTheDocument();
+    expect(screen.getByText("Not issued")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Issue" }));
+
+    expect(routerPost).toHaveBeenCalledWith(
+      "/operations/training/1/certificates/issue",
+      { learnerId: 42 },
+      expect.objectContaining({ preserveScroll: true }),
+    );
+  });
+
+  it("shows Issued without an Issue button once the certificate is available", () => {
+    setPage({
+      content: detail({
+        certificates: {
+          eligibleCount: 1,
+          issuedCount: 1,
+          capped: false,
+          learners: [
+            {
+              id: 42,
+              name: "Alex Agent",
+              email: "alex@example.com",
+              officeName: "Fairfax VA",
+              completedAt: "2026-09-01T12:00:00Z",
+              certificate: { status: "approved", available: true },
+            },
+          ],
+        },
+      }),
+    });
+    render(<TrainingWorkspace />);
+
+    expect(screen.getByText("Issued")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Reissue" })).toBeInTheDocument();
   });
 });

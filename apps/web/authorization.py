@@ -1291,6 +1291,18 @@ ROUTE_POLICIES: dict[str, AuthorizationPolicy] = {
         route_names=("training_certificate",),
         scope_rule="training_audience_scope",
     ),
+    "training_certificate_verify": AuthorizationPolicy(
+        key="training_certificate_verify",
+        access="public",
+        description=(
+            "Public verification of a training certificate by QR / UUID "
+            "(HTML page or JSON for external providers)."
+        ),
+        methods=("GET",),
+        route_names=("training_certificate_verify",),
+        allow_incomplete_profile=True,
+        auth_behavior="json",
+    ),
     "training_quiz_save": AuthorizationPolicy(
         key="training_quiz_save",
         access="permission_protected",
@@ -1327,6 +1339,18 @@ ROUTE_POLICIES: dict[str, AuthorizationPolicy] = {
         ),
         methods=("POST",),
         route_names=("training_progress_correct",),
+        all_permissions=("web.manage_training",),
+        scope_rule="office_tree_scope",
+    ),
+    "training_certificate_issue": AuthorizationPolicy(
+        key="training_certificate_issue",
+        access="permission_protected",
+        description=(
+            "Issue a certificate of completion to a scoped learner who has "
+            "completed the training."
+        ),
+        methods=("POST",),
+        route_names=("training_certificate_issue",),
         all_permissions=("web.manage_training",),
         scope_rule="office_tree_scope",
     ),

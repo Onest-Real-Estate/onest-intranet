@@ -3172,6 +3172,15 @@ export interface TrainingCertificatePayload {
   downloadUrl: string | null;
 }
 
+export interface TrainingCertificateLearner {
+  id: number;
+  name: string;
+  email: string;
+  officeName: string;
+  completedAt: string | null;
+  certificate: { status: string; available: boolean } | null;
+}
+
 export interface TrainingCourseRollup {
   total: number;
   completed: number;
@@ -3352,6 +3361,12 @@ export interface TrainingAdminDetail extends TrainingAdminRow {
     completed: number;
     inProgress: number;
     notStarted: number;
+  };
+  certificates: {
+    learners: TrainingCertificateLearner[];
+    eligibleCount: number;
+    issuedCount: number;
+    capped: boolean;
   };
   mediaHref: string;
   quiz?: {
