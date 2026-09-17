@@ -29,7 +29,6 @@ from apps.announcements.article_fetch import (
 from apps.contract.field_ai import (
     _OPENAI_DEFAULT_MODEL,
     _chat_completions_target,
-    _field_ai_http_message,
     _http_error_body,
     field_ai_configured,
 )
@@ -68,6 +67,23 @@ class ArticleAiError(ValidationError):
 
 class RateLimited(ValidationError):
     """The actor has asked too often inside the window."""
+
+
+def _article_ai_http_message(status: int) -> str:
+    """User-facing copy for announcement digests — not Field AI branding."""
+    if status in {401, 403}:
+        return "AI summary rejected the API key. Check CONTRACT_FIELD_AI_*."
+    if status == 404:
+        return (
+            "AI summary model was not found. Set CONTRACT_FIELD_AI_MODEL to a "
+            "current model (for Gemini, gemini-3.6-flash)."
+        )
+    if status in {429, 503}:
+        return (
+            "The AI provider is busy or rate-limited. "
+            "Try Generate summary again in a moment, or write the copy manually."
+        )
+    return "AI summary is unavailable right now. Try again later."
 
 
 def _rate_key(user) -> str:
@@ -168,7 +184,7 @@ def _call_chat(extract_text: str, *, title: str, publisher: str) -> dict[str, st
             exc.code,
             detail,
         )
-        raise ArticleAiError({"form": [_field_ai_http_message(exc.code)]}) from exc
+        raise ArticleAiError({"form": [_article_ai_http_message(exc.code)]}) from exc
     except urllib.error.URLError as exc:
         logger.warning("announcement article AI failed reason=%s", exc.reason)
         raise ArticleAiError(
