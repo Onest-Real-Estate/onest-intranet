@@ -1,6 +1,9 @@
 from django.urls import path
 
 from .administration_views import (
+    announcement_article_fetch,
+    announcement_article_import_hero,
+    announcement_article_summarize,
     announcement_create,
     announcement_edit,
     announcement_lifecycle,
@@ -76,6 +79,21 @@ urlpatterns = [
         "operations/announcements/<int:announcement_id>/pin",
         announcement_pin,
         name="announcement_pin",
+    ),
+    path(
+        "operations/announcements/article-fetch",
+        announcement_article_fetch,
+        name="announcement_article_fetch",
+    ),
+    path(
+        "operations/announcements/article-summarize",
+        announcement_article_summarize,
+        name="announcement_article_summarize",
+    ),
+    path(
+        "operations/announcements/<int:announcement_id>/article-import-hero",
+        announcement_article_import_hero,
+        name="announcement_article_import_hero",
     ),
     # Media management.
     path(

@@ -1058,6 +1058,45 @@ ROUTE_POLICIES: dict[str, AuthorizationPolicy] = {
         scope_rule="delegated_user_scope",
         auth_behavior="json",
     ),
+    "announcement_article_fetch": AuthorizationPolicy(
+        key="announcement_article_fetch",
+        access="permission_protected",
+        description=(
+            "Fetch Open Graph and page metadata for a pasted public article "
+            "URL. SSRF-hardened; returns reviewable suggestions only."
+        ),
+        methods=("POST",),
+        route_names=("announcement_article_fetch",),
+        all_permissions=("web.manage_announcements",),
+        scope_rule="publication_scope",
+        auth_behavior="json",
+    ),
+    "announcement_article_summarize": AuthorizationPolicy(
+        key="announcement_article_summarize",
+        access="permission_protected",
+        description=(
+            "Opt-in AI teaser and digest from a prior article fetch extract. "
+            "Never runs on save or publish."
+        ),
+        methods=("POST",),
+        route_names=("announcement_article_summarize",),
+        all_permissions=("web.manage_announcements",),
+        scope_rule="publication_scope",
+        auth_behavior="json",
+    ),
+    "announcement_article_import_hero": AuthorizationPolicy(
+        key="announcement_article_import_hero",
+        access="permission_protected",
+        description=(
+            "Import a remote article image candidate through the validated "
+            "hero media pipeline for a scoped announcement."
+        ),
+        methods=("POST",),
+        route_names=("announcement_article_import_hero",),
+        all_permissions=("web.manage_announcements",),
+        scope_rule="publication_scope",
+        auth_behavior="json",
+    ),
     "training_library": AuthorizationPolicy(
         key="training_library",
         access="authenticated",
