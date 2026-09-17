@@ -118,10 +118,20 @@ class AnnouncementForm(forms.ModelForm):
             for code in sorted(targetable_role_codes(actor))
         ]
 
-        for name in ("summary", "body", "publish_at", "expires_at"):
+        for name in (
+            "summary",
+            "body",
+            "publish_at",
+            "expires_at",
+            "source_url",
+            "source_publisher",
+            "source_retrieved_at",
+        ):
             self.fields[name].required = False
         self.fields["cta_label"].required = False
         self.fields["cta_url"].required = False
+        self.fields["ai_assisted_summary"].required = False
+        self.fields["ai_assisted_body"].required = False
         if self.instance.pk:
             # Ownership is the publishing identity and part of the slug's
             # uniqueness scope. Moving it would silently re-aim an announcement
@@ -148,6 +158,17 @@ class AnnouncementForm(forms.ModelForm):
             self.add_error("cta_url", _("Give the button somewhere to go."))
         cleaned["cta_label"] = label
         cleaned["cta_url"] = url
+        source = (cleaned.get("source_url") or "").strip()
+        cleaned["source_url"] = source
+        if not source:
+            cleaned["source_publisher"] = ""
+            cleaned["source_retrieved_at"] = None
+        else:
+            cleaned["source_publisher"] = (
+                cleaned.get("source_publisher") or ""
+            ).strip()
+        cleaned["ai_assisted_summary"] = bool(cleaned.get("ai_assisted_summary"))
+        cleaned["ai_assisted_body"] = bool(cleaned.get("ai_assisted_body"))
         if not any(
             (
                 cleaned.get("audience_company"),

@@ -95,6 +95,11 @@ EDITABLE_FIELDS: tuple[str, ...] = (
     "expires_at",
     "cta_label",
     "cta_url",
+    "source_url",
+    "source_publisher",
+    "source_retrieved_at",
+    "ai_assisted_summary",
+    "ai_assisted_body",
 )
 
 #: Audit actions that make up the publication history panel, in the order the
@@ -309,6 +314,8 @@ def snapshot(announcement: Announcement) -> dict[str, Any]:
         "is_pinned": announcement.is_pinned,
         "cta_label": announcement.cta_label,
         "cta_url": announcement.cta_url,
+        "source_url": announcement.source_url,
+        "source_publisher": announcement.source_publisher,
         "audience": describe_audience(announcement),
     }
 
@@ -989,6 +996,19 @@ def detail_payload(announcement: Announcement, *, now=None) -> dict[str, Any]:
             if announcement.cta_label and announcement.cta_url
             else None
         ),
+        "source": (
+            {
+                "url": announcement.source_url,
+                "publisher": announcement.source_publisher,
+                "retrievedAt": _iso(announcement.source_retrieved_at),
+            }
+            if announcement.source_url
+            else None
+        ),
+        "aiAssisted": {
+            "summary": announcement.ai_assisted_summary,
+            "body": announcement.ai_assisted_body,
+        },
         "validation": validation_debt_payload(announcement),
         "history": publication_history(announcement),
         "mediaHref": f"/operations/announcements/{announcement.pk}/media",

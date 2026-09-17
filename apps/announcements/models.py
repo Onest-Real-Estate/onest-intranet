@@ -238,6 +238,37 @@ class Announcement(models.Model):
             "Validated against the same allowlist body links use."
         ),
     )
+    source_url = models.CharField(
+        _("source article URL"),
+        max_length=500,
+        blank=True,
+        help_text=_(
+            "Optional public HTTPS article this announcement attributes. "
+            "Separate from the call-to-action button."
+        ),
+    )
+    source_publisher = models.CharField(
+        _("source publisher"),
+        max_length=120,
+        blank=True,
+        help_text=_("Site or publisher name shown as attribution when set."),
+    )
+    source_retrieved_at = models.DateTimeField(
+        _("source retrieved at"),
+        null=True,
+        blank=True,
+        help_text=_("When article metadata was last fetched for authoring."),
+    )
+    ai_assisted_summary = models.BooleanField(
+        _("AI-assisted summary"),
+        default=False,
+        help_text=_("Author accepted an AI suggestion into the summary field."),
+    )
+    ai_assisted_body = models.BooleanField(
+        _("AI-assisted body"),
+        default=False,
+        help_text=_("Author accepted an AI suggestion into the body field."),
+    )
     created_by = models.ForeignKey(
         "user.User",
         verbose_name=_("created by"),
@@ -353,6 +384,19 @@ class Announcement(models.Model):
                 "Use an https:// address, a mailto: address, or a link inside "
                 "the hub starting with /."
             )
+        source = (self.source_url or "").strip()
+        if source:
+            allowed = safe_url(source)
+            if allowed is None or not allowed.startswith("https://"):
+                errors["source_url"] = _(
+                    "Use a public https:// article URL for the source."
+                )
+            else:
+                self.source_url = allowed
+        else:
+            self.source_url = ""
+            self.source_publisher = ""
+            self.source_retrieved_at = None
         refused = unsafe_links(self.body)
         if refused:
             errors["body"] = _(
