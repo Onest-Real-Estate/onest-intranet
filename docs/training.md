@@ -26,6 +26,26 @@ forms post to `training_quiz_save` / `training_session_save` separately from the
 main content draft. Publish validation refuses unconfigured quiz or session
 items.
 
+### Tool onboarding guides
+
+A `tool_onboarding` item is the activation guide an onboarding tool unlocks. It
+carries `tool_code`, matched against the live catalog's stable slug (legacy
+codes from the retired four-value enum stay valid), and the training workspace
+picks that code from the catalog rather than from free text — so a new tool
+needs configuration, not a deploy.
+
+Like a video or recording, publishing one requires a ready primary recording or
+an approved embed: the whole point is something to watch, and a guide with
+nothing behind it ships a play button that opens nothing.
+
+`apps.training.tool_guides.activation_guides_for` is the only way another module
+asks for one. It reuses `visible_training_content`, so a guide offered beside a
+tool can never be more permissive than the same item in the library, and it
+returns the current version per tool — highest visible version number in the
+lowest-ordered family. The onboarding journey decides *when* a guide is offered;
+see `docs/onboarding-operations.md`. Completing one writes `TrainingProgress`
+and nothing else: it never marks a vendor account ready.
+
 ## Transcriptions
 
 Video and recording items may include searchable transcript segments

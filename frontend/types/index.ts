@@ -1188,6 +1188,7 @@ export type AgentJourneyOfficeHandoffState =
   | "notified"
   | "notification_failed";
 export type AgentJourneyContractState =
+  | "not_started"
   | "generated"
   | "sent"
   | "signed"
@@ -1233,7 +1234,39 @@ export interface AgentJourneyTool {
   /** When the office sent it. Null until somebody records the send. */
   invitationSentAt: string | null;
   complete: boolean;
+  /** False when somebody switched this tool off for this agent. */
+  applicable: boolean;
   updatedAt: string | null;
+  /** Vendor help page, when the catalog has a good one. */
+  helpUrl: string;
+  /** Hub path that starts a request for this tool, usually IT support. */
+  requestPath: string;
+  /** Who to chase — "your branch admin", "IT support". */
+  contact: string;
+}
+
+/**
+ * The activation guide a tool unlocks. `locked` until that tool's own
+ * invitation is recorded as sent; `unavailable` when it is unlocked but no
+ * published guide reaches this agent, which is the row's cue to fall back to
+ * vendor help or support.
+ */
+export type AgentActivationGuideState =
+  | "locked"
+  | "available"
+  | "completed"
+  | "unavailable"
+  | "not_applicable";
+
+export interface AgentActivationGuide {
+  state: AgentActivationGuideState;
+  contentId?: number;
+  title?: string;
+  summary?: string;
+  estimatedMinutes?: number | null;
+  href?: string;
+  hasTranscript?: boolean;
+  inProgress?: boolean;
 }
 
 /** Versioned server composition; clients display it and never infer progress. */
@@ -1255,9 +1288,21 @@ export interface AgentOnboardingJourney {
       }[];
     };
   };
-  contract: AgentJourneyState<AgentJourneyContractState>;
+  contract: AgentJourneyState<AgentJourneyContractState> & {
+    /** Agent-safe wording. Never admin-only contract detail. */
+    detail: string;
+    actionHref: string | null;
+    actionLabel: string | null;
+  };
   toolsSource: AgentJourneyToolSourceState;
   tools: AgentJourneyTool[];
+  /** Where vendor invitations land, and whether one is old enough to chase. */
+  invitationInbox: {
+    email: string;
+    followUpHours: number;
+    overdue: boolean;
+    supportHref: string;
+  };
   requiredSetupComplete: boolean;
   activationComplete: boolean;
   strictGateActive: boolean;
@@ -1565,6 +1610,8 @@ export interface OnboardingActivation {
   autoOpen: boolean;
   /** Public facts for the agent's office; null when none is set or activation is complete. */
   office: OnboardingOfficeSelection | null;
+  /** Activation guides keyed by the same tool key the journey uses. */
+  guides: Record<string, AgentActivationGuide>;
 }
 
 export interface OnboardingPageProps extends PageProps, OnboardingProfileProps {

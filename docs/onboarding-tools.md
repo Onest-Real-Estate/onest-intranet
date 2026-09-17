@@ -216,6 +216,7 @@ Every save and reorder writes an audit event.
 | Route | Who | What |
 | --- | --- | --- |
 | `/my-tools` | Everyone | Your own checklist and every setup guide |
+| Dashboard setup dialog | Agent journey | Next steps: inbox guidance, contract, and per-tool activation guides |
 | `/operations/tool-readiness` | `web.view_new_agents` | How far the people you cover have got |
 | `/operations/tool-readiness/<id>` | Same, scoped | One agent's checklist, editable |
 
@@ -236,6 +237,15 @@ The **guide opens in place**, using `<details>`. It is the only reason this page
 beats a spreadsheet, so it must not sit behind a navigation — and the native
 element carries its own keyboard and screen-reader behaviour rather than a
 hand-rolled disclosure that forgets half of it.
+
+### Activation guides
+
+`invitation_sent_at` is what the dashboard's Next steps reads to unlock a tool's
+"Watch how to activate X" — each row on its own timestamp, never on another
+tool's. That is the reason the lifecycle stores invitation provenance as columns
+rather than as a note. The guide itself is a published training item tagged with
+this tool's slug; `help_url` and `request_path` are the fallback when no guide
+reaches the agent. See `docs/onboarding-operations.md` for the state table.
 
 A blocked row shows its note **to the agent**, not only to staff: the reason you
 are stuck is the one thing you most need. Only the control that changes the state

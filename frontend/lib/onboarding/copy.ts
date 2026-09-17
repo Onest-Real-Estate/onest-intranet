@@ -54,12 +54,38 @@ export const ONBOARDING_COPY = {
     tools: "Brokerage tools",
     toolsUnavailable: "Tool status is not available right now.",
     blocker: "Needs attention",
+    heading: "What happens next",
+    watchGuide: (tool: string) => `Watch how to activate ${tool}`,
+    watchAgain: (tool: string) => `Watch the ${tool} guide again`,
+    vendorHelp: (tool: string) => `Open ${tool} help`,
+    guideLocked: "The activation guide unlocks when your office sends the invitation.",
+    guideUnavailable:
+      "No activation guide is published for this tool yet. Use the help link or raise a support request.",
+    guideCompleted: "You finished this guide.",
+    guideMinutes: (minutes: number) => `${minutes} min`,
+    guideTranscript: "Transcript available",
     state: {
       done: "Done",
       waiting: "Waiting",
       attention: "Needs attention",
       unavailable: "Unavailable",
     },
+  },
+  /**
+   * Watching the inbox. The Hub cannot see an agent's mailbox, so none of this
+   * claims a delivery — it says where an invitation is sent and what to do if
+   * it does not arrive. It never asks for a link, a code, or a password.
+   */
+  inbox: {
+    heading: "Watch your Microsoft Outlook inbox",
+    body: (email: string) =>
+      `Vendor invitations are sent to ${email}. They come from the vendor, not from the Hub.`,
+    junk: "If you cannot find one, check Junk and the Other tab in Outlook.",
+    safety:
+      "Never paste an invitation link, code, or password into the Hub. Activate each account on the vendor's own site.",
+    overdue: (hours: number) =>
+      `An invitation was sent more than ${hours} hours ago and is still not set up. Raise a support request and we will chase it.`,
+    support: "Contact IT Support",
   },
   office: {
     administratorUnavailable: "Office administrator unavailable",

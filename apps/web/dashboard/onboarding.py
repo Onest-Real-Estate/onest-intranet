@@ -13,6 +13,7 @@ from typing import Any
 from django.http import HttpRequest
 
 from apps.user.models import User
+from apps.user.services.onboarding_guides import activation_guide_payloads
 from apps.user.services.onboarding_office import office_confirmation_payload
 from apps.user.services.onboarding_profile import (
     ProfileFlowContext,
@@ -67,10 +68,12 @@ def setup_dialog_props(
 def activation_center_props(
     request: HttpRequest, user: User, journey: AgentOnboardingJourney
 ) -> dict[str, Any]:
-    """Whether the released activation center opens, and the office it names.
+    """The released activation center: open policy, office, and tool guides.
 
     Callers pass this as a lazy prop so a partial reload that does not ask for
-    it never spends the once-per-login prompt.
+    it never spends the once-per-login prompt — and so the training lookup
+    behind the activation guides is paid once, by the one agent reading them,
+    rather than on every request that happens to build a journey.
     """
     requested = dialog_requested(request)
     first_prompt = (
@@ -81,7 +84,13 @@ def activation_center_props(
     if requested or first_prompt:
         request.session[ACTIVATION_PROMPT_SESSION_KEY] = user.onboarding_version
     office = None
+    guides: dict[str, Any] = {}
     if requested or not journey.activation_complete:
         selected = user.office
         office = office_confirmation_payload(selected) if selected else None
-    return {"autoOpen": requested or first_prompt, "office": office}
+        guides = activation_guide_payloads(user, journey)
+    return {
+        "autoOpen": requested or first_prompt,
+        "office": office,
+        "guides": guides,
+    }

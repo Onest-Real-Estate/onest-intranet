@@ -254,6 +254,10 @@ def bulk_agent_onboarding_states(users):
                     updated_by_label=(
                         str(row.updated_by) if row and row.updated_by else ""
                     ),
+                    applicable=state != ToolState.NOT_APPLICABLE,
+                    help_url=tool.help_url,
+                    request_path=tool.request_path,
+                    contact_label=tool.contact_label,
                 )
             )
         result[user.pk] = ToolOnboardingState(

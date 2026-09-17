@@ -320,6 +320,12 @@ def _onboarding_state_for_contract(contract: AgentContract | None):
         journey_status = ContractJourneyStatus.SENT
     elif generated_done:
         journey_status = ContractJourneyStatus.GENERATED
+    elif contract is None:
+        # The source answered and there is simply nothing yet. ``UNAVAILABLE``
+        # is reserved for a source that could not answer at all, so the agent's
+        # own surface can say "waiting for your office" instead of implying a
+        # broken integration.
+        journey_status = ContractJourneyStatus.NOT_STARTED
     else:
         journey_status = ContractJourneyStatus.UNAVAILABLE
     return ContractOnboardingState(
