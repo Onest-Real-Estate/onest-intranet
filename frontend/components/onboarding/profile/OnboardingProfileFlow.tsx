@@ -1,13 +1,6 @@
-import { Head, router, usePage, useRemember } from "@inertiajs/react";
-import { LogOut } from "lucide-react";
-import { useState } from "react";
+import { Head, router, useRemember } from "@inertiajs/react";
+import { useEffect, useRef, useState } from "react";
 
-import {
-  PanelHeader,
-  SurfaceCard,
-  SurfaceCardContent,
-  SurfaceCardMeta,
-} from "@/components/design-system";
 import { ContactSection } from "@/components/onboarding/profile/ContactSection";
 import { CredentialsSection } from "@/components/onboarding/profile/CredentialsSection";
 import {
@@ -27,7 +20,7 @@ import {
   UnsavedChangesDialog,
   useUnsavedChangesGuard,
 } from "@/components/onboarding/profile/unsaved-changes";
-import { Button } from "@/components/ui/button";
+import { ONBOARDING_COPY } from "@/lib/onboarding/copy";
 import { routes } from "@/lib/routes";
 import type {
   OnboardingPageProps,
@@ -63,15 +56,22 @@ function applyDraft(
 }
 
 /**
- * The resumable first-login profile, section by section.
+ * The resumable first-login profile, section by section, inside the dashboard
+ * setup dialog.
  *
- * Self-contained on page props so the dashboard setup dialog can host it
- * without a second implementation. The server decides the current section,
- * each section's status and revision, field requirements, and what review
- * shows; this component renders those decisions and posts values back.
+ * The server decides the current section, each section's status and revision,
+ * field requirements, and what review shows; this component renders those
+ * decisions and posts values back. Section visits keep the dialog mounted, so
+ * focus moves to the new section's heading and the change is announced.
  */
-export function OnboardingProfileFlow() {
-  const page = usePage<OnboardingPageProps>().props;
+export function OnboardingProfileFlow({
+  page,
+  onDirtyChange,
+}: {
+  page: OnboardingPageProps;
+  /** Lets the dialog warn before signing out over unsaved edits. */
+  onDirtyChange?: (dirty: boolean) => void;
+}) {
   const { profileFlow, initial, saved, validation, csrfToken } = page;
   const current = profileFlow.currentSection;
   const index = Math.max(0, SECTION_ORDER.indexOf(current));
@@ -118,21 +118,47 @@ export function OnboardingProfileFlow() {
   const guard = useUnsavedChangesGuard(dirty);
   const [confirmed, setConfirmed] = useState(false);
 
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+  }, [dirty, onDirtyChange]);
+
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const shownSection = useRef(current);
+  const [announcement, setAnnouncement] = useState("");
+  const sectionLabel = section?.label ?? "";
+  useEffect(() => {
+    if (shownSection.current === current) {
+      return;
+    }
+    shownSection.current = current;
+    setAnnouncement(
+      ONBOARDING_COPY.setup.stepAnnouncement(
+        index + 1,
+        SECTION_ORDER.length,
+        sectionLabel,
+      ),
+    );
+    headingRef.current?.focus();
+  }, [current, index, sectionLabel]);
+
   const labels: Record<string, string> = Object.fromEntries(
     Object.entries(profileFlow.fields).map(([name, policy]) => [name, policy.label]),
   );
   labels[CONFIRMATION_FIELD] = "Confirmation";
   labels.confirm_office = "Office confirmation";
+  const completedLabels = profileFlow.sections
+    .filter((item) => item.status === "complete")
+    .map((item) => item.label);
 
   function navigate(code: OnboardingProfileSectionCode) {
     if (code === current) {
       return;
     }
-    router.get(routes.onboarding(), { section: code });
+    router.get(routes.dashboard(), { section: code }, { preserveState: true });
   }
 
   function refreshAfterPhoto() {
-    router.reload({ only: ["profileFlow", "saved", "user"] });
+    router.reload({ only: ["onboardingProfile", "onboardingJourney", "user"] });
   }
 
   const onBack = index > 0 ? () => navigate(SECTION_ORDER[index - 1]) : undefined;
@@ -151,29 +177,13 @@ export function OnboardingProfileFlow() {
   };
 
   return (
-    <div className="mx-auto grid w-full max-w-3xl gap-6 py-8 sm:py-12">
-      <Head title={`${section?.label ?? "Profile"} · Set up your profile`} />
-
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div className="grid gap-2">
-          <h1 className="text-2xl leading-8 font-bold tracking-[-0.02em]">
-            Set up your agent profile
-          </h1>
-          <p className="text-muted-foreground max-w-measure text-sm">
-            About 3–5 minutes. Each section saves when you continue, so you can stop and
-            pick up exactly where you left off.
-          </p>
-        </div>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={() => router.post(routes.logout())}
-        >
-          <LogOut aria-hidden />
-          Sign out
-        </Button>
-      </header>
+    <div className="grid gap-5">
+      <Head
+        title={`${sectionLabel || "Profile"} · ${ONBOARDING_COPY.setup.headTitle}`}
+      />
+      <p role="status" className="sr-only">
+        {announcement}
+      </p>
 
       <SectionStepper
         sections={profileFlow.sections}
@@ -181,19 +191,32 @@ export function OnboardingProfileFlow() {
         onNavigate={navigate}
       />
 
-      <SurfaceCard>
-        <PanelHeader
-          title={section?.label}
-          description={section?.description}
-          meta={
-            <SurfaceCardMeta>
-              Step {index + 1} of {SECTION_ORDER.length}
-            </SurfaceCardMeta>
-          }
-          divided
-        />
-        <SurfaceCardContent>
-          {current === "review" ? (
+      <section aria-labelledby="onboarding-section-heading" className="grid gap-5">
+        <div className="border-border flex flex-wrap items-end justify-between gap-x-4 gap-y-1 border-b pb-3">
+          <div className="grid min-w-0 gap-1">
+            <h3
+              ref={headingRef}
+              id="onboarding-section-heading"
+              tabIndex={-1}
+              className="text-base font-semibold outline-none"
+            >
+              {sectionLabel}
+            </h3>
+            {section?.description ? (
+              <p className="text-muted-foreground text-sm">{section.description}</p>
+            ) : null}
+          </div>
+          <p className="text-muted-foreground text-xs">
+            {ONBOARDING_COPY.setup.stepOf(index + 1, SECTION_ORDER.length)} ·{" "}
+            {ONBOARDING_COPY.setup.completedSections(completedLabels)}
+          </p>
+        </div>
+
+        {current === "review" ? (
+          <>
+            <p className="text-muted-foreground max-w-measure text-sm">
+              {ONBOARDING_COPY.setup.afterSubmit}
+            </p>
             <SectionForm
               {...commonFormProps}
               action={routes.onboarding_profile_finalize()}
@@ -211,35 +234,32 @@ export function OnboardingProfileFlow() {
                 onNavigate={navigate}
               />
             </SectionForm>
-          ) : (
-            <SectionForm
-              {...commonFormProps}
-              key={`${current}-${section?.revision ?? ""}`}
-              action={routes.onboarding_profile_save(current)}
-              tokens={{
-                revision: section?.revision ?? "",
-                expected_onboarding_version: String(profileFlow.onboardingVersion),
-              }}
-              onDraft={(values) => setDraft({ key: sectionKey, values })}
-              submitLabel="Save and continue"
-              submittingLabel="Saving…"
-            >
-              {current === "identity" ? (
-                <IdentitySection page={view} onPhotoChange={refreshAfterPhoto} />
-              ) : null}
-              {current === "contact" ? (
-                <ContactSection page={view} onDirty={() => setTouched(true)} />
-              ) : null}
-              {current === "credentials" ? (
-                <CredentialsSection
-                  page={sectionView}
-                  onDirty={() => setTouched(true)}
-                />
-              ) : null}
-            </SectionForm>
-          )}
-        </SurfaceCardContent>
-      </SurfaceCard>
+          </>
+        ) : (
+          <SectionForm
+            {...commonFormProps}
+            key={`${current}-${section?.revision ?? ""}`}
+            action={routes.onboarding_profile_save(current)}
+            tokens={{
+              revision: section?.revision ?? "",
+              expected_onboarding_version: String(profileFlow.onboardingVersion),
+            }}
+            onDraft={(values) => setDraft({ key: sectionKey, values })}
+            submitLabel="Save and continue"
+            submittingLabel="Saving…"
+          >
+            {current === "identity" ? (
+              <IdentitySection page={view} onPhotoChange={refreshAfterPhoto} />
+            ) : null}
+            {current === "contact" ? (
+              <ContactSection page={view} onDirty={() => setTouched(true)} />
+            ) : null}
+            {current === "credentials" ? (
+              <CredentialsSection page={sectionView} onDirty={() => setTouched(true)} />
+            ) : null}
+          </SectionForm>
+        )}
+      </section>
 
       <UnsavedChangesDialog
         open={guard.pendingUrl !== null}

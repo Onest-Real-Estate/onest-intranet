@@ -37,6 +37,7 @@ from apps.web.quick_access.views import quick_access_index
 from .authorization import enforce_policy
 from .contracts import list_response
 from .dashboard import HUB_SECTIONS, deferred_widget_props, greeting_payload
+from .dashboard.onboarding import activation_center_props, setup_dialog_props
 from .dashboard.sections import LIVE_SECTION_ROUTES
 from .operations import (
     OPERATIONS_DESTINATIONS,
@@ -67,8 +68,15 @@ def dashboard(request):
             request._onboarding_journey = journey
         payload["onboardingJourney"] = agent_journey_payload(journey)
         if not journey.required_setup_complete:
+            # The strict gate: the setup dialog's props and nothing else. No
+            # deferred provider is registered, so no widget data can be fetched
+            # behind the overlay by a partial reload either.
             request._onboarding_strict_gate = True
+            payload["onboardingProfile"] = setup_dialog_props(request, request.user)
             return payload
+        payload["onboardingActivation"] = lambda: activation_center_props(
+            request, request.user, journey
+        )
     return {**payload, **deferred_widget_props(request.user)}
 
 

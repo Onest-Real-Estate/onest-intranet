@@ -68,10 +68,18 @@ export function UnsavedChangesDialog({
   open,
   onStay,
   onLeave,
+  title = "Leave this section without saving?",
+  description = "The changes you made here have not been saved. Everything you saved earlier stays exactly as it was.",
+  leaveLabel = "Discard changes",
+  stayLabel = "Keep editing",
 }: {
   open: boolean;
   onStay: () => void;
   onLeave: () => void;
+  title?: string;
+  description?: string;
+  leaveLabel?: string;
+  stayLabel?: string;
 }) {
   return (
     <Dialog
@@ -84,18 +92,15 @@ export function UnsavedChangesDialog({
     >
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Leave this section without saving?</DialogTitle>
-          <DialogDescription>
-            The changes you made here have not been saved. Everything you saved earlier
-            stays exactly as it was.
-          </DialogDescription>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={onLeave}>
-            Discard changes
+            {leaveLabel}
           </Button>
           <Button type="button" onClick={onStay} autoFocus>
-            Keep editing
+            {stayLabel}
           </Button>
         </DialogFooter>
       </DialogContent>

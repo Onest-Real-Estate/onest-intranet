@@ -1,33 +1,13 @@
-import { Building2, Clock3, Mail, MapPin, Phone } from "lucide-react";
+import { Building2 } from "lucide-react";
 
 import { Callout, FormFieldError } from "@/components/design-system";
+import { OfficeDetails } from "@/components/onboarding/OfficeDetails";
 import { Checkbox } from "@/components/ui/checkbox";
+import { ONBOARDING_COPY } from "@/lib/onboarding/copy";
 import { cn } from "@/lib/utils";
 import type { OnboardingOfficeSelection } from "@/types";
 
 export const OFFICE_CONFIRMATION_FIELD = "confirm_office";
-
-function phoneHref(phone: string): string {
-  return `tel:${phone.replace(/[^+\d]/g, "")}`;
-}
-
-function officeHoursLines(hours: unknown[]): string[] {
-  return hours.flatMap((value) => {
-    if (typeof value === "string") {
-      return value.trim() ? [value.trim()] : [];
-    }
-    if (!value || typeof value !== "object") {
-      return [];
-    }
-    const row = value as Record<string, unknown>;
-    const day = String(row.day ?? row.label ?? "").trim();
-    const period = String(row.hours ?? row.value ?? "").trim();
-    return day || period ? [`${day}${day && period ? ": " : ""}${period}`] : [];
-  });
-}
-
-const contactLink =
-  "text-primary inline-flex min-w-0 items-center gap-1.5 text-sm hover:underline";
 
 export function OfficeConfirmation({
   selection,
@@ -41,92 +21,24 @@ export function OfficeConfirmation({
   error?: string;
 }) {
   const { office, administrator, support } = selection;
-  const locality = [office.city, office.state].filter(Boolean).join(", ");
-  const address = [office.streetAddress, locality, office.zipCode]
-    .filter(Boolean)
-    .join(" · ");
-  const hours = officeHoursLines(office.officeHours);
 
   return (
     <section aria-labelledby="office-confirmation-heading" className="grid gap-4">
-      <div className="bg-muted/30 overflow-hidden rounded-lg border">
-        <div className="border-border grid gap-1 border-b px-4 py-3">
-          <div className="flex items-center gap-2">
-            <Building2 className="text-muted-foreground size-4" aria-hidden />
-            <h3 id="office-confirmation-heading" className="text-sm font-semibold">
-              {office.name}
-            </h3>
-          </div>
-          <p className="text-muted-foreground text-xs">{office.hierarchy}</p>
-        </div>
-        <dl className="divide-border grid divide-y bg-background">
-          <div className="grid gap-1 px-4 py-3 sm:grid-cols-[9rem_1fr] sm:gap-4">
-            <dt className="text-muted-foreground flex items-center gap-2 text-xs font-semibold uppercase">
-              <MapPin className="size-3.5" aria-hidden /> Office address
-            </dt>
-            <dd className="text-sm">{address || "Address not listed yet."}</dd>
-          </div>
-          {office.mainPhone || office.publicEmail ? (
-            <div className="grid gap-1 px-4 py-3 sm:grid-cols-[9rem_1fr] sm:gap-4">
-              <dt className="text-muted-foreground text-xs font-semibold uppercase">
-                Main contact
-              </dt>
-              <dd className="flex flex-wrap gap-x-4 gap-y-1">
-                {office.mainPhone ? (
-                  <a className={contactLink} href={phoneHref(office.mainPhone)}>
-                    <Phone className="size-3.5" aria-hidden /> {office.mainPhone}
-                  </a>
-                ) : null}
-                {office.publicEmail ? (
-                  <a className={contactLink} href={`mailto:${office.publicEmail}`}>
-                    <Mail className="size-3.5" aria-hidden /> {office.publicEmail}
-                  </a>
-                ) : null}
-              </dd>
-            </div>
-          ) : null}
-          {hours.length ? (
-            <div className="grid gap-1 px-4 py-3 sm:grid-cols-[9rem_1fr] sm:gap-4">
-              <dt className="text-muted-foreground flex items-center gap-2 text-xs font-semibold uppercase">
-                <Clock3 className="size-3.5" aria-hidden /> Office hours
-              </dt>
-              <dd className="grid gap-0.5 text-sm">
-                {hours.map((line) => (
-                  <span key={line}>{line}</span>
-                ))}
-              </dd>
-            </div>
-          ) : null}
-        </dl>
+      <div className="grid gap-1">
+        <h3
+          id="office-confirmation-heading"
+          className="flex items-center gap-2 text-sm font-semibold"
+        >
+          <Building2 className="text-muted-foreground size-4" aria-hidden />
+          {office.name}
+        </h3>
+        <p className="text-muted-foreground text-xs">{office.hierarchy}</p>
       </div>
 
-      {administrator ? (
-        <div className="grid gap-1.5 rounded-lg border px-4 py-3">
-          <p className="text-muted-foreground text-xs font-semibold uppercase">
-            {administrator.resolutionLabel}
-          </p>
-          <p className="text-sm font-semibold">{administrator.name}</p>
-          <div className="flex flex-wrap gap-x-4 gap-y-1">
-            {administrator.phone ? (
-              <a
-                className={contactLink}
-                href={phoneHref(administrator.phone)}
-                aria-label={`Call ${administrator.name}`}
-              >
-                <Phone className="size-3.5" aria-hidden /> {administrator.phone}
-              </a>
-            ) : null}
-            <a
-              className={contactLink}
-              href={`mailto:${administrator.email}`}
-              aria-label={`Email ${administrator.name}`}
-            >
-              <Mail className="size-3.5" aria-hidden /> {administrator.email}
-            </a>
-          </div>
-        </div>
-      ) : (
-        <Callout tone="warning" title="Office administrator unavailable">
+      <OfficeDetails selection={selection} showName={false} />
+
+      {administrator ? null : (
+        <Callout tone="warning" title={ONBOARDING_COPY.office.administratorUnavailable}>
           {support.message}
         </Callout>
       )}

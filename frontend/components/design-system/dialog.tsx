@@ -13,9 +13,12 @@ export function DialogContent({
   className,
   children,
   fallbackFocusRef,
+  showCloseButton = true,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   fallbackFocusRef?: React.RefObject<HTMLElement | null>;
+  /** Off only for a dialog that must not be dismissed, e.g. a required setup gate. */
+  showCloseButton?: boolean;
 }) {
   return (
     <DialogPrimitive.Portal>
@@ -35,17 +38,19 @@ export function DialogContent({
         {...props}
       >
         {children}
-        <DialogPrimitive.Close asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="absolute top-3 right-3 size-8"
-            aria-label="Close dialog"
-          >
-            <X className="size-4" aria-hidden />
-          </Button>
-        </DialogPrimitive.Close>
+        {showCloseButton ? (
+          <DialogPrimitive.Close asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="absolute top-3 right-3 size-8"
+              aria-label="Close dialog"
+            >
+              <X className="size-4" aria-hidden />
+            </Button>
+          </DialogPrimitive.Close>
+        ) : null}
       </DialogPrimitive.Content>
     </DialogPrimitive.Portal>
   );
