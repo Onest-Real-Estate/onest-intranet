@@ -84,6 +84,24 @@ export function AnnouncementArticle({
               announcement that has been truncated has not been announced. */}
           <AnnouncementBody blocks={announcement.bodyBlocks} />
 
+          {announcement.source ? (
+            <p className="text-muted-foreground mt-4 text-sm">
+              {announcement.source.publisher
+                ? `Via ${announcement.source.publisher}. `
+                : null}
+              <a
+                href={announcement.source.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-foreground inline-flex items-center gap-1 underline-offset-4 hover:underline"
+              >
+                Original article
+                <ExternalLink className="size-3.5 shrink-0" aria-hidden />
+                <span className="sr-only">(opens in a new tab)</span>
+              </a>
+            </p>
+          ) : null}
+
           {announcement.cta ? (
             <div className="mt-6">
               <Button asChild>
