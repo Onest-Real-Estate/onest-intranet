@@ -328,6 +328,12 @@ def reset_required_setup(*, actor: User, user: User) -> None:
         office_id=locked_user.office.stable_key if locked_user.office else "",
         channel="admin",
     )
+    publish(
+        "user.onboarding.profile_changed",
+        actor_id=str(actor.pk),
+        subject=f"user:{locked_user.pk}",
+        payload={"user_id": locked_user.pk},
+    )
 
 
 @transaction.atomic

@@ -354,6 +354,7 @@ def save_profile_section(
     confirmed_office_id: int | None = None,
 ) -> SectionSaveResult:
     """Validate and persist one section without completing the profile."""
+    from apps.audit.events import publish
     from apps.audit.service import actor_from_user, log_model_change
     from apps.user.services.agent_administration import reset_license_verification
     from apps.user.services.hierarchy import sync_primary_membership
@@ -434,6 +435,12 @@ def save_profile_section(
             sync_default_agent_assignment(
                 saved, actor=saved, business_reason=ONBOARDING_OFFICE_REASON
             )
+            publish(
+                "user.onboarding.office_changed",
+                actor_id=str(saved.pk),
+                subject=f"user:{saved.pk}",
+                payload={"user_id": saved.pk},
+            )
         if section == OnboardingSection.CREDENTIALS and confirmation_changed:
             now = timezone.now()
             if case is None:
@@ -459,6 +466,12 @@ def save_profile_section(
                 "section": str(section),
                 "onboarding_version": saved.onboarding_version,
             },
+        )
+        publish(
+            "user.onboarding.profile_changed",
+            actor_id=str(saved.pk),
+            subject=f"user:{saved.pk}",
+            payload={"user_id": saved.pk},
         )
     return SectionSaveResult(changed=True)
 

@@ -57,6 +57,7 @@ from .views.onboarding_profile_views import (
     onboarding_profile_finalize,
     onboarding_profile_save,
 )
+from .views.onboarding_stream_views import onboarding_stream_token
 from .views.role_assignment_views import (
     role_assignment_mutate,
     role_assignment_preview,
@@ -68,6 +69,11 @@ urlpatterns = [
     path("login", RedirectView.as_view(pattern_name="login", query_string=True)),
     path("logout", logout, name="logout"),
     path("onboarding", onboarding, name="onboarding"),
+    path(
+        "onboarding/live/token",
+        onboarding_stream_token,
+        name="onboarding_stream_token",
+    ),
     path(
         "onboarding/offices/<int:office_id>/preview",
         onboarding_office_preview,

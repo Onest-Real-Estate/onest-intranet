@@ -16,6 +16,7 @@ import { UnsavedChangesDialog } from "@/components/onboarding/profile/unsaved-ch
 import { StageRail } from "@/components/onboarding/StageRail";
 import { Button } from "@/components/ui/button";
 import { ONBOARDING_COPY } from "@/lib/onboarding/copy";
+import { onboardingAnnouncement } from "@/lib/onboarding/live";
 import { setupStages } from "@/lib/onboarding/stages";
 import { routes } from "@/lib/routes";
 import type {
@@ -48,6 +49,9 @@ export function OnboardingDialog({
   open,
   onOpenChange,
   returnFocusRef,
+  liveStatus,
+  checkingUpdates,
+  onCheckUpdates,
 }: {
   page: DashboardPageProps;
   journey: AgentOnboardingJourney;
@@ -55,6 +59,9 @@ export function OnboardingDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   returnFocusRef?: RefObject<HTMLElement | null>;
+  liveStatus: "fresh" | "delayed";
+  checkingUpdates: boolean;
+  onCheckUpdates: () => void;
 }) {
   const strict = journey.strictGateActive;
   const titleRef = useRef<HTMLHeadingElement>(null);
@@ -62,6 +69,25 @@ export function OnboardingDialog({
   const [confirmingSignOut, setConfirmingSignOut] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [announcement, setAnnouncement] = useState("");
+  const previousJourney = useRef(journey);
+
+  useEffect(() => {
+    if (
+      journey.stateVersion !== undefined &&
+      previousJourney.current.stateVersion !== undefined &&
+      journey.stateVersion > previousJourney.current.stateVersion
+    ) {
+      const message = onboardingAnnouncement(previousJourney.current, journey);
+      if (message) setAnnouncement(message);
+      if (
+        !(document.activeElement instanceof HTMLElement) ||
+        !document.activeElement.isConnected
+      ) {
+        titleRef.current?.focus({ preventScroll: true });
+      }
+    }
+    previousJourney.current = journey;
+  }, [journey]);
 
   // Finishing review keeps this dialog mounted; say what just unlocked.
   const wasStrict = useRef(strict);
@@ -162,6 +188,23 @@ export function OnboardingDialog({
 
         <StageRail stages={setupStages(journey)} />
 
+        <div className="flex flex-wrap items-center justify-end gap-2 border-b pb-3 text-sm">
+          {liveStatus === "delayed" ? (
+            <p role="status" className="text-muted-foreground me-auto">
+              Live updates are delayed. Check for updates to see the latest status.
+            </p>
+          ) : null}
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={checkingUpdates}
+            onClick={onCheckUpdates}
+          >
+            {checkingUpdates ? "Checking…" : "Check for updates"}
+          </Button>
+        </div>
+
         {strict ? (
           profilePage ? (
             <OnboardingProfileFlow page={profilePage} onDirtyChange={setDirty} />
@@ -176,8 +219,10 @@ export function OnboardingDialog({
         ) : (
           <ActivationCenter
             journey={journey}
-            office={page.onboardingActivation?.office ?? null}
-            guides={page.onboardingActivation?.guides ?? {}}
+            office={
+              journey.activationOffice ?? page.onboardingActivation?.office ?? null
+            }
+            guides={journey.activationGuides ?? page.onboardingActivation?.guides ?? {}}
             onContinue={() => onOpenChange(false)}
           />
         )}

@@ -238,8 +238,8 @@ ready keeps its guide replayable.
 | `locked` | This tool's invitation is not recorded as sent | No button, and a line saying what unlocks it |
 | `available` | Unlocked, with a visible playable guide | "Watch how to activate X" → `training_detail` |
 | `completed` | The agent finished it | "Watch again", plus a finished note |
-| `unavailable` | Unlocked, no offerable guide | Vendor help, else the tool's request path |
-| `not_applicable` | Somebody switched the tool off for this agent | Nothing |
+| `unavailable` | An invitation was sent, but no offerable guide | Vendor help, else the tool's request path |
+| `not_applicable` | The tool is switched off for this agent, or it is self-serve with no guide published | Nothing |
 
 `apps.training.tool_guides` resolves a guide from `content_type=tool_onboarding`
 matched on the catalog's stable `tool_code`, through the same
@@ -251,10 +251,88 @@ version before it rather than to nothing. `apps.user.services.onboarding_guides`
 applies the unlock and serializes id, wording, and the typed route — never a
 media URL, a storage key, or an audience.
 
-Guides resolve in `activation_center_props` only, for the one agent reading
-them. They are deliberately not on the journey payload: `journey_for_user` runs
-in middleware on every request, and a training query there would be paid by
-every page in the Hub.
+Guides resolve for the one agent reading the dashboard. The dashboard embeds
+them in `onboardingJourney.activationGuides` so a live partial reload of that
+single prop can unlock a guide. `journey_for_user` itself remains lean in
+middleware on other routes; the full dashboard reuses the resolved guides in
+`onboardingActivation` without a second training query.
+
+## Live journey invalidation (self-hosted Centrifugo)
+
+The open dialog subscribes to one `$onboarding:<opaque-key>` private channel
+for its signed-in Agent. The key is an HMAC of the internal user ID, never an
+enumerable channel or a client-selected target. `GET /onboarding/live/token`
+issues connection and subscription JWTs for **that session's user only**; it
+rechecks account state and the effective Agent role and limits token requests.
+Both tokens expire after 60 seconds. No administrative subscription surface is
+exposed by this feature.
+
+The existing domain-event outbox dispatches the onboarding stream consumer
+after each owning transaction commits. It increments a per-agent database
+cursor and publishes exactly `{id, eventType, sourceKey, stateVersion}`. Source
+payloads are never forwarded. The client batches hints, ignores old cursors,
+and reloads only `onboardingJourney`. Inertia reload retains local form state
+and scroll. The current step remains component state; a live region announces
+guide and contract changes. Reconnects recheck the database for missed hints.
+The journey is always reconstructed from source tables on page load, so a
+missing or delayed event cannot become authoritative.
+
+Set these Django environment variables for a self-hosted Centrifugo instance:
+
+| Variable | Purpose |
+| --- | --- |
+| `CENTRIFUGO_API_URL` | Internal base URL reachable by Django/Celery, without `/api` |
+| `CENTRIFUGO_API_KEY` | Server API key; never exposed to the browser |
+| `CENTRIFUGO_HMAC_SECRET` | JWT HMAC key of at least 32 characters, shared with Centrifugo; never exposed to the browser |
+| `CENTRIFUGO_WS_URL` | Browser-reachable `wss://.../connection/websocket` URL |
+
+In Centrifugo, set `client.token.hmac_secret_key` to the same HMAC secret,
+`http_api.key` to the API key, and `client.allowed_origins` to the Hub origin.
+Create an `onboarding` channel namespace with `allow_subscribe_for_client:
+false`, no client publishing, presence, history, or recovery. Keep the default
+`$` private prefix and require the subscription JWT. TLS, API reachability
+from workers, and the Celery event dispatcher are deployment prerequisites.
+For example, the relevant self-hosted configuration shape is:
+
+```json
+{
+  "client": {
+    "token": { "hmac_secret_key": "<same secret as Django>" },
+    "allowed_origins": ["https://hub.example.com"]
+  },
+  "http_api": { "key": "<same API key as Django>" },
+  "channel": {
+    "namespaces": [
+      {
+        "name": "onboarding",
+        "allow_subscribe_for_client": false,
+        "allow_publish_for_subscriber": false,
+        "presence": false,
+        "history_size": 0
+      }
+    ]
+  }
+}
+```
+
+Do not use a third-party Pusher endpoint. Refer to the
+[Centrifugo channel permission model](https://centrifugal.dev/docs/server/channel_permissions)
+and [server API](https://centrifugal.dev/docs/server/server_api) when configuring
+the instance. No deployment files are changed by this feature.
+
+When Centrifugo is unavailable or not configured, the dialog remains usable.
+After a prolonged failure it explains that live updates are delayed; **Check
+for updates** performs the same journey-only reload. Refresh or a new login
+also retrieves current database truth. Inspect privacy-safe
+`onboarding_live.unconfigured`, `onboarding_live.publish_failed`, and
+`onboarding_live.published` log counts plus the domain-event delivery ledger.
+Retry dead letters after restoring the service. Logs and Centrifugo events
+must not include profile values, invitation links, contract details, or notes.
+
+To add a milestone source, publish a registered domain event in its owning
+write service, then map it to a safe `SourceKey` in
+`apps.user.services.onboarding_stream.EVENT_SOURCES`. Keep the payload allowlist
+in `_payload` and reuse this channel; the client needs no new subscription.
 
 Finishing a guide writes `TrainingProgress` and means only that the agent
 watched it. A vendor account becomes ready when the tool lifecycle says so, and

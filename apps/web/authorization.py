@@ -77,6 +77,16 @@ ROUTE_POLICIES: dict[str, AuthorizationPolicy] = {
         allow_incomplete_profile=True,
         scope_rule="self_only",
     ),
+    "onboarding_stream_token": AuthorizationPolicy(
+        key="onboarding_stream_token",
+        access="authenticated",
+        description="Issue short-lived, self-only onboarding stream credentials.",
+        methods=("GET",),
+        route_names=("onboarding_stream_token",),
+        allow_incomplete_profile=True,
+        scope_rule="self_only",
+        auth_behavior="json",
+    ),
     "onboarding_profile_save": AuthorizationPolicy(
         key="onboarding_profile_save",
         access="onboarding_only",

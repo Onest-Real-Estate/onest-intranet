@@ -226,6 +226,15 @@ def touch_progress(
         after=after,
         metadata=metadata,
     )
+    if content.is_required:
+        from apps.audit.events import publish
+
+        publish(
+            "training.onboarding_progress_changed",
+            actor_id=str(audit_actor.pk),
+            subject=f"user:{user.pk}",
+            payload={"user_id": user.pk},
+        )
     return locked
 
 

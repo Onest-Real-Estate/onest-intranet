@@ -104,7 +104,17 @@ def activation_guide_payloads(
             continue
         guide = guides.get(tool.key)
         if guide is None:
-            payloads[tool.key] = {"state": str(GuideState.UNAVAILABLE)}
+            # "No guide published" is only worth saying where one was expected:
+            # an invitation the office actually sent. A self-serve tool has its
+            # own setup steps in the catalog, and telling its row to go chase a
+            # missing video would send the agent nowhere useful.
+            payloads[tool.key] = {
+                "state": str(
+                    GuideState.NOT_APPLICABLE
+                    if tool.invitation_status != ToolInvitationStatus.SENT
+                    else GuideState.UNAVAILABLE
+                )
+            }
             continue
         payloads[tool.key] = {
             "state": str(

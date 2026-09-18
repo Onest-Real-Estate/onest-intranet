@@ -273,6 +273,7 @@ const URLS = {
     'onboarding_profile_finalize': () => `/onboarding/profile/finalize`,
     'onboarding_profile_save': (section: string) => `/onboarding/profile/sections/${section}`,
     'onboarding_office_preview': (office_id: number) => `/onboarding/offices/${office_id}/preview`,
+    'onboarding_stream_token': () => `/onboarding/live/token`,
     'onboarding': () => `/onboarding`,
     'logout': () => `/logout`,
     'login': () => `/`,

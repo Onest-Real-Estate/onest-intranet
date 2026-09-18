@@ -17,6 +17,13 @@ SECRET_KEY = config(
 
 DEBUG = config("DJANGO_DEBUG", default=True, cast=bool)
 
+# Self-hosted Centrifugo. Empty values disable live hints; database-backed
+# onboarding and the manual refresh action continue to work.
+CENTRIFUGO_API_URL = config("CENTRIFUGO_API_URL", default="")
+CENTRIFUGO_API_KEY = config("CENTRIFUGO_API_KEY", default="")
+CENTRIFUGO_HMAC_SECRET = config("CENTRIFUGO_HMAC_SECRET", default="")
+CENTRIFUGO_WS_URL = config("CENTRIFUGO_WS_URL", default="")
+
 ALLOWED_HOSTS = config(
     "DJANGO_ALLOWED_HOSTS", default="localhost,127.0.0.1", cast=Csv()
 )
@@ -410,7 +417,7 @@ DJANGO_VITE = {
 # ---------------------------------------------------------------------------
 INERTIA_LAYOUT = "layout.html"
 # Bump whenever the frontend bundle changes so stale clients get a full reload.
-INERTIA_VERSION = "49"
+INERTIA_VERSION = "50"
 
 # Optional external help centre. The shell exposes it only when it is an
 # absolute, credential-free HTTPS URL; an empty or unsafe value leaves the

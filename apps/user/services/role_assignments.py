@@ -9,6 +9,7 @@ from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 
+from apps.audit.events import publish
 from apps.audit.models import AuditEvent
 from apps.audit.service import AuditTarget, actor_from_user, log_event
 from apps.user.models import Office, User, UserRoleAssignment
@@ -29,6 +30,15 @@ from apps.user.roles import (
 )
 
 MANAGEMENT_ROLES = MANAGEMENT_ROLE_KEYS
+
+
+def _publish_access_change(actor: User, user: User) -> None:
+    publish(
+        "user.onboarding.access_changed",
+        actor_id=str(actor.pk),
+        subject=f"user:{user.pk}",
+        payload={"user_id": user.pk},
+    )
 
 
 @dataclass(frozen=True)
@@ -505,6 +515,7 @@ def create_role_assignment(
             region_id=_region_scope_key(scope_type, scope_office),
             metadata={"business_reason": business_reason},
         )
+        _publish_access_change(actor, target_user)
         return assignment
 
 
@@ -591,6 +602,7 @@ def _apply_revocation(
             region_id=_region_scope_key(locked.scope_type, locked.scope_office),
             metadata={"business_reason": business_reason},
         )
+        _publish_access_change(actor, locked.user)
         return locked
 
 
@@ -647,6 +659,7 @@ def update_role_assignment(
             office_id=(locked.scope_office.stable_key if locked.scope_office else ""),
             region_id=_region_scope_key(locked.scope_type, locked.scope_office),
         )
+        _publish_access_change(actor, locked.user)
         return locked
 
 
