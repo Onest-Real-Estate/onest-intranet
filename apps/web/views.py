@@ -22,6 +22,7 @@ from apps.user.services.onboarding_state import (
     journey_applies_to,
     journey_for_user,
 )
+from apps.user.services.onboarding_stream import state_version
 from apps.user.services.role_assignments import get_effective_access
 from apps.user.views.directory_views import user_directory
 from apps.user.views.office_administration_views import office_administration_index
@@ -66,7 +67,21 @@ def dashboard(request):
         if journey is None:
             journey = journey_for_user(request.user)
             request._onboarding_journey = journey
-        payload["onboardingJourney"] = agent_journey_payload(journey)
+        journey_payload = agent_journey_payload(journey)
+        journey_payload["stateVersion"] = state_version(request.user.pk)
+        if journey.required_setup_complete:
+            from apps.user.services.onboarding_guides import activation_guide_payloads
+            from apps.user.services.onboarding_office import office_confirmation_payload
+
+            journey_payload["activationGuides"] = activation_guide_payloads(
+                request.user, journey
+            )
+            journey_payload["activationOffice"] = (
+                office_confirmation_payload(request.user.office)
+                if request.user.office
+                else None
+            )
+        payload["onboardingJourney"] = journey_payload
         if not journey.required_setup_complete:
             # The strict gate: the setup dialog's props and nothing else. No
             # deferred provider is registered, so no widget data can be fetched
@@ -75,7 +90,11 @@ def dashboard(request):
             payload["onboardingProfile"] = setup_dialog_props(request, request.user)
             return payload
         payload["onboardingActivation"] = lambda: activation_center_props(
-            request, request.user, journey
+            request,
+            request.user,
+            journey,
+            office=journey_payload["activationOffice"],
+            guides=journey_payload["activationGuides"],
         )
     return {**payload, **deferred_widget_props(request.user)}
 

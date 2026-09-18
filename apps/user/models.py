@@ -1565,6 +1565,15 @@ class UserOnboardingCase(models.Model):
         return f"Onboarding / {self.user}"
 
 
+class OnboardingStreamState(models.Model):
+    """Monotonic invalidation cursor for one agent's source-owned journey."""
+
+    user = models.OneToOneField(
+        User, on_delete=models.CASCADE, related_name="onboarding_stream_state"
+    )
+    version = models.PositiveBigIntegerField(default=0)
+
+
 class OnboardingTask(models.Model):
     class Status(models.TextChoices):
         OPEN = "open", _("Open")

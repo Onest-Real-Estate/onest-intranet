@@ -66,7 +66,12 @@ def setup_dialog_props(
 
 
 def activation_center_props(
-    request: HttpRequest, user: User, journey: AgentOnboardingJourney
+    request: HttpRequest,
+    user: User,
+    journey: AgentOnboardingJourney,
+    *,
+    office: dict[str, Any] | None = None,
+    guides: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """The released activation center: open policy, office, and tool guides.
 
@@ -83,14 +88,14 @@ def activation_center_props(
     )
     if requested or first_prompt:
         request.session[ACTIVATION_PROMPT_SESSION_KEY] = user.onboarding_version
-    office = None
-    guides: dict[str, Any] = {}
     if requested or not journey.activation_complete:
-        selected = user.office
-        office = office_confirmation_payload(selected) if selected else None
-        guides = activation_guide_payloads(user, journey)
+        if office is None:
+            selected = user.office
+            office = office_confirmation_payload(selected) if selected else None
+        if guides is None:
+            guides = activation_guide_payloads(user, journey)
     return {
         "autoOpen": requested or first_prompt,
         "office": office,
-        "guides": guides,
+        "guides": guides or {},
     }

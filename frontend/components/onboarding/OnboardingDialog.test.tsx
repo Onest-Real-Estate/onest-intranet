@@ -293,6 +293,32 @@ describe("Onboarding dialog under the strict gate", () => {
     }
   });
 
+  it("keeps an unsaved profile draft, step, focus, and scroll on a journey-only update", async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(<Dashboard />);
+    const dialog = screen.getByRole("dialog", { name: TITLE });
+    const phone = within(dialog).getByRole("textbox", { name: "Phone number" });
+    await user.type(phone, "2025550100");
+    phone.focus();
+    dialog.scrollTop = 125;
+
+    setPage({
+      onboardingJourney: { ...strictJourney(), version: "2:new" },
+      onboardingProfile: {} as OnboardingProfileProps,
+    });
+    rerender(<Dashboard />);
+
+    expect(within(dialog).getByRole("textbox", { name: "Phone number" })).toHaveValue(
+      "2025550100",
+    );
+    expect(phone).toHaveFocus();
+    expect(dialog.scrollTop).toBe(125);
+    expect(within(dialog).getAllByRole("listitem")[0]).toHaveAttribute(
+      "aria-current",
+      "step",
+    );
+  });
+
   it("shows three stages as words and icons, marking only the current one", () => {
     render(<Dashboard />);
     const stages = within(screen.getByRole("dialog", { name: TITLE })).getAllByRole(

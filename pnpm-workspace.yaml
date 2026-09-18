@@ -2,3 +2,7 @@
 # last 7 days (10080 minutes), so compromised releases are usually detected
 # and removed before they can reach us. Set to 0 to disable.
 minimumReleaseAge: 10080
+# The official Centrifugo client ships generated protobuf code. Its optional
+# protobufjs postinstall is not needed by the browser bundle.
+allowBuilds:
+  protobufjs: false

@@ -1314,6 +1314,10 @@ export interface AgentOnboardingJourney {
     method: "get" | null;
   };
   version: string;
+  /** Monotonic cursor for Centrifugo invalidations; database remains authoritative. */
+  stateVersion?: number;
+  activationGuides?: Record<string, AgentActivationGuide>;
+  activationOffice?: OnboardingOfficeSelection | null;
   updatedAt: string;
   blockers: { key: string; message: string }[];
 }

@@ -11,6 +11,7 @@ import { OnboardingDialog } from "@/components/onboarding/OnboardingDialog";
 import { OnboardingStatusEntry } from "@/components/onboarding/OnboardingStatusEntry";
 import { Button } from "@/components/ui/button";
 import { useAuthorizationStaleness } from "@/hooks/use-authorization-staleness";
+import { useOnboardingLive } from "@/hooks/use-onboarding-live";
 import {
   naturalSpan,
   packRows,
@@ -61,6 +62,10 @@ export default function Dashboard() {
     readRememberedProfile(),
   );
   const { stale, acknowledge } = useAuthorizationStaleness(shell?.authorizationVersion);
+  const onboardingLive = useOnboardingLive(
+    onboardingJourney,
+    shell?.authorizationVersion,
+  );
 
   const resolved = useMemo(
     () => resolveDashboard(user, assignment, chosenProfileId),
@@ -114,6 +119,9 @@ export default function Dashboard() {
       open={onboardingOpen}
       onOpenChange={setOnboardingOpen}
       returnFocusRef={statusEntryRef}
+      liveStatus={onboardingLive.status}
+      checkingUpdates={onboardingLive.checking}
+      onCheckUpdates={onboardingLive.checkForUpdates}
     />
   ) : null;
 

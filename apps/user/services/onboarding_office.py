@@ -203,6 +203,7 @@ def record_office_handoff_delivery(
     the small journey checkpoint used by the agent-facing composer. A replay
     for an older office or reset cycle never changes the current case.
     """
+    from apps.audit.events import publish
     from apps.audit.service import AuditTarget, log_event, system_actor
     from apps.notifications.models import Notification
     from apps.user.models import UserOnboardingCase
@@ -263,6 +264,15 @@ def record_office_handoff_delivery(
                 after={"state": str(next_state)},
                 channel="notifications",
                 office_id=case.user.office.stable_key if case.user.office else "",
+            )
+            publish(
+                "user.onboarding.office_handoff_changed",
+                subject=f"user:{user_id}",
+                payload={
+                    "user_id": user_id,
+                    "from": str(previous),
+                    "to": str(next_state),
+                },
             )
     if not notification_exists:
         raise OfficeHandoffDeliveryUnavailable(

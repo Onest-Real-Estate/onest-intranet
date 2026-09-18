@@ -87,6 +87,34 @@ registry.register(
 )
 
 registry.register(
+    name="user.onboarding.profile_changed",
+    version=1,
+    required_payload_keys={"user_id"},
+    description="An agent saved a profile or office onboarding section.",
+)
+
+registry.register(
+    name="user.onboarding.office_changed",
+    version=1,
+    required_payload_keys={"user_id"},
+    description="An administrator changed an agent's office assignment.",
+)
+
+registry.register(
+    name="user.onboarding.access_changed",
+    version=1,
+    required_payload_keys={"user_id"},
+    description="A role assignment changed and live credentials must be rechecked.",
+)
+
+registry.register(
+    name="training.onboarding_progress_changed",
+    version=1,
+    required_payload_keys={"user_id"},
+    description="Required onboarding training completion changed.",
+)
+
+registry.register(
     name="user.onboarding.required_setup_completed",
     version=1,
     required_payload_keys={"user_id", "onboarding_version"},

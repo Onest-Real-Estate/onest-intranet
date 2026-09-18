@@ -338,6 +338,9 @@ def test_credentials_section_uses_the_profile_normalizers(client, json_body):
     )
     user.refresh_from_db()
     assert user.office == assignable_office()
+    assert DomainEvent.objects.filter(
+        name="user.onboarding.office_changed", subject=f"user:{user.pk}"
+    ).exists()
     assert user.license_number == "VA-99 11"
     assert user.nrds_number == "123456789"
     assert user.mls_number == ""
