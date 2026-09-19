@@ -105,8 +105,31 @@ register / cancel / attended / no-show. Capacity is enforced under row lock.
 
 ## Certificates
 
-`TrainingCertificate` is approval-gated. Learners only see a download when the
-certificate is `approved` and stored in private storage.
+Certificates of completion are **admin-issued** from the training workspace
+(`/operations/training/<id>/edit`). Publishers with `web.manage_training` see
+completed learners in their author and learner scope and **Issue** a PDF in one
+step (`training_certificate_issue`). Issuance is idempotent once the certificate
+is `approved` with a stored file.
+
+The PDF is a landscape, branded certificate of completion (reportlab) with a
+cryptographic HMAC-SHA256 signature and a QR code pointing at the public
+verification URL. Each certificate has a stable `public_id` (UUID).
+
+### Verification
+
+- Human / QR: `GET /verify/training-certificates/<uuid>` (Inertia page)
+- External providers: same URL with `Accept: application/json` or `?format=json`
+
+The JSON envelope includes `valid`, `status`, `signatureValid`, learner name,
+training title, dates, and a signature fingerprint. Signing key:
+`TRAINING_CERTIFICATE_SIGNING_KEY` (falls back to a purpose-bound derivation of
+`DJANGO_SECRET_KEY`).
+
+`TrainingCertificate` stays approval-gated for learners: they only see a
+download when the certificate is `approved` and stored in private storage
+(`/training-learning/<id>/certificate`). The workspace list is capped (newest
+completions first) so the edit page stays light. Use **Reissue** to refresh an
+already-issued PDF (new signature + QR).
 
 ## Administration
 

@@ -333,6 +333,7 @@ function TrainingWorkspacePage() {
   );
   const [submitting, setSubmitting] = useState(false);
   const [pendingAction, setPendingAction] = useState<string | null>(null);
+  const [issuingLearnerId, setIssuingLearnerId] = useState<number | null>(null);
 
   const lifecycleActions = useMemo(
     () => (content ? (ACTIONS_BY_STATE[content.lifecycle.code] ?? []) : []),
@@ -1123,6 +1124,98 @@ function TrainingWorkspacePage() {
                   {content.usage.notStarted}
                 </p>
               </div>
+            </SurfaceCardContent>
+          </SurfaceCard>
+        ) : null}
+
+        {editing ? (
+          <SurfaceCard>
+            <PanelHeader
+              divided
+              title="Certificates of completion"
+              description={
+                content.certificates.eligibleCount === 0
+                  ? "Issue a downloadable certificate after a learner completes this training."
+                  : `${content.certificates.issuedCount} issued of ${content.certificates.eligibleCount} completed${
+                      content.certificates.capped
+                        ? " (showing the most recent completions)"
+                        : ""
+                    }.`
+              }
+            />
+            <SurfaceCardContent>
+              {content.certificates.learners.length === 0 ? (
+                <EmptyState
+                  icon={GraduationCap}
+                  title="No completions yet"
+                  description="When a learner completes this training, they appear here so you can issue a certificate."
+                />
+              ) : (
+                <ul className="divide-border/60 divide-y">
+                  {content.certificates.learners.map((learner) => {
+                    const issued =
+                      learner.certificate?.status === "approved" &&
+                      learner.certificate.available;
+                    const revoked = learner.certificate?.status === "revoked";
+                    return (
+                      <li
+                        key={learner.id}
+                        className="flex flex-col gap-3 py-3 sm:flex-row sm:items-center sm:justify-between"
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate font-medium">{learner.name}</p>
+                          <p className="text-muted-foreground truncate text-xs">
+                            {learner.officeName || "No office"}
+                            {learner.completedAt
+                              ? ` · Completed ${formatMoment(learner.completedAt)}`
+                              : null}
+                          </p>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2">
+                          <StatusBadge
+                            status={
+                              issued
+                                ? { label: "Issued", tone: "success" }
+                                : revoked
+                                  ? { label: "Revoked", tone: "destructive" }
+                                  : { label: "Not issued", tone: "neutral" }
+                            }
+                          />
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant={issued ? "outline" : "default"}
+                            disabled={submitting || issuingLearnerId === learner.id}
+                            aria-busy={issuingLearnerId === learner.id || undefined}
+                            onClick={() => {
+                              setIssuingLearnerId(learner.id);
+                              router.post(
+                                routes.training_certificate_issue(content.id),
+                                {
+                                  learnerId: learner.id,
+                                  ...(issued ? { force: true } : {}),
+                                },
+                                {
+                                  preserveScroll: true,
+                                  onFinish: () => setIssuingLearnerId(null),
+                                },
+                              );
+                            }}
+                          >
+                            {issuingLearnerId === learner.id
+                              ? issued
+                                ? "Reissuing…"
+                                : "Issuing…"
+                              : issued
+                                ? "Reissue"
+                                : "Issue"}
+                          </Button>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
             </SurfaceCardContent>
           </SurfaceCard>
         ) : null}

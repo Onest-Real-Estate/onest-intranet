@@ -2,6 +2,7 @@ from django.urls import path
 
 from .administration_views import (
     training_certificate_approve,
+    training_certificate_issue,
     training_create,
     training_duplicate_version,
     training_edit,
@@ -28,9 +29,15 @@ from .views import (
     training_quiz_submit,
     training_session_register,
 )
+from .views_verify import training_certificate_verify
 
 urlpatterns = [
     path("training-learning", training_learning, name="training_learning"),
+    path(
+        "verify/training-certificates/<uuid:public_id>",
+        training_certificate_verify,
+        name="training_certificate_verify",
+    ),
     path(
         "training-learning/<int:content_id>",
         training_detail,
@@ -115,6 +122,11 @@ urlpatterns = [
         "operations/training/<int:content_id>/progress/correct",
         training_progress_correct,
         name="training_progress_correct",
+    ),
+    path(
+        "operations/training/<int:content_id>/certificates/issue",
+        training_certificate_issue,
+        name="training_certificate_issue",
     ),
     path(
         "operations/training/certificates/<int:certificate_id>/approve",

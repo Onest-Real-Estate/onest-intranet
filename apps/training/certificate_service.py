@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import io
 from typing import Any
 
 from django.core.exceptions import PermissionDenied, ValidationError
@@ -11,70 +10,26 @@ from django.db import transaction
 from django.http import FileResponse, Http404
 from django.utils import timezone
 
-from apps.audit.service import actor_from_user, log_on_commit, target_from_instance
+from apps.audit.service import (
+    AuditTarget,
+    actor_from_user,
+    log_on_commit,
+)
 from apps.training.administration import assert_can_author
 from apps.training.audience import assert_visible, targetable_user_queryset
+from apps.training.certificate_pdf import build_training_certificate_pdf
 from apps.training.models import TrainingCertificate, TrainingContent, TrainingProgress
 from apps.user.models import User
 from apps.user.services.role_assignments import has_effective_permission
 
 MANAGE_PERMISSION = "web.manage_training"
+CERTIFICATE_LEARNER_CAP = 50
 Status = TrainingCertificate.Status
 ProgressStatus = TrainingProgress.Status
 
 
 class CertificateError(ValidationError):
     """Domain validation for certificate mutations."""
-
-
-def _build_simple_pdf(*, title: str, learner_name: str, completed_at: str) -> bytes:
-    """Minimal PDF evidence page (not cryptographic)."""
-    # Hand-rolled one-page PDF avoids a heavy dependency for a short certificate.
-    lines = [
-        "Certificate of Completion",
-        title,
-        f"Awarded to {learner_name}",
-        f"Completed {completed_at}",
-        "oNEST Hub training evidence",
-    ]
-    content_lines = []
-    y = 720
-    for line in lines:
-        safe = line.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
-        content_lines.append(f"BT /F1 16 Tf 72 {y} Td ({safe}) Tj ET")
-        y -= 28
-    stream = "\n".join(content_lines).encode("latin-1", errors="replace")
-    objects = []
-    objects.append(b"1 0 obj<< /Type /Catalog /Pages 2 0 R >>endobj\n")
-    objects.append(b"2 0 obj<< /Type /Pages /Kids [3 0 R] /Count 1 >>endobj\n")
-    objects.append(
-        b"3 0 obj<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
-        b"/Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>endobj\n"
-    )
-    objects.append(
-        f"4 0 obj<< /Length {len(stream)} >>stream\n".encode()
-        + stream
-        + b"\nendstream\nendobj\n"
-    )
-    objects.append(
-        b"5 0 obj<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>endobj\n"
-    )
-    out = io.BytesIO()
-    out.write(b"%PDF-1.4\n")
-    offsets = [0]
-    for obj in objects:
-        offsets.append(out.tell())
-        out.write(obj)
-    xref = out.tell()
-    out.write(f"xref\n0 {len(offsets)}\n".encode())
-    out.write(b"0000000000 65535 f \n")
-    for offset in offsets[1:]:
-        out.write(f"{offset:010d} 00000 n \n".encode())
-    trailer = (
-        f"trailer<< /Size {len(offsets)} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n"
-    )
-    out.write(trailer.encode())
-    return out.getvalue()
 
 
 def certificate_payload(content: TrainingContent, user: User) -> dict[str, Any] | None:
@@ -90,6 +45,67 @@ def certificate_payload(content: TrainingContent, user: User) -> dict[str, Any] 
             if cert.status == Status.APPROVED and cert.file
             else None
         ),
+    }
+
+
+def _admin_certificate_summary(
+    cert: TrainingCertificate | None,
+) -> dict[str, Any] | None:
+    if cert is None:
+        return None
+    return {
+        "status": cert.status,
+        "available": cert.status == Status.APPROVED and bool(cert.file),
+    }
+
+
+def certificates_workspace_payload(
+    actor: User, content: TrainingContent
+) -> dict[str, Any]:
+    """Completed learners in scope for the training workspace Issue panel."""
+    targetable = targetable_user_queryset(actor)
+    completed_qs = (
+        TrainingProgress.objects.filter(
+            content=content,
+            status=ProgressStatus.COMPLETED,
+            user__in=targetable,
+        )
+        .select_related("user", "user__office")
+        .order_by("-completed_at", "user_id")
+    )
+    eligible_count = completed_qs.count()
+    rows = list(completed_qs[:CERTIFICATE_LEARNER_CAP])
+    user_ids = [row.user.pk for row in rows]
+    certs = {
+        cert.user.pk: cert
+        for cert in TrainingCertificate.objects.filter(
+            content=content, user_id__in=user_ids
+        ).select_related("user")
+    }
+    issued_count = TrainingCertificate.objects.filter(
+        content=content,
+        status=Status.APPROVED,
+        user__in=targetable,
+        user_id__in=TrainingProgress.objects.filter(
+            content=content, status=ProgressStatus.COMPLETED
+        ).values("user_id"),
+    ).count()
+    learners = [
+        {
+            "id": row.user.pk,
+            "name": row.user.get_full_name() or row.user.email,
+            "email": row.user.email,
+            "officeName": row.user.office.name if row.user.office else "",
+            "completedAt": (row.completed_at.isoformat() if row.completed_at else None),
+            "certificate": _admin_certificate_summary(certs.get(row.user.pk)),
+        }
+        for row in rows
+    ]
+    return {
+        "learners": learners,
+        "eligibleCount": eligible_count,
+        "issuedCount": issued_count,
+        "capped": eligible_count > CERTIFICATE_LEARNER_CAP,
     }
 
 
@@ -113,26 +129,31 @@ def ensure_pending_certificate(
     return cert
 
 
-@transaction.atomic
-def approve_certificate(
-    *,
-    actor: User,
-    certificate: TrainingCertificate,
-) -> TrainingCertificate:
+def _assert_can_manage_certificate(
+    *, actor: User, content: TrainingContent, learner: User
+) -> None:
     if not has_effective_permission(actor, MANAGE_PERMISSION):
-        raise PermissionDenied("You cannot approve training certificates.")
-    assert_can_author(actor, certificate.content.owner_office)
-    if not targetable_user_queryset(actor).filter(pk=certificate.user.pk).exists():
+        raise PermissionDenied("You cannot issue training certificates.")
+    assert_can_author(actor, content.owner_office)
+    if not targetable_user_queryset(actor).filter(pk=learner.pk).exists():
         raise PermissionDenied("That learner is outside your training scope.")
 
-    locked = (
-        TrainingCertificate.objects.select_for_update(of=("self",))
-        .filter(pk=certificate.pk)
-        .first()
+
+def _finalize_approval(
+    *, actor: User, locked: TrainingCertificate, force: bool = False
+) -> TrainingCertificate:
+    """Generate signed PDF and mark approved. Caller must hold the row lock."""
+    from apps.training.certificate_crypto import (
+        seal_certificate,
+        verify_url,
     )
-    if locked is None:
-        raise CertificateError({"certificate": ["Certificate no longer exists."]})
-    if locked.status == Status.APPROVED and locked.file:
+
+    if (
+        not force
+        and locked.status == Status.APPROVED
+        and locked.file
+        and locked.signature
+    ):
         return locked
 
     learner_name = locked.user.get_full_name() or locked.user.email
@@ -140,33 +161,118 @@ def approve_certificate(
         user=locked.user, content=locked.content, status=ProgressStatus.COMPLETED
     ).first()
     completed_at = (
-        completed.completed_at.date().isoformat()
+        completed.completed_at.date()
         if completed and completed.completed_at
-        else timezone.localdate().isoformat()
+        else timezone.localdate()
     )
-    pdf = _build_simple_pdf(
+    approved_at = timezone.now()
+    was_new = locked.status != Status.APPROVED or not locked.signature
+
+    digest = seal_certificate(
+        locked, completed_at=completed_at, approved_at=approved_at
+    )
+    pdf = build_training_certificate_pdf(
         title=locked.content.title,
         learner_name=learner_name,
         completed_at=completed_at,
+        public_id=str(locked.public_id),
+        verify_url=verify_url(locked.public_id),
+        signature=digest,
+        signature_algorithm=locked.signature_algorithm,
     )
     filename = f"training-{locked.content.pk}-certificate.pdf"
     locked.file.save(filename, ContentFile(pdf), save=False)
     locked.status = Status.APPROVED
     locked.approved_by = actor
-    locked.approved_at = timezone.now()
+    locked.approved_at = approved_at
     locked.save()
 
-    log_on_commit(
-        "training.certificate_approved",
-        actor=actor_from_user(actor),
-        target=target_from_instance(locked, label=locked.content.title),
-        metadata={
-            "learner_id": locked.user.pk,
-            "content_id": locked.content.pk,
-            "certificate_id": locked.pk,
-        },
-    )
+    if was_new:
+        log_on_commit(
+            "training.certificate_approved",
+            actor=actor_from_user(actor),
+            target=AuditTarget(
+                target_type=TrainingCertificate._meta.label_lower,
+                target_id=str(locked.pk),
+                target_label=locked.content.title,
+                target_snapshot={
+                    "status": locked.status,
+                    "learner_id": locked.user.pk,
+                    "content_id": locked.content.pk,
+                    "public_id": str(locked.public_id),
+                    "has_file": bool(locked.file),
+                },
+            ),
+            metadata={
+                "learner_id": locked.user.pk,
+                "content_id": locked.content.pk,
+                "certificate_id": locked.pk,
+                "public_id": str(locked.public_id),
+            },
+        )
     return locked
+
+
+@transaction.atomic
+def approve_certificate(
+    *,
+    actor: User,
+    certificate: TrainingCertificate,
+    force: bool = False,
+) -> TrainingCertificate:
+    _assert_can_manage_certificate(
+        actor=actor, content=certificate.content, learner=certificate.user
+    )
+
+    locked = (
+        TrainingCertificate.objects.select_for_update(of=("self",))
+        .select_related("user", "content")
+        .filter(pk=certificate.pk)
+        .first()
+    )
+    if locked is None:
+        raise CertificateError({"certificate": ["Certificate no longer exists."]})
+    return _finalize_approval(actor=actor, locked=locked, force=force)
+
+
+@transaction.atomic
+def issue_certificate(
+    *,
+    actor: User,
+    content: TrainingContent,
+    learner: User,
+    force: bool = False,
+) -> TrainingCertificate:
+    """One-click issue: create (if needed) and approve a signed certificate PDF."""
+    _assert_can_manage_certificate(actor=actor, content=content, learner=learner)
+
+    progress = TrainingProgress.objects.filter(
+        user=learner, content=content, status=ProgressStatus.COMPLETED
+    ).first()
+    if progress is None:
+        raise CertificateError(
+            {
+                "learnerId": [
+                    "Issue a certificate only after the learner has completed "
+                    "this training."
+                ]
+            }
+        )
+
+    cert, _ = TrainingCertificate.objects.get_or_create(
+        user=learner,
+        content=content,
+        defaults={"status": Status.PENDING},
+    )
+    locked = (
+        TrainingCertificate.objects.select_for_update(of=("self",))
+        .select_related("user", "content")
+        .filter(pk=cert.pk)
+        .first()
+    )
+    if locked is None:
+        raise CertificateError({"certificate": ["Certificate no longer exists."]})
+    return _finalize_approval(actor=actor, locked=locked, force=force)
 
 
 def stream_certificate(user: User, content: TrainingContent):
