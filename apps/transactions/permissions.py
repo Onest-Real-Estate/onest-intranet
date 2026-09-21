@@ -8,6 +8,9 @@ VIEW_TRANSACTIONS = "web.view_transactions"
 # Create drafts, edit non-status fields, and mutate assignments.
 MANAGE_TRANSACTIONS = "web.manage_transactions"
 
+# Agents may open a deal for themselves without the full manage grant.
+CREATE_OWN_TRANSACTIONS = "web.create_own_transactions"
+
 # Lifecycle transitions through the centralized service.
 TRANSITION_TRANSACTIONS = "web.transition_transactions"
 

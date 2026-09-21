@@ -7,9 +7,10 @@ including Dual Representation as a representation posture. This document is
 the contract for the data model, scope, field projection, and enforced
 lifecycle shipped in [#99](https://github.com/Onest-Real-Estate/onest/issues/99).
 Creation UI, workspace, documents, checklists, commissions, and notification
-producers are later epic issues (#100–#108). CRM property/client foreign keys
-arrive with the CRM stack (#109+); until then the deal stores snapshots and
-opaque external references.
+producers are later epic issues (#101–#108). The guided create workflow in
+[#100](https://github.com/Onest-Real-Estate/onest/issues/100) is documented
+below. CRM property/client foreign keys arrive with the CRM stack (#109+);
+until then the deal stores snapshots and opaque external references.
 
 ## Permissions
 
@@ -17,12 +18,16 @@ opaque external references.
 | --- | --- |
 | `web.view_transactions` | Scoped list/detail and ops nav destination |
 | `web.manage_transactions` | Create drafts, edit non-status fields, mutate assignments |
+| `web.create_own_transactions` | Agents open a draft as primary agent in their home office |
 | `web.transition_transactions` | Lifecycle moves through the service |
 | `transactions.view_transaction_financials` | `listPrice` / `contractPrice` in serialization |
 | `transactions.view_transaction_clients` | Client snapshot PII in serialization |
 
 Holding a manage grant does **not** imply financial or client field grants.
 Frontend hiding is never authorization.
+
+Branch managers hold `web.manage_transactions` (office-scoped). Realtors hold
+`web.create_own_transactions` without the full manage grant.
 
 ## Scope
 
@@ -50,8 +55,51 @@ deals outside office expansion.
 - **Money:** `list_price` / `contract_price` via Decimal USD helpers (12/2)
 - **Dates:** `acceptance_date`, `closing_date`; lifecycle timestamps per status
 - **Vendors:** opaque `lender_ref` / `title_ref` / `referral_ref`
+- **Idempotency:** nullable unique `submission_key` stamped on prepare
 - **Archive:** soft only — `archived_at` / `archived_by` / `archive_reason`.
   No hard delete of deal history.
+
+## Create workflow (#100)
+
+Routes: `transaction_new`, `transaction_draft_save`, `transaction_prepare`,
+`transaction_people_search`, `transaction_workspace`. Services live in
+`apps.transactions.creation`.
+
+### Creator matrix
+
+| Actor | Gate | Hard rules |
+| --- | --- | --- |
+| Manage grant (admins, RM, TC, branch manager) | `web.manage_transactions` | Office and people must sit in effective scope |
+| Agent | `web.create_own_transactions` | `primary_agent=self`, `office=home`; crafted expansions refused |
+| Anyone else | — | 403 |
+
+Status is never accepted from the client. Draft save allows incomplete prepare
+fields. Prepare validates `REQUIRED_FIELDS[preparing]` plus a street address,
+then transitions Draft → Preparing under a client `submissionKey`.
+
+### Server-owned schema
+
+`build_create_schema` returns camelCase sections, required markers, locked
+fields, and type/representation options. Type↔representation pairs are
+allowlisted (buy→buyer/dual, sell→seller/dual, rent→landlord/tenant/dual).
+The UI mirrors required flags; the server remains authoritative.
+
+### Duplicates
+
+`find_duplicate_matches` searches only `for_reader` rows by MLS (casefold),
+normalized address, and client email/name. Visible hits expose `reference` +
+`publicId` only. Out-of-scope candidates are never acknowledged. Prepare
+returns 409 with those matches until `confirmedDuplicate` is set.
+
+### Idempotency
+
+The same `submission_key` returns the same transaction without a second create
+audit or prepare transition event.
+
+### Workspace shell
+
+`TransactionWorkspace` is a read-mostly confirmation page for #100. Parties,
+documents, tasks, and compliance expand in #101+.
 
 ## Assignments
 
@@ -124,4 +172,5 @@ out of scope for #99.
 - [`docs/permissions.md`](permissions.md) — capability catalog
 - [`docs/roles.md`](roles.md) — TC / regional TC scopes
 - [`docs/agent-contracts.md`](agent-contracts.md) — high-stakes lifecycle pattern
-- Issues #100–#108 — creation UI through closure notifications
+- Issues #101–#108 — workspace through closure notifications
+- Issue #100 — scoped create workflow (this document)

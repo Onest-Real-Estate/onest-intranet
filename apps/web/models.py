@@ -36,6 +36,10 @@ class OperationsPermission(models.Model):
             ("view_transactions", _("Can view scoped transactions")),
             ("manage_transactions", _("Can create and manage scoped transactions")),
             (
+                "create_own_transactions",
+                _("Can create own transactions as primary agent"),
+            ),
+            (
                 "transition_transactions",
                 _("Can transition scoped transaction lifecycle"),
             ),

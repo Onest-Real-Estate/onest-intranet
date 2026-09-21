@@ -2960,3 +2960,35 @@ ROUTE_POLICIES["my_reservation_cancel"] = AuthorizationPolicy(
     route_names=("my_reservation_cancel",),
     scope_rule="self_only",
 )
+
+ROUTE_POLICIES["transaction_create"] = AuthorizationPolicy(
+    key="transaction_create",
+    access="permission_protected",
+    description=("Guided transaction create, draft save, prepare, and people search."),
+    methods=("GET", "POST"),
+    route_names=(
+        "transaction_new",
+        "transaction_draft_save",
+        "transaction_prepare",
+        "transaction_people_search",
+    ),
+    any_permissions=(
+        "web.manage_transactions",
+        "web.create_own_transactions",
+    ),
+    scope_rule="user_office_scope",
+)
+ROUTE_POLICIES["transaction_workspace"] = AuthorizationPolicy(
+    key="transaction_workspace",
+    access="permission_protected",
+    description="Minimal transaction workspace shell; row scope re-checked in view.",
+    methods=("GET",),
+    route_names=("transaction_workspace",),
+    any_permissions=(
+        "web.view_transactions",
+        "web.manage_transactions",
+        "web.create_own_transactions",
+        "web.view_own_transactions",
+    ),
+    scope_rule="user_office_scope",
+)

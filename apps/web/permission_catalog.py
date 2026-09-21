@@ -311,10 +311,22 @@ PERMISSION_DEFINITIONS: tuple[PermissionDefinition, ...] = (
         default_roles=(
             *_BROKERAGE_ADMINS,
             REGIONAL_MANAGER,
+            BRANCH_MANAGER,
             TRANSACTION_COORDINATOR,
             REGIONAL_TRANSACTION_COORDINATOR,
         ),
         risk="high",
+    ),
+    PermissionDefinition(
+        codename="web.create_own_transactions",
+        name="Can create own transactions as primary agent",
+        domain="transactions",
+        action="create",
+        description=(
+            "Open a draft transaction where the signed-in agent is the "
+            "primary agent and the owning office is their home office."
+        ),
+        default_roles=(REALTOR,),
     ),
     PermissionDefinition(
         codename="web.transition_transactions",

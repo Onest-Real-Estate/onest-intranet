@@ -152,6 +152,18 @@ class Transaction(models.Model):
     title_ref = models.CharField(_("title reference"), max_length=128, blank=True)
     referral_ref = models.CharField(_("referral reference"), max_length=128, blank=True)
 
+    submission_key = models.CharField(
+        _("submission key"),
+        max_length=64,
+        blank=True,
+        null=True,
+        unique=True,
+        help_text=_(
+            "Client-supplied idempotency key for create/prepare. Null until "
+            "the first prepare attempt stamps one."
+        ),
+    )
+
     status = models.CharField(
         _("status"),
         max_length=32,

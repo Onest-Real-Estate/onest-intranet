@@ -236,6 +236,7 @@ _OPS_BRANCH = (
     "contract.manage_contract_templates",
     "contract.view_commission_terms",
     "web.view_transactions",
+    "web.manage_transactions",
     "web.transition_transactions",
     "web.view_inventory",
     "web.view_reservations",
@@ -320,6 +321,7 @@ _OPS_OFFICE_ADMIN = (
 _OPS_REALTOR = (
     "reservations.book_spaces",
     "web.view_own_transactions",
+    "web.create_own_transactions",
     "web.view_own_tasks",
     "web.view_own_commission",
     "web.view_own_leads",

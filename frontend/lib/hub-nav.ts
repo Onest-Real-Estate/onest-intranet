@@ -292,7 +292,7 @@ export const HUB_NAV_REGISTRY: HubNavItem[] = [
   {
     key: "agent-transactions",
     label: "Agent transactions",
-    route: route("coming_soon", routes.coming_soon("agent-transactions")),
+    route: route("transaction_new", routes.transaction_new()),
     icon: ClipboardList,
     group: "general",
     order: 40,
@@ -300,7 +300,7 @@ export const HUB_NAV_REGISTRY: HubNavItem[] = [
     permissions: {},
     roles: PRODUCING_ROLES,
     feature: "agent-transactions",
-    activeMatch: active(routes.coming_soon("agent-transactions")),
+    activeMatch: active(routes.transaction_new(), "/transactions/"),
   },
   {
     key: "my-reservations",
