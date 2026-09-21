@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AnnouncementSourceArticlePanel } from "@/components/announcements/AnnouncementSourceArticlePanel";
 import type { AnnouncementArticleSuggestions } from "@/types";
@@ -30,7 +30,11 @@ function suggestions(
 describe("AnnouncementSourceArticlePanel", () => {
   beforeEach(() => {
     fetchMock.mockReset();
-    document.cookie = "XSRF-TOKEN=test-token";
+    vi.spyOn(document, "cookie", "get").mockReturnValue("XSRF-TOKEN=test-token");
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it("fetches suggestions and applies title only when asked", async () => {
