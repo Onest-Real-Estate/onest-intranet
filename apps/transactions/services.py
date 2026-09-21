@@ -50,7 +50,7 @@ logger = logging.getLogger("apps.transactions")
 
 def _audit_target(tx: Transaction) -> AuditTarget:
     return AuditTarget(
-        target_type="transactions.transaction",
+        target_type="transaction.transaction",
         target_id=str(tx.public_id),
         target_label=tx.reference or str(tx.public_id),
         target_snapshot={

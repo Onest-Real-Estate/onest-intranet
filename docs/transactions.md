@@ -101,6 +101,54 @@ audit or prepare transition event.
 `TransactionWorkspace` is a read-mostly confirmation page for #100. Parties,
 documents, tasks, and compliance expand in #101+.
 
+## Workspace (#101)
+
+Routes: `my_transactions`, `admin_transactions` (ops list),
+`transaction_workspace?section=`, plus section POST saves
+(`transaction_party_save`, `transaction_property_save`,
+`transaction_key_date_save`, `transaction_note_save`,
+`transaction_assignment_save`).
+
+### Sections
+
+Live URL-driven sections: Overview, Parties, Property, Dates, Notes,
+Assignments, Activity. Stub sections (Documents, Checklist, Tasks, Signatures,
+Commission, Compliance) render “coming soon” and stay non-writable until later
+epics.
+
+### Models
+
+| Model | Purpose |
+| --- | --- |
+| `TransactionParty` | Structured party with role/kind/contact, primary-per-role uniqueness, frozen `snapshot` JSON |
+| `TransactionPropertySnapshot` | Immutable history row on material property/MLS changes |
+| `TransactionKeyDate` | Typed aware datetime + timezone; soft-supersede via `ended_at` / `superseded_by` |
+| `TransactionNote` | Body + visibility enum; never one unrestricted stream |
+
+Concurrency: every workspace write bumps `Transaction.updated_at`. Clients post
+`expectedVersion` (ISO µs from `updated_at`); mismatch → **409** with form
+error (contract pattern).
+
+### Note visibility mapping
+
+No new permission catalog entries:
+
+| Visibility | Who sees it |
+| --- | --- |
+| `team` | Anyone who can `for_reader` the deal |
+| `broker_compliance` | Holders of `web.manage_transactions` or `web.transition_transactions` |
+| `private_author` | Author only |
+
+Contact fields on parties reuse `transactions.view_transaction_clients`.
+Financial fields keep `transactions.view_transaction_financials`.
+
+### Activity
+
+Audit `target_type` is `transaction.transaction` (legacy
+`transactions.transaction` still projects). Timeline embeds on the Activity
+section and Overview teaser via `project_record_activity`; out-of-scope ids
+404 through `scoped_transaction_queryset`.
+
 ## Assignments
 
 `TransactionAssignment` records `(transaction, user, role)` with `ended_at`
@@ -160,6 +208,7 @@ Registered in `apps/audit/catalog.py`:
 - `transaction.status_changed`
 - `transaction.archived`
 - `transaction.assignment_changed`
+- `transaction.updated` (workspace field writes; allowlisted metadata only)
 
 ## Retention
 

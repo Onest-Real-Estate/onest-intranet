@@ -5787,6 +5787,60 @@ export interface TransactionWorkspaceAssignment {
   endedAt: string | null;
 }
 
+export interface TransactionWorkspaceSection {
+  id: string;
+  label: string;
+  live: boolean;
+  stub: boolean;
+  writable: boolean;
+}
+
+export interface TransactionPartyRow {
+  publicId: string;
+  role: string;
+  roleLabel: string;
+  kind: string;
+  displayName: string;
+  organizationName: string;
+  representation: string;
+  isPrimary: boolean;
+  validFrom: string | null;
+  validUntil: string | null;
+  email?: string;
+  phone?: string;
+  snapshot: Record<string, string>;
+}
+
+export interface TransactionKeyDateRow {
+  publicId: string;
+  dateType: string;
+  dateTypeLabel: string;
+  label: string;
+  occursAt: string | null;
+  timezone: string;
+  source: string;
+  isRequired: boolean;
+}
+
+export interface TransactionNoteRow {
+  publicId: string;
+  body: string;
+  visibility: string;
+  visibilityLabel: string;
+  author: { id: string; displayName: string } | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+  mine: boolean;
+}
+
+export interface TransactionPropertyHistoryRow {
+  publicId: string;
+  snapshot: Record<string, string>;
+  mlsNumber: string;
+  recordedAt: string | null;
+  changeSummary: string[];
+}
+
 export interface TransactionWorkspaceRecord {
   publicId: string;
   reference: string;
@@ -5824,5 +5878,51 @@ export interface TransactionWorkspaceRecord {
 
 export interface TransactionWorkspacePageProps extends PageProps {
   transaction: TransactionWorkspaceRecord;
-  capabilities: { manage: boolean; view: boolean };
+  expectedVersion: string;
+  section: string;
+  sections: TransactionWorkspaceSection[];
+  capabilities: {
+    manage: boolean;
+    view: boolean;
+    transition: boolean;
+    viewBrokerNotes: boolean;
+    viewClients: boolean;
+  };
+  allowedLifecycleActions: Array<{ to: string; code: string }>;
+  parties: TransactionPartyRow[];
+  propertyHistory: TransactionPropertyHistoryRow[];
+  keyDates: TransactionKeyDateRow[];
+  notes: TransactionNoteRow[];
+  activity: ActivityTimelinePage | null;
+  activityTeaser: ActivityTimelinePage | null;
+  errors?: ValidationErrors;
+}
+
+export interface TransactionListRow {
+  publicId: string;
+  reference: string;
+  transactionType: string;
+  representationType: string;
+  status: string;
+  statusLabel: string;
+  office: { stableKey: string; name: string } | null;
+  primaryAgent: { id: string; displayName: string; email: string } | null;
+  coordinator: { id: string; displayName: string; email: string } | null;
+  propertyLine: string;
+  mlsNumber: string;
+  acceptanceDate: string | null;
+  closingDate: string | null;
+  updatedAt: string | null;
+  listPrice?: string | null;
+  contractPrice?: string | null;
+}
+
+export interface MyTransactionsPageProps extends PageProps {
+  items: ListResponse<TransactionListRow, Record<string, string>>;
+  capabilities: { create: boolean; manage: boolean; view: boolean };
+}
+
+export interface AdminTransactionsPageProps extends PageProps {
+  items: ListResponse<TransactionListRow, Record<string, string>>;
+  capabilities: { create: boolean; manage: boolean; view: boolean };
 }

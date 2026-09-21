@@ -213,7 +213,7 @@ def test_coming_soon_redirects_live_section_to_real_route(client):
         reverse("coming_soon", kwargs={"section": "agent-transactions"}),
     )
     assert response.status_code == 302
-    assert response.url == reverse("transaction_new")
+    assert response.url == reverse("my_transactions")
 
 
 @pytest.mark.django_db

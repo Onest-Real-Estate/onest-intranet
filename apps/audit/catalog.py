@@ -1301,3 +1301,18 @@ registry.register(
         "reviewer assignment is activated or ended."
     ),
 )
+
+registry.register(
+    name="transaction.updated",
+    version=1,
+    required_payload_keys={
+        "transaction_id",
+        "office_id",
+        "actor_id",
+        "section",
+    },
+    description=(
+        "Emitted when workspace fields (parties, property, dates, notes) "
+        "change. Metadata carries allowlisted field keys only — no raw PII."
+    ),
+)
