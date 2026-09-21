@@ -68,6 +68,7 @@ TEAM_METRIC_KEYS = (
 # Branch and region managers do not hold every operations permission, so their
 # team card set is a documented subset rather than the whole band.
 BRANCH_TEAM_METRIC_KEYS = (
+    "teamActiveTransactions",
     "teamOverdueInventory",
     "teamRoomUtilization",
     "teamNewAgents",
