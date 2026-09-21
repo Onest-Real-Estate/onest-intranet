@@ -237,6 +237,7 @@ const URLS = {
     'office_inventory_item': (public_id: string) => `/office-inventory/${public_id}`,
     'office_inventory': () => `/office-inventory`,
     'new_agent_onboarding_notice': (user_id: number) => `/operations/new-agents/${user_id}/notices`,
+    'new_agent_onboarding_handoff': (user_id: number) => `/operations/new-agents/${user_id}/handoff`,
     'new_agent_onboarding_contract': (user_id: number) => `/operations/new-agents/${user_id}/contract`,
     'new_agent_onboarding_tools': (user_id: number) => `/operations/new-agents/${user_id}/tools`,
     'new_agent_onboarding_tasks': (user_id: number) => `/operations/new-agents/${user_id}/tasks`,

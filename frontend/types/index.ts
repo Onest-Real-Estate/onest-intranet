@@ -2165,6 +2165,7 @@ export type OnboardingWorkspaceActionCode =
   | "retry_notification"
   | "initiate_contract"
   | "open_contract"
+  | "retry_office_handoff"
   | "wait_for_required_setup"
   | "review_blockers";
 
@@ -2178,7 +2179,7 @@ export interface OnboardingWorkspaceAction {
   method?: "get" | "post";
   href?: string | null;
   permission?: string;
-  source?: "tool" | "contract" | "profile" | "onboarding";
+  source?: "tool" | "contract" | "handoff" | "profile" | "onboarding";
   description?: string;
 }
 

@@ -345,6 +345,31 @@ describe("OnboardingWorkspace", () => {
     );
   });
 
+  it("retries a failed office handoff from the recommended action", async () => {
+    setPage({
+      recommendedAction: {
+        source: "handoff",
+        code: "retry_office_handoff",
+        label: "Retry office handoff",
+        description: "The office handoff was not delivered.",
+        method: "post",
+        href: "/operations/new-agents/9/handoff",
+        tool: null,
+        enabled: true,
+        unavailableReason: "",
+      },
+    });
+    const user = userEvent.setup();
+    render(<OnboardingWorkspace />);
+    await user.dblClick(screen.getByRole("button", { name: "Retry office handoff" }));
+    expect(router.post).toHaveBeenCalledTimes(1);
+    expect(router.post).toHaveBeenCalledWith(
+      "/operations/new-agents/9/handoff",
+      { expected_version: "0:7:2026-08-19T12:00:00+00:00" },
+      expect.any(Object),
+    );
+  });
+
   it("shows the submitted profile and confirmed office contact", () => {
     render(<OnboardingWorkspace />);
     expect(screen.getByRole("img", { name: "Bob Lee headshot" })).toHaveAttribute(

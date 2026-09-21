@@ -49,11 +49,15 @@ result without revealing whether the office exists.
 
 ## Aggregate reconciliation
 
-Connected calculators (`onboardingProgress`, `officeHeadcount`,
-`complianceOpenItems`) build
+Connected calculators (`onboardingProgress`, `onboardingJourneyHealth`,
+`officeHeadcount`, `complianceOpenItems`) build
 aggregates and chart series from the **same** filtered row set (via
 `Counter` / per-office buckets). Drill-down rows therefore sum to the chart
 and the reported total under the documented inclusion rules.
+
+`onboardingJourneyHealth` rows are aggregates only (group, measure, value),
+so the step rows sum to the scoped total and no row names a person. See
+[onboarding-support.md](onboarding-support.md#operational-measures).
 
 ## Exports
 

@@ -25,6 +25,7 @@ from ..services.agent_administration import (
     ADMINISTERED_FIELDS,
     reset_license_verification,
 )
+from ..services.onboarding_metrics import OnboardingErrorCode, record_onboarding_error
 from ..services.profile import (
     PROFILE_AUDIT_FIELDS,
     HeadshotStorageUnavailable,
@@ -183,6 +184,7 @@ def headshot_upload(request: HttpRequest) -> JsonResponse:
     try:
         validate_headshot(upload)
     except ValidationError as exc:
+        record_onboarding_error(OnboardingErrorCode.HEADSHOT_INVALID)
         return JsonResponse(
             {"error": " ".join(exc.messages), "retryable": False}, status=422
         )
@@ -190,6 +192,7 @@ def headshot_upload(request: HttpRequest) -> JsonResponse:
     try:
         replace_headshot(user, upload)
     except HeadshotStorageUnavailable as exc:
+        record_onboarding_error(OnboardingErrorCode.HEADSHOT_STORAGE_UNAVAILABLE)
         return JsonResponse({"error": exc.message, "retryable": True}, status=503)
     return JsonResponse({"url": headshot_public_url(request, user)})
 

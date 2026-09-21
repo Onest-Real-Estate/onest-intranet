@@ -26,6 +26,7 @@ from apps.web.metrics import (
 from apps.web.reporting.calculators import (
     compliance_open_items,
     office_headcount,
+    onboarding_journey_health,
     onboarding_progress,
     pending_source,
     training_completion,
@@ -223,6 +224,35 @@ REPORT_DEFINITIONS: tuple[ReportDefinition, ...] = (
             "Population is the new-agent queryset (90-day join window, incomplete "
             "profile, or open operational work), scoped before filters. Aggregate "
             "status counts are Counter totals over the same filtered rows. "
+            f"Timezone: {settings.TIME_ZONE}. Currency: n/a. No prior-period "
+            "comparison in calculation version 1."
+        ),
+        all_permissions=("web.view_new_agents",),
+    ),
+    ReportDefinition(
+        key="onboardingJourneyHealth",
+        title="Onboarding journey health",
+        description="First-login journey funnel, handoff, tools, and blockers.",
+        category="onboarding",
+        order=65,
+        scopes=(MetricScope.OFFICE, MetricScope.REGION, MetricScope.COMPANY),
+        source_module=SourceModule.USER_DIRECTORY,
+        calculator=onboarding_journey_health,
+        columns=(
+            ReportColumn(key="group", label="Group"),
+            ReportColumn(key="measure", label="Measure"),
+            ReportColumn(key="value", label="Value", numeric=True),
+        ),
+        filters=(ReportFilterSpec(key="office", label="Office", kind="office"),),
+        time_grain="none",
+        definition=(
+            "Population is the new-agent queryset scoped before filters, without "
+            "staff or superusers. Rows are aggregates keyed by stable state, "
+            "blocker, and audit-action codes; no row identifies a person. "
+            "Medians are hours: required setup from account creation, tool "
+            "invitation and ready from the required-setup checkpoint; backfilled "
+            "legacy users are excluded from medians. Guides opened/completed "
+            "count agents with tool-onboarding training progress. "
             f"Timezone: {settings.TIME_ZONE}. Currency: n/a. No prior-period "
             "comparison in calculation version 1."
         ),

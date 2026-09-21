@@ -126,6 +126,103 @@ def onboarding_progress(context: ReportContext) -> ReportResult:
     )
 
 
+def onboarding_journey_health(context: ReportContext) -> ReportResult:
+    """Aggregate first-login journey health within effective scope.
+
+    Inclusion rules:
+    - Population is ``new_agent_queryset`` (already office-scoped), minus staff
+      and superusers, optionally intersected with an in-scope ``office``.
+    - Every row is an aggregate keyed by a stable enum value; no row names a
+      person, so the projection carries no personal data.
+    - Durations are hours from the required-setup checkpoint (or account
+      creation, for required setup itself) and exclude backfilled legacy users.
+    - Timezone: stored UTC instants; no prior-period comparison in v1.
+    """
+    from apps.user.services.onboarding_metrics import journey_health
+
+    queryset = new_agent_queryset(context.user, at=context.now, access=context.access)
+    office_key = context.filters.get("office")
+    if office_key:
+        in_scope = scoped_users(
+            context.user, access=context.access, office_stable_key=office_key
+        )
+        queryset = queryset.filter(pk__in=in_scope.values("pk"))
+    health = journey_health(queryset, now=context.now)
+
+    rows: list[dict[str, Any]] = [
+        {"group": "journey", "measure": "population", "value": health.population},
+        {"group": "journey", "measure": "started", "value": health.journeys_started},
+        {
+            "group": "journey",
+            "measure": "required_setup_completed",
+            "value": health.required_setup_completed,
+        },
+        {
+            "group": "journey",
+            "measure": "activation_completed",
+            "value": health.activation_completed,
+        },
+        {
+            "group": "journey",
+            "measure": "median_hours_to_required_setup",
+            "value": health.median_hours_to_required_setup,
+        },
+        {
+            "group": "journey",
+            "measure": "blocked_by_missing_contact_or_source",
+            "value": health.agents_blocked_by_source,
+        },
+    ]
+    for group, counts in (
+        ("current_step", health.current_steps),
+        ("handoff", health.handoff_states),
+        ("handoff_delivery", health.handoff_delivery),
+        ("contract", health.contract_states),
+        ("blocker", health.blockers),
+        ("failure", health.failures),
+    ):
+        rows.extend(
+            {"group": group, "measure": key, "value": value}
+            for key, value in counts.items()
+        )
+    for tool in health.tools:
+        rows.extend(
+            {"group": f"tool:{tool.tool}", "measure": measure, "value": value}
+            for measure, value in (
+                ("invitations_sent", tool.invitations_sent),
+                ("ready", tool.ready),
+                ("median_hours_to_invitation", tool.median_hours_to_invitation),
+                ("median_hours_to_ready", tool.median_hours_to_ready),
+                ("guides_opened", tool.guides_opened),
+                ("guides_completed", tool.guides_completed),
+            )
+        )
+
+    series = tuple(
+        ReportSeriesPoint(key=key, label=key.replace("_", " ").capitalize(), value=v)
+        for key, v in health.current_steps.items()
+    )
+    return ReportResult(
+        aggregates={
+            "total": health.population,
+            "requiredSetupCompleted": health.required_setup_completed,
+            "activationCompleted": health.activation_completed,
+            "blockedBySource": health.agents_blocked_by_source,
+        },
+        rows=tuple(rows),
+        series=series,
+        chart_kind="bar",
+        empty_reason=(
+            None if health.population else "No new agents are in your scope right now."
+        ),
+        data_as_of=context.now,
+        comparison_note=(
+            "A point-in-time snapshot of the current journey; not compared to a "
+            "prior period in calculation version 1."
+        ),
+    )
+
+
 def office_headcount(context: ReportContext) -> ReportResult:
     """Active vs disabled people by office inside effective scope.
 

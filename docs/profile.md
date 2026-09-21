@@ -137,6 +137,11 @@ double submit is harmless; a real change from a stale tab returns 409 with the
 agent's typed values kept. Finalization locks the user row, returns early when
 already complete, and publishes `user.onboarded` (v2) once per onboarding cycle.
 
+Reset, rollback, and what a reset keeps are in
+[onboarding-support.md](onboarding-support.md#reset-and-replay). Rejected
+section saves, reviews, and uploads are counted by stable code
+(`onboarding_error code=…`) without logging any submitted value.
+
 ## Adding a field
 
 1. Add the model field, the normalizer in `profile_fields.py`, and a migration.

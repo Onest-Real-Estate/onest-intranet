@@ -46,6 +46,13 @@ lowest-ordered family. The onboarding journey decides *when* a guide is offered;
 see `docs/onboarding-operations.md`. Completing one writes `TrainingProgress`
 and nothing else: it never marks a vendor account ready.
 
+Accessibility: uploaded recordings have no caption track yet, and transcripts
+have no authoring surface. Until both ship, publish activation guides as
+provider embeds with captions enabled, and verify captions during the staging
+pass in [onboarding-support.md](onboarding-support.md#staging-checklist).
+Opened and completed guides are counted per tool in the **Onboarding journey
+health** report.
+
 ## Transcriptions
 
 Video and recording items may include searchable transcript segments

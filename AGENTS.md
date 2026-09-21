@@ -103,6 +103,8 @@ docs/quick-access.md   Administered dashboard launchers: audience, grants, order
 docs/quick-create.md   Global Quick Create menu: action registry, scope, safe returns
 docs/search.md     Global search: provider contract, isolation, caps, palette
 docs/notifications.md  In-app notifications: producers, sources, centre, badge
+docs/onboarding-operations.md  Onboarding journey contract: states, gate, dialog, live updates
+docs/onboarding-support.md  Onboarding measures, runbook, reset/rollback, staging, seams
 docs/user-directory.md Scoped people directory: filters, field permissions, account state
 docs/agent-directory.md Peer Agent Directory: privacy allowlist, visibility, gated headshots
 docs/profile.md    Self-service profile: editable allowlist, normalization, audit

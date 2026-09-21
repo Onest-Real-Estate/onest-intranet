@@ -231,7 +231,8 @@ export default function OnboardingWorkspace() {
   const canRunRecommended =
     onboarding.recommendedAction.enabled &&
     (onboarding.recommendedAction.source !== "contract" || canRunContractAction) &&
-    (onboarding.recommendedAction.source !== "tool" || canManage);
+    (onboarding.recommendedAction.source !== "tool" || canManage) &&
+    (onboarding.recommendedAction.source !== "handoff" || canManage);
 
   function runRecommendedAction() {
     const action = onboarding.recommendedAction;
@@ -242,9 +243,11 @@ export default function OnboardingWorkspace() {
     }
     setRecommendedSubmitting(true);
     const href =
-      action.source === "contract"
-        ? routes.new_agent_onboarding_contract(onboarding.user.id)
-        : routes.new_agent_onboarding_tools(onboarding.user.id);
+      action.source === "tool"
+        ? routes.new_agent_onboarding_tools(onboarding.user.id)
+        : action.source === "handoff"
+          ? routes.new_agent_onboarding_handoff(onboarding.user.id)
+          : routes.new_agent_onboarding_contract(onboarding.user.id);
     router.post(
       href,
       {
@@ -302,6 +305,7 @@ export default function OnboardingWorkspace() {
               action: "Tool action",
               reason: "Correction reason",
               contract: "Agent contract",
+              handoff: "Office handoff",
               expected_version: "Workspace version",
             }}
           />

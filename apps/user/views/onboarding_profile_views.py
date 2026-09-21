@@ -23,6 +23,7 @@ from ..forms import (
     form_errors,
 )
 from ..models import Office, User
+from ..services.onboarding_metrics import OnboardingErrorCode, record_onboarding_error
 from ..services.onboarding_office import office_confirmation_payload
 from ..services.onboarding_profile import (
     EDITABLE_SECTIONS,
@@ -114,6 +115,7 @@ def _protected_field_denial(request: HttpRequest) -> HttpResponse | None:
     if not rejected:
         return None
     _log_protected_field_rejection(request, rejected)
+    record_onboarding_error(OnboardingErrorCode.PROTECTED_FIELD_REJECTED)
     return HttpResponse("Forbidden", status=403)
 
 
@@ -164,6 +166,7 @@ def onboarding_profile_save(request: HttpRequest, section: str) -> HttpResponse:
 
     tokens = OnboardingProfileSubmissionForm(request.POST)
     if not tokens.is_valid():
+        record_onboarding_error(OnboardingErrorCode.STALE_ONBOARDING_VERSION)
         return _render_flow(
             request,
             section=target,
@@ -186,10 +189,12 @@ def onboarding_profile_save(request: HttpRequest, section: str) -> HttpResponse:
     except ProfileAlreadyFinalized:
         return redirect("dashboard")
     except StaleOnboardingVersion as exc:
+        record_onboarding_error(OnboardingErrorCode.STALE_ONBOARDING_VERSION)
         return _render_flow(
             request, section=target, status=409, errors=_form_message(exc.message)
         )
     except StaleProfileSection as exc:
+        record_onboarding_error(OnboardingErrorCode.STALE_PROFILE_SECTION)
         # Keep what the agent typed: the newer values are one save away from
         # being replaced deliberately, never silently.
         return _render_flow(
@@ -200,6 +205,7 @@ def onboarding_profile_save(request: HttpRequest, section: str) -> HttpResponse:
             posted=request.POST,
         )
     if result.invalid_form is not None:
+        record_onboarding_error(OnboardingErrorCode.PROFILE_INVALID)
         return _render_flow(
             request,
             section=target,
@@ -208,6 +214,7 @@ def onboarding_profile_save(request: HttpRequest, section: str) -> HttpResponse:
             posted=request.POST,
         )
     if result.errors is not None:
+        record_onboarding_error(OnboardingErrorCode.PROFILE_INVALID)
         return _render_flow(
             request,
             section=target,
@@ -232,6 +239,7 @@ def onboarding_profile_finalize(request: HttpRequest) -> HttpResponse:
 
     submission = OnboardingProfileFinalizeForm(request.POST)
     if not submission.is_valid():
+        record_onboarding_error(OnboardingErrorCode.STALE_ONBOARDING_VERSION)
         return _render_flow(
             request,
             section=OnboardingSection.REVIEW,
@@ -247,6 +255,7 @@ def onboarding_profile_finalize(request: HttpRequest) -> HttpResponse:
             ],
         )
     except StaleOnboardingVersion as exc:
+        record_onboarding_error(OnboardingErrorCode.STALE_ONBOARDING_VERSION)
         return _render_flow(
             request,
             section=OnboardingSection.REVIEW,
@@ -254,6 +263,7 @@ def onboarding_profile_finalize(request: HttpRequest) -> HttpResponse:
             errors=_form_message(exc.message),
         )
     except HeadshotStorageUnavailable as exc:
+        record_onboarding_error(OnboardingErrorCode.HEADSHOT_STORAGE_UNAVAILABLE)
         return _render_flow(
             request,
             section=OnboardingSection.REVIEW,
@@ -261,6 +271,7 @@ def onboarding_profile_finalize(request: HttpRequest) -> HttpResponse:
             errors=_form_message(exc.message),
         )
     if result.errors is not None:
+        record_onboarding_error(OnboardingErrorCode.PROFILE_INVALID)
         return _render_flow(
             request,
             section=OnboardingSection.REVIEW,

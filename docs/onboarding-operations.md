@@ -7,6 +7,9 @@ activation completion. Dashboard, onboarding, New Agent List, user
 administration, and future assistant surfaces consume this contract instead of
 reconstructing status rules.
 
+Operating it — measures, the support runbook, reset and rollback, staging
+sign-off, and extension seams — is in [onboarding-support.md](onboarding-support.md).
+
 The JSON contract is camelCase and currently has `schemaVersion: 1`. Its
 `version` is an opaque concurrency token. Clients must return that token when a
 write supports `expected_version`; they must never parse or manufacture it.
@@ -39,13 +42,14 @@ profile/office gate from releasing.
 | Profile | `not_started`, `in_progress`, `complete` |
 | Office | `not_selected`, `selected`, `confirmed` |
 | Office handoff | `pending`, `notified`, `notification_failed` |
-| Contract | `generated`, `sent`, `signed`, `active`, `blocked`, `unavailable` |
+| Contract | `not_started`, `generated`, `sent`, `signed`, `active`, `blocked`, `unavailable` |
 | Tool source | `available`, `unavailable` |
 | Tool progress | `complete`, `pending`, `blocked`, `unavailable` |
 | Tool invitation | `not_applicable`, `pending`, `sent`, `unavailable` |
 | Admin tool shelf | `waiting`, `invitation_sent`, `ready`, `blocked`, `not_applicable` |
 | Admin tool action | `mark_invitation_sent`, `revoke_invitation`, `mark_ready`, `mark_blocked`, `retry_notification` |
 | Admin contract action | `initiate_contract`, `open_contract` |
+| Admin handoff action | `retry_office_handoff` |
 | Current step | `profile`, `office`, `activation`, `complete` |
 | Next action | `complete_profile`, `confirm_office`, `set_up_tool`, `wait_for_office`, `wait_for_activation`, `none` |
 
@@ -62,7 +66,7 @@ business wording.
 | Profile `not_started`/`in_progress` | Confirm the reviewed profile | Profile `complete`; office remains `confirmed` | Explicit review confirmation, every required field valid under today's rules, a stored headshot, and an office confirmation for the current office/version. Sets the compatibility flag and required-setup checkpoint, creates/reuses the case, preserves an explicit owner, and publishes `user.onboarded` plus the handoff intent once. |
 | Office handoff `pending` | Notification consumer records the in-app handoff | `notified` | The resolved recipient still has server-side scope to the case. The notification dedupe key is user/onboarding-version/office. Outbound providers record queued, sent, retryable, suppressed, and terminal outcomes in the notification ledger. |
 | Office handoff `pending` | Recipient is unavailable or no longer authorized | `notification_failed` | The outbox consumer records the failure and retries. The agent sees support escalation copy, never a false delivery claim. |
-| Office handoff `notification_failed` | Retry successfully | `notified` | Authorized scoped administrator and current version. |
+| Office handoff `notification_failed` | Retry office handoff | Unchanged until delivery, then `notified` | Authorized scoped administrator, current version, and a Branch Admin now resolvable for the current office. Re-publishes the same deduplicated handoff event and assigns the resolved admin as owner only when the case has none; the delivery consumer records `notified` once the notification exists. The workspace recommends this action ahead of every other while the handoff has failed. |
 | Office handoff `notified` | Any handoff transition | — | Rejected; delivered history is not rewound. |
 | Tool waiting/requested | Mark invitation sent | `invitation_sent` | Required setup is complete; the tool remains active and applicable to the agent's current office; actor retains onboarding-management permission and scope; current journey version. Records sender/timestamp and publishes one agent-notice intent after commit. |
 | Tool invitation/in progress/ready | Correct invitation record | `requested` | Same live permission, scope, office, applicability, and version checks, plus a required safe business reason. Clears current invitation provenance without erasing audit history. |
@@ -222,8 +226,11 @@ guidance never asks for an invitation link, code, or password.
 
 **The contract.** `contract.state` is source-derived. `not_started` means the
 contract source answered and there is nothing yet ("Waiting for your office
-administrator"); `unavailable` is reserved for a source that could not answer,
-and only that one raises a blocker. `sent` offers `my_contract`; `blocked` and
+administrator"); an initiated draft, a contract in review, or one awaiting the
+company signature is `generated` ("Being prepared"); an expired or terminated
+contract that never became active is `blocked`. `unavailable` is reserved for a
+source that could not answer, and only that one raises the
+`contract_unavailable` blocker. `sent` offers `my_contract`; `blocked` and
 `unavailable` offer IT Support. The payload carries the agent's own half only —
 commission terms, internal notes, and template versions stay behind the
 contract page's field permissions.
