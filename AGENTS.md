@@ -120,6 +120,7 @@ docs/training.md   Training library: audience visibility, media, progress, admin
 docs/marketing-resources.md  Marketing library + admin: audience, versioning, source/export
 docs/compliance.md  Policies & compliance: audience, jurisdiction, lifecycle, acknowledgements
 docs/documents-forms.md  Documents & forms library: current version, audience, protected files
+docs/transactions.md  Real-estate deals: model, scope, lifecycle, field projection
 docs/operational-tasks.md  Operational tasks: lifecycle, scope, conversion seam
 docs/feedback.md   Feedback intake: diagnostic redaction, idempotency, triage
 docs/it-support.md IT help desk: lifecycle, scope, internal notes, onboarding seam

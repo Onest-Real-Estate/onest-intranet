@@ -14,10 +14,10 @@ Django permission codenames (`web.view_users`, `user.change_user_administration`
 | `broker_admin` | Broker Admin | company | no | Full operations; may assign non-protected roles company-wide |
 | `regional_manager` | Regional Manager | region | no | Regional people, transactions, inventory, offices, training |
 | `regional_admin` | Regional Admin | region | no | Regional people/admin support without full manager bundle |
-| `regional_transaction_coordinator` | Regional Transaction Coordinator | region, assigned_record | no | Regional transactions, contracts, documents |
+| `regional_transaction_coordinator` | Regional Transaction Coordinator | region, assigned_record | no | Regional transactions (manage/transition + field grants), contracts, documents |
 | `branch_manager` | Branch Manager | office | no | Office people, inventory, training, agent administration |
 | `branch_admin` | Branch Admin / Office Admin | office | no | Office people lists, training, documents |
-| `transaction_coordinator` | Transaction Coordinator | office, assigned_record | no | Office transactions, contracts, documents |
+| `transaction_coordinator` | Transaction Coordinator | office, assigned_record | no | Office transactions (manage/transition + field grants), contracts, documents |
 | `realtor` | Realtor | office, assigned_record | no | Own dashboard metrics (default signup role) |
 | `marketing_team` | Marketing Team | company | no | Announcements, feedback, documents |
 | `accountant` | Accountant | company | no | Transactions, users, contracts, commission visibility |

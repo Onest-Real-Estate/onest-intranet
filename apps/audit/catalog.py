@@ -1238,3 +1238,66 @@ registry.register(
     required_payload_keys={"policy_id", "recipient_id", "kind", "occurred_at"},
     description="An authorized actor recorded a correction without deleting evidence.",
 )
+
+# ---------------------------------------------------------------------------
+# transactions domain  (publisher: apps.transactions)
+# ---------------------------------------------------------------------------
+
+registry.register(
+    name="transaction.created",
+    version=1,
+    required_payload_keys={
+        "transaction_id",
+        "office_id",
+        "transaction_type",
+        "actor_id",
+    },
+    description="Emitted when a transaction draft is created.",
+)
+
+registry.register(
+    name="transaction.status_changed",
+    version=1,
+    required_payload_keys={
+        "transaction_id",
+        "office_id",
+        "from",
+        "to",
+        "actor_id",
+    },
+    description=(
+        "Emitted when a transaction moves through the enforced lifecycle "
+        "(including side paths such as On Hold, Cancelled, Withdrawn, "
+        "and Terminated)."
+    ),
+)
+
+registry.register(
+    name="transaction.archived",
+    version=1,
+    required_payload_keys={
+        "transaction_id",
+        "office_id",
+        "from",
+        "to",
+        "actor_id",
+    },
+    description="Emitted when a closed transaction is soft-archived for retention.",
+)
+
+registry.register(
+    name="transaction.assignment_changed",
+    version=1,
+    required_payload_keys={
+        "transaction_id",
+        "office_id",
+        "role",
+        "user_id",
+        "change",
+        "actor_id",
+    },
+    description=(
+        "Emitted when a primary agent, co-agent, coordinator, or compliance "
+        "reviewer assignment is activated or ended."
+    ),
+)

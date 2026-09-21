@@ -37,6 +37,7 @@ PermissionAction = Literal[
     "export",
     "manage",
     "replay",
+    "transition",
 ]
 PermissionRisk = Literal["low", "medium", "high"]
 
@@ -297,6 +298,69 @@ PERMISSION_DEFINITIONS: tuple[PermissionDefinition, ...] = (
             ACCOUNTANT,
             REGIONAL_ADMIN,
         ),
+    ),
+    PermissionDefinition(
+        codename="web.manage_transactions",
+        name="Can create and manage scoped transactions",
+        domain="transactions",
+        action="manage",
+        description=(
+            "Create drafts, edit non-status fields, and mutate party "
+            "assignments within effective scope."
+        ),
+        default_roles=(
+            *_BROKERAGE_ADMINS,
+            REGIONAL_MANAGER,
+            TRANSACTION_COORDINATOR,
+            REGIONAL_TRANSACTION_COORDINATOR,
+        ),
+        risk="high",
+    ),
+    PermissionDefinition(
+        codename="web.transition_transactions",
+        name="Can transition scoped transaction lifecycle",
+        domain="transactions",
+        action="transition",
+        description=(
+            "Move transactions through the enforced lifecycle within effective scope."
+        ),
+        default_roles=(
+            *_BROKERAGE_ADMINS,
+            REGIONAL_MANAGER,
+            BRANCH_MANAGER,
+            TRANSACTION_COORDINATOR,
+            REGIONAL_TRANSACTION_COORDINATOR,
+        ),
+        risk="high",
+    ),
+    PermissionDefinition(
+        codename="transactions.view_transaction_financials",
+        name="Can view transaction list and contract prices",
+        domain="transactions",
+        action="view",
+        description="View list and contract prices on scoped transactions.",
+        default_roles=(
+            *_BROKERAGE_ADMINS,
+            REGIONAL_MANAGER,
+            TRANSACTION_COORDINATOR,
+            REGIONAL_TRANSACTION_COORDINATOR,
+            ACCOUNTANT,
+        ),
+        sensitive=True,
+    ),
+    PermissionDefinition(
+        codename="transactions.view_transaction_clients",
+        name="Can view transaction client snapshots",
+        domain="transactions",
+        action="view",
+        description="View client PII snapshots on scoped transactions.",
+        default_roles=(
+            *_BROKERAGE_ADMINS,
+            REGIONAL_MANAGER,
+            TRANSACTION_COORDINATOR,
+            REGIONAL_TRANSACTION_COORDINATOR,
+        ),
+        sensitive=True,
     ),
     PermissionDefinition(
         codename="web.view_inventory",

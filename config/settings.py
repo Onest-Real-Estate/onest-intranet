@@ -59,6 +59,7 @@ INSTALLED_APPS = [
     "apps.notifications",
     "apps.announcements",
     "apps.contract",
+    "apps.transactions",
     "apps.operational_tasks",
     "apps.it_support",
     "apps.onboarding_tools",
