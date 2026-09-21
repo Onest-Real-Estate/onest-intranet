@@ -57,7 +57,9 @@ RECORD_TYPES: dict[str, RecordTypeConfig] = {
     ),
     RECORD_TRANSACTION: RecordTypeConfig(
         key=RECORD_TRANSACTION,
-        target_types=frozenset({"transaction.transaction", "transaction"}),
+        target_types=frozenset(
+            {"transaction.transaction", "transactions.transaction", "transaction"}
+        ),
         action_prefixes=("transaction.",),
         domain_permission="web.view_transactions",
         label="transaction",
@@ -133,6 +135,10 @@ def assert_can_view_record_activity(
         _resolve_user(viewer, record_id)
         return config
 
+    if record_type == RECORD_TRANSACTION:
+        _resolve_transaction(viewer, record_id)
+        return config
+
     _require_permission(
         viewer,
         config.domain_permission,
@@ -141,3 +147,18 @@ def assert_can_view_record_activity(
     if not str(record_id).strip():
         raise Http404(f"{config.label.capitalize()} not found.")
     return config
+
+
+def _resolve_transaction(viewer: User, record_id: str):
+    from uuid import UUID
+
+    from apps.transactions.services import scoped_transaction_queryset
+
+    try:
+        public_id = UUID(str(record_id))
+    except (TypeError, ValueError) as exc:
+        raise Http404("Transaction not found.") from exc
+    tx = scoped_transaction_queryset(viewer).filter(public_id=public_id).first()
+    if tx is None:
+        raise Http404("Transaction not found.")
+    return tx

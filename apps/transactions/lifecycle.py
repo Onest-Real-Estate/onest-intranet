@@ -93,7 +93,7 @@ def _actor_is_assignee(tx: Transaction, user: Any) -> bool:
 def _audit_target(tx: Transaction) -> AuditTarget:
     """Audit target without Decimal money fields in the snapshot."""
     return AuditTarget(
-        target_type="transactions.transaction",
+        target_type="transaction.transaction",
         target_id=str(tx.public_id),
         target_label=tx.reference or str(tx.public_id),
         target_snapshot={

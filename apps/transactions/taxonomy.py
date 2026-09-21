@@ -457,6 +457,183 @@ def is_pipeline(status: str) -> bool:
     return status in PIPELINE_STATUSES
 
 
+# --------------------------------------------------------------------------- #
+# Workspace sections (#101)
+# --------------------------------------------------------------------------- #
+
+
+class WorkspaceSection:
+    OVERVIEW = "overview"
+    PARTIES = "parties"
+    PROPERTY = "property"
+    DATES = "dates"
+    NOTES = "notes"
+    ASSIGNMENTS = "assignments"
+    ACTIVITY = "activity"
+    DOCUMENTS = "documents"
+    CHECKLIST = "checklist"
+    TASKS = "tasks"
+    SIGNATURES = "signatures"
+    COMMISSION = "commission"
+    COMPLIANCE = "compliance"
+
+
+LIVE_WORKSPACE_SECTIONS: frozenset[str] = frozenset(
+    {
+        WorkspaceSection.OVERVIEW,
+        WorkspaceSection.PARTIES,
+        WorkspaceSection.PROPERTY,
+        WorkspaceSection.DATES,
+        WorkspaceSection.NOTES,
+        WorkspaceSection.ASSIGNMENTS,
+        WorkspaceSection.ACTIVITY,
+    }
+)
+
+STUB_WORKSPACE_SECTIONS: frozenset[str] = frozenset(
+    {
+        WorkspaceSection.DOCUMENTS,
+        WorkspaceSection.CHECKLIST,
+        WorkspaceSection.TASKS,
+        WorkspaceSection.SIGNATURES,
+        WorkspaceSection.COMMISSION,
+        WorkspaceSection.COMPLIANCE,
+    }
+)
+
+WORKSPACE_SECTION_LABELS: dict[str, str] = {
+    WorkspaceSection.OVERVIEW: _("Overview"),
+    WorkspaceSection.PARTIES: _("Parties"),
+    WorkspaceSection.PROPERTY: _("Property"),
+    WorkspaceSection.DATES: _("Dates"),
+    WorkspaceSection.NOTES: _("Notes"),
+    WorkspaceSection.ASSIGNMENTS: _("Assignments"),
+    WorkspaceSection.ACTIVITY: _("Activity"),
+    WorkspaceSection.DOCUMENTS: _("Documents"),
+    WorkspaceSection.CHECKLIST: _("Checklist"),
+    WorkspaceSection.TASKS: _("Tasks"),
+    WorkspaceSection.SIGNATURES: _("Signatures"),
+    WorkspaceSection.COMMISSION: _("Commission"),
+    WorkspaceSection.COMPLIANCE: _("Compliance"),
+}
+
+WORKSPACE_SECTION_CODES = frozenset(WORKSPACE_SECTION_LABELS)
+DEFAULT_WORKSPACE_SECTION = WorkspaceSection.OVERVIEW
+
+
+# --------------------------------------------------------------------------- #
+# Party roles (structured TransactionParty rows)
+# --------------------------------------------------------------------------- #
+
+
+class PartyRole:
+    BUYER = "buyer"
+    SELLER = "seller"
+    TENANT = "tenant"
+    LANDLORD = "landlord"
+    LENDER = "lender"
+    TITLE = "title"
+    ATTORNEY = "attorney"
+    INSPECTOR = "inspector"
+    REFERRAL_AGENT = "referral_agent"
+    CO_PARTY = "co_party"
+
+
+PARTY_ROLE_LABELS: dict[str, str] = {
+    PartyRole.BUYER: _("Buyer"),
+    PartyRole.SELLER: _("Seller"),
+    PartyRole.TENANT: _("Tenant"),
+    PartyRole.LANDLORD: _("Landlord"),
+    PartyRole.LENDER: _("Lender"),
+    PartyRole.TITLE: _("Title"),
+    PartyRole.ATTORNEY: _("Attorney"),
+    PartyRole.INSPECTOR: _("Inspector"),
+    PartyRole.REFERRAL_AGENT: _("Referral agent"),
+    PartyRole.CO_PARTY: _("Co-party"),
+}
+
+PARTY_ROLE_CHOICES = tuple(PARTY_ROLE_LABELS.items())
+PARTY_ROLE_CODES = frozenset(PARTY_ROLE_LABELS)
+
+#: At most one primary party per role on a live deal.
+PRIMARY_PARTY_ROLES: frozenset[str] = frozenset(
+    {
+        PartyRole.BUYER,
+        PartyRole.SELLER,
+        PartyRole.TENANT,
+        PartyRole.LANDLORD,
+        PartyRole.LENDER,
+        PartyRole.TITLE,
+    }
+)
+
+
+class PartyKind:
+    PERSON = "person"
+    ORGANIZATION = "organization"
+
+
+PARTY_KIND_LABELS: dict[str, str] = {
+    PartyKind.PERSON: _("Person"),
+    PartyKind.ORGANIZATION: _("Organization"),
+}
+
+PARTY_KIND_CHOICES = tuple(PARTY_KIND_LABELS.items())
+PARTY_KIND_CODES = frozenset(PARTY_KIND_LABELS)
+
+
+# --------------------------------------------------------------------------- #
+# Key dates
+# --------------------------------------------------------------------------- #
+
+
+class KeyDateType:
+    ACCEPTANCE = "acceptance"
+    CLOSING = "closing"
+    INSPECTION = "inspection"
+    APPRAISAL = "appraisal"
+    FINANCING = "financing"
+    EARNEST_MONEY = "earnest_money"
+    POSSESSION = "possession"
+    OTHER = "other"
+
+
+KEY_DATE_TYPE_LABELS: dict[str, str] = {
+    KeyDateType.ACCEPTANCE: _("Acceptance"),
+    KeyDateType.CLOSING: _("Closing"),
+    KeyDateType.INSPECTION: _("Inspection"),
+    KeyDateType.APPRAISAL: _("Appraisal"),
+    KeyDateType.FINANCING: _("Financing contingency"),
+    KeyDateType.EARNEST_MONEY: _("Earnest money"),
+    KeyDateType.POSSESSION: _("Possession"),
+    KeyDateType.OTHER: _("Other"),
+}
+
+KEY_DATE_TYPE_CHOICES = tuple(KEY_DATE_TYPE_LABELS.items())
+KEY_DATE_TYPE_CODES = frozenset(KEY_DATE_TYPE_LABELS)
+
+
+# --------------------------------------------------------------------------- #
+# Notes visibility — mapped to existing grants (no new catalog entries)
+# --------------------------------------------------------------------------- #
+
+
+class NoteVisibility:
+    TEAM = "team"
+    BROKER_COMPLIANCE = "broker_compliance"
+    PRIVATE_AUTHOR = "private_author"
+
+
+NOTE_VISIBILITY_LABELS: dict[str, str] = {
+    NoteVisibility.TEAM: _("Team"),
+    NoteVisibility.BROKER_COMPLIANCE: _("Broker / compliance"),
+    NoteVisibility.PRIVATE_AUTHOR: _("Private (author only)"),
+}
+
+NOTE_VISIBILITY_CHOICES = tuple(NOTE_VISIBILITY_LABELS.items())
+NOTE_VISIBILITY_CODES = frozenset(NOTE_VISIBILITY_LABELS)
+
+
 #: Timestamp field stamped when entering each status (first time).
 STATUS_ENTERED_AT: dict[str, str] = {
     TransactionStatus.PREPARING: "preparing_at",
@@ -477,9 +654,28 @@ __all__ = [
     "ASSIGNMENT_ROLE_CODES",
     "ASSIGNMENT_ROLE_LABELS",
     "AssignmentRole",
+    "DEFAULT_WORKSPACE_SECTION",
     "HAPPY_PATH",
     "HOLDABLE_STATUSES",
+    "KEY_DATE_TYPE_CHOICES",
+    "KEY_DATE_TYPE_CODES",
+    "KEY_DATE_TYPE_LABELS",
+    "KeyDateType",
+    "LIVE_WORKSPACE_SECTIONS",
+    "NOTE_VISIBILITY_CHOICES",
+    "NOTE_VISIBILITY_CODES",
+    "NOTE_VISIBILITY_LABELS",
+    "NoteVisibility",
+    "PARTY_KIND_CHOICES",
+    "PARTY_KIND_CODES",
+    "PARTY_KIND_LABELS",
+    "PARTY_ROLE_CHOICES",
+    "PARTY_ROLE_CODES",
+    "PARTY_ROLE_LABELS",
     "PIPELINE_STATUSES",
+    "PRIMARY_PARTY_ROLES",
+    "PartyKind",
+    "PartyRole",
     "REPRESENTATION_CHOICES",
     "REPRESENTATION_CODES",
     "REPRESENTATION_LABELS",
@@ -490,6 +686,7 @@ __all__ = [
     "STATUS_CODES",
     "STATUS_ENTERED_AT",
     "STATUS_LABELS",
+    "STUB_WORKSPACE_SECTIONS",
     "TERMINAL_STATUSES",
     "TRANSITIONS",
     "TYPE_CHOICES",
@@ -499,6 +696,9 @@ __all__ = [
     "TransactionStatus",
     "TransactionType",
     "Transition",
+    "WORKSPACE_SECTION_CODES",
+    "WORKSPACE_SECTION_LABELS",
+    "WorkspaceSection",
     "find_transition",
     "is_pipeline",
     "is_terminal",

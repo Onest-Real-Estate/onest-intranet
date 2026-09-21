@@ -17,6 +17,7 @@ from apps.it_support.views import it_support_queue
 from apps.marketing.administration_views import marketing_administration_index
 from apps.operational_tasks.views import tasks_index
 from apps.training.administration_views import training_administration_index
+from apps.transactions.views.workspace_views import admin_transactions
 from apps.user.services.onboarding_state import (
     agent_journey_payload,
     journey_applies_to,
@@ -191,6 +192,7 @@ OPERATIONS_VIEWS["admin_inventory"] = inventory_admin_index
 OPERATIONS_VIEWS["admin_reservations"] = admin_reservations_index
 OPERATIONS_VIEWS["operational_tasks"] = tasks_index
 OPERATIONS_VIEWS["admin_it_support"] = it_support_queue
+OPERATIONS_VIEWS["admin_transactions"] = admin_transactions
 
 
 _CATALOG_CONTRACTS = (

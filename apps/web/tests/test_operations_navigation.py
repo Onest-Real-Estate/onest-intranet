@@ -137,6 +137,7 @@ def test_registry_has_exact_destinations_order_routes_and_permissions():
                 "admin_it_support",
                 "admin_inventory",
                 "admin_reservations",
+                "admin_transactions",
                 "admin_compliance",
                 "admin_documents",
             }
@@ -327,6 +328,10 @@ def test_brokerage_admin_can_reach_every_registered_destination(client):
             assert "filterOptions" in props
             assert "capabilities" in props
             continue
+        if destination.route_name == "admin_transactions":
+            assert "items" in props
+            assert "capabilities" in props
+            continue
         assert "title" in props, (
             f"{destination.route_name} missing title; keys={sorted(props)}"
         )
@@ -483,12 +488,18 @@ def test_scoped_and_specialty_personas_reach_only_authorized_scope(
     response = client.get(reverse(route_name), HTTP_X_INERTIA="true")
 
     assert response.status_code == 200
-    scope = inertia_props(response)["scope"]
+    props = inertia_props(response)
+    scope = props["scope"]
     expected_level = "region" if scope_type == ScopeType.REGION else "office"
     assert scope["level"] == expected_level
     assert scope["label"] == scope_office.name
-    assert "members" not in inertia_props(response)
-    assert "items" not in inertia_props(response)
+    assert "members" not in props
+    if route_name == "admin_transactions":
+        # Live list: confirm the shell is the scoped list, not Coming Soon.
+        assert "items" in props
+        assert "capabilities" in props
+    else:
+        assert "items" not in props
 
 
 @pytest.mark.django_db

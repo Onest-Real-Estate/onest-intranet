@@ -1,6 +1,13 @@
 from django.contrib import admin
 
-from apps.transactions.models import Transaction, TransactionAssignment
+from apps.transactions.models import (
+    Transaction,
+    TransactionAssignment,
+    TransactionKeyDate,
+    TransactionNote,
+    TransactionParty,
+    TransactionPropertySnapshot,
+)
 
 
 class TransactionAssignmentInline(admin.TabularInline):
@@ -8,6 +15,14 @@ class TransactionAssignmentInline(admin.TabularInline):
     extra = 0
     fields = ("user", "role", "assigned_by", "assigned_at", "ended_at")
     readonly_fields = ("assigned_at", "public_id")
+    show_change_link = True
+
+
+class TransactionPartyInline(admin.TabularInline):
+    model = TransactionParty
+    extra = 0
+    fields = ("role", "display_name", "kind", "is_primary", "ended_at")
+    readonly_fields = ("public_id",)
     show_change_link = True
 
 
@@ -52,7 +67,7 @@ class TransactionAdmin(admin.ModelAdmin):
         "updated_at",
     )
     autocomplete_fields = ("office", "primary_agent", "coordinator", "created_by")
-    inlines = (TransactionAssignmentInline,)
+    inlines = (TransactionAssignmentInline, TransactionPartyInline)
 
 
 @admin.register(TransactionAssignment)
@@ -61,3 +76,34 @@ class TransactionAssignmentAdmin(admin.ModelAdmin):
     list_filter = ("role",)
     readonly_fields = ("public_id", "assigned_at")
     autocomplete_fields = ("transaction", "user", "assigned_by")
+
+
+@admin.register(TransactionParty)
+class TransactionPartyAdmin(admin.ModelAdmin):
+    list_display = ("transaction", "role", "display_name", "is_primary", "ended_at")
+    list_filter = ("role", "kind")
+    readonly_fields = ("public_id", "snapshot", "created_at", "updated_at")
+    autocomplete_fields = ("transaction", "created_by")
+
+
+@admin.register(TransactionKeyDate)
+class TransactionKeyDateAdmin(admin.ModelAdmin):
+    list_display = ("transaction", "date_type", "occurs_at", "ended_at")
+    list_filter = ("date_type",)
+    readonly_fields = ("public_id", "created_at", "updated_at")
+    raw_id_fields = ("transaction", "created_by", "superseded_by")
+
+
+@admin.register(TransactionNote)
+class TransactionNoteAdmin(admin.ModelAdmin):
+    list_display = ("transaction", "visibility", "author", "created_at", "ended_at")
+    list_filter = ("visibility",)
+    readonly_fields = ("public_id", "created_at", "updated_at")
+    raw_id_fields = ("transaction", "author")
+
+
+@admin.register(TransactionPropertySnapshot)
+class TransactionPropertySnapshotAdmin(admin.ModelAdmin):
+    list_display = ("transaction", "mls_number", "recorded_at")
+    readonly_fields = ("public_id", "snapshot", "change_summary", "recorded_at")
+    raw_id_fields = ("transaction", "recorded_by")

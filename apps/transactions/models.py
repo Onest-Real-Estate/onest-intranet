@@ -18,16 +18,24 @@ from django.utils.translation import gettext_lazy as _
 from apps.transactions.money import money_field
 from apps.transactions.taxonomy import (
     ASSIGNMENT_ROLE_CHOICES,
+    KEY_DATE_TYPE_CHOICES,
+    NOTE_VISIBILITY_CHOICES,
+    PARTY_KIND_CHOICES,
+    PARTY_ROLE_CHOICES,
+    PRIMARY_PARTY_ROLES,
     REPRESENTATION_CHOICES,
     SINGLETON_ASSIGNMENT_ROLES,
     STATUS_CHOICES,
     STATUS_CODES,
     TYPE_CHOICES,
     AssignmentRole,
+    NoteVisibility,
+    PartyKind,
     TransactionStatus,
 )
 from apps.user.models import Office
 
+_PRIMARY_PARTY_ROLES: list[str] = sorted(PRIMARY_PARTY_ROLES)
 _STATUS_LIST: list[str] = sorted(STATUS_CODES)
 _SINGLETON_ROLES: list[str] = sorted(SINGLETON_ASSIGNMENT_ROLES)
 
@@ -410,10 +418,267 @@ class TransactionAssignment(models.Model):
         return str(ASSIGNMENT_ROLE_LABELS.get(self.role, self.role))
 
 
+class TransactionParty(models.Model):
+    """Structured party on a deal (buyer, seller, vendor, co-party, …)."""
+
+    public_id = models.UUIDField(
+        _("public id"), default=uuid.uuid4, editable=False, unique=True
+    )
+    transaction = models.ForeignKey(
+        Transaction,
+        on_delete=models.CASCADE,
+        related_name="parties",
+        verbose_name=_("transaction"),
+    )
+    role = models.CharField(_("role"), max_length=32, choices=PARTY_ROLE_CHOICES)
+    kind = models.CharField(
+        _("kind"),
+        max_length=20,
+        choices=PARTY_KIND_CHOICES,
+        default=PartyKind.PERSON,
+    )
+    display_name = models.CharField(_("display name"), max_length=255)
+    organization_name = models.CharField(
+        _("organization name"), max_length=255, blank=True
+    )
+    email = models.EmailField(_("email"), blank=True)
+    phone = models.CharField(_("phone"), max_length=40, blank=True)
+    representation = models.CharField(
+        _("representation"),
+        max_length=20,
+        choices=REPRESENTATION_CHOICES,
+        blank=True,
+    )
+    is_primary = models.BooleanField(_("is primary"), default=False)
+    valid_from = models.DateTimeField(_("valid from"), null=True, blank=True)
+    valid_until = models.DateTimeField(_("valid until"), null=True, blank=True)
+    snapshot = models.JSONField(
+        _("snapshot"),
+        default=dict,
+        blank=True,
+        help_text=_("Frozen presentation fields captured on each write."),
+    )
+    ended_at = models.DateTimeField(_("ended at"), null=True, blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="transaction_parties_created",
+        verbose_name=_("created by"),
+    )
+    created_at = models.DateTimeField(_("created at"), auto_now_add=True)
+    updated_at = models.DateTimeField(_("updated at"), auto_now=True)
+
+    class Meta:
+        ordering = ["role", "-is_primary", "display_name", "pk"]
+        verbose_name = _("transaction party")
+        verbose_name_plural = _("transaction parties")
+        constraints = [
+            models.UniqueConstraint(
+                fields=["transaction", "role"],
+                condition=Q(
+                    ended_at__isnull=True,
+                    is_primary=True,
+                    role__in=_PRIMARY_PARTY_ROLES,
+                ),
+                name="txn_party_unique_primary_role",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["transaction", "role", "ended_at"],
+                name="txn_party_role_active_idx",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.role}:{self.display_name}"
+
+    @property
+    def role_label(self) -> str:
+        from apps.transactions.taxonomy import PARTY_ROLE_LABELS
+
+        return str(PARTY_ROLE_LABELS.get(self.role, self.role))
+
+    @property
+    def is_active(self) -> bool:
+        return self.ended_at is None
+
+
+class TransactionPropertySnapshot(models.Model):
+    """Immutable history row for material property-field changes."""
+
+    public_id = models.UUIDField(
+        _("public id"), default=uuid.uuid4, editable=False, unique=True
+    )
+    transaction = models.ForeignKey(
+        Transaction,
+        on_delete=models.CASCADE,
+        related_name="property_snapshots",
+        verbose_name=_("transaction"),
+    )
+    snapshot = models.JSONField(_("snapshot"), default=dict)
+    mls_number = models.CharField(_("MLS number"), max_length=64, blank=True)
+    recorded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="transaction_property_snapshots",
+        verbose_name=_("recorded by"),
+    )
+    recorded_at = models.DateTimeField(_("recorded at"), auto_now_add=True)
+    change_summary = models.JSONField(
+        _("change summary"),
+        default=list,
+        blank=True,
+        help_text=_("Allowlisted field keys that changed in this revision."),
+    )
+
+    class Meta:
+        ordering = ["-recorded_at", "-pk"]
+        verbose_name = _("transaction property snapshot")
+        verbose_name_plural = _("transaction property snapshots")
+        indexes = [
+            models.Index(
+                fields=["transaction", "-recorded_at"],
+                name="txn_prop_snap_txn_idx",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        transaction_id = getattr(self, "transaction_id", None)
+        return f"property@{transaction_id}:{self.pk}"
+
+
+class TransactionKeyDate(models.Model):
+    """Named key date on a deal (acceptance, closing, contingencies, …)."""
+
+    public_id = models.UUIDField(
+        _("public id"), default=uuid.uuid4, editable=False, unique=True
+    )
+    transaction = models.ForeignKey(
+        Transaction,
+        on_delete=models.CASCADE,
+        related_name="key_dates",
+        verbose_name=_("transaction"),
+    )
+    date_type = models.CharField(
+        _("date type"), max_length=32, choices=KEY_DATE_TYPE_CHOICES
+    )
+    label = models.CharField(_("label"), max_length=120, blank=True)
+    occurs_at = models.DateTimeField(_("occurs at"), null=True, blank=True)
+    timezone = models.CharField(_("timezone"), max_length=64, blank=True)
+    source = models.CharField(_("source"), max_length=64, blank=True)
+    is_required = models.BooleanField(_("is required"), default=False)
+    superseded_by = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="supersedes",
+        verbose_name=_("superseded by"),
+    )
+    ended_at = models.DateTimeField(_("ended at"), null=True, blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="transaction_key_dates_created",
+        verbose_name=_("created by"),
+    )
+    created_at = models.DateTimeField(_("created at"), auto_now_add=True)
+    updated_at = models.DateTimeField(_("updated at"), auto_now=True)
+
+    class Meta:
+        ordering = ["occurs_at", "date_type", "pk"]
+        verbose_name = _("transaction key date")
+        verbose_name_plural = _("transaction key dates")
+        indexes = [
+            models.Index(
+                fields=["transaction", "date_type", "ended_at"],
+                name="txn_keydate_type_active_idx",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.date_type}:{self.occurs_at}"
+
+    @property
+    def date_type_label(self) -> str:
+        from apps.transactions.taxonomy import KEY_DATE_TYPE_LABELS
+
+        return str(KEY_DATE_TYPE_LABELS.get(self.date_type, self.date_type))
+
+    @property
+    def is_active(self) -> bool:
+        return self.ended_at is None
+
+
+class TransactionNote(models.Model):
+    """Workspace note with explicit visibility — never one unrestricted stream."""
+
+    public_id = models.UUIDField(
+        _("public id"), default=uuid.uuid4, editable=False, unique=True
+    )
+    transaction = models.ForeignKey(
+        Transaction,
+        on_delete=models.CASCADE,
+        related_name="notes",
+        verbose_name=_("transaction"),
+    )
+    body = models.TextField(_("body"))
+    visibility = models.CharField(
+        _("visibility"),
+        max_length=32,
+        choices=NOTE_VISIBILITY_CHOICES,
+        default=NoteVisibility.TEAM,
+    )
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="transaction_notes",
+        verbose_name=_("author"),
+    )
+    created_at = models.DateTimeField(_("created at"), auto_now_add=True)
+    updated_at = models.DateTimeField(_("updated at"), auto_now=True)
+    ended_at = models.DateTimeField(_("ended at"), null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at", "-pk"]
+        verbose_name = _("transaction note")
+        verbose_name_plural = _("transaction notes")
+        indexes = [
+            models.Index(
+                fields=["transaction", "visibility", "ended_at"],
+                name="txn_note_vis_active_idx",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"note:{self.public_id}"
+
+    @property
+    def visibility_label(self) -> str:
+        from apps.transactions.taxonomy import NOTE_VISIBILITY_LABELS
+
+        return str(NOTE_VISIBILITY_LABELS.get(self.visibility, self.visibility))
+
+    @property
+    def is_active(self) -> bool:
+        return self.ended_at is None
+
+
 # Re-export for callers that expect AssignmentRole on the model module.
 __all__ = [
     "AssignmentRole",
     "Transaction",
     "TransactionAssignment",
+    "TransactionKeyDate",
+    "TransactionNote",
+    "TransactionParty",
+    "TransactionPropertySnapshot",
     "TransactionQuerySet",
 ]

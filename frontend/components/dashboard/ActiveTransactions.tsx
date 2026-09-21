@@ -66,7 +66,7 @@ export function ActiveTransactions({
         description="Deals that need your attention next."
         action={
           <Button asChild variant="outline" size="sm">
-            <Link href={routes.coming_soon("agent-transactions")}>
+            <Link href={routes.my_transactions()}>
               Manage pipeline
               <ArrowRight className="size-4" aria-hidden />
             </Link>

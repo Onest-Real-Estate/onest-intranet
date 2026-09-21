@@ -291,6 +291,7 @@ OPERATIONS_FEATURES["admin-it-support"] = True
 OPERATIONS_FEATURES["admin-agent-contracts"] = True
 OPERATIONS_FEATURES["admin-inventory"] = True
 OPERATIONS_FEATURES["admin-reservations"] = True
+OPERATIONS_FEATURES["admin-transactions"] = True
 
 _OPS_SURFACE_PERMISSIONS = frozenset(
     destination.permission for destination in OPERATIONS_DESTINATIONS

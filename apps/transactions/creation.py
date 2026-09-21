@@ -36,7 +36,6 @@ from apps.transactions.models import Transaction
 from apps.transactions.permissions import (
     CREATE_OWN_TRANSACTIONS,
     MANAGE_TRANSACTIONS,
-    VIEW_TRANSACTIONS,
 )
 from apps.transactions.services import (
     ActorContext,
@@ -44,7 +43,6 @@ from apps.transactions.services import (
     _normalize_property_snapshot,
     create_draft,
     scoped_transaction_queryset,
-    serialize_transaction,
     upsert_assignment,
 )
 from apps.transactions.taxonomy import (
@@ -785,26 +783,15 @@ def build_new_transaction_page(
 
 
 def workspace_payload(user: User, tx: Transaction) -> dict[str, Any]:
-    return {
-        "transaction": serialize_transaction(user, tx),
-        "capabilities": {
-            "manage": has_effective_permission(user, MANAGE_TRANSACTIONS),
-            "view": has_effective_permission(user, VIEW_TRANSACTIONS)
-            or scoped_transaction_queryset(user).filter(pk=tx.pk).exists(),
-        },
-    }
+    from apps.transactions.workspace import workspace_payload as build
+
+    return build(user, tx)
 
 
 def load_workspace_transaction(user: User, public_id: UUID) -> Transaction:
-    tx = (
-        scoped_transaction_queryset(user)
-        .select_related("office", "primary_agent", "coordinator")
-        .filter(public_id=public_id)
-        .first()
-    )
-    if tx is None:
-        raise Transaction.DoesNotExist
-    return tx
+    from apps.transactions.concurrency import load_workspace_transaction as load
+
+    return load(user, public_id)
 
 
 __all__ = [

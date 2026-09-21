@@ -5,6 +5,8 @@ from __future__ import annotations
 # Scoped list/detail (also on web.OperationsPermission for ops nav).
 VIEW_TRANSACTIONS = "web.view_transactions"
 
+VIEW_OWN_TRANSACTIONS = "web.view_own_transactions"
+
 # Create drafts, edit non-status fields, and mutate assignments.
 MANAGE_TRANSACTIONS = "web.manage_transactions"
 

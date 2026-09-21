@@ -205,12 +205,19 @@ TRANSACTION_MAPPER = DomainMapper(
     action_labels={
         "transaction.created": "Transaction opened",
         "transaction.updated": "Transaction updated",
+        "transaction.status_changed": "Transaction status changed",
+        "transaction.assignment_changed": "Assignment changed",
+        "transaction.archived": "Transaction archived",
         "transaction.closed": "Transaction closed",
         "transaction.cancelled": "Transaction cancelled",
     },
     typed_actions={
         "transaction.closed": "transaction.close",
         "transaction.cancelled": "transaction.cancel",
+        "transaction.archived": "transaction.archive",
+        "transaction.status_changed": "transaction.transition",
+        "transaction.assignment_changed": "transaction.assign",
+        "transaction.updated": "transaction.update",
     },
 )
 

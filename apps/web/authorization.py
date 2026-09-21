@@ -2981,9 +2981,44 @@ ROUTE_POLICIES["transaction_create"] = AuthorizationPolicy(
 ROUTE_POLICIES["transaction_workspace"] = AuthorizationPolicy(
     key="transaction_workspace",
     access="permission_protected",
-    description="Minimal transaction workspace shell; row scope re-checked in view.",
+    description="Sectioned transaction workspace; row scope re-checked in view.",
     methods=("GET",),
     route_names=("transaction_workspace",),
+    any_permissions=(
+        "web.view_transactions",
+        "web.manage_transactions",
+        "web.create_own_transactions",
+        "web.view_own_transactions",
+    ),
+    scope_rule="user_office_scope",
+)
+ROUTE_POLICIES["transaction_workspace_write"] = AuthorizationPolicy(
+    key="transaction_workspace_write",
+    access="permission_protected",
+    description="Mutate transaction workspace sections; row scope re-checked in view.",
+    methods=("POST", "DELETE"),
+    route_names=(
+        "transaction_party_save",
+        "transaction_party_end",
+        "transaction_property_save",
+        "transaction_key_date_save",
+        "transaction_key_date_end",
+        "transaction_note_save",
+        "transaction_note_end",
+        "transaction_assignment_save",
+    ),
+    any_permissions=(
+        "web.manage_transactions",
+        "web.create_own_transactions",
+    ),
+    scope_rule="user_office_scope",
+)
+ROUTE_POLICIES["my_transactions"] = AuthorizationPolicy(
+    key="my_transactions",
+    access="permission_protected",
+    description="Agent-facing scoped transaction list.",
+    methods=("GET",),
+    route_names=("my_transactions",),
     any_permissions=(
         "web.view_transactions",
         "web.manage_transactions",
