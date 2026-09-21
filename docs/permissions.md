@@ -159,6 +159,9 @@ the administrative record omit keys the reader may not have — `agentStatus`,
 `user.change_user_administration`. Contract commission terms and contract
 internal notes use `contract.view_commission_terms` and
 `contract.view_internal_notes` (see [agent-contracts.md](agent-contracts.md)).
+Transaction list/contract prices and client snapshots use
+`transactions.view_transaction_financials` and
+`transactions.view_transaction_clients` (see [transactions.md](transactions.md)).
 Keys are absent rather than null: a key
 present but empty still discloses that the field exists.
 

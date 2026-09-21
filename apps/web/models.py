@@ -34,6 +34,11 @@ class OperationsPermission(models.Model):
             ("assign_user_roles", _("Can assign user roles")),
             ("view_agent_contracts", _("Can view scoped agent contracts")),
             ("view_transactions", _("Can view scoped transactions")),
+            ("manage_transactions", _("Can create and manage scoped transactions")),
+            (
+                "transition_transactions",
+                _("Can transition scoped transaction lifecycle"),
+            ),
             ("view_inventory", _("Can view scoped inventory")),
             ("view_reservations", _("Can view scoped reservations")),
             ("manage_announcements", _("Can manage announcements")),
