@@ -104,6 +104,7 @@ def test_only_the_live_destinations_are_enabled():
             "admin-rooms": True,
             "my-reservations": True,
             "agent-directory": True,
+            "agent-transactions": True,
         }.items()
         if enabled
     }
@@ -131,12 +132,14 @@ def test_only_the_live_destinations_are_enabled():
     assert HUB_FEATURES["admin-rooms"] is True
     assert HUB_FEATURES["my-reservations"] is True
     assert HUB_FEATURES["agent-directory"] is True
+    assert HUB_FEATURES["agent-transactions"] is True
 
 
 def test_feature_states_are_a_copy_callers_cannot_corrupt():
     states = hub_feature_states()
-    states["agent-transactions"] = True
-    assert HUB_FEATURES["agent-transactions"] is False
+    original = states["agent-transactions"]
+    states["agent-transactions"] = not original
+    assert HUB_FEATURES["agent-transactions"] is original
 
 
 @pytest.mark.django_db
@@ -161,6 +164,7 @@ def test_unauthorized_administrative_feature_keys_are_not_shared(client):
         "marketing-resources": True,
         "policies-compliance": True,
         "agent-directory": True,
+        "agent-transactions": True,
     }
     assert not any(key.startswith("admin-") for key in props["features"])
 
@@ -265,6 +269,7 @@ def test_shared_props_carry_feature_state_and_office(client):
         "marketing-resources": True,
         "policies-compliance": True,
         "agent-directory": True,
+        "agent-transactions": True,
     }
     assert props["primaryOffice"] == {
         "id": office.id,

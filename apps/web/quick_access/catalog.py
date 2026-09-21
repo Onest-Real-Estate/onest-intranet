@@ -52,6 +52,7 @@ DEFAULT_ICON = "app-window"
 LIVE_HUB_ROUTES: dict[str, tuple[str, tuple[str, ...]]] = {
     "announcements": ("announcements", ()),
     "my-contract": ("my_contract", ()),
+    "agent-transactions": ("transaction_new", ()),
     "office-info": ("office_info", ()),
     "office-resources": ("office_resources", ()),
     "office-inventory": ("office_inventory", ()),
