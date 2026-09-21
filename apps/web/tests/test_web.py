@@ -206,17 +206,14 @@ def test_dashboard_partial_reload_returns_transactions(client):
 
 
 @pytest.mark.django_db
-def test_coming_soon_renders_named_section(client):
+def test_coming_soon_redirects_live_section_to_real_route(client):
     user = User.objects.create_user(email="alice@example.com", profile_completed=True)
     client.force_login(user)
     response = client.get(
         reverse("coming_soon", kwargs={"section": "agent-transactions"}),
-        HTTP_X_INERTIA="true",
     )
-    assert response.status_code == 200
-    data = json.loads(response.content)
-    assert data["component"] == "ComingSoon"
-    assert data["props"]["title"] == "Agent transactions"
+    assert response.status_code == 302
+    assert response.url == reverse("transaction_new")
 
 
 @pytest.mark.django_db

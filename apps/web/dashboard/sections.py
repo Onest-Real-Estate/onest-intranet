@@ -40,6 +40,7 @@ LIVE_SECTION_ROUTES: dict[str, str] = {
     "announcements": "announcements",
     "my-contract": "my_contract",
     "my-tools": "my_tools",
+    "agent-transactions": "transaction_new",
     "my-reservations": "my_reservations",
     "office-info": "office_info",
     "office-resources": "office_resources",

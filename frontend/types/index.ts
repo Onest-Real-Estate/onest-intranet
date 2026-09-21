@@ -3931,6 +3931,7 @@ export interface AgentContractRecipientResult {
   officeId: number | null;
   officeName: string;
   officeState?: string;
+  officeKey?: string;
   licenseState: string;
   agentIdentifier: string;
 }
@@ -5736,4 +5737,92 @@ export interface DocumentsMediaManagerPageProps extends PageProps {
   limits: DocumentsMediaLimits;
   capabilities: DocumentsCapabilities;
   validation: ValidationErrors;
+}
+
+/** Guided transaction create (#100). */
+export interface TransactionCreateSchema {
+  stage: "draft" | "preparing" | string;
+  sections: Array<{ id: string; label: string; fields: string[] }>;
+  requiredFields: string[];
+  lockedFields: string[];
+  transactionTypes: Array<{ value: string; label: string }>;
+  representationTypes: Array<{ value: string; label: string }>;
+  jurisdiction: string;
+}
+
+export interface TransactionCreateCapabilities {
+  manage: boolean;
+  createOwn: boolean;
+  lockOffice: boolean;
+  lockPrimaryAgent: boolean;
+}
+
+export interface TransactionOfficeOption {
+  stableKey: string;
+  name: string;
+  state: string;
+}
+
+export interface TransactionDuplicateMatch {
+  publicId: string;
+  reference: string;
+}
+
+export interface TransactionNewPageProps extends PageProps {
+  schema: TransactionCreateSchema;
+  draft: Record<string, string>;
+  errors: ValidationErrors;
+  duplicates: TransactionDuplicateMatch[];
+  offices: TransactionOfficeOption[];
+  capabilities: TransactionCreateCapabilities;
+  selfPerson: AgentContractRecipientResult;
+}
+
+export interface TransactionWorkspaceAssignment {
+  publicId: string;
+  role: string;
+  roleLabel: string;
+  user: { id: string; displayName: string; email: string } | null;
+  assignedAt: string | null;
+  endedAt: string | null;
+}
+
+export interface TransactionWorkspaceRecord {
+  publicId: string;
+  reference: string;
+  transactionType: string;
+  representationType: string;
+  status: string;
+  statusLabel: string;
+  office: { stableKey: string; name: string } | null;
+  primaryAgent: { id: string; displayName: string; email: string } | null;
+  coordinator: { id: string; displayName: string; email: string } | null;
+  property: {
+    line1?: string;
+    city?: string;
+    state?: string;
+    postalCode?: string;
+  };
+  mlsNumber: string;
+  acceptanceDate: string | null;
+  closingDate: string | null;
+  lenderRef: string;
+  titleRef: string;
+  referralRef: string;
+  listPrice?: string | null;
+  contractPrice?: string | null;
+  clients?: Array<{
+    name?: string;
+    role?: string;
+    email?: string;
+    phone?: string;
+  }>;
+  assignments: TransactionWorkspaceAssignment[];
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
+export interface TransactionWorkspacePageProps extends PageProps {
+  transaction: TransactionWorkspaceRecord;
+  capabilities: { manage: boolean; view: boolean };
 }

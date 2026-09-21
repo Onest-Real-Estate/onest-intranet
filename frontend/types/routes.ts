@@ -1,4 +1,9 @@
 const URLS = {
+    'transaction_workspace': (public_id: string) => `/transactions/${public_id}`,
+    'transaction_people_search': () => `/transactions/people`,
+    'transaction_prepare': () => `/transactions/prepare`,
+    'transaction_draft_save': () => `/transactions/draft`,
+    'transaction_new': () => `/transactions/new`,
     'space_administration_booking_cancel': (public_id: string) => `/operations/rooms/bookings/${public_id}/cancel`,
     'space_administration_booking_move': (public_id: string) => `/operations/rooms/bookings/${public_id}/move`,
     'space_administration_block_delete': (public_id: string) => `/operations/rooms/blocks/${public_id}/delete`,

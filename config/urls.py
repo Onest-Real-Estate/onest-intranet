@@ -40,6 +40,7 @@ urlpatterns += [
     path("", include("apps.documents.urls")),
     path("", include("apps.audit.urls")),
     path("", include("apps.reservations.urls")),
+    path("", include("apps.transactions.urls")),
 ]
 
 # Silk (SQL profiling) is dev-only — see config/settings.py. Web UI: /silk/.
