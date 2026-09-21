@@ -23,6 +23,7 @@ from apps.user.models import (
 )
 from apps.user.onboarding_forms import (
     OnboardingContractForm,
+    OnboardingHandoffForm,
     OnboardingNoticeForm,
     OnboardingOwnerForm,
     OnboardingTaskCreateForm,
@@ -30,6 +31,10 @@ from apps.user.onboarding_forms import (
     OnboardingToolActionForm,
 )
 from apps.user.services.agent_administration import assignable_office_queryset
+from apps.user.services.onboarding_metrics import (
+    OnboardingErrorCode,
+    record_onboarding_error,
+)
 from apps.user.services.onboarding_office import (
     office_confirmation_is_current,
     office_confirmation_payload,
@@ -44,6 +49,7 @@ from apps.user.services.onboarding_operations import (
     perform_tool_action,
     resend_notice,
     resolve_task,
+    retry_office_handoff,
 )
 from apps.user.services.onboarding_state import (
     build_onboarding_states,
@@ -428,12 +434,14 @@ def _render_error(
 
 def _mutation_error(request, actor, target, form, callback, *, success_message: str):
     if not form.is_valid():
+        record_onboarding_error(OnboardingErrorCode.ADMIN_ACTION_INVALID)
         return _render_error(
             request, actor, target, validation_errors(form), status=422
         )
     try:
         callback(form.cleaned_data)
     except StaleOnboardingVersion as exc:
+        record_onboarding_error(OnboardingErrorCode.ADMIN_ACTION_STALE)
         return _render_error(
             request,
             actor,
@@ -458,6 +466,7 @@ def _mutation_error(request, actor, target, form, callback, *, success_message: 
             if message_dict
             else {"fields": {}, "form": list(exc.messages)}
         )
+        record_onboarding_error(OnboardingErrorCode.ADMIN_ACTION_INVALID)
         return _render_error(request, actor, target, validation, status=422)
     set_flash(request, level="success", message=success_message)
     return redirect("new_agent_onboarding", user_id=target.pk)
@@ -567,6 +576,26 @@ def onboarding_contract(request: HttpRequest, user_id: int):
             expected_version=data["expected_version"],
         ),
         success_message="Agent contract initiated.",
+    )
+
+
+@enforce_policy("new_agent_onboarding_handoff")
+@require_POST
+def onboarding_handoff(request: HttpRequest, user_id: int):
+    actor = cast(User, request.user)
+    target = _target(actor, user_id)
+    form = OnboardingHandoffForm(request.POST)
+    return _mutation_error(
+        request,
+        actor,
+        target,
+        form,
+        lambda data: retry_office_handoff(
+            actor=actor,
+            user=target,
+            expected_version=data["expected_version"],
+        ),
+        success_message="Office handoff sent again.",
     )
 
 

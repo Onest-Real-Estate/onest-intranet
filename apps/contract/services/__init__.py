@@ -253,6 +253,16 @@ def bulk_agent_onboarding_states(users: list[User]):
     return result
 
 
+#: Pre-send statuses the agent sees as "being prepared" by their office.
+_PREPARING_STATUSES = frozenset(
+    {
+        ContractStatus.DRAFT,
+        ContractStatus.READY_FOR_REVIEW,
+        ContractStatus.AWAITING_COMPANY_SIGNATURE,
+    }
+)
+
+
 def _onboarding_state_for_contract(contract: AgentContract | None):
     from apps.user.services.onboarding_state import (
         ContractJourneyStatus,
@@ -318,7 +328,11 @@ def _onboarding_state_for_contract(contract: AgentContract | None):
         ContractStatus.VIEWED,
     }:
         journey_status = ContractJourneyStatus.SENT
-    elif generated_done:
+    elif generated_done or (
+        contract is not None and contract.status in _PREPARING_STATUSES
+    ):
+        # A draft the office initiated is still "being prepared" for the agent,
+        # whether or not its PDF exists yet.
         journey_status = ContractJourneyStatus.GENERATED
     elif contract is None:
         # The source answered and there is simply nothing yet. ``UNAVAILABLE``
@@ -327,7 +341,9 @@ def _onboarding_state_for_contract(contract: AgentContract | None):
         # broken integration.
         journey_status = ContractJourneyStatus.NOT_STARTED
     else:
-        journey_status = ContractJourneyStatus.UNAVAILABLE
+        # The source answered with a contract that cannot progress (expired or
+        # terminated before activation): an administrator has to act.
+        journey_status = ContractJourneyStatus.BLOCKED
     return ContractOnboardingState(
         status=overall,
         journey_status=journey_status,
@@ -709,13 +725,12 @@ def initiate_onboarding_contract(
     """
     from apps.user.models import UserOnboardingCase
     from apps.user.services.onboarding_office import office_confirmation_is_current
+    from apps.user.services.onboarding_operations import locked_user_queryset
 
     _ensure_manage(actor)
     if actor.pk == recipient.pk:
         raise PermissionDenied(_("You cannot initiate your own agent contract."))
-    locked = (
-        User.objects.select_for_update().select_related("office").get(pk=recipient.pk)
-    )
+    locked = locked_user_queryset().get(pk=recipient.pk)
     if not is_user_in_scope(actor, locked):
         raise PermissionDenied(_("Recipient is outside your administrative scope."))
     case = UserOnboardingCase.objects.filter(user=locked).first()

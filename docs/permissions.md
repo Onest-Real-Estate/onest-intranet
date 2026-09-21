@@ -125,6 +125,22 @@ form in the library and supersedes the previous current sibling.
 Retirement removes it from the library while keeping files and history.
 See [documents-forms.md](documents-forms.md).
 
+### Onboarding
+
+| Codename | What it gates |
+| --- | --- |
+| `web.view_new_agents` | New Agent List, the scoped workspace, and the onboarding reports |
+| `web.manage_new_agent_onboarding` | Owner, tasks, tool actions, notice resends, and **Retry office handoff** |
+| `contract.manage_agent_contracts` | Initiating the agent contract from the workspace (plus the manage grant) |
+| `web.manage_onboarding_tools` | The tool catalog, company-wide |
+
+Default bundles: System Admin, Principal Broker, Broker Admin, Regional
+Manager, and Branch Manager hold all three onboarding grants; Regional Admin
+and Branch Admin hold `view_new_agents` only. The handoff routes to a Branch
+Admin contact, so this split is an open sign-off item — see
+[onboarding-support.md](onboarding-support.md#product-owner-sign-off). Staff
+reset is a Django admin action, not a permission.
+
 ### Reading a record vs ending its access
 
 `user.change_user_administration` maintains somebody's record;
@@ -172,6 +188,7 @@ Helpers: `hasPermission`, `isAuthorizationStale`, `isAccessRevoked`, and
 
 ## Related docs
 
+- `docs/onboarding-support.md` — onboarding runbook, measures, and sign-off
 - `docs/authorization.md` — route policies and scope helpers
 - `docs/roles.md` — brokerage role catalog
 - `docs/dashboard-metrics.md` — metric-level permissions

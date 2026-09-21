@@ -118,12 +118,20 @@ def locked_case_queryset():
     )
 
 
-def _lock_case(user: User, expected_version: str) -> UserOnboardingCase:
-    locked_user = (
-        User.objects.select_for_update()
-        .select_related("office", "office__region")
-        .get(pk=user.pk)
+def locked_user_queryset():
+    """The agent row, locked for update, with its office loaded.
+
+    ``office`` is nullable, so ``select_related`` is a LEFT OUTER JOIN and a
+    bare ``FOR UPDATE`` fails on PostgreSQL. ``of=("self",)`` locks only the
+    user row; see ``locked_case_queryset`` for why SQLite hides this.
+    """
+    return User.objects.select_for_update(of=("self",)).select_related(
+        "office", "office__region"
     )
+
+
+def _lock_case(user: User, expected_version: str) -> UserOnboardingCase:
+    locked_user = locked_user_queryset().get(pk=user.pk)
     case = locked_case_queryset().filter(user=locked_user).first()
     if expected_version != journey_version_token(locked_user, case):
         raise StaleOnboardingVersion()
@@ -279,6 +287,83 @@ def transition_office_handoff(
         )
     )
     return True
+
+
+@transaction.atomic
+def retry_office_handoff(*, actor: User, user: User, expected_version: str) -> None:
+    """Re-send a failed office handoff to the office's current Branch Admin.
+
+    The state is not moved here. The same idempotent handoff event is published
+    again, and the notification consumer records ``notified`` only once a
+    notification actually exists — so a retry never claims a delivery. Typical
+    use: support added the missing Branch Admin contact after the agent
+    finished required setup.
+    """
+    from apps.user.services.onboarding_office import (
+        DEFAULT_OWNER_POLICY,
+        OFFICE_HANDOFF_EVENT,
+        DefaultOnboardingOwnerPolicy,
+        resolve_office_administrator,
+    )
+
+    ensure_manage_authority(actor, user)
+    case = _lock_case(user, expected_version)
+    locked_user = case.user
+    handoff_is_current = (
+        getattr(case, "office_handoff_office_id", None)
+        == getattr(locked_user, "office_id", None)
+        and case.office_handoff_onboarding_version == locked_user.onboarding_version
+    )
+    if not (
+        case.required_setup_completed_at
+        and handoff_is_current
+        and case.office_handoff_state
+        == UserOnboardingCase.OfficeHandoffState.NOTIFICATION_FAILED
+    ):
+        raise ValidationError(
+            {"handoff": "Only a failed handoff for the current office can be retried."}
+        )
+    assert locked_user.office is not None
+    resolved = resolve_office_administrator(locked_user.office)
+    if resolved is None:
+        raise ValidationError(
+            {
+                "handoff": (
+                    "This office has no current Branch Admin contact. Add one, "
+                    "then retry."
+                )
+            }
+        )
+    if (
+        getattr(case, "owner_id", None) is None
+        and DEFAULT_OWNER_POLICY == DefaultOnboardingOwnerPolicy.RESOLVED_OFFICE_ADMIN
+    ):
+        case.owner = resolved.user
+    case.updated_by = actor
+    case.save(update_fields=["owner", "updated_by", "updated_at"])
+    log_event(
+        "user.onboarding.office_handoff_retried",
+        actor=actor_from_user(actor),
+        target=_target(actor, locked_user),
+        after={
+            "office_id": locked_user.office.pk,
+            "onboarding_version": locked_user.onboarding_version,
+            "recipient_id": resolved.user.pk,
+        },
+        office_id=locked_user.office.stable_key,
+        channel="onboarding_workspace",
+    )
+    publish(
+        OFFICE_HANDOFF_EVENT,
+        actor_id=str(actor.pk),
+        subject=f"user:{locked_user.pk}",
+        payload={
+            "user_id": locked_user.pk,
+            "office_id": locked_user.office.pk,
+            "recipient_id": resolved.user.pk,
+            "onboarding_version": locked_user.onboarding_version,
+        },
+    )
 
 
 @transaction.atomic

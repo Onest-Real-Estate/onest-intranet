@@ -1942,6 +1942,18 @@ ROUTE_POLICIES: dict[str, AuthorizationPolicy] = {
         ),
         scope_rule="administered_user_scope",
     ),
+    "new_agent_onboarding_handoff": AuthorizationPolicy(
+        key="new_agent_onboarding_handoff",
+        access="permission_protected",
+        description=(
+            "Re-send a failed office handoff for one scoped onboarding case to "
+            "the office's current Branch Admin."
+        ),
+        methods=("POST",),
+        route_names=("new_agent_onboarding_handoff",),
+        all_permissions=("web.manage_new_agent_onboarding",),
+        scope_rule="source_service_reauthorization",
+    ),
     "new_agent_onboarding_notice": AuthorizationPolicy(
         key="new_agent_onboarding_notice",
         access="permission_protected",

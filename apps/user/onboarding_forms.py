@@ -59,6 +59,10 @@ class OnboardingContractForm(VersionedOnboardingForm):
     pass
 
 
+class OnboardingHandoffForm(VersionedOnboardingForm):
+    pass
+
+
 class OnboardingNoticeForm(VersionedOnboardingForm):
     source = forms.ChoiceField(
         choices=(("contract", "Contract"), ("training", "Training"))

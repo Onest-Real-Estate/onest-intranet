@@ -7,8 +7,10 @@ from datetime import date
 import pytest
 from django.core.exceptions import PermissionDenied, ValidationError
 
+from apps.contract.models import AgentContract
 from apps.contract.services import (
     agent_contract_status,
+    bulk_agent_onboarding_states,
     contract_status_options,
     create_draft_contract,
     recipient_contract_queryset,
@@ -199,3 +201,31 @@ def test_serialize_includes_payee_summary(seeded_offices):
     assert payee["id"] == mentor.pk
     assert payee["email"] == mentor.email
     assert payee["name"]
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("status", "journey"),
+    [
+        (ContractStatus.DRAFT, "generated"),
+        (ContractStatus.READY_FOR_REVIEW, "generated"),
+        (ContractStatus.AWAITING_COMPANY_SIGNATURE, "generated"),
+        (ContractStatus.EXPIRED, "blocked"),
+        (ContractStatus.TERMINATED, "blocked"),
+    ],
+)
+def test_an_answered_contract_is_never_reported_as_an_unavailable_source(
+    seeded_offices, status, journey
+):
+    """``unavailable`` means the source could not answer; a draft it answered
+    with is being prepared, and a dead contract needs an administrator."""
+    admin = company_admin(seeded_offices)
+    recipient = agent(seeded_offices, email="drafted@example.com")
+    contract = create_draft_contract(
+        admin, recipient=recipient, effective_on=date.today()
+    )
+    # Fixture state only: the lifecycle service owns real transitions.
+    AgentContract.objects.filter(pk=contract.pk).update(status=status)
+
+    state = bulk_agent_onboarding_states([recipient])[recipient.pk]
+    assert str(state.journey_status) == journey

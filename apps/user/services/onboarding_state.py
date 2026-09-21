@@ -271,22 +271,26 @@ def new_agent_queryset(
     ``access`` is accepted for dashboard callers that already resolved it; the
     administration scope service remains the one database boundary.
     """
+    del access  # administered_user_queryset resolves the same effective grant.
+    return (
+        administered_user_queryset(actor)
+        .filter(new_agent_filter(at or timezone.now()))
+        .distinct()
+    )
+
+
+def new_agent_filter(moment: datetime) -> Q:
+    """The new-agent population rule, shared by scoped and operator callers."""
     from apps.onboarding_tools.models import OPEN_STATES
 
-    del access  # administered_user_queryset resolves the same effective grant.
-    moment = at or timezone.now()
     cutoff_date = timezone.localdate(moment) - timedelta(days=NEW_AGENT_WINDOW_DAYS)
     cutoff_datetime = moment - timedelta(days=NEW_AGENT_WINDOW_DAYS)
     return (
-        administered_user_queryset(actor)
-        .filter(
-            Q(start_date__gte=cutoff_date)
-            | Q(date_joined__gte=cutoff_datetime)
-            | Q(profile_completed=False)
-            | Q(onboarding_case__tasks__status=OnboardingTask.Status.OPEN)
-            | Q(tool_statuses__state__in=sorted(OPEN_STATES))
-        )
-        .distinct()
+        Q(start_date__gte=cutoff_date)
+        | Q(date_joined__gte=cutoff_datetime)
+        | Q(profile_completed=False)
+        | Q(onboarding_case__tasks__status=OnboardingTask.Status.OPEN)
+        | Q(tool_statuses__state__in=sorted(OPEN_STATES))
     )
 
 
@@ -599,6 +603,42 @@ def _contract_workspace_action(actor: User, state: OnboardingState) -> dict[str,
     return action
 
 
+def _handoff_workspace_action(state: OnboardingState) -> dict[str, Any] | None:
+    """A failed office handoff outranks every other action: nobody owns it.
+
+    Offered only while the current cycle's handoff failed, and disabled with
+    the reason while the office still has no Branch Admin contact to send to.
+    """
+    from apps.user.services.onboarding_office import resolve_office_administrator
+
+    if state.journey.office_handoff_status != (
+        UserOnboardingCase.OfficeHandoffState.NOTIFICATION_FAILED
+    ):
+        return None
+    office = state.user.office
+    recipient = resolve_office_administrator(office) if office else None
+    reason = (
+        ""
+        if recipient is not None
+        else "Add a current Branch Admin contact for this office first."
+    )
+    return {
+        "source": "handoff",
+        "code": "retry_office_handoff",
+        "label": "Retry office handoff",
+        "description": (
+            reason
+            or "The office handoff was not delivered. Send it to the office's "
+            "current Branch Admin."
+        ),
+        "enabled": recipient is not None,
+        "unavailableReason": reason,
+        "method": "post",
+        "href": reverse("new_agent_onboarding_handoff", args=[state.user.pk]),
+        "tool": None,
+    }
+
+
 def _recommended_workspace_action(
     *,
     state: OnboardingState,
@@ -621,6 +661,9 @@ def _recommended_workspace_action(
             "enabled": False,
             "tool": None,
         }
+    handoff = _handoff_workspace_action(state)
+    if handoff is not None:
+        return handoff
     priorities = (
         ToolWorkspaceAction.RETRY_NOTIFICATION,
         ToolWorkspaceAction.MARK_INVITATION_SENT,

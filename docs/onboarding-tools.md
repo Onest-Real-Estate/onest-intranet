@@ -136,6 +136,12 @@ production.
 already runs onboarding. There is deliberately **no new permission**: the people
 who do this work already hold it, and a second grant is one more thing to forget.
 
+The office handoff notifies the office's **Branch Admin**, whose default role
+bundle holds `web.view_new_agents` but not this grant: today they can open the
+case, while a Branch Manager or company admin records the invitation. Whether
+Branch and Regional Admins should hold it is an open product decision; see
+[onboarding-support.md](onboarding-support.md#product-owner-sign-off).
+
 **Self-management is refused**, matching the New Agent List. An agent marking
 their own Office 365 "ready" tells nobody anything, and the figure would stop
 meaning "IT confirmed this works".

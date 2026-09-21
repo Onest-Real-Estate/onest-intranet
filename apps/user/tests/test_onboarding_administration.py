@@ -848,3 +848,19 @@ def test_case_lock_compiles_to_valid_postgresql(monkeypatch):
     assert "LEFT OUTER JOIN" in sql
     assert 'FOR UPDATE OF "user_useronboardingcase"' in sql
     assert not sql.rstrip().endswith("FOR UPDATE")
+
+
+def test_agent_lock_compiles_to_valid_postgresql(monkeypatch):
+    """Every workspace mutation and contract initiation locks the agent first.
+
+    ``office`` is nullable, so this lock once shipped as an unqualified
+    ``FOR UPDATE`` that PostgreSQL rejects on every tool, task, owner, and
+    contract action while the SQLite suite stayed green.
+    """
+    from apps.user.services.onboarding_operations import locked_user_queryset
+    from apps.user.tests.pg_compile import compile_for_postgresql
+
+    sql = compile_for_postgresql(locked_user_queryset().filter(pk=1), monkeypatch)
+
+    assert "LEFT OUTER JOIN" in sql
+    assert 'FOR UPDATE OF "user_user"' in sql
