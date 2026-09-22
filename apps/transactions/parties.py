@@ -26,9 +26,38 @@ from apps.transactions.taxonomy import (
     PRIMARY_PARTY_ROLES,
     REPRESENTATION_CODES,
     PartyKind,
+    PartyRole,
+    RepresentationType,
 )
 from apps.user.models import User
 from apps.user.services.role_assignments import has_effective_permission
+
+_REP_TO_PARTY_ROLE: dict[str, str] = {
+    RepresentationType.BUYER: PartyRole.BUYER,
+    RepresentationType.SELLER: PartyRole.SELLER,
+    RepresentationType.TENANT: PartyRole.TENANT,
+    RepresentationType.LANDLORD: PartyRole.LANDLORD,
+    RepresentationType.DUAL: PartyRole.BUYER,
+}
+
+_ROLE_ALIASES: dict[str, str] = {
+    "buyer": PartyRole.BUYER,
+    "buyers": PartyRole.BUYER,
+    "buyer_agency": PartyRole.BUYER,
+    "buyer agency": PartyRole.BUYER,
+    "seller": PartyRole.SELLER,
+    "sellers": PartyRole.SELLER,
+    "seller_agency": PartyRole.SELLER,
+    "seller agency": PartyRole.SELLER,
+    "tenant": PartyRole.TENANT,
+    "tenants": PartyRole.TENANT,
+    "tenant_agency": PartyRole.TENANT,
+    "tenant agency": PartyRole.TENANT,
+    "landlord": PartyRole.LANDLORD,
+    "landlords": PartyRole.LANDLORD,
+    "landlord_agency": PartyRole.LANDLORD,
+    "landlord agency": PartyRole.LANDLORD,
+}
 
 
 def _audit_target(tx: Transaction) -> AuditTarget:
@@ -87,6 +116,82 @@ def serialize_parties(user: User, tx: Transaction) -> list[dict[str, Any]]:
         transaction=tx, ended_at__isnull=True
     ).order_by("role", "-is_primary", "display_name", "pk")
     return [_serialize_party(user, row) for row in rows]
+
+
+def _party_role_for_client(client: dict[str, Any], representation_type: str) -> str:
+    raw = str(client.get("role") or "").strip().casefold().replace("-", "_")
+    if raw in PARTY_ROLE_CODES:
+        return raw
+    aliased = _ROLE_ALIASES.get(raw) or _ROLE_ALIASES.get(raw.replace("_", " "))
+    if aliased:
+        return aliased
+    return _REP_TO_PARTY_ROLE.get(representation_type, PartyRole.BUYER)
+
+
+def ensure_parties_from_client_snapshots(
+    *, actor: User, tx: Transaction
+) -> list[TransactionParty]:
+    """Materialize create-form client snapshots as structured parties.
+
+    Idempotent: skips when live parties already exist, or when a matching
+    email/name for the role is already on the deal. Safe to call from prepare,
+    draft save, and workspace load (one-shot backfill for older deals).
+    """
+    clients = [
+        item
+        for item in (tx.client_snapshots or [])
+        if isinstance(item, dict) and str(item.get("name") or "").strip()
+    ]
+    if not clients:
+        return []
+
+    if TransactionParty.objects.filter(transaction=tx, ended_at__isnull=True).exists():
+        return []
+
+    created: list[TransactionParty] = []
+    primary_claimed: set[str] = set()
+    for client in clients:
+        display_name = str(client.get("name") or "").strip()[:255]
+        role = _party_role_for_client(client, tx.representation_type)
+        email = str(client.get("email") or "").strip()[:254]
+        phone = str(client.get("phone") or "").strip()[:40]
+        is_primary = role in PRIMARY_PARTY_ROLES and role not in primary_claimed
+        if is_primary:
+            primary_claimed.add(role)
+
+        fields = {
+            "role": role,
+            "kind": PartyKind.PERSON,
+            "display_name": display_name,
+            "organization_name": "",
+            "email": email,
+            "phone": phone,
+            "representation": tx.representation_type or "",
+            "is_primary": is_primary,
+        }
+        party = TransactionParty(
+            transaction=tx,
+            created_by=actor,
+            snapshot=_party_snapshot(fields),
+            **fields,
+        )
+        party.save()
+        created.append(party)
+
+    if created:
+        touch_transaction(tx)
+        log_on_commit(
+            action="transaction.updated",
+            actor=actor_from_user(actor),
+            target=_audit_target(tx),
+            metadata={
+                "section": "parties",
+                "change": "parties_seeded_from_clients",
+                "count": len(created),
+                "fields": ["display_name", "email", "phone", "role"],
+            },
+        )
+    return created
 
 
 def _parse_party_fields(raw: dict[str, Any]) -> dict[str, Any]:
@@ -224,6 +329,7 @@ def end_party(
 
 __all__ = [
     "end_party",
+    "ensure_parties_from_client_snapshots",
     "save_party",
     "serialize_parties",
 ]

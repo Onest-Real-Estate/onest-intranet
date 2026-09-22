@@ -88,6 +88,18 @@ ACTION_DEFINITIONS: tuple[NotificationAction, ...] = (
         arg_types=(str,),
     ),
     NotificationAction(
+        key="open_transaction_workspace",
+        route_name="transaction_workspace",
+        label="Open transaction",
+        arg_types=(str,),
+    ),
+    NotificationAction(
+        key="open_transaction_signature_ceremony",
+        route_name="transaction_signature_ceremony",
+        label="Sign documents",
+        arg_types=(str,),
+    ),
+    NotificationAction(
         key="open_inventory_reservation",
         route_name="inventory_reservation_detail",
         label="Open reservation",

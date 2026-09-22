@@ -371,6 +371,19 @@ CONTRACT_FIELD_AI_API_VERSION = config(
 )
 CONTRACT_FIELD_AI_MODEL = config("CONTRACT_FIELD_AI_MODEL", default="gpt-4o")
 
+# Transaction signature packages. The org seal reuses CONTRACT_SIGNING_CERT_*
+# — one brokerage certificate signs both agent contracts and deal documents.
+TRANSACTION_SIGNING_PROVIDER = config(
+    "TRANSACTION_SIGNING_PROVIDER", default="hub_native"
+)
+TRANSACTION_SIGNING_INTENT_TTL_SECONDS = config(
+    "TRANSACTION_SIGNING_INTENT_TTL_SECONDS", default=900, cast=int
+)
+# External signers reach the ceremony through a one-time magic link (7 days).
+TRANSACTION_SIGNATURE_MAGIC_LINK_TTL_SECONDS = config(
+    "TRANSACTION_SIGNATURE_MAGIC_LINK_TTL_SECONDS", default=604800, cast=int
+)
+
 # ---------------------------------------------------------------------------
 # Notification push providers (email is always on; others opt-in)
 # ---------------------------------------------------------------------------
@@ -395,6 +408,10 @@ NOTIFICATION_SLACK_BOT_TOKEN = config("NOTIFICATION_SLACK_BOT_TOKEN", default=""
 # Contract reminder / warning cadences (Celery beat tasks re-check state).
 CONTRACT_SIGNATURE_REMINDER_DAYS = (3, 7, 14)
 CONTRACT_EXPIRATION_WARNING_DAYS = (30, 14, 7)
+
+# Transaction signature package reminder cadence, measured per signer from
+# their invitation (beat task re-checks package state before publishing).
+TRANSACTION_SIGNATURE_REMINDER_DAYS = (3, 7, 14)
 
 # Inventory return reminder / escalation cadences (beat tasks re-check state).
 INVENTORY_NOTIFICATION_POLICY_VERSION = 1
@@ -424,7 +441,7 @@ DJANGO_VITE = {
 # ---------------------------------------------------------------------------
 INERTIA_LAYOUT = "layout.html"
 # Bump whenever the frontend bundle changes so stale clients get a full reload.
-INERTIA_VERSION = "51"
+INERTIA_VERSION = "52"
 
 # Optional external help centre. The shell exposes it only when it is an
 # absolute, credential-free HTTPS URL; an empty or unsafe value leaves the

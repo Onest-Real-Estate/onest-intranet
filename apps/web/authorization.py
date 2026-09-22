@@ -3015,6 +3015,11 @@ ROUTE_POLICIES["transaction_workspace_write"] = AuthorizationPolicy(
         "transaction_document_comment_save",
         "transaction_document_comment_resolve",
         "transaction_document_comment_end",
+        "transaction_signature_package_create",
+        "transaction_signature_package_save",
+        "transaction_signature_package_send",
+        "transaction_signature_package_cancel",
+        "transaction_signature_signer_remind",
     ),
     any_permissions=(
         "web.manage_transactions",
@@ -3034,6 +3039,68 @@ ROUTE_POLICIES["transaction_document_file"] = AuthorizationPolicy(
         "transaction_document_download",
         "transaction_document_preview",
     ),
+    any_permissions=(
+        "web.view_transactions",
+        "web.manage_transactions",
+        "web.create_own_transactions",
+        "web.view_own_transactions",
+    ),
+    scope_rule="user_office_scope",
+)
+ROUTE_POLICIES["transaction_signature_ceremony"] = AuthorizationPolicy(
+    key="transaction_signature_ceremony",
+    access="authenticated",
+    description=(
+        "Hub-user ceremony for a transaction signature package. The view "
+        "re-checks that the actor is the assigned signer."
+    ),
+    methods=("GET", "POST"),
+    route_names=(
+        "transaction_signature_ceremony",
+        "transaction_signature_ceremony_complete",
+        "transaction_signature_ceremony_decline",
+    ),
+    scope_rule="self_only",
+)
+ROUTE_POLICIES["transaction_signature_magic_link"] = AuthorizationPolicy(
+    key="transaction_signature_magic_link",
+    access="public",
+    description=(
+        "External magic-link ceremony. Token authenticity is enforced in the "
+        "view; incomplete profiles are allowed."
+    ),
+    methods=("GET", "POST"),
+    route_names=(
+        "transaction_signature_magic_link",
+        "transaction_signature_magic_link_complete",
+        "transaction_signature_magic_link_decline",
+    ),
+    allow_incomplete_profile=True,
+    auth_behavior="json",
+)
+ROUTE_POLICIES["transaction_signature_document_preview"] = AuthorizationPolicy(
+    key="transaction_signature_document_preview",
+    access="public",
+    description=(
+        "Preview a package document during ceremony. Hub auth or magic-link "
+        "session is re-checked in the view."
+    ),
+    methods=("GET",),
+    route_names=("transaction_signature_document_preview",),
+    allow_incomplete_profile=True,
+    auth_behavior="json",
+)
+ROUTE_POLICIES["transaction_signature_artifact_download"] = AuthorizationPolicy(
+    key="transaction_signature_artifact_download",
+    access="permission_protected",
+    description=(
+        "Download a sealed signed PDF or certificate of completion. Artifacts "
+        "stay inside the Hub — an external signer is pointed at the brokerage "
+        "rather than given a durable link to the executed agreement — and deal "
+        "scope plus completed status are re-checked in the view."
+    ),
+    methods=("GET",),
+    route_names=("transaction_signature_artifact_download",),
     any_permissions=(
         "web.view_transactions",
         "web.manage_transactions",

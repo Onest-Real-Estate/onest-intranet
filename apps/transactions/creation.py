@@ -33,6 +33,7 @@ from apps.transactions.create_schema import (
 )
 from apps.transactions.lifecycle import transition
 from apps.transactions.models import Transaction
+from apps.transactions.parties import ensure_parties_from_client_snapshots
 from apps.transactions.permissions import (
     CREATE_OWN_TRANSACTIONS,
     MANAGE_TRANSACTIONS,
@@ -129,8 +130,16 @@ def scoped_offices_for_creator(user: User) -> list[Office]:
     return list(Office.objects.filter(filters).distinct().order_by("name", "pk"))
 
 
-def scoped_people_queryset(user: User, *, role: str = "agent"):
-    """People an actor may assign, scoped before serialization."""
+def scoped_people_queryset(
+    user: User, *, role: str = "agent", office_key: str | None = None
+):
+    """People an actor may assign, scoped before serialization.
+
+    When ``office_key`` is set, results are limited to that owning office after
+    confirming it sits in the actor's create scope. Callers that omit the key
+    keep the broader actor-scope pool (home office for agents; effective tree
+    for managers).
+    """
     mode = require_creator(user)
     access = get_effective_access(user)
     qs = User.objects.filter(is_active=True, profile_completed=True)
@@ -149,6 +158,13 @@ def scoped_people_queryset(user: User, *, role: str = "agent"):
             )
         qs = qs.filter(office_filter)
 
+    key = (office_key or "").strip()
+    if key:
+        office = Office.objects.filter(stable_key=key).first()
+        if office is None or not _office_in_actor_scope(user, office, access=access):
+            return qs.none()
+        qs = qs.filter(office=office)
+
     if role == "coordinator":
         qs = qs.filter(
             role_assignments__role=TRANSACTION_COORDINATOR,
@@ -163,9 +179,14 @@ def scoped_people_queryset(user: User, *, role: str = "agent"):
 
 
 def search_transaction_people(
-    user: User, *, q: str, role: str = "agent", limit: int = 20
+    user: User,
+    *,
+    q: str,
+    role: str = "agent",
+    office_key: str | None = None,
+    limit: int = 20,
 ) -> list[dict[str, Any]]:
-    qs = scoped_people_queryset(user, role=role)
+    qs = scoped_people_queryset(user, role=role, office_key=office_key)
     needle = (q or "").strip()
     if needle:
         qs = qs.filter(
@@ -175,7 +196,7 @@ def search_transaction_people(
             | Q(preferred_name__icontains=needle)
         )
     results: list[dict[str, Any]] = []
-    for person in qs[: max(1, min(limit, 50))]:
+    for person in qs.select_related("office")[: max(1, min(limit, 50))]:
         results.append(
             {
                 "id": person.pk,
@@ -237,12 +258,19 @@ def _resolve_office(user: User, mode: CreatorMode, office_key: str | None) -> Of
     return office
 
 
+def _person_role_message(role: str) -> str:
+    if role == "coordinator":
+        return "Choose a transaction coordinator in the owning office."
+    return "Choose an agent in the owning office."
+
+
 def _resolve_person(
     user: User,
     *,
     person_id: str | None,
     field: str,
     role: str,
+    office: Office,
     required: bool = False,
 ) -> User | None:
     raw = (person_id or "").strip()
@@ -254,10 +282,20 @@ def _resolve_person(
         pk = int(raw)
     except ValueError as exc:
         raise ValidationError({field: ["Unknown person."]}) from exc
-    person = scoped_people_queryset(user, role=role).filter(pk=pk).first()
+    person = (
+        scoped_people_queryset(user, role=role, office_key=office.stable_key)
+        .filter(pk=pk)
+        .first()
+    )
     if person is None:
-        # Do not disclose whether the id exists outside scope.
-        raise ValidationError({field: ["Choose a person in your scope."]})
+        # Same office, wrong role (e.g. realtor picked as coordinator) gets a
+        # role-specific message. Wrong/unknown office stays opaque.
+        same_office = User.objects.filter(
+            pk=pk, is_active=True, profile_completed=True, office=office
+        ).exists()
+        if same_office:
+            raise ValidationError({field: [_person_role_message(role)]})
+        raise ValidationError({field: ["Choose a person in the owning office."]})
     return person
 
 
@@ -432,6 +470,7 @@ def _apply_fields(
             person_id=data.get("primaryAgentId") or data.get("primary_agent_id"),
             field="primaryAgentId",
             role="agent",
+            office=office,
             required=require_preparing_fields,
         )
 
@@ -440,6 +479,7 @@ def _apply_fields(
         person_id=data.get("coAgentId") or data.get("co_agent_id"),
         field="coAgentId",
         role="agent",
+        office=office,
         required=False,
     )
     coordinator = _resolve_person(
@@ -447,6 +487,7 @@ def _apply_fields(
         person_id=data.get("coordinatorId") or data.get("coordinator_id"),
         field="coordinatorId",
         role="coordinator",
+        office=office,
         required=False,
     )
 
@@ -628,7 +669,15 @@ def save_draft(*, user: User, data: dict[str, Any]) -> Transaction:
         data=data,
         require_preparing_fields=False,
     )
-    return _write_draft_row(actor=actor, values=values)
+    tx = _write_draft_row(actor=actor, values=values)
+    return _seed_clients_as_parties(actor=actor, tx=tx)
+
+
+def _seed_clients_as_parties(*, actor: ActorContext, tx: Transaction) -> Transaction:
+    ensure_parties_from_client_snapshots(actor=actor.user, tx=tx)
+    return Transaction.objects.select_related(
+        "office", "primary_agent", "coordinator"
+    ).get(pk=tx.pk)
 
 
 def _load_editable_draft(user: User, public_id: str) -> Transaction:
@@ -701,6 +750,8 @@ def prepare_transaction(
         if winner is not None:
             return winner
         raise
+
+    tx = _seed_clients_as_parties(actor=actor, tx=tx)
 
     # Re-check under lock in case of race on the unique key.
     locked = (

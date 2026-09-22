@@ -112,7 +112,7 @@ Routes: `my_transactions`, `admin_transactions` (ops list),
 ### Sections
 
 Live URL-driven sections: Overview, Parties, Property, Dates, Notes,
-Assignments, Activity, Documents. Stub sections (Checklist, Tasks, Signatures,
+Assignments, Activity, Documents, Signatures. Stub sections (Checklist, Tasks,
 Commission, Compliance) render “coming soon” and stay non-writable until later
 epics.
 
@@ -168,6 +168,42 @@ ships lock fields and review comments those flows will drive.
 
 Orphan cleanup: `manage.py sweep_transaction_documents` (abandoned pending /
 failed older than 14 days + unreferenced storage keys past a 6h grace).
+
+### Signatures (#103 / P1-086)
+
+Hub-native multi-party packages on locked PDF document versions. Owning code:
+`apps/transactions/signing/`. Workspace section `signatures` is live.
+
+| Model | Role |
+| --- | --- |
+| `SignaturePackage` | Draft→sent→in_progress→completed (or declined/expired/cancelled) |
+| `SignaturePackageDocument` | Frozen `TransactionDocumentVersion` + source checksum |
+| `SignaturePackageSigner` | Role, contact, hub/email delivery, routing order, status |
+| `SignaturePackageField` | Page coordinates keyed to signer public id |
+| `SignatureAccessToken` | Hashed magic-link token (raw never stored) |
+| `SignatureSigningIntent` / `SignatureRecord` | Ceremony bind + immutable evidence |
+| `SignatureArtifact` | Write-once signed PDF per document + package CoC |
+
+**Routing.** `ordered`: only the lowest unsigned `routing_order` cohort may
+sign. `parallel`: every invited signer may sign. Enforced on start/complete
+under `select_for_update(of=("self",))`.
+
+**Delivery.** Hub users open `/transactions/sign/<package>/` after SSO.
+External parties open `/sign/p/<token>/` (public policy; token authenticity is
+the gate). Signers see only their eligible fields.
+
+**Finalize.** Celery `finalize_signature_package` stamps appearances, appends
+CoC, seals with the org PKCS#12 (`CONTRACT_SIGNING_CERT_*`), stores artifacts,
+and locks source versions at `signature_status=signed`. Idempotent.
+
+**Reminders / expiry.** Beat tasks `send_signature_package_reminders` and
+`expire_signature_packages`; cadence `TRANSACTION_SIGNATURE_REMINDER_DAYS`.
+Domain events `transaction.signature_package_*` / `transaction.signature_*`
+feed notifications for Hub recipients; email invites/reminders cover magic-link
+signers.
+
+Authoring requires `web.manage_transactions` inside `for_reader` scope. No
+presigned artifact URLs — Hub stream only.
 
 ### Activity
 

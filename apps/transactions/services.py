@@ -35,8 +35,10 @@ from apps.transactions.permissions import (
 from apps.transactions.taxonomy import (
     ASSIGNMENT_ROLE_CODES,
     REPRESENTATION_CODES,
+    REPRESENTATION_LABELS,
     SINGLETON_ASSIGNMENT_ROLES,
     TYPE_CODES,
+    TYPE_LABELS,
     AssignmentRole,
     TransactionStatus,
 )
@@ -463,7 +465,13 @@ def serialize_transaction(user, tx: Transaction) -> dict[str, Any]:
         "publicId": str(tx.public_id),
         "reference": tx.reference,
         "transactionType": tx.transaction_type,
+        "transactionTypeLabel": str(
+            TYPE_LABELS.get(tx.transaction_type, tx.transaction_type)
+        ),
         "representationType": tx.representation_type,
+        "representationTypeLabel": str(
+            REPRESENTATION_LABELS.get(tx.representation_type, tx.representation_type)
+        ),
         "status": tx.status,
         "statusLabel": tx.status_label,
         "office": {

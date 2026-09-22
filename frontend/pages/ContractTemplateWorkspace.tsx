@@ -1105,7 +1105,7 @@ function WorkbenchTabs({
       role="tablist"
       aria-label="Template workspace views"
       onKeyDown={onKeyDown}
-      className="border-border flex items-center gap-1 overflow-x-auto border-b"
+      className="border-border flex items-center gap-1 overflow-x-auto scrollbar-none border-b"
     >
       {TABS.map((tab) => {
         const selected = tab.id === active;

@@ -247,6 +247,44 @@ def test_duplicate_finder_is_silent_outside_scope(seeded):
 
 
 @pytest.mark.django_db
+def test_prepare_seeds_client_as_party(seeded):
+    manager = tc_user("party.seed@example.com")
+    agent = agent_user("party.seed.agent@example.com")
+    tx = prepare_transaction(
+        user=manager,
+        data=base_payload(
+            primaryAgentId=str(agent.pk),
+            clientName="Casey Client",
+            clientEmail="casey@example.com",
+            clientPhone="555-0100",
+            clientRole="buyer",
+            submissionKey=str(uuid.uuid4()),
+        ),
+    )
+    from apps.transactions.models import TransactionParty
+
+    parties = list(
+        TransactionParty.objects.filter(transaction=tx, ended_at__isnull=True)
+    )
+    assert len(parties) == 1
+    party = parties[0]
+    assert party.display_name == "Casey Client"
+    assert party.email == "casey@example.com"
+    assert party.phone == "555-0100"
+    assert party.role == "buyer"
+    assert party.is_primary is True
+
+    # Idempotent: revisiting the workspace does not duplicate.
+    from apps.transactions.parties import ensure_parties_from_client_snapshots
+
+    ensure_parties_from_client_snapshots(actor=manager, tx=tx)
+    assert (
+        TransactionParty.objects.filter(transaction=tx, ended_at__isnull=True).count()
+        == 1
+    )
+
+
+@pytest.mark.django_db
 def test_save_draft_allows_incomplete_then_prepare(seeded):
     manager = tc_user("draft.tc@example.com")
     agent = agent_user("draft.agent@example.com")
@@ -310,3 +348,90 @@ def test_type_representation_pair_validated(seeded):
                 primaryAgentId=str(agent.pk),
             ),
         )
+
+
+@pytest.mark.django_db
+def test_people_search_filters_to_selected_owning_office(client, seeded):
+    from apps.user.roles import SYSTEM_ADMIN
+
+    admin = completed_user(
+        email="admin.people@example.com", office=office("fairfax-va")
+    )
+    assign(admin, SYSTEM_ADMIN, ScopeType.COMPANY)
+    admin = grant(admin, MANAGE_TRANSACTIONS)
+
+    fairfax_agent = agent_user("fairfax.people@example.com")
+    charlotte = office("charlottesville-va")
+    charlotte_agent = completed_user(
+        email="charlotte.people@example.com", office=charlotte
+    )
+    assign(charlotte_agent, REALTOR, ScopeType.OFFICE, charlotte)
+
+    client.force_login(admin)
+    url = reverse("transaction_people_search")
+    unfiltered = client.get(url, {"role": "agent", "q": "people"})
+    assert unfiltered.status_code == 200
+    ids = {row["id"] for row in unfiltered.json()["results"]}
+    assert fairfax_agent.pk in ids
+    assert charlotte_agent.pk in ids
+
+    filtered = client.get(
+        url,
+        {
+            "role": "agent",
+            "q": "people",
+            "officeKey": charlotte.stable_key,
+        },
+    )
+    assert filtered.status_code == 200
+    filtered_ids = {row["id"] for row in filtered.json()["results"]}
+    assert filtered_ids == {charlotte_agent.pk}
+
+
+@pytest.mark.django_db
+def test_prepare_rejects_primary_outside_owning_office(seeded):
+    from django.core.exceptions import ValidationError
+
+    from apps.user.roles import SYSTEM_ADMIN
+
+    admin = completed_user(email="admin.cross@example.com", office=office("fairfax-va"))
+    assign(admin, SYSTEM_ADMIN, ScopeType.COMPANY)
+    admin = grant(admin, MANAGE_TRANSACTIONS)
+
+    fairfax_agent = agent_user("cross.fairfax@example.com")
+    charlotte = office("charlottesville-va")
+    with pytest.raises(ValidationError) as exc:
+        prepare_transaction(
+            user=admin,
+            data=base_payload(
+                officeKey=charlotte.stable_key,
+                primaryAgentId=str(fairfax_agent.pk),
+            ),
+        )
+    assert "primaryAgentId" in exc.value.message_dict
+    assert "owning office" in exc.value.message_dict["primaryAgentId"][0].lower()
+
+
+@pytest.mark.django_db
+def test_prepare_rejects_realtor_as_coordinator(seeded):
+    from django.core.exceptions import ValidationError
+
+    from apps.user.roles import SYSTEM_ADMIN
+
+    admin = completed_user(email="admin.coord@example.com", office=office("fairfax-va"))
+    assign(admin, SYSTEM_ADMIN, ScopeType.COMPANY)
+    admin = grant(admin, MANAGE_TRANSACTIONS)
+
+    fairfax_agent = agent_user("coord.fairfax@example.com")
+    with pytest.raises(ValidationError) as exc:
+        prepare_transaction(
+            user=admin,
+            data=base_payload(
+                officeKey=office("fairfax-va").stable_key,
+                primaryAgentId=str(fairfax_agent.pk),
+                coordinatorId=str(fairfax_agent.pk),
+            ),
+        )
+    assert "coordinatorId" in exc.value.message_dict
+    assert "coordinator" in exc.value.message_dict["coordinatorId"][0].lower()
+    assert "primaryAgentId" not in exc.value.message_dict

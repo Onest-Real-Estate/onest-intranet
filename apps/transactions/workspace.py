@@ -21,7 +21,10 @@ from apps.transactions.key_dates import serialize_key_dates
 from apps.transactions.lifecycle import available_transitions
 from apps.transactions.models import Transaction
 from apps.transactions.notes import serialize_notes_for_reader
-from apps.transactions.parties import serialize_parties
+from apps.transactions.parties import (
+    ensure_parties_from_client_snapshots,
+    serialize_parties,
+)
 from apps.transactions.permissions import (
     CREATE_OWN_TRANSACTIONS,
     MANAGE_TRANSACTIONS,
@@ -137,6 +140,12 @@ def workspace_payload(
         or scoped_transaction_queryset(user).filter(pk=tx.pk).exists()
     )
 
+    # Create-form clients used to live only in client_snapshots. Materialize
+    # them once so the Parties tab matches what was entered at prepare.
+    ensure_parties_from_client_snapshots(actor=user, tx=tx)
+    if can_edit:
+        tx.refresh_from_db(fields=["updated_at"])
+
     payload: dict[str, Any] = {
         "transaction": serialize_transaction(user, tx),
         "expectedVersion": transaction_version(tx),
@@ -158,11 +167,25 @@ def workspace_payload(
         "notes": serialize_notes_for_reader(user, tx),
         "documents": [],
         "documentSchema": None,
+        "signaturePackages": [],
+        "signatureSchema": None,
         "activity": None,
         "activityTeaser": None,
     }
 
-    if active == WorkspaceSection.DOCUMENTS:
+    if active == WorkspaceSection.SIGNATURES:
+        from apps.transactions.deal_documents import serialize_documents_for_reader
+        from apps.transactions.signing.serialize import (
+            serialize_packages_for_reader,
+            signature_schema_payload,
+        )
+
+        payload["signaturePackages"] = serialize_packages_for_reader(user, tx)
+        payload["signatureSchema"] = signature_schema_payload()
+        # A package is built from document versions already on the deal, so the
+        # authoring picker needs the same projection the Documents section uses.
+        payload["documents"] = serialize_documents_for_reader(user, tx)
+    elif active == WorkspaceSection.DOCUMENTS:
         from apps.transactions.deal_documents import (
             document_schema_payload,
             serialize_documents_for_reader,

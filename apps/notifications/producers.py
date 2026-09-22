@@ -634,6 +634,202 @@ def policy_ack_reminder(envelope: EventEnvelope) -> list[NotificationRequest]:
     ]
 
 
+def _signature_package_id(envelope: EventEnvelope) -> str:
+    return str(envelope.payload.get("package_id") or "").strip()
+
+
+def _signature_transaction_id(envelope: EventEnvelope) -> str:
+    return str(envelope.payload.get("transaction_id") or "").strip()
+
+
+def _hub_signer_user_ids(package_id: str) -> list[int]:
+    from apps.transactions.models import SignaturePackageSigner
+    from apps.transactions.taxonomy import ELIGIBLE_SIGNATURE_SIGNER_STATUSES
+
+    if not package_id:
+        return []
+    return list(
+        SignaturePackageSigner.objects.filter(
+            package__public_id=package_id,
+            user_id__isnull=False,
+            status__in=ELIGIBLE_SIGNATURE_SIGNER_STATUSES,
+        ).values_list("user_id", flat=True)
+    )
+
+
+def _package_staff_user_ids(package_id: str) -> list[int]:
+    from apps.transactions.models import SignaturePackage
+
+    if not package_id:
+        return []
+    package = (
+        SignaturePackage.objects.select_related("created_by", "transaction")
+        .filter(public_id=package_id)
+        .first()
+    )
+    if package is None:
+        return []
+    ids: list[int] = []
+    if package.created_by_id:
+        ids.append(int(package.created_by_id))
+    tx = package.transaction
+    if tx.primary_agent_pk:
+        ids.append(int(tx.primary_agent_pk))
+    if tx.coordinator_pk:
+        ids.append(int(tx.coordinator_pk))
+    return sorted(set(ids))
+
+
+def _signature_hub_notices(
+    envelope: EventEnvelope,
+    *,
+    title: str,
+    recipient_ids: list[int],
+    action_key: str,
+    action_args: tuple = (),
+    priority: int = NotificationPriority.HIGH,
+    is_mandatory: bool = True,
+    dedupe_suffix: str = "",
+) -> list[NotificationRequest]:
+    package_id = _signature_package_id(envelope)
+    if not package_id or not recipient_ids:
+        return []
+    dedupe_base = f"{envelope.name}:{package_id}"
+    if dedupe_suffix:
+        dedupe_base = f"{dedupe_base}:{dedupe_suffix}"
+    return [
+        NotificationRequest(
+            recipient_id=user_id,
+            notification_type=NotificationType.TRANSACTION,
+            event_key=envelope.name,
+            title=title,
+            dedupe_key=f"{dedupe_base}:user:{user_id}",
+            priority=priority,
+            is_mandatory=is_mandatory,
+            source_module="transactions",
+            source_record_type="signature_package",
+            source_record_id=package_id,
+            action_key=action_key,
+            action_args=action_args,
+        )
+        for user_id in sorted(set(recipient_ids))
+    ]
+
+
+def signature_package_sent(envelope: EventEnvelope) -> list[NotificationRequest]:
+    package_id = _signature_package_id(envelope)
+    return _signature_hub_notices(
+        envelope,
+        title="Transaction documents are ready for your signature",
+        recipient_ids=_hub_signer_user_ids(package_id),
+        action_key="open_transaction_signature_ceremony",
+        action_args=(package_id,),
+        is_mandatory=True,
+    )
+
+
+def signature_signed(envelope: EventEnvelope) -> list[NotificationRequest]:
+    package_id = _signature_package_id(envelope)
+    transaction_id = _signature_transaction_id(envelope)
+    return _signature_hub_notices(
+        envelope,
+        title="A party signed transaction documents",
+        recipient_ids=_package_staff_user_ids(package_id),
+        action_key="open_transaction_workspace",
+        action_args=(transaction_id,),
+        priority=NotificationPriority.NORMAL,
+        is_mandatory=False,
+        dedupe_suffix=str(envelope.payload.get("signer_id") or ""),
+    )
+
+
+def signature_reminder(envelope: EventEnvelope) -> list[NotificationRequest]:
+    from apps.transactions.models import SignaturePackageSigner
+    from apps.transactions.taxonomy import ELIGIBLE_SIGNATURE_SIGNER_STATUSES
+
+    package_id = _signature_package_id(envelope)
+    signer_id = str(envelope.payload.get("signer_id") or "").strip()
+    day = str(envelope.payload.get("reminder_day") or "0")
+    if not package_id or not signer_id:
+        return []
+    signer = (
+        SignaturePackageSigner.objects.filter(
+            public_id=signer_id,
+            package__public_id=package_id,
+            user_id__isnull=False,
+            status__in=ELIGIBLE_SIGNATURE_SIGNER_STATUSES,
+        )
+        .only("user_id")
+        .first()
+    )
+    if signer is None or signer.user_id is None:
+        return []
+    return _signature_hub_notices(
+        envelope,
+        title="Reminder: transaction documents await your signature",
+        recipient_ids=[int(signer.user_id)],
+        action_key="open_transaction_signature_ceremony",
+        action_args=(package_id,),
+        is_mandatory=True,
+        dedupe_suffix=f"day:{day}",
+    )
+
+
+def signature_package_completed(envelope: EventEnvelope) -> list[NotificationRequest]:
+    package_id = _signature_package_id(envelope)
+    transaction_id = _signature_transaction_id(envelope)
+    return _signature_hub_notices(
+        envelope,
+        title="Transaction signature package is complete",
+        recipient_ids=_package_staff_user_ids(package_id),
+        action_key="open_transaction_workspace",
+        action_args=(transaction_id,),
+        priority=NotificationPriority.NORMAL,
+        is_mandatory=False,
+    )
+
+
+def signature_package_declined(envelope: EventEnvelope) -> list[NotificationRequest]:
+    package_id = _signature_package_id(envelope)
+    transaction_id = _signature_transaction_id(envelope)
+    return _signature_hub_notices(
+        envelope,
+        title="A party declined a signature package",
+        recipient_ids=_package_staff_user_ids(package_id),
+        action_key="open_transaction_workspace",
+        action_args=(transaction_id,),
+        priority=NotificationPriority.HIGH,
+        is_mandatory=True,
+    )
+
+
+def signature_package_cancelled(envelope: EventEnvelope) -> list[NotificationRequest]:
+    package_id = _signature_package_id(envelope)
+    return _signature_hub_notices(
+        envelope,
+        title="A signature package was cancelled",
+        recipient_ids=_hub_signer_user_ids(package_id)
+        + _package_staff_user_ids(package_id),
+        action_key="open_transaction_workspace",
+        action_args=(_signature_transaction_id(envelope),),
+        priority=NotificationPriority.NORMAL,
+        is_mandatory=False,
+    )
+
+
+def signature_package_expired(envelope: EventEnvelope) -> list[NotificationRequest]:
+    package_id = _signature_package_id(envelope)
+    return _signature_hub_notices(
+        envelope,
+        title="A signature package expired",
+        recipient_ids=_package_staff_user_ids(package_id),
+        action_key="open_transaction_workspace",
+        action_args=(_signature_transaction_id(envelope),),
+        priority=NotificationPriority.HIGH,
+        is_mandatory=True,
+    )
+
+
 EventBuilder = Callable[[EventEnvelope], list[NotificationRequest]]
 
 EVENT_PRODUCERS: dict[str, EventBuilder] = {
@@ -661,6 +857,13 @@ EVENT_PRODUCERS: dict[str, EventBuilder] = {
     "training.required_changed": training_required_changed,
     "policy.published": policy_published,
     "policy.ack_reminder": policy_ack_reminder,
+    "transaction.signature_package_sent": signature_package_sent,
+    "transaction.signature_signed": signature_signed,
+    "transaction.signature_reminder": signature_reminder,
+    "transaction.signature_package_completed": signature_package_completed,
+    "transaction.signature_package_declined": signature_package_declined,
+    "transaction.signature_package_cancelled": signature_package_cancelled,
+    "transaction.signature_package_expired": signature_package_expired,
 }
 
 
