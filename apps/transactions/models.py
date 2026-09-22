@@ -18,6 +18,12 @@ from django.utils.translation import gettext_lazy as _
 from apps.transactions.money import money_field
 from apps.transactions.taxonomy import (
     ASSIGNMENT_ROLE_CHOICES,
+    DOCUMENT_CATEGORY_CHOICES,
+    DOCUMENT_COMPLIANCE_STATUS_CHOICES,
+    DOCUMENT_REQUIREMENT_CHOICES,
+    DOCUMENT_RETENTION_POLICY_CHOICES,
+    DOCUMENT_REVIEW_RESOLUTION_CHOICES,
+    DOCUMENT_SIGNATURE_STATUS_CHOICES,
     KEY_DATE_TYPE_CHOICES,
     NOTE_VISIBILITY_CHOICES,
     PARTY_KIND_CHOICES,
@@ -29,11 +35,18 @@ from apps.transactions.taxonomy import (
     STATUS_CODES,
     TYPE_CHOICES,
     AssignmentRole,
+    DocumentCategory,
+    DocumentComplianceStatus,
+    DocumentRequirement,
+    DocumentRetentionPolicy,
+    DocumentReviewResolution,
+    DocumentSignatureStatus,
     NoteVisibility,
     PartyKind,
     TransactionStatus,
 )
 from apps.user.models import Office
+from apps.user.storage import private_storage
 
 _PRIMARY_PARTY_ROLES: list[str] = sorted(PRIMARY_PARTY_ROLES)
 _STATUS_LIST: list[str] = sorted(STATUS_CODES)
@@ -671,11 +684,305 @@ class TransactionNote(models.Model):
         return self.ended_at is None
 
 
+def _transaction_document_upload_to(
+    instance: TransactionDocumentVersion, filename: str
+) -> str:
+    from apps.transactions.media import storage_key
+
+    return storage_key(filename or instance.original_name or "file.bin")
+
+
+class TransactionDocument(models.Model):
+    """Deal document package (family/slot) holding versioned files."""
+
+    public_id = models.UUIDField(
+        _("public id"), default=uuid.uuid4, editable=False, unique=True
+    )
+    transaction = models.ForeignKey(
+        Transaction,
+        on_delete=models.CASCADE,
+        related_name="documents",
+        verbose_name=_("transaction"),
+    )
+    category = models.CharField(
+        _("category"),
+        max_length=32,
+        choices=DOCUMENT_CATEGORY_CHOICES,
+        default=DocumentCategory.OTHER,
+    )
+    requirement = models.CharField(
+        _("requirement"),
+        max_length=16,
+        choices=DOCUMENT_REQUIREMENT_CHOICES,
+        default=DocumentRequirement.OPTIONAL,
+    )
+    title = models.CharField(_("title"), max_length=180)
+    current_version = models.ForeignKey(
+        "TransactionDocumentVersion",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+        verbose_name=_("current version"),
+    )
+    retention_policy = models.CharField(
+        _("retention policy"),
+        max_length=32,
+        choices=DOCUMENT_RETENTION_POLICY_CHOICES,
+        default=DocumentRetentionPolicy.DEAL_CLOSE_PLUS_7Y,
+    )
+    retain_until = models.DateField(_("retain until"), null=True, blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="transaction_documents_created",
+        verbose_name=_("created by"),
+    )
+    created_at = models.DateTimeField(_("created at"), auto_now_add=True)
+    updated_at = models.DateTimeField(_("updated at"), auto_now=True)
+    ended_at = models.DateTimeField(_("ended at"), null=True, blank=True)
+
+    class Meta:
+        ordering = ["category", "title", "pk"]
+        verbose_name = _("transaction document")
+        verbose_name_plural = _("transaction documents")
+        indexes = [
+            models.Index(
+                fields=["transaction", "ended_at", "category"],
+                name="txn_doc_txn_active_cat_idx",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.category}:{self.title}"
+
+    @property
+    def is_active(self) -> bool:
+        return self.ended_at is None
+
+    @property
+    def current_version_pk(self) -> int | None:
+        return getattr(self, "current_version_id", None)
+
+    @property
+    def category_label(self) -> str:
+        from apps.transactions.taxonomy import DOCUMENT_CATEGORY_LABELS
+
+        return str(DOCUMENT_CATEGORY_LABELS.get(self.category, self.category))
+
+    @property
+    def requirement_label(self) -> str:
+        from apps.transactions.taxonomy import DOCUMENT_REQUIREMENT_LABELS
+
+        return str(DOCUMENT_REQUIREMENT_LABELS.get(self.requirement, self.requirement))
+
+
+class TransactionDocumentVersion(models.Model):
+    """Immutable file revision on a deal document package."""
+
+    class ProcessingState(models.TextChoices):
+        PENDING = "pending", _("Processing")
+        READY = "ready", _("Ready")
+        QUARANTINED = "quarantined", _("Quarantined")
+        FAILED = "failed", _("Processing failed")
+
+    public_id = models.UUIDField(
+        _("public id"), default=uuid.uuid4, editable=False, unique=True
+    )
+    document = models.ForeignKey(
+        TransactionDocument,
+        on_delete=models.CASCADE,
+        related_name="versions",
+        verbose_name=_("document"),
+    )
+    version_number = models.PositiveIntegerField(_("version number"), default=1)
+    original_name = models.CharField(_("original name"), max_length=255)
+    display_name = models.CharField(_("display name"), max_length=180)
+    file = models.FileField(
+        _("file"),
+        max_length=255,
+        storage=private_storage,
+        upload_to=_transaction_document_upload_to,
+    )
+    media_type = models.CharField(_("media type"), max_length=120)
+    byte_size = models.PositiveBigIntegerField(_("size in bytes"))
+    checksum = models.CharField(_("checksum"), max_length=64)
+    processing_state = models.CharField(
+        _("processing state"),
+        max_length=16,
+        choices=ProcessingState.choices,
+        default=ProcessingState.PENDING,
+    )
+    processing_note = models.CharField(_("processing note"), max_length=255, blank=True)
+    is_active = models.BooleanField(_("active"), default=True)
+    signature_status = models.CharField(
+        _("signature status"),
+        max_length=16,
+        choices=DOCUMENT_SIGNATURE_STATUS_CHOICES,
+        default=DocumentSignatureStatus.NONE,
+    )
+    compliance_status = models.CharField(
+        _("compliance status"),
+        max_length=16,
+        choices=DOCUMENT_COMPLIANCE_STATUS_CHOICES,
+        default=DocumentComplianceStatus.NONE,
+    )
+    locked_at = models.DateTimeField(_("locked at"), null=True, blank=True)
+    locked_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="transaction_document_versions_locked",
+        verbose_name=_("locked by"),
+    )
+    lock_reason = models.CharField(_("lock reason"), max_length=64, blank=True)
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="transaction_document_versions_uploaded",
+        verbose_name=_("uploaded by"),
+    )
+    created_at = models.DateTimeField(_("created at"), auto_now_add=True)
+    updated_at = models.DateTimeField(_("updated at"), auto_now=True)
+
+    class Meta:
+        ordering = ["-version_number", "-pk"]
+        verbose_name = _("transaction document version")
+        verbose_name_plural = _("transaction document versions")
+        constraints = [
+            models.UniqueConstraint(
+                fields=["document", "version_number"],
+                name="txn_doc_unique_document_version",
+            ),
+            models.CheckConstraint(
+                condition=Q(byte_size__gt=0),
+                name="txn_doc_version_has_bytes",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["document", "is_active", "processing_state"],
+                name="txn_doc_ver_state_idx",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.display_name} (v{self.version_number})"
+
+    @property
+    def is_readable(self) -> bool:
+        return (
+            self.is_active
+            and self.processing_state == self.ProcessingState.READY
+            and bool(self.file)
+        )
+
+    @property
+    def is_locked(self) -> bool:
+        if self.locked_at is not None:
+            return True
+        return (
+            self.signature_status == DocumentSignatureStatus.SIGNED
+            or self.compliance_status == DocumentComplianceStatus.APPROVED
+        )
+
+    @property
+    def is_image(self) -> bool:
+        return (self.media_type or "").startswith("image/")
+
+
+class TransactionDocumentReviewComment(models.Model):
+    """Version-bound review comment with visibility and resolution."""
+
+    public_id = models.UUIDField(
+        _("public id"), default=uuid.uuid4, editable=False, unique=True
+    )
+    version = models.ForeignKey(
+        TransactionDocumentVersion,
+        on_delete=models.CASCADE,
+        related_name="review_comments",
+        verbose_name=_("version"),
+    )
+    body = models.TextField(_("body"))
+    visibility = models.CharField(
+        _("visibility"),
+        max_length=32,
+        choices=NOTE_VISIBILITY_CHOICES,
+        default=NoteVisibility.TEAM,
+    )
+    resolution_state = models.CharField(
+        _("resolution state"),
+        max_length=16,
+        choices=DOCUMENT_REVIEW_RESOLUTION_CHOICES,
+        default=DocumentReviewResolution.OPEN,
+    )
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="transaction_document_review_comments",
+        verbose_name=_("author"),
+    )
+    resolved_at = models.DateTimeField(_("resolved at"), null=True, blank=True)
+    resolved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="transaction_document_reviews_resolved",
+        verbose_name=_("resolved by"),
+    )
+    created_at = models.DateTimeField(_("created at"), auto_now_add=True)
+    updated_at = models.DateTimeField(_("updated at"), auto_now=True)
+    ended_at = models.DateTimeField(_("ended at"), null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at", "-pk"]
+        verbose_name = _("transaction document review comment")
+        verbose_name_plural = _("transaction document review comments")
+        indexes = [
+            models.Index(
+                fields=["version", "visibility", "ended_at"],
+                name="txn_doc_review_vis_idx",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"review:{self.public_id}"
+
+    @property
+    def is_active(self) -> bool:
+        return self.ended_at is None
+
+    @property
+    def visibility_label(self) -> str:
+        from apps.transactions.taxonomy import NOTE_VISIBILITY_LABELS
+
+        return str(NOTE_VISIBILITY_LABELS.get(self.visibility, self.visibility))
+
+    @property
+    def resolution_label(self) -> str:
+        from apps.transactions.taxonomy import DOCUMENT_REVIEW_RESOLUTION_LABELS
+
+        return str(
+            DOCUMENT_REVIEW_RESOLUTION_LABELS.get(
+                self.resolution_state, self.resolution_state
+            )
+        )
+
+
 # Re-export for callers that expect AssignmentRole on the model module.
 __all__ = [
     "AssignmentRole",
     "Transaction",
     "TransactionAssignment",
+    "TransactionDocument",
+    "TransactionDocumentReviewComment",
+    "TransactionDocumentVersion",
     "TransactionKeyDate",
     "TransactionNote",
     "TransactionParty",

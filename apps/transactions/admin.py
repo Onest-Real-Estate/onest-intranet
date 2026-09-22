@@ -3,6 +3,9 @@ from django.contrib import admin
 from apps.transactions.models import (
     Transaction,
     TransactionAssignment,
+    TransactionDocument,
+    TransactionDocumentReviewComment,
+    TransactionDocumentVersion,
     TransactionKeyDate,
     TransactionNote,
     TransactionParty,
@@ -107,3 +110,55 @@ class TransactionPropertySnapshotAdmin(admin.ModelAdmin):
     list_display = ("transaction", "mls_number", "recorded_at")
     readonly_fields = ("public_id", "snapshot", "change_summary", "recorded_at")
     raw_id_fields = ("transaction", "recorded_by")
+
+
+@admin.register(TransactionDocument)
+class TransactionDocumentAdmin(admin.ModelAdmin):
+    list_display = (
+        "title",
+        "transaction",
+        "category",
+        "requirement",
+        "ended_at",
+    )
+    list_filter = ("category", "requirement", "retention_policy")
+    readonly_fields = ("public_id", "created_at", "updated_at")
+    raw_id_fields = ("transaction", "current_version", "created_by")
+    search_fields = ("title", "transaction__reference")
+
+
+@admin.register(TransactionDocumentVersion)
+class TransactionDocumentVersionAdmin(admin.ModelAdmin):
+    list_display = (
+        "display_name",
+        "document",
+        "version_number",
+        "processing_state",
+        "signature_status",
+        "compliance_status",
+        "locked_at",
+    )
+    list_filter = ("processing_state", "signature_status", "compliance_status")
+    readonly_fields = (
+        "public_id",
+        "checksum",
+        "byte_size",
+        "created_at",
+        "updated_at",
+    )
+    raw_id_fields = ("document", "uploaded_by", "locked_by")
+
+
+@admin.register(TransactionDocumentReviewComment)
+class TransactionDocumentReviewCommentAdmin(admin.ModelAdmin):
+    list_display = (
+        "version",
+        "visibility",
+        "resolution_state",
+        "author",
+        "created_at",
+        "ended_at",
+    )
+    list_filter = ("visibility", "resolution_state")
+    readonly_fields = ("public_id", "created_at", "updated_at")
+    raw_id_fields = ("version", "author", "resolved_by")

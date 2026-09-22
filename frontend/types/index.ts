@@ -5893,9 +5893,82 @@ export interface TransactionWorkspacePageProps extends PageProps {
   propertyHistory: TransactionPropertyHistoryRow[];
   keyDates: TransactionKeyDateRow[];
   notes: TransactionNoteRow[];
+  documents?: TransactionDocumentPackage[];
+  documentSchema?: TransactionDocumentSchema | null;
   activity: ActivityTimelinePage | null;
   activityTeaser: ActivityTimelinePage | null;
   errors?: ValidationErrors;
+}
+
+export interface TransactionDocumentReviewComment {
+  publicId: string;
+  body: string;
+  visibility: string;
+  visibilityLabel: string;
+  resolutionState: string;
+  resolutionLabel: string;
+  author: { id: string; displayName: string } | null;
+  resolvedAt: string | null;
+  resolvedBy: { id: string; displayName: string } | null;
+  createdAt: string | null;
+  mine: boolean;
+}
+
+export interface TransactionDocumentVersionRow {
+  publicId: string;
+  versionNumber: number;
+  originalName: string;
+  displayName: string;
+  mediaType: string;
+  byteSize: number;
+  checksum: string;
+  processingState: string;
+  processingNote: string;
+  isReadable: boolean;
+  isCurrent: boolean;
+  isLocked: boolean;
+  signatureStatus: string;
+  signatureStatusLabel: string;
+  complianceStatus: string;
+  complianceStatusLabel: string;
+  lockedAt: string | null;
+  lockReason: string;
+  uploadedBy: { id: string; displayName: string } | null;
+  createdAt: string | null;
+  downloadUrl: string;
+  previewUrl: string;
+  reviewComments: TransactionDocumentReviewComment[];
+}
+
+export interface TransactionDocumentPackage {
+  publicId: string;
+  title: string;
+  category: string;
+  categoryLabel: string;
+  requirement: string;
+  requirementLabel: string;
+  retentionPolicy: string;
+  retentionPolicyLabel: string;
+  retainUntil: string | null;
+  createdBy: { id: string; displayName: string } | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+  currentVersion: TransactionDocumentVersionRow | null;
+  versions: TransactionDocumentVersionRow[];
+}
+
+export interface TransactionDocumentSchema {
+  categories: Array<{ value: string; label: string }>;
+  requirements: Array<{ value: string; label: string }>;
+  retentionPolicies: Array<{ value: string; label: string }>;
+  signatureStatuses: Array<{ value: string; label: string }>;
+  complianceStatuses: Array<{ value: string; label: string }>;
+  matrix: {
+    extensions: string[];
+    maxBytes: number;
+    maxCount: number;
+    maxBatch: number;
+  };
 }
 
 export interface TransactionListRow {

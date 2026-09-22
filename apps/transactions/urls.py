@@ -6,6 +6,19 @@ from apps.transactions.views.creation_views import (
     transaction_people_search,
     transaction_prepare,
 )
+from apps.transactions.views.document_views import (
+    transaction_document_classify,
+    transaction_document_comment_end,
+    transaction_document_comment_resolve,
+    transaction_document_comment_save,
+    transaction_document_download,
+    transaction_document_lock,
+    transaction_document_preview,
+    transaction_document_retire,
+    transaction_document_retry,
+    transaction_document_revision,
+    transaction_document_upload,
+)
 from apps.transactions.views.workspace_views import (
     my_transactions,
     transaction_assignment_save,
@@ -81,5 +94,60 @@ urlpatterns = [
         "transactions/<uuid:public_id>/assignments",
         transaction_assignment_save,
         name="transaction_assignment_save",
+    ),
+    path(
+        "transactions/<uuid:public_id>/documents/upload",
+        transaction_document_upload,
+        name="transaction_document_upload",
+    ),
+    path(
+        "transactions/<uuid:public_id>/documents/<uuid:document_id>/classify",
+        transaction_document_classify,
+        name="transaction_document_classify",
+    ),
+    path(
+        "transactions/<uuid:public_id>/documents/<uuid:document_id>/versions",
+        transaction_document_revision,
+        name="transaction_document_revision",
+    ),
+    path(
+        "transactions/<uuid:public_id>/documents/<uuid:document_id>/retire",
+        transaction_document_retire,
+        name="transaction_document_retire",
+    ),
+    path(
+        "transactions/<uuid:public_id>/documents/versions/<uuid:version_id>/retry",
+        transaction_document_retry,
+        name="transaction_document_retry",
+    ),
+    path(
+        "transactions/<uuid:public_id>/documents/versions/<uuid:version_id>/lock",
+        transaction_document_lock,
+        name="transaction_document_lock",
+    ),
+    path(
+        "transactions/<uuid:public_id>/documents/versions/<uuid:version_id>/comments",
+        transaction_document_comment_save,
+        name="transaction_document_comment_save",
+    ),
+    path(
+        "transactions/<uuid:public_id>/documents/comments/<uuid:comment_id>/resolve",
+        transaction_document_comment_resolve,
+        name="transaction_document_comment_resolve",
+    ),
+    path(
+        "transactions/<uuid:public_id>/documents/comments/<uuid:comment_id>/end",
+        transaction_document_comment_end,
+        name="transaction_document_comment_end",
+    ),
+    path(
+        "transactions/documents/versions/<uuid:public_id>/file",
+        transaction_document_download,
+        name="transaction_document_download",
+    ),
+    path(
+        "transactions/documents/versions/<uuid:public_id>/preview",
+        transaction_document_preview,
+        name="transaction_document_preview",
     ),
 ]

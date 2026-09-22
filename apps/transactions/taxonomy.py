@@ -487,12 +487,12 @@ LIVE_WORKSPACE_SECTIONS: frozenset[str] = frozenset(
         WorkspaceSection.NOTES,
         WorkspaceSection.ASSIGNMENTS,
         WorkspaceSection.ACTIVITY,
+        WorkspaceSection.DOCUMENTS,
     }
 )
 
 STUB_WORKSPACE_SECTIONS: frozenset[str] = frozenset(
     {
-        WorkspaceSection.DOCUMENTS,
         WorkspaceSection.CHECKLIST,
         WorkspaceSection.TASKS,
         WorkspaceSection.SIGNATURES,
@@ -649,12 +649,161 @@ STATUS_ENTERED_AT: dict[str, str] = {
     TransactionStatus.TERMINATED: "terminated_at",
 }
 
+
+# --------------------------------------------------------------------------- #
+# Deal documents (#102 / P1-085)
+# --------------------------------------------------------------------------- #
+
+
+class DocumentCategory:
+    PURCHASE_AGREEMENT = "purchase_agreement"
+    DISCLOSURE = "disclosure"
+    INSPECTION = "inspection"
+    ADDENDUM = "addendum"
+    CLOSING = "closing"
+    OTHER = "other"
+
+
+DOCUMENT_CATEGORY_LABELS: dict[str, str] = {
+    DocumentCategory.PURCHASE_AGREEMENT: _("Purchase agreement"),
+    DocumentCategory.DISCLOSURE: _("Disclosure"),
+    DocumentCategory.INSPECTION: _("Inspection"),
+    DocumentCategory.ADDENDUM: _("Addendum"),
+    DocumentCategory.CLOSING: _("Closing"),
+    DocumentCategory.OTHER: _("Other"),
+}
+
+DOCUMENT_CATEGORY_CODES = frozenset(DOCUMENT_CATEGORY_LABELS)
+DOCUMENT_CATEGORY_CHOICES = tuple(
+    (code, DOCUMENT_CATEGORY_LABELS[code]) for code in sorted(DOCUMENT_CATEGORY_CODES)
+)
+
+
+class DocumentRequirement:
+    REQUIRED = "required"
+    OPTIONAL = "optional"
+
+
+DOCUMENT_REQUIREMENT_LABELS: dict[str, str] = {
+    DocumentRequirement.REQUIRED: _("Required"),
+    DocumentRequirement.OPTIONAL: _("Optional"),
+}
+
+DOCUMENT_REQUIREMENT_CODES = frozenset(DOCUMENT_REQUIREMENT_LABELS)
+DOCUMENT_REQUIREMENT_CHOICES = tuple(
+    (code, DOCUMENT_REQUIREMENT_LABELS[code])
+    for code in sorted(DOCUMENT_REQUIREMENT_CODES)
+)
+
+
+class DocumentRetentionPolicy:
+    DEAL_CLOSE_PLUS_7Y = "deal_close_plus_7y"
+    DEAL_CLOSE_PLUS_3Y = "deal_close_plus_3y"
+    INDEFINITE = "indefinite"
+    CUSTOM = "custom"
+
+
+DOCUMENT_RETENTION_POLICY_LABELS: dict[str, str] = {
+    DocumentRetentionPolicy.DEAL_CLOSE_PLUS_7Y: _("Seven years after close"),
+    DocumentRetentionPolicy.DEAL_CLOSE_PLUS_3Y: _("Three years after close"),
+    DocumentRetentionPolicy.INDEFINITE: _("Indefinite"),
+    DocumentRetentionPolicy.CUSTOM: _("Custom date"),
+}
+
+DOCUMENT_RETENTION_POLICY_CODES = frozenset(DOCUMENT_RETENTION_POLICY_LABELS)
+DOCUMENT_RETENTION_POLICY_CHOICES = tuple(
+    (code, DOCUMENT_RETENTION_POLICY_LABELS[code])
+    for code in sorted(DOCUMENT_RETENTION_POLICY_CODES)
+)
+
+
+class DocumentSignatureStatus:
+    NONE = "none"
+    PENDING = "pending"
+    SIGNED = "signed"
+
+
+DOCUMENT_SIGNATURE_STATUS_LABELS: dict[str, str] = {
+    DocumentSignatureStatus.NONE: _("None"),
+    DocumentSignatureStatus.PENDING: _("Pending signature"),
+    DocumentSignatureStatus.SIGNED: _("Signed"),
+}
+
+DOCUMENT_SIGNATURE_STATUS_CODES = frozenset(DOCUMENT_SIGNATURE_STATUS_LABELS)
+DOCUMENT_SIGNATURE_STATUS_CHOICES = tuple(
+    (code, DOCUMENT_SIGNATURE_STATUS_LABELS[code])
+    for code in sorted(DOCUMENT_SIGNATURE_STATUS_CODES)
+)
+
+
+class DocumentComplianceStatus:
+    NONE = "none"
+    IN_REVIEW = "in_review"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+
+
+DOCUMENT_COMPLIANCE_STATUS_LABELS: dict[str, str] = {
+    DocumentComplianceStatus.NONE: _("None"),
+    DocumentComplianceStatus.IN_REVIEW: _("In review"),
+    DocumentComplianceStatus.APPROVED: _("Approved"),
+    DocumentComplianceStatus.REJECTED: _("Rejected"),
+}
+
+DOCUMENT_COMPLIANCE_STATUS_CODES = frozenset(DOCUMENT_COMPLIANCE_STATUS_LABELS)
+DOCUMENT_COMPLIANCE_STATUS_CHOICES = tuple(
+    (code, DOCUMENT_COMPLIANCE_STATUS_LABELS[code])
+    for code in sorted(DOCUMENT_COMPLIANCE_STATUS_CODES)
+)
+
+
+class DocumentReviewResolution:
+    OPEN = "open"
+    RESOLVED = "resolved"
+
+
+DOCUMENT_REVIEW_RESOLUTION_LABELS: dict[str, str] = {
+    DocumentReviewResolution.OPEN: _("Open"),
+    DocumentReviewResolution.RESOLVED: _("Resolved"),
+}
+
+DOCUMENT_REVIEW_RESOLUTION_CODES = frozenset(DOCUMENT_REVIEW_RESOLUTION_LABELS)
+DOCUMENT_REVIEW_RESOLUTION_CHOICES = tuple(
+    (code, DOCUMENT_REVIEW_RESOLUTION_LABELS[code])
+    for code in sorted(DOCUMENT_REVIEW_RESOLUTION_CODES)
+)
+
+
 __all__ = [
     "ASSIGNMENT_ROLE_CHOICES",
     "ASSIGNMENT_ROLE_CODES",
     "ASSIGNMENT_ROLE_LABELS",
     "AssignmentRole",
     "DEFAULT_WORKSPACE_SECTION",
+    "DOCUMENT_CATEGORY_CHOICES",
+    "DOCUMENT_CATEGORY_CODES",
+    "DOCUMENT_CATEGORY_LABELS",
+    "DOCUMENT_COMPLIANCE_STATUS_CHOICES",
+    "DOCUMENT_COMPLIANCE_STATUS_CODES",
+    "DOCUMENT_COMPLIANCE_STATUS_LABELS",
+    "DOCUMENT_REQUIREMENT_CHOICES",
+    "DOCUMENT_REQUIREMENT_CODES",
+    "DOCUMENT_REQUIREMENT_LABELS",
+    "DOCUMENT_RETENTION_POLICY_CHOICES",
+    "DOCUMENT_RETENTION_POLICY_CODES",
+    "DOCUMENT_RETENTION_POLICY_LABELS",
+    "DOCUMENT_REVIEW_RESOLUTION_CHOICES",
+    "DOCUMENT_REVIEW_RESOLUTION_CODES",
+    "DOCUMENT_REVIEW_RESOLUTION_LABELS",
+    "DOCUMENT_SIGNATURE_STATUS_CHOICES",
+    "DOCUMENT_SIGNATURE_STATUS_CODES",
+    "DOCUMENT_SIGNATURE_STATUS_LABELS",
+    "DocumentCategory",
+    "DocumentComplianceStatus",
+    "DocumentRequirement",
+    "DocumentRetentionPolicy",
+    "DocumentReviewResolution",
+    "DocumentSignatureStatus",
     "HAPPY_PATH",
     "HOLDABLE_STATUSES",
     "KEY_DATE_TYPE_CHOICES",
