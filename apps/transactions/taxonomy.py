@@ -488,6 +488,7 @@ LIVE_WORKSPACE_SECTIONS: frozenset[str] = frozenset(
         WorkspaceSection.ASSIGNMENTS,
         WorkspaceSection.ACTIVITY,
         WorkspaceSection.DOCUMENTS,
+        WorkspaceSection.SIGNATURES,
     }
 )
 
@@ -495,7 +496,6 @@ STUB_WORKSPACE_SECTIONS: frozenset[str] = frozenset(
     {
         WorkspaceSection.CHECKLIST,
         WorkspaceSection.TASKS,
-        WorkspaceSection.SIGNATURES,
         WorkspaceSection.COMMISSION,
         WorkspaceSection.COMPLIANCE,
     }
@@ -774,6 +774,179 @@ DOCUMENT_REVIEW_RESOLUTION_CHOICES = tuple(
 )
 
 
+# --------------------------------------------------------------------------- #
+# Signature packages (#103 / P1-086)
+# --------------------------------------------------------------------------- #
+
+
+class SignaturePackageStatus:
+    DRAFT = "draft"
+    SENT = "sent"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    DECLINED = "declined"
+    EXPIRED = "expired"
+    CANCELLED = "cancelled"
+
+
+SIGNATURE_PACKAGE_STATUS_LABELS: dict[str, str] = {
+    SignaturePackageStatus.DRAFT: _("Draft"),
+    SignaturePackageStatus.SENT: _("Sent"),
+    SignaturePackageStatus.IN_PROGRESS: _("In progress"),
+    SignaturePackageStatus.COMPLETED: _("Completed"),
+    SignaturePackageStatus.DECLINED: _("Declined"),
+    SignaturePackageStatus.EXPIRED: _("Expired"),
+    SignaturePackageStatus.CANCELLED: _("Cancelled"),
+}
+
+SIGNATURE_PACKAGE_STATUS_CODES = frozenset(SIGNATURE_PACKAGE_STATUS_LABELS)
+SIGNATURE_PACKAGE_STATUS_CHOICES = tuple(
+    (code, SIGNATURE_PACKAGE_STATUS_LABELS[code])
+    for code in sorted(SIGNATURE_PACKAGE_STATUS_CODES)
+)
+
+OPEN_SIGNATURE_PACKAGE_STATUSES: frozenset[str] = frozenset(
+    {
+        SignaturePackageStatus.SENT,
+        SignaturePackageStatus.IN_PROGRESS,
+    }
+)
+
+TERMINAL_SIGNATURE_PACKAGE_STATUSES: frozenset[str] = frozenset(
+    {
+        SignaturePackageStatus.COMPLETED,
+        SignaturePackageStatus.DECLINED,
+        SignaturePackageStatus.EXPIRED,
+        SignaturePackageStatus.CANCELLED,
+    }
+)
+
+
+class SignatureRoutingMode:
+    ORDERED = "ordered"
+    PARALLEL = "parallel"
+
+
+SIGNATURE_ROUTING_MODE_LABELS: dict[str, str] = {
+    SignatureRoutingMode.ORDERED: _("Ordered"),
+    SignatureRoutingMode.PARALLEL: _("Parallel"),
+}
+
+SIGNATURE_ROUTING_MODE_CODES = frozenset(SIGNATURE_ROUTING_MODE_LABELS)
+SIGNATURE_ROUTING_MODE_CHOICES = tuple(
+    (code, SIGNATURE_ROUTING_MODE_LABELS[code])
+    for code in sorted(SIGNATURE_ROUTING_MODE_CODES)
+)
+
+
+class SignatureDeliveryMethod:
+    HUB = "hub"
+    EMAIL = "email"
+
+
+SIGNATURE_DELIVERY_METHOD_LABELS: dict[str, str] = {
+    SignatureDeliveryMethod.HUB: _("Hub user"),
+    SignatureDeliveryMethod.EMAIL: _("Email magic link"),
+}
+
+SIGNATURE_DELIVERY_METHOD_CODES = frozenset(SIGNATURE_DELIVERY_METHOD_LABELS)
+SIGNATURE_DELIVERY_METHOD_CHOICES = tuple(
+    (code, SIGNATURE_DELIVERY_METHOD_LABELS[code])
+    for code in sorted(SIGNATURE_DELIVERY_METHOD_CODES)
+)
+
+
+class SignatureSignerStatus:
+    PENDING = "pending"
+    INVITED = "invited"
+    VIEWED = "viewed"
+    SIGNED = "signed"
+    DECLINED = "declined"
+    EXPIRED = "expired"
+
+
+SIGNATURE_SIGNER_STATUS_LABELS: dict[str, str] = {
+    SignatureSignerStatus.PENDING: _("Pending"),
+    SignatureSignerStatus.INVITED: _("Invited"),
+    SignatureSignerStatus.VIEWED: _("Viewed"),
+    SignatureSignerStatus.SIGNED: _("Signed"),
+    SignatureSignerStatus.DECLINED: _("Declined"),
+    SignatureSignerStatus.EXPIRED: _("Expired"),
+}
+
+SIGNATURE_SIGNER_STATUS_CODES = frozenset(SIGNATURE_SIGNER_STATUS_LABELS)
+SIGNATURE_SIGNER_STATUS_CHOICES = tuple(
+    (code, SIGNATURE_SIGNER_STATUS_LABELS[code])
+    for code in sorted(SIGNATURE_SIGNER_STATUS_CODES)
+)
+
+ELIGIBLE_SIGNATURE_SIGNER_STATUSES: frozenset[str] = frozenset(
+    {
+        SignatureSignerStatus.INVITED,
+        SignatureSignerStatus.VIEWED,
+    }
+)
+
+
+class SignatureFieldType:
+    SIGNATURE = "signature"
+    INITIALS = "initials"
+    DATE = "date"
+    TEXT = "text"
+
+
+SIGNATURE_FIELD_TYPE_LABELS: dict[str, str] = {
+    SignatureFieldType.SIGNATURE: _("Signature"),
+    SignatureFieldType.INITIALS: _("Initials"),
+    SignatureFieldType.DATE: _("Date"),
+    SignatureFieldType.TEXT: _("Text"),
+}
+
+SIGNATURE_FIELD_TYPE_CODES = frozenset(SIGNATURE_FIELD_TYPE_LABELS)
+SIGNATURE_FIELD_TYPE_CHOICES = tuple(
+    (code, SIGNATURE_FIELD_TYPE_LABELS[code])
+    for code in sorted(SIGNATURE_FIELD_TYPE_CODES)
+)
+
+
+class SignatureIntentStatus:
+    PENDING = "pending"
+    CONSUMED = "consumed"
+    EXPIRED = "expired"
+    CANCELLED = "cancelled"
+
+
+SIGNATURE_INTENT_STATUS_LABELS: dict[str, str] = {
+    SignatureIntentStatus.PENDING: _("Pending"),
+    SignatureIntentStatus.CONSUMED: _("Consumed"),
+    SignatureIntentStatus.EXPIRED: _("Expired"),
+    SignatureIntentStatus.CANCELLED: _("Cancelled"),
+}
+
+SIGNATURE_INTENT_STATUS_CODES = frozenset(SIGNATURE_INTENT_STATUS_LABELS)
+SIGNATURE_INTENT_STATUS_CHOICES = tuple(
+    (code, SIGNATURE_INTENT_STATUS_LABELS[code])
+    for code in sorted(SIGNATURE_INTENT_STATUS_CODES)
+)
+
+
+class SignatureArtifactKind:
+    SIGNED_PDF = "signed_pdf"
+    CERTIFICATE_OF_COMPLETION = "certificate_of_completion"
+
+
+SIGNATURE_ARTIFACT_KIND_LABELS: dict[str, str] = {
+    SignatureArtifactKind.SIGNED_PDF: _("Signed PDF"),
+    SignatureArtifactKind.CERTIFICATE_OF_COMPLETION: _("Certificate of completion"),
+}
+
+SIGNATURE_ARTIFACT_KIND_CODES = frozenset(SIGNATURE_ARTIFACT_KIND_LABELS)
+SIGNATURE_ARTIFACT_KIND_CHOICES = tuple(
+    (code, SIGNATURE_ARTIFACT_KIND_LABELS[code])
+    for code in sorted(SIGNATURE_ARTIFACT_KIND_CODES)
+)
+
+
 __all__ = [
     "ASSIGNMENT_ROLE_CHOICES",
     "ASSIGNMENT_ROLE_CODES",
@@ -804,6 +977,7 @@ __all__ = [
     "DocumentRetentionPolicy",
     "DocumentReviewResolution",
     "DocumentSignatureStatus",
+    "ELIGIBLE_SIGNATURE_SIGNER_STATUSES",
     "HAPPY_PATH",
     "HOLDABLE_STATUSES",
     "KEY_DATE_TYPE_CHOICES",
@@ -815,6 +989,7 @@ __all__ = [
     "NOTE_VISIBILITY_CODES",
     "NOTE_VISIBILITY_LABELS",
     "NoteVisibility",
+    "OPEN_SIGNATURE_PACKAGE_STATUSES",
     "PARTY_KIND_CHOICES",
     "PARTY_KIND_CODES",
     "PARTY_KIND_LABELS",
@@ -830,12 +1005,41 @@ __all__ = [
     "REPRESENTATION_LABELS",
     "REQUIRED_FIELDS",
     "RepresentationType",
+    "SIGNATURE_ARTIFACT_KIND_CHOICES",
+    "SIGNATURE_ARTIFACT_KIND_CODES",
+    "SIGNATURE_ARTIFACT_KIND_LABELS",
+    "SIGNATURE_DELIVERY_METHOD_CHOICES",
+    "SIGNATURE_DELIVERY_METHOD_CODES",
+    "SIGNATURE_DELIVERY_METHOD_LABELS",
+    "SIGNATURE_FIELD_TYPE_CHOICES",
+    "SIGNATURE_FIELD_TYPE_CODES",
+    "SIGNATURE_FIELD_TYPE_LABELS",
+    "SIGNATURE_INTENT_STATUS_CHOICES",
+    "SIGNATURE_INTENT_STATUS_CODES",
+    "SIGNATURE_INTENT_STATUS_LABELS",
+    "SIGNATURE_PACKAGE_STATUS_CHOICES",
+    "SIGNATURE_PACKAGE_STATUS_CODES",
+    "SIGNATURE_PACKAGE_STATUS_LABELS",
+    "SIGNATURE_ROUTING_MODE_CHOICES",
+    "SIGNATURE_ROUTING_MODE_CODES",
+    "SIGNATURE_ROUTING_MODE_LABELS",
+    "SIGNATURE_SIGNER_STATUS_CHOICES",
+    "SIGNATURE_SIGNER_STATUS_CODES",
+    "SIGNATURE_SIGNER_STATUS_LABELS",
     "SINGLETON_ASSIGNMENT_ROLES",
     "STATUS_CHOICES",
     "STATUS_CODES",
     "STATUS_ENTERED_AT",
     "STATUS_LABELS",
     "STUB_WORKSPACE_SECTIONS",
+    "SignatureArtifactKind",
+    "SignatureDeliveryMethod",
+    "SignatureFieldType",
+    "SignatureIntentStatus",
+    "SignaturePackageStatus",
+    "SignatureRoutingMode",
+    "SignatureSignerStatus",
+    "TERMINAL_SIGNATURE_PACKAGE_STATUSES",
     "TERMINAL_STATUSES",
     "TRANSITIONS",
     "TYPE_CHOICES",

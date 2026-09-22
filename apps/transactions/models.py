@@ -8,6 +8,7 @@ writes the same way agent contracts do.
 from __future__ import annotations
 
 import uuid
+from typing import TYPE_CHECKING
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
@@ -30,6 +31,13 @@ from apps.transactions.taxonomy import (
     PARTY_ROLE_CHOICES,
     PRIMARY_PARTY_ROLES,
     REPRESENTATION_CHOICES,
+    SIGNATURE_ARTIFACT_KIND_CHOICES,
+    SIGNATURE_DELIVERY_METHOD_CHOICES,
+    SIGNATURE_FIELD_TYPE_CHOICES,
+    SIGNATURE_INTENT_STATUS_CHOICES,
+    SIGNATURE_PACKAGE_STATUS_CHOICES,
+    SIGNATURE_ROUTING_MODE_CHOICES,
+    SIGNATURE_SIGNER_STATUS_CHOICES,
     SINGLETON_ASSIGNMENT_ROLES,
     STATUS_CHOICES,
     STATUS_CODES,
@@ -43,6 +51,13 @@ from apps.transactions.taxonomy import (
     DocumentSignatureStatus,
     NoteVisibility,
     PartyKind,
+    SignatureArtifactKind,
+    SignatureDeliveryMethod,
+    SignatureFieldType,
+    SignatureIntentStatus,
+    SignaturePackageStatus,
+    SignatureRoutingMode,
+    SignatureSignerStatus,
     TransactionStatus,
 )
 from apps.user.models import Office
@@ -975,9 +990,614 @@ class TransactionDocumentReviewComment(models.Model):
         )
 
 
+def _signature_artifact_upload_to(instance: SignatureArtifact, filename: str) -> str:
+    from apps.transactions.media import storage_key
+
+    return storage_key(filename or instance.display_name or "artifact.pdf")
+
+
+def _signature_appearance_upload_to(instance: SignatureRecord, filename: str) -> str:
+    from apps.transactions.media import storage_key
+
+    return storage_key(filename or "appearance.png")
+
+
+def _signature_initials_upload_to(instance: SignatureRecord, filename: str) -> str:
+    from apps.transactions.media import storage_key
+
+    return storage_key(filename or "initials.png")
+
+
+class SignaturePackage(models.Model):
+    """Multi-party e-signature package bound to locked deal document versions."""
+
+    public_id = models.UUIDField(
+        _("public id"), default=uuid.uuid4, editable=False, unique=True
+    )
+    transaction = models.ForeignKey(
+        Transaction,
+        on_delete=models.CASCADE,
+        related_name="signature_packages",
+        verbose_name=_("transaction"),
+    )
+    title = models.CharField(_("title"), max_length=180)
+    status = models.CharField(
+        _("status"),
+        max_length=16,
+        choices=SIGNATURE_PACKAGE_STATUS_CHOICES,
+        default=SignaturePackageStatus.DRAFT,
+        db_index=True,
+    )
+    routing_mode = models.CharField(
+        _("routing mode"),
+        max_length=16,
+        choices=SIGNATURE_ROUTING_MODE_CHOICES,
+        default=SignatureRoutingMode.ORDERED,
+    )
+    disclosure_version = models.CharField(
+        _("disclosure version"), max_length=64, blank=True, default=""
+    )
+    expires_at = models.DateTimeField(_("expires at"), null=True, blank=True)
+    sent_at = models.DateTimeField(_("sent at"), null=True, blank=True)
+    completed_at = models.DateTimeField(_("completed at"), null=True, blank=True)
+    cancelled_at = models.DateTimeField(_("cancelled at"), null=True, blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="signature_packages_created",
+        verbose_name=_("created by"),
+    )
+    created_at = models.DateTimeField(_("created at"), auto_now_add=True)
+    updated_at = models.DateTimeField(_("updated at"), auto_now=True)
+
+    if TYPE_CHECKING:
+        transaction_id: int
+        created_by_id: int | None
+        documents: models.Manager[SignaturePackageDocument]
+        signers: models.Manager[SignaturePackageSigner]
+        fields: models.Manager[SignaturePackageField]
+        artifacts: models.Manager[SignatureArtifact]
+        #: Set by the lifecycle service for the one legal status write.
+        _allow_status_write: bool
+
+    class Meta:
+        ordering = ["-created_at", "-pk"]
+        verbose_name = _("signature package")
+        verbose_name_plural = _("signature packages")
+        indexes = [
+            models.Index(
+                fields=["transaction", "status", "-created_at"],
+                name="txn_sig_pkg_txn_status_idx",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.title}:{self.status}"
+
+    def save(self, *args, **kwargs):
+        if self.pk:
+            previous = (
+                SignaturePackage.objects.filter(pk=self.pk)
+                .values_list("status", flat=True)
+                .first()
+            )
+            if previous is not None and previous != self.status:
+                update_fields = kwargs.get("update_fields")
+                if update_fields is not None and "status" not in update_fields:
+                    raise ValidationError(
+                        {
+                            "status": _(
+                                "Signature package status may only change through "
+                                "the signing lifecycle service."
+                            )
+                        }
+                    )
+                # Allow service-layer updates that include status in update_fields
+                # or full saves from the service; refuse accidental drift when
+                # callers omit update_fields after mutating status in memory.
+                if update_fields is None and not getattr(
+                    self, "_allow_status_write", False
+                ):
+                    raise ValidationError(
+                        {
+                            "status": _(
+                                "Signature package status may only change through "
+                                "the signing lifecycle service."
+                            )
+                        }
+                    )
+        return super().save(*args, **kwargs)
+
+
+class SignaturePackageDocument(models.Model):
+    """Source document version frozen into a signature package."""
+
+    public_id = models.UUIDField(
+        _("public id"), default=uuid.uuid4, editable=False, unique=True
+    )
+    package = models.ForeignKey(
+        SignaturePackage,
+        on_delete=models.CASCADE,
+        related_name="documents",
+        verbose_name=_("package"),
+    )
+    version = models.ForeignKey(
+        TransactionDocumentVersion,
+        on_delete=models.PROTECT,
+        related_name="signature_package_documents",
+        verbose_name=_("document version"),
+    )
+    source_checksum = models.CharField(_("source checksum"), max_length=64)
+    page_count = models.PositiveIntegerField(_("page count"), default=1)
+    sort_order = models.PositiveIntegerField(_("sort order"), default=0)
+    created_at = models.DateTimeField(_("created at"), auto_now_add=True)
+
+    if TYPE_CHECKING:
+        package_id: int
+        version_id: int
+
+    class Meta:
+        ordering = ["sort_order", "pk"]
+        verbose_name = _("signature package document")
+        verbose_name_plural = _("signature package documents")
+        constraints = [
+            models.UniqueConstraint(
+                fields=["package", "version"],
+                name="txn_sig_pkg_unique_version",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.package_id}:{self.version_id}"
+
+
+class SignaturePackageSigner(models.Model):
+    """One party asked to sign a package."""
+
+    public_id = models.UUIDField(
+        _("public id"), default=uuid.uuid4, editable=False, unique=True
+    )
+    package = models.ForeignKey(
+        SignaturePackage,
+        on_delete=models.CASCADE,
+        related_name="signers",
+        verbose_name=_("package"),
+    )
+    role_label = models.CharField(_("role label"), max_length=64)
+    display_name = models.CharField(_("display name"), max_length=255)
+    email = models.EmailField(_("email"))
+    delivery_method = models.CharField(
+        _("delivery method"),
+        max_length=16,
+        choices=SIGNATURE_DELIVERY_METHOD_CHOICES,
+        default=SignatureDeliveryMethod.EMAIL,
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="transaction_signature_signers",
+        verbose_name=_("hub user"),
+    )
+    party = models.ForeignKey(
+        TransactionParty,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="signature_signers",
+        verbose_name=_("transaction party"),
+    )
+    routing_order = models.PositiveIntegerField(_("routing order"), default=1)
+    status = models.CharField(
+        _("status"),
+        max_length=16,
+        choices=SIGNATURE_SIGNER_STATUS_CHOICES,
+        default=SignatureSignerStatus.PENDING,
+        db_index=True,
+    )
+    invited_at = models.DateTimeField(_("invited at"), null=True, blank=True)
+    viewed_at = models.DateTimeField(_("viewed at"), null=True, blank=True)
+    signed_at = models.DateTimeField(_("signed at"), null=True, blank=True)
+    declined_at = models.DateTimeField(_("declined at"), null=True, blank=True)
+    decline_reason = models.CharField(
+        _("decline reason"), max_length=255, blank=True, default=""
+    )
+    created_at = models.DateTimeField(_("created at"), auto_now_add=True)
+    updated_at = models.DateTimeField(_("updated at"), auto_now=True)
+
+    if TYPE_CHECKING:
+        package_id: int
+        user_id: int | None
+        party_id: int | None
+        fields: models.Manager[SignaturePackageField]
+        access_tokens: models.Manager[SignatureAccessToken]
+
+    class Meta:
+        ordering = ["routing_order", "pk"]
+        verbose_name = _("signature package signer")
+        verbose_name_plural = _("signature package signers")
+        constraints = [
+            models.UniqueConstraint(
+                fields=["package", "email"],
+                name="txn_sig_pkg_unique_signer_email",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["package", "routing_order", "status"],
+                name="txn_sig_signer_route_idx",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.role_label}:{self.email}"
+
+    @property
+    def signer_key(self) -> str:
+        """Stable role key used in field layout / PDF stamp."""
+        return str(self.public_id)
+
+
+class SignaturePackageField(models.Model):
+    """Page-coordinate field assigned to one signer on one package document."""
+
+    public_id = models.UUIDField(
+        _("public id"), default=uuid.uuid4, editable=False, unique=True
+    )
+    package = models.ForeignKey(
+        SignaturePackage,
+        on_delete=models.CASCADE,
+        related_name="fields",
+        verbose_name=_("package"),
+    )
+    document = models.ForeignKey(
+        SignaturePackageDocument,
+        on_delete=models.CASCADE,
+        related_name="fields",
+        verbose_name=_("package document"),
+    )
+    signer = models.ForeignKey(
+        SignaturePackageSigner,
+        on_delete=models.CASCADE,
+        related_name="fields",
+        verbose_name=_("signer"),
+    )
+    name = models.CharField(_("name"), max_length=80)
+    field_type = models.CharField(
+        _("field type"),
+        max_length=16,
+        choices=SIGNATURE_FIELD_TYPE_CHOICES,
+        default=SignatureFieldType.SIGNATURE,
+    )
+    page = models.PositiveIntegerField(_("page"), default=1)
+    x = models.FloatField(_("x"))
+    y = models.FloatField(_("y"))
+    w = models.FloatField(_("width"))
+    h = models.FloatField(_("height"))
+    required = models.BooleanField(_("required"), default=True)
+    created_at = models.DateTimeField(_("created at"), auto_now_add=True)
+
+    if TYPE_CHECKING:
+        package_id: int
+        document_id: int
+        signer_id: int
+
+    class Meta:
+        ordering = ["document_id", "page", "pk"]
+        verbose_name = _("signature package field")
+        verbose_name_plural = _("signature package fields")
+        constraints = [
+            models.UniqueConstraint(
+                fields=["package", "name"],
+                name="txn_sig_pkg_unique_field_name",
+            ),
+            models.CheckConstraint(
+                condition=Q(page__gte=1)
+                & Q(w__gt=0)
+                & Q(h__gt=0)
+                & Q(x__gte=0)
+                & Q(y__gte=0),
+                name="txn_sig_field_bounds_positive",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.name}:{self.field_type}"
+
+
+class SignatureAccessToken(models.Model):
+    """Hashed magic-link token for an external email signer."""
+
+    public_id = models.UUIDField(
+        _("public id"), default=uuid.uuid4, editable=False, unique=True
+    )
+    signer = models.ForeignKey(
+        SignaturePackageSigner,
+        on_delete=models.CASCADE,
+        related_name="access_tokens",
+        verbose_name=_("signer"),
+    )
+    token_hash = models.CharField(_("token hash"), max_length=64, unique=True)
+    expires_at = models.DateTimeField(_("expires at"), db_index=True)
+    consumed_at = models.DateTimeField(_("consumed at"), null=True, blank=True)
+    last_sent_at = models.DateTimeField(_("last sent at"), null=True, blank=True)
+    created_at = models.DateTimeField(_("created at"), auto_now_add=True)
+
+    if TYPE_CHECKING:
+        signer_id: int
+
+    class Meta:
+        ordering = ["-created_at", "-pk"]
+        verbose_name = _("signature access token")
+        verbose_name_plural = _("signature access tokens")
+        indexes = [
+            models.Index(
+                fields=["signer", "-created_at"],
+                name="txn_sig_token_signer_idx",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"token:{self.public_id}"
+
+    @property
+    def is_active(self) -> bool:
+        from django.utils import timezone
+
+        if self.consumed_at is not None:
+            return False
+        return self.expires_at > timezone.now()
+
+
+class SignatureSigningIntent(models.Model):
+    """Short-lived ceremony binding for one signer on one package."""
+
+    public_id = models.UUIDField(
+        _("public id"), default=uuid.uuid4, editable=False, unique=True
+    )
+    package = models.ForeignKey(
+        SignaturePackage,
+        on_delete=models.PROTECT,
+        related_name="signing_intents",
+        verbose_name=_("package"),
+    )
+    signer = models.ForeignKey(
+        SignaturePackageSigner,
+        on_delete=models.PROTECT,
+        related_name="signing_intents",
+        verbose_name=_("signer"),
+    )
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="transaction_signing_intents",
+        verbose_name=_("actor"),
+    )
+    package_version = models.CharField(_("package version token"), max_length=64)
+    source_checksums = models.JSONField(_("source checksums"), default=dict)
+    session_key_hash = models.CharField(_("session key hash"), max_length=64)
+    access_token_hash = models.CharField(
+        _("access token hash"), max_length=64, blank=True, default=""
+    )
+    request_ip_hash = models.CharField(
+        _("request IP hash"), max_length=64, blank=True, default=""
+    )
+    request_ua_hash = models.CharField(
+        _("request user-agent hash"), max_length=64, blank=True, default=""
+    )
+    disclosure_version = models.CharField(_("disclosure version"), max_length=64)
+    consent_accepted_at = models.DateTimeField(_("consent accepted at"))
+    status = models.CharField(
+        _("status"),
+        max_length=16,
+        choices=SIGNATURE_INTENT_STATUS_CHOICES,
+        default=SignatureIntentStatus.PENDING,
+        db_index=True,
+    )
+    expires_at = models.DateTimeField(_("expires at"), db_index=True)
+    created_at = models.DateTimeField(_("created at"), auto_now_add=True)
+    consumed_at = models.DateTimeField(_("consumed at"), null=True, blank=True)
+
+    if TYPE_CHECKING:
+        package_id: int
+        signer_id: int
+        actor_id: int | None
+
+    class Meta:
+        ordering = ["-created_at", "-pk"]
+        verbose_name = _("signature signing intent")
+        verbose_name_plural = _("signature signing intents")
+        indexes = [
+            models.Index(
+                fields=["package", "signer", "status"],
+                name="txn_sig_intent_lookup_idx",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.public_id}:{self.status}"
+
+
+class SignatureRecord(models.Model):
+    """Immutable electronic signature evidence for one package signer."""
+
+    public_id = models.UUIDField(
+        _("public id"), default=uuid.uuid4, editable=False, unique=True
+    )
+    package = models.ForeignKey(
+        SignaturePackage,
+        on_delete=models.PROTECT,
+        related_name="signature_records",
+        verbose_name=_("package"),
+    )
+    signer = models.ForeignKey(
+        SignaturePackageSigner,
+        on_delete=models.PROTECT,
+        related_name="signature_records",
+        verbose_name=_("signer"),
+    )
+    intent = models.OneToOneField(
+        SignatureSigningIntent,
+        on_delete=models.PROTECT,
+        related_name="signature_record",
+        verbose_name=_("signing intent"),
+    )
+    method = models.CharField(
+        _("method"),
+        max_length=32,
+        default="hub_embedded",
+    )
+    disclosure_version = models.CharField(_("disclosure version"), max_length=64)
+    source_checksums = models.JSONField(_("source checksums"), default=dict)
+    field_values = models.JSONField(_("field values"), default=dict, blank=True)
+    signed_date_value = models.CharField(
+        _("signed date value"), max_length=64, blank=True, default=""
+    )
+    appearance_file = models.FileField(
+        _("signature appearance"),
+        max_length=255,
+        storage=private_storage,
+        upload_to=_signature_appearance_upload_to,
+        blank=True,
+        default="",
+    )
+    initials_file = models.FileField(
+        _("initials appearance"),
+        max_length=255,
+        storage=private_storage,
+        upload_to=_signature_initials_upload_to,
+        blank=True,
+        default="",
+    )
+    appearance_checksum = models.CharField(
+        _("appearance checksum"), max_length=64, blank=True, default=""
+    )
+    request_ip_hash = models.CharField(
+        _("request IP hash"), max_length=64, blank=True, default=""
+    )
+    request_ua_hash = models.CharField(
+        _("request user-agent hash"), max_length=64, blank=True, default=""
+    )
+    signed_at = models.DateTimeField(_("signed at"), auto_now_add=True)
+
+    if TYPE_CHECKING:
+        package_id: int
+        signer_id: int
+        intent_id: int | None
+
+    class Meta:
+        ordering = ["-signed_at", "-pk"]
+        verbose_name = _("signature record")
+        verbose_name_plural = _("signature records")
+        constraints = [
+            models.UniqueConstraint(
+                fields=["package", "signer"],
+                name="txn_sig_unique_package_signer",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"sig:{self.public_id}"
+
+    def save(self, *args, **kwargs):
+        if self.pk:
+            raise ValidationError(
+                {"form": [_("Signature records are immutable after create.")]}
+            )
+        return super().save(*args, **kwargs)
+
+
+class SignatureArtifact(models.Model):
+    """Write-once signed PDF or certificate of completion for a package document."""
+
+    public_id = models.UUIDField(
+        _("public id"), default=uuid.uuid4, editable=False, unique=True
+    )
+    package = models.ForeignKey(
+        SignaturePackage,
+        on_delete=models.PROTECT,
+        related_name="artifacts",
+        verbose_name=_("package"),
+    )
+    package_document = models.ForeignKey(
+        SignaturePackageDocument,
+        on_delete=models.PROTECT,
+        related_name="artifacts",
+        verbose_name=_("package document"),
+        null=True,
+        blank=True,
+    )
+    kind = models.CharField(
+        _("kind"),
+        max_length=32,
+        choices=SIGNATURE_ARTIFACT_KIND_CHOICES,
+        default=SignatureArtifactKind.SIGNED_PDF,
+    )
+    display_name = models.CharField(_("display name"), max_length=180)
+    file = models.FileField(
+        _("file"),
+        max_length=255,
+        storage=private_storage,
+        upload_to=_signature_artifact_upload_to,
+    )
+    media_type = models.CharField(
+        _("media type"), max_length=120, default="application/pdf"
+    )
+    byte_size = models.PositiveBigIntegerField(_("size in bytes"))
+    checksum = models.CharField(_("checksum"), max_length=64)
+    source_checksum = models.CharField(
+        _("source checksum"), max_length=64, blank=True, default=""
+    )
+    created_at = models.DateTimeField(_("created at"), auto_now_add=True)
+
+    if TYPE_CHECKING:
+        package_id: int
+        package_document_id: int | None
+
+    class Meta:
+        ordering = ["-created_at", "-pk"]
+        verbose_name = _("signature artifact")
+        verbose_name_plural = _("signature artifacts")
+        constraints = [
+            models.UniqueConstraint(
+                fields=["package", "package_document", "kind"],
+                condition=Q(package_document__isnull=False),
+                name="txn_sig_unique_doc_artifact_kind",
+            ),
+            models.UniqueConstraint(
+                fields=["package", "kind"],
+                condition=Q(package_document__isnull=True),
+                name="txn_sig_unique_pkg_artifact_kind",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.kind}:{self.public_id}"
+
+    def save(self, *args, **kwargs):
+        if self.pk:
+            raise ValidationError(
+                {"form": [_("Signature artifacts are immutable after create.")]}
+            )
+        return super().save(*args, **kwargs)
+
+
 # Re-export for callers that expect AssignmentRole on the model module.
 __all__ = [
     "AssignmentRole",
+    "SignatureAccessToken",
+    "SignatureArtifact",
+    "SignaturePackage",
+    "SignaturePackageDocument",
+    "SignaturePackageField",
+    "SignaturePackageSigner",
+    "SignatureRecord",
+    "SignatureSigningIntent",
     "Transaction",
     "TransactionAssignment",
     "TransactionDocument",

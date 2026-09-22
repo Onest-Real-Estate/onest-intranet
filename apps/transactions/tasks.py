@@ -183,8 +183,61 @@ def sweep_orphan_documents(*, now=None) -> SweepReport:
     return report
 
 
+@shared_task(
+    bind=True,
+    max_retries=3,
+    default_retry_delay=60,
+    autoretry_for=(OSError,),
+    retry_backoff=True,
+)
+def finalize_signature_package(self, package_id: int) -> str:
+    """Seal signed PDFs and the certificate once every party has signed.
+
+    Idempotent by design: a retry reuses artifacts that already landed. A
+    terminal failure (checksum drift, missing appearance) is logged with its
+    code and not retried, because replaying it cannot succeed.
+    """
+    from apps.transactions.signing.finalize import (
+        FinalizationError,
+        finalize_package,
+    )
+
+    try:
+        return finalize_package(package_id)
+    except FinalizationError as exc:
+        if exc.retryable:
+            raise
+        logger.warning(
+            "transactions: finalize terminal package_id=%s code=%s",
+            package_id,
+            exc.code,
+        )
+        return f"failed:{exc.code}"
+
+
+@shared_task
+def send_signature_package_reminders() -> int:
+    """Beat-safe reminders for signers still holding up an open package."""
+    from apps.transactions.signing.notification_schedule import (
+        publish_signature_reminders,
+    )
+
+    return publish_signature_reminders()
+
+
+@shared_task
+def expire_signature_packages() -> int:
+    """Beat-safe expiry for open packages past their ``expires_at``."""
+    from apps.transactions.signing.lifecycle import expire_due_packages
+
+    return expire_due_packages()
+
+
 __all__ = [
+    "expire_signature_packages",
+    "finalize_signature_package",
     "process_transaction_document_version",
+    "send_signature_package_reminders",
     "sweep_orphan_documents",
     "sweep_transaction_document_orphans",
 ]
