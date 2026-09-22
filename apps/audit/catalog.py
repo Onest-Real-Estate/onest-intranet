@@ -1316,3 +1316,70 @@ registry.register(
         "change. Metadata carries allowlisted field keys only — no raw PII."
     ),
 )
+
+# Signature packages (#103). Payloads carry ids and counts only: never a
+# signer name, email address, or magic-link token.
+_SIGNATURE_PACKAGE_KEYS = {
+    "package_id",
+    "transaction_id",
+    "office_id",
+    "occurred_at",
+}
+
+registry.register(
+    name="transaction.signature_package_sent",
+    version=1,
+    required_payload_keys=_SIGNATURE_PACKAGE_KEYS,
+    description=(
+        "Emitted when a draft signature package is validated and released to "
+        "its first signers."
+    ),
+)
+
+registry.register(
+    name="transaction.signature_signed",
+    version=1,
+    required_payload_keys={*_SIGNATURE_PACKAGE_KEYS, "signer_id"},
+    description="Emitted when one party's durable signature record is stored.",
+)
+
+registry.register(
+    name="transaction.signature_reminder",
+    version=1,
+    required_payload_keys={*_SIGNATURE_PACKAGE_KEYS, "signer_id", "reminder_day"},
+    description=(
+        "Emitted per cadence day for a signer who still owes a signature on an "
+        "open package."
+    ),
+)
+
+registry.register(
+    name="transaction.signature_package_completed",
+    version=1,
+    required_payload_keys=_SIGNATURE_PACKAGE_KEYS,
+    description=(
+        "Emitted once every signer has signed and the sealed PDFs plus "
+        "certificate of completion are stored."
+    ),
+)
+
+registry.register(
+    name="transaction.signature_package_declined",
+    version=1,
+    required_payload_keys={*_SIGNATURE_PACKAGE_KEYS, "signer_id"},
+    description="Emitted when a signer declines, which ends the package.",
+)
+
+registry.register(
+    name="transaction.signature_package_cancelled",
+    version=1,
+    required_payload_keys=_SIGNATURE_PACKAGE_KEYS,
+    description="Emitted when a manager withdraws a package before completion.",
+)
+
+registry.register(
+    name="transaction.signature_package_expired",
+    version=1,
+    required_payload_keys=_SIGNATURE_PACKAGE_KEYS,
+    description="Emitted when an open package passes its expiry without signing.",
+)

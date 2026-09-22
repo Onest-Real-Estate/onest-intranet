@@ -104,7 +104,18 @@ def resolve_onboarding_tools(
 
 
 CONTRACT_MODULE = "contract"
+TRANSACTIONS_MODULE = "transactions"
 COMPLIANCE_MODULE = "compliance"
+
+#: Signature events addressed to the signer rather than the deal team. Their
+#: action is the signer's own ceremony, so they are resolved from the signer
+#: record and not from workspace scope.
+SIGNER_FACING_SIGNATURE_EVENTS = frozenset(
+    {
+        "transaction.signature_package_sent",
+        "transaction.signature_reminder",
+    }
+)
 
 
 def resolve_compliance_policies(
@@ -233,6 +244,97 @@ def resolve_contracts(user, notifications: Sequence) -> dict[UUID, SourceResolut
     return resolutions
 
 
+def resolve_signature_packages(
+    user, notifications: Sequence
+) -> dict[UUID, SourceResolution]:
+    """Fail closed when a signature package is no longer actionable.
+
+    Two audiences read these rows and they are authorized differently. A
+    *signer* is entitled to their own ceremony whether or not they can see the
+    deal, so their row resolves from their signer record and stays actionable
+    only while they personally still owe a signature — a reminder that outlived
+    the signing goes quiet here, the way the contract resolver does. A *deal
+    team* row instead needs the transaction to still be in the reader's scope,
+    because its action opens the workspace.
+    """
+    from apps.transactions.models import SignaturePackage, SignaturePackageSigner
+    from apps.transactions.services import scoped_transaction_queryset
+    from apps.transactions.signing.lifecycle import is_signer_eligible
+    from apps.transactions.taxonomy import (
+        OPEN_SIGNATURE_PACKAGE_STATUSES,
+        SignaturePackageStatus,
+        SignatureSignerStatus,
+    )
+
+    by_notification: dict[UUID, str] = {}
+    event_by_id: dict[UUID, str] = {}
+    for notification in notifications:
+        raw = str(notification.source_record_id or "").strip()
+        if raw:
+            by_notification[notification.public_id] = raw
+            event_by_id[notification.public_id] = str(
+                getattr(notification, "event_key", "") or ""
+            )
+    if not by_notification:
+        return {}
+
+    wanted = list(by_notification.values())
+    scoped = {
+        str(row.public_id): row
+        for row in SignaturePackage.objects.filter(
+            public_id__in=wanted,
+            transaction__in=scoped_transaction_queryset(user),
+        )
+    }
+    own_signer_rows = {
+        str(row.package.public_id): row
+        for row in SignaturePackageSigner.objects.select_related("package").filter(
+            package__public_id__in=wanted, user_id=user.pk
+        )
+    }
+
+    detail_by_status = {
+        SignaturePackageStatus.DRAFT: "Draft signature package",
+        SignaturePackageStatus.SENT: "Awaiting signatures",
+        SignaturePackageStatus.IN_PROGRESS: "Signatures in progress",
+        SignaturePackageStatus.COMPLETED: "Package completed",
+        SignaturePackageStatus.DECLINED: "Package declined",
+        SignaturePackageStatus.EXPIRED: "Package expired",
+        SignaturePackageStatus.CANCELLED: "Package cancelled",
+    }
+
+    resolutions: dict[UUID, SourceResolution] = {}
+    for note_id, package_id in by_notification.items():
+        event_key = event_by_id.get(note_id, "")
+        if event_key in SIGNER_FACING_SIGNATURE_EVENTS:
+            signer = own_signer_rows.get(package_id)
+            if signer is None:
+                continue
+            package = signer.package
+            if package.status not in OPEN_SIGNATURE_PACKAGE_STATUSES:
+                continue
+            if signer.status == SignatureSignerStatus.SIGNED:
+                continue
+            if not is_signer_eligible(package, signer):
+                continue
+            resolutions[note_id] = SourceResolution(
+                available=True,
+                detail="Awaiting your signature",
+                action_available=True,
+            )
+            continue
+
+        package = scoped.get(package_id)
+        if package is None:
+            continue
+        resolutions[note_id] = SourceResolution(
+            available=True,
+            detail=detail_by_status.get(package.status, "Signature package update"),
+            action_available=True,
+        )
+    return resolutions
+
+
 def register_default_resolvers() -> None:
     from apps.notifications.sources import register_resolver, registered_modules
 
@@ -244,3 +346,5 @@ def register_default_resolvers() -> None:
         register_resolver(CONTRACT_MODULE, resolve_contracts)
     if COMPLIANCE_MODULE not in registered_modules():
         register_resolver(COMPLIANCE_MODULE, resolve_compliance_policies)
+    if TRANSACTIONS_MODULE not in registered_modules():
+        register_resolver(TRANSACTIONS_MODULE, resolve_signature_packages)
