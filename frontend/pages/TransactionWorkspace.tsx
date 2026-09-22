@@ -15,6 +15,7 @@ import {
 } from "@/components/design-system";
 import { HubLayout } from "@/components/HubLayout";
 import { PermissionRequired } from "@/components/PermissionRequired";
+import { DocumentsPanel } from "@/components/transactions/DocumentsPanel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -757,7 +758,7 @@ function AssignmentsPanel({ props }: { props: TransactionWorkspacePageProps }) {
 function StubPanel({ label }: { label: string }) {
   return (
     <Callout tone="info" title={`${label} coming soon`}>
-      This section lands in a later transaction epic (#102–#106).
+      This section lands in a later transaction epic (#103–#106).
     </Callout>
   );
 }
@@ -773,6 +774,8 @@ export default function TransactionWorkspace() {
     parties,
     keyDates,
     notes,
+    documents,
+    documentSchema,
     activity,
     errors,
   } = props;
@@ -849,6 +852,17 @@ export default function TransactionWorkspace() {
             />
           ) : null}
           {activeSection === "assignments" ? <AssignmentsPanel props={props} /> : null}
+          {activeSection === "documents" ? (
+            <DocumentsPanel
+              documents={documents}
+              documentSchema={documentSchema}
+              expectedVersion={expectedVersion}
+              publicId={transaction.publicId}
+              canEdit={capabilities.manage}
+              canLock={capabilities.manage || capabilities.transition}
+              errors={errors}
+            />
+          ) : null}
           {activeSection === "activity" ? (
             activity ? (
               <ActivityTimeline title="Activity" page={activity} />
@@ -861,14 +875,9 @@ export default function TransactionWorkspace() {
               />
             )
           ) : null}
-          {[
-            "documents",
-            "checklist",
-            "tasks",
-            "signatures",
-            "commission",
-            "compliance",
-          ].includes(activeSection) ? (
+          {["checklist", "tasks", "signatures", "commission", "compliance"].includes(
+            activeSection,
+          ) ? (
             <StubPanel
               label={
                 sections.find((s) => s.id === activeSection)?.label || activeSection

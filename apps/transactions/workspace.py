@@ -156,11 +156,21 @@ def workspace_payload(
         "propertyHistory": serialize_property_history(tx),
         "keyDates": serialize_key_dates(tx),
         "notes": serialize_notes_for_reader(user, tx),
+        "documents": [],
+        "documentSchema": None,
         "activity": None,
         "activityTeaser": None,
     }
 
-    if active == WorkspaceSection.ACTIVITY:
+    if active == WorkspaceSection.DOCUMENTS:
+        from apps.transactions.deal_documents import (
+            document_schema_payload,
+            serialize_documents_for_reader,
+        )
+
+        payload["documents"] = serialize_documents_for_reader(user, tx)
+        payload["documentSchema"] = document_schema_payload()
+    elif active == WorkspaceSection.ACTIVITY:
         payload["activity"] = _activity_page(user, tx, limit=20) or {
             "entries": [],
             "nextCursor": None,

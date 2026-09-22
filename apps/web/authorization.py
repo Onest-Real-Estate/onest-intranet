@@ -3006,10 +3006,39 @@ ROUTE_POLICIES["transaction_workspace_write"] = AuthorizationPolicy(
         "transaction_note_save",
         "transaction_note_end",
         "transaction_assignment_save",
+        "transaction_document_upload",
+        "transaction_document_classify",
+        "transaction_document_revision",
+        "transaction_document_retire",
+        "transaction_document_retry",
+        "transaction_document_lock",
+        "transaction_document_comment_save",
+        "transaction_document_comment_resolve",
+        "transaction_document_comment_end",
     ),
     any_permissions=(
         "web.manage_transactions",
         "web.create_own_transactions",
+    ),
+    scope_rule="user_office_scope",
+)
+ROUTE_POLICIES["transaction_document_file"] = AuthorizationPolicy(
+    key="transaction_document_file",
+    access="permission_protected",
+    description=(
+        "Authorized preview/download of transaction document versions; "
+        "row scope re-checked in the delivery service."
+    ),
+    methods=("GET",),
+    route_names=(
+        "transaction_document_download",
+        "transaction_document_preview",
+    ),
+    any_permissions=(
+        "web.view_transactions",
+        "web.manage_transactions",
+        "web.create_own_transactions",
+        "web.view_own_transactions",
     ),
     scope_rule="user_office_scope",
 )

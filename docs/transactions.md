@@ -112,7 +112,7 @@ Routes: `my_transactions`, `admin_transactions` (ops list),
 ### Sections
 
 Live URL-driven sections: Overview, Parties, Property, Dates, Notes,
-Assignments, Activity. Stub sections (Documents, Checklist, Tasks, Signatures,
+Assignments, Activity, Documents. Stub sections (Checklist, Tasks, Signatures,
 Commission, Compliance) render “coming soon” and stay non-writable until later
 epics.
 
@@ -124,6 +124,9 @@ epics.
 | `TransactionPropertySnapshot` | Immutable history row on material property/MLS changes |
 | `TransactionKeyDate` | Typed aware datetime + timezone; soft-supersede via `ended_at` / `superseded_by` |
 | `TransactionNote` | Body + visibility enum; never one unrestricted stream |
+| `TransactionDocument` | Deal document package (category, requirement, retention, current version) |
+| `TransactionDocumentVersion` | Immutable file revision with processing/lock/signature/compliance state |
+| `TransactionDocumentReviewComment` | Version-bound review note with visibility + resolution |
 
 Concurrency: every workspace write bumps `Transaction.updated_at`. Clients post
 `expectedVersion` (ISO µs from `updated_at`); mismatch → **409** with form
@@ -141,6 +144,30 @@ No new permission catalog entries:
 
 Contact fields on parties reuse `transactions.view_transaction_clients`.
 Financial fields keep `transactions.view_transaction_financials`.
+
+### Documents (#102 / P1-085)
+
+Routes (workspace write + file read policies):
+`transaction_document_upload`, `…_classify`, `…_revision`, `…_retire`,
+`…_retry`, `…_lock`, `…_comment_save` / `…_resolve` / `…_end`,
+`transaction_document_download`, `transaction_document_preview`.
+
+| Concern | Rule |
+| --- | --- |
+| Scope | Every list/serialize/stream path starts from `for_reader` |
+| Upload | Extension + sniffed MIME + size via `apps.transactions.media`; UUID keys under `transactions/` on `private_storage` |
+| Processing | Celery `process_transaction_document_version`: checksum verify → `ready` / `quarantined` / `failed`. Images are sanitized. |
+| Current | After READY, highest `version_number` then `pk` among ready active versions; quarantined/failed never become current |
+| Lock | `signed` / `approved` (or `locked_at`) refuse replace/delete/retire of that version; new revisions still allowed |
+| Delivery | Hub stream only (`Cache-Control: private, no-store`); ordinary readers get the **current** ready version; managers may history-stream. Guessed ids → 404 |
+| Reviews | Version-bound comments reuse note visibility (`team` / `broker_compliance` / `private_author`) plus open/resolved |
+
+Compliance review queue, correction workflow, and Ready-to-Close gating stay in
+[#106](https://github.com/Onest-Real-Estate/onest/issues/106) — this epic only
+ships lock fields and review comments those flows will drive.
+
+Orphan cleanup: `manage.py sweep_transaction_documents` (abandoned pending /
+failed older than 14 days + unreferenced storage keys past a 6h grace).
 
 ### Activity
 
@@ -212,14 +239,22 @@ Registered in `apps/audit/catalog.py`:
 
 ## Retention
 
-Soft-archive only. Closed deals may move to Archived for retention; rows and
-assignments remain queryable under scope. Hard delete and automated purge are
-out of scope for #99.
+Soft-archive only for deals. Closed deals may move to Archived; rows and
+assignments remain queryable under scope. Hard delete and automated purge of
+deal history are out of scope for #99.
+
+Document packages carry `retention_policy` / `retain_until` metadata. Version
+bytes are soft-retained (locked/approved versions cannot be deleted through
+normal paths). Orphan storage cleanup only removes abandoned pending/failed
+uploads and unreferenced keys — never ready history.
 
 ## Related
 
 - [`docs/permissions.md`](permissions.md) — capability catalog
 - [`docs/roles.md`](roles.md) — TC / regional TC scopes
 - [`docs/agent-contracts.md`](agent-contracts.md) — high-stakes lifecycle pattern
+- [`docs/documents-forms.md`](documents-forms.md) — brokerage forms library (not deal attachments)
 - Issues #101–#108 — workspace through closure notifications
-- Issue #100 — scoped create workflow (this document)
+- Issue #100 — scoped create workflow
+- Issue #102 — deal document management (this document)
+- Issue #106 — compliance review queue that locks approved evidence

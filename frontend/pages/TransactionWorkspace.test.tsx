@@ -37,7 +37,7 @@ const page = {
     { id: "overview", label: "Overview", live: true, stub: false, writable: false },
     { id: "parties", label: "Parties", live: true, stub: false, writable: true },
     { id: "notes", label: "Notes", live: true, stub: false, writable: true },
-    { id: "documents", label: "Documents", live: false, stub: true, writable: false },
+    { id: "documents", label: "Documents", live: true, stub: false, writable: true },
   ],
   capabilities: {
     manage: true,
@@ -62,6 +62,20 @@ const page = {
       mine: true,
     },
   ],
+  documents: [],
+  documentSchema: {
+    categories: [{ value: "other", label: "Other" }],
+    requirements: [{ value: "optional", label: "Optional" }],
+    retentionPolicies: [{ value: "indefinite", label: "Indefinite" }],
+    signatureStatuses: [{ value: "none", label: "None" }],
+    complianceStatuses: [{ value: "none", label: "None" }],
+    matrix: {
+      extensions: [".pdf"],
+      maxBytes: 20_000_000,
+      maxCount: 40,
+      maxBatch: 10,
+    },
+  },
   activity: null,
   activityTeaser: null,
 };
@@ -138,5 +152,13 @@ describe("TransactionWorkspace", () => {
     expect(screen.getByRole("alert").textContent).toContain(
       "A display name is required.",
     );
+  });
+
+  it("renders the live documents panel instead of a stub", () => {
+    page.section = "documents";
+    render(<TransactionWorkspace />);
+    expect(screen.getByRole("heading", { name: "Documents" })).toBeTruthy();
+    expect(screen.getByText("No documents yet")).toBeTruthy();
+    expect(screen.queryByText(/coming soon/i)).toBeNull();
   });
 });
