@@ -192,7 +192,8 @@ export function PersonCombobox({
       abortRef.current?.abort();
       const controller = new AbortController();
       abortRef.current = controller;
-      fetch(`${endpoint}?q=${encodeURIComponent(term.trim())}`, {
+      const separator = endpoint.includes("?") ? "&" : "?";
+      fetch(`${endpoint}${separator}q=${encodeURIComponent(term.trim())}`, {
         headers: { Accept: "application/json" },
         credentials: "same-origin",
         signal: controller.signal,

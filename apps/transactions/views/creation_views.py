@@ -155,5 +155,6 @@ def transaction_people_search(request: HttpRequest):
         _actor(request),
         q=request.GET.get("q") or "",
         role=role,
+        office_key=request.GET.get("officeKey") or request.GET.get("office_key") or "",
     )
     return JsonResponse({"results": results})

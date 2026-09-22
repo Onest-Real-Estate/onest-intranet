@@ -21,7 +21,10 @@ from apps.transactions.key_dates import serialize_key_dates
 from apps.transactions.lifecycle import available_transitions
 from apps.transactions.models import Transaction
 from apps.transactions.notes import serialize_notes_for_reader
-from apps.transactions.parties import serialize_parties
+from apps.transactions.parties import (
+    ensure_parties_from_client_snapshots,
+    serialize_parties,
+)
 from apps.transactions.permissions import (
     CREATE_OWN_TRANSACTIONS,
     MANAGE_TRANSACTIONS,
@@ -136,6 +139,12 @@ def workspace_payload(
         or has_effective_permission(user, MANAGE_TRANSACTIONS)
         or scoped_transaction_queryset(user).filter(pk=tx.pk).exists()
     )
+
+    # Create-form clients used to live only in client_snapshots. Materialize
+    # them once so the Parties tab matches what was entered at prepare.
+    ensure_parties_from_client_snapshots(actor=user, tx=tx)
+    if can_edit:
+        tx.refresh_from_db(fields=["updated_at"])
 
     payload: dict[str, Any] = {
         "transaction": serialize_transaction(user, tx),

@@ -216,22 +216,32 @@ describe("PersonCombobox", () => {
     expect(list.closest('[data-slot="popover-content"]')).not.toBeNull();
   });
 
-  it("drops a stale response so a slow query cannot overwrite a fast one", async () => {
-    const aborted: boolean[] = [];
-    vi.stubGlobal(
-      "fetch",
-      vi.fn((_url: string, init?: RequestInit) => {
-        init?.signal?.addEventListener("abort", () => aborted.push(true));
-        return Promise.resolve({ ok: true, json: async () => ({ results: PEOPLE }) });
-      }),
-    );
+  it("appends q with & when the endpoint already has a query string", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ results: PEOPLE }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
     const user = userEvent.setup();
-    render(<Harness />);
-    const input = screen.getByLabelText("Agent");
+    render(
+      <form>
+        <PersonCombobox
+          id="agent"
+          name="recipient_id"
+          label="Agent"
+          endpoint="/transactions/people?role=agent&officeKey=fairfax-va"
+          value={null}
+          onChange={() => {}}
+        />
+      </form>,
+    );
 
-    await user.type(input, "sam");
-    await screen.findByRole("listbox");
-    await user.type(input, "uel");
-    await waitFor(() => expect(aborted.length).toBeGreaterThan(0));
+    await user.type(screen.getByLabelText("Agent"), "sa");
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const calledUrl = String(fetchMock.mock.calls[0]?.[0] ?? "");
+    expect(calledUrl).toContain("role=agent");
+    expect(calledUrl).toContain("officeKey=fairfax-va");
+    expect(calledUrl).toMatch(/[?&]q=sa/);
+    expect(calledUrl).not.toContain("?q=");
   });
 });

@@ -37,6 +37,22 @@ const ACCESS = {
   any: ["web.manage_transactions", "web.create_own_transactions"],
 };
 
+const FIELD_LABELS: Record<string, string> = {
+  transactionType: "Transaction type",
+  representationType: "Representation",
+  officeKey: "Owning office",
+  primaryAgentId: "Primary agent",
+  coAgentId: "Co-agent",
+  coordinatorId: "Coordinator",
+  propertyLine1: "Property address",
+  propertyCity: "City",
+  propertyState: "State",
+  listPrice: "List price",
+  contractPrice: "Contract price",
+  acceptanceDate: "Acceptance date",
+  closingDate: "Closing date",
+};
+
 function fieldRequired(required: string[], name: string): boolean {
   return required.includes(name);
 }
@@ -80,8 +96,20 @@ export default function TransactionNew() {
 
   const required = schema.requiredFields;
   const locked = schema.lockedFields;
-  const peopleEndpoint = (role: "agent" | "coordinator") =>
-    `${routes.transaction_people_search()}?role=${role}`;
+  const peopleEndpoint = (role: "agent" | "coordinator") => {
+    const params = new URLSearchParams({ role });
+    if (officeKey) params.set("officeKey", officeKey);
+    return `${routes.transaction_people_search()}?${params.toString()}`;
+  };
+
+  function clearPeopleForOfficeChange() {
+    // Owning office is the assignment boundary — never keep a prior pick
+    // across an office change (including same-name people or stale role
+    // selections from an earlier search).
+    if (!capabilities.lockPrimaryAgent) setPrimaryAgent(null);
+    setCoAgent(null);
+    setCoordinator(null);
+  }
 
   function post(action: "draft" | "prepare", confirmedDuplicate = false) {
     if (submitting) return;
@@ -114,7 +142,9 @@ export default function TransactionNew() {
           description="Capture the deal basics, save a draft when needed, then prepare when the required fields are ready."
         />
 
-        {hasValidationErrors(errors) ? <FormErrorSummary errors={errors} /> : null}
+        {hasValidationErrors(errors) ? (
+          <FormErrorSummary errors={errors} labels={FIELD_LABELS} />
+        ) : null}
 
         {duplicates.length > 0 ? (
           <SurfaceCard>
@@ -336,7 +366,10 @@ export default function TransactionNew() {
                 </FormLabel>
                 <Select
                   value={officeKey}
-                  onValueChange={setOfficeKey}
+                  onValueChange={(value) => {
+                    setOfficeKey(value);
+                    clearPeopleForOfficeChange();
+                  }}
                   disabled={
                     submitting ||
                     fieldLocked(locked, "officeKey") ||
@@ -369,9 +402,16 @@ export default function TransactionNew() {
                 endpoint={peopleEndpoint("agent")}
                 value={primaryAgent}
                 onChange={setPrimaryAgent}
-                disabled={submitting || fieldLocked(locked, "primaryAgentId")}
+                disabled={
+                  submitting || fieldLocked(locked, "primaryAgentId") || !officeKey
+                }
                 required={fieldRequired(required, "primaryAgentId")}
                 invalid={Boolean(errors.fields?.primaryAgentId?.length)}
+                description={
+                  officeKey
+                    ? undefined
+                    : "Choose an owning office before searching for agents."
+                }
               />
               <FormFieldError messages={errors.fields?.primaryAgentId} />
 
@@ -383,7 +423,7 @@ export default function TransactionNew() {
                   endpoint={peopleEndpoint("agent")}
                   value={coAgent}
                   onChange={setCoAgent}
-                  disabled={submitting}
+                  disabled={submitting || !officeKey}
                 />
               ) : null}
 
@@ -394,7 +434,13 @@ export default function TransactionNew() {
                 endpoint={peopleEndpoint("coordinator")}
                 value={coordinator}
                 onChange={setCoordinator}
-                disabled={submitting}
+                disabled={submitting || !officeKey}
+                invalid={Boolean(errors.fields?.coordinatorId?.length)}
+                description={
+                  officeKey
+                    ? "Search transaction coordinators in the owning office."
+                    : "Choose an owning office before searching for coordinators."
+                }
               />
               <FormFieldError messages={errors.fields?.coordinatorId} />
             </SurfaceCardContent>

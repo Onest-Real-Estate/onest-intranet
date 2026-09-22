@@ -5845,7 +5845,9 @@ export interface TransactionWorkspaceRecord {
   publicId: string;
   reference: string;
   transactionType: string;
+  transactionTypeLabel?: string;
   representationType: string;
+  representationTypeLabel?: string;
   status: string;
   statusLabel: string;
   office: { stableKey: string; name: string } | null;
