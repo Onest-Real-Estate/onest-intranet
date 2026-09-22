@@ -10,6 +10,7 @@ import {
 import { useState } from "react";
 
 import {
+  DateField,
   Dialog,
   DialogContent,
   DialogHeader,
@@ -351,8 +352,10 @@ function DocumentCard({
   const [category, setCategory] = useState(row.category);
   const [requirement, setRequirement] = useState(row.requirement);
   const [retentionPolicy, setRetentionPolicy] = useState(row.retentionPolicy);
+  const [retainUntil, setRetainUntil] = useState(row.retainUntil ?? "");
   const [busy, setBusy] = useState(false);
   const current = row.currentVersion;
+  const customRetention = retentionPolicy === "custom";
 
   return (
     <SurfaceCard>
@@ -468,7 +471,15 @@ function DocumentCard({
               </div>
               <div className="grid gap-1.5">
                 <Label htmlFor={`ret-${row.publicId}`}>Retention</Label>
-                <Select value={retentionPolicy} onValueChange={setRetentionPolicy}>
+                <Select
+                  value={retentionPolicy}
+                  onValueChange={(next) => {
+                    setRetentionPolicy(next);
+                    if (next !== "custom") {
+                      setRetainUntil("");
+                    }
+                  }}
+                >
                   <SelectTrigger id={`ret-${row.publicId}`}>
                     <SelectValue />
                   </SelectTrigger>
@@ -481,12 +492,26 @@ function DocumentCard({
                   </SelectContent>
                 </Select>
               </div>
+              {customRetention ? (
+                <DateField
+                  name="retainUntil"
+                  label="Retain until"
+                  value={retainUntil}
+                  onChange={setRetainUntil}
+                  required
+                  validation={errors}
+                />
+              ) : null}
             </div>
             <FormFieldError messages={errors?.fields?.title} />
+            <FormFieldError messages={errors?.fields?.retentionPolicy} />
+            {!customRetention ? (
+              <FormFieldError messages={errors?.fields?.retainUntil} />
+            ) : null}
             <FormActionBar status="Classification applies to the package, not a single version.">
               <Button
                 type="button"
-                disabled={busy || !title.trim()}
+                disabled={busy || !title.trim() || (customRetention && !retainUntil)}
                 onClick={() => {
                   setBusy(true);
                   router.post(
@@ -497,6 +522,7 @@ function DocumentCard({
                       category,
                       requirement,
                       retentionPolicy,
+                      ...(customRetention ? { retainUntil } : {}),
                     },
                     { onFinish: () => setBusy(false) },
                   );

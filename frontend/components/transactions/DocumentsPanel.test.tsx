@@ -1,6 +1,8 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import { formatFormDate } from "@/lib/dates";
 
 import { DocumentsPanel } from "./DocumentsPanel";
 
@@ -23,7 +25,10 @@ const schema = {
     { value: "optional", label: "Optional" },
     { value: "required", label: "Required" },
   ],
-  retentionPolicies: [{ value: "indefinite", label: "Indefinite" }],
+  retentionPolicies: [
+    { value: "indefinite", label: "Indefinite" },
+    { value: "custom", label: "Custom date" },
+  ],
   signatureStatuses: [{ value: "none", label: "None" }],
   complianceStatuses: [{ value: "none", label: "None" }],
   matrix: {
@@ -174,5 +179,97 @@ describe("DocumentsPanel", () => {
     await user.click(screen.getByRole("button", { name: /Add comment/i }));
     expect(routerPost).toHaveBeenCalled();
     expect(String(routerPost.mock.calls[0][0])).toContain("/comments");
+  });
+
+  it("shows retain-until when custom retention is selected and posts it", async () => {
+    const user = userEvent.setup();
+    render(
+      <DocumentsPanel
+        documents={[
+          {
+            publicId: "cccccccc-cccc-cccc-cccc-cccccccccccc",
+            title: "Disclosure",
+            category: "disclosure",
+            categoryLabel: "Disclosure",
+            requirement: "optional",
+            requirementLabel: "Optional",
+            retentionPolicy: "indefinite",
+            retentionPolicyLabel: "Indefinite",
+            retainUntil: null,
+            createdBy: null,
+            createdAt: null,
+            updatedAt: null,
+            currentVersion: readyVersion,
+            versions: [readyVersion],
+          },
+        ]}
+        documentSchema={schema}
+        expectedVersion="v1"
+        publicId="11111111-1111-1111-1111-111111111111"
+        canEdit
+        canLock
+      />,
+    );
+
+    expect(screen.queryByLabelText(/^Retain until/)).toBeNull();
+
+    await user.click(screen.getByLabelText("Retention"));
+    await user.click(screen.getByRole("option", { name: "Custom date" }));
+
+    expect(screen.getByLabelText(/^Retain until/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Save classification/i })).toBeDisabled();
+
+    // fireEvent: Radix popover + day-grid pointer checks stall under userEvent.
+    fireEvent.click(screen.getByLabelText(/^Retain until/));
+    const day = new Date();
+    day.setDate(15);
+    const monthName = day.toLocaleString("en-US", { month: "long" });
+    fireEvent.click(
+      await screen.findByRole("button", { name: new RegExp(`${monthName} 15`) }),
+    );
+
+    await user.click(screen.getByRole("button", { name: /Save classification/i }));
+
+    expect(routerPost).toHaveBeenCalled();
+    const [url, payload] = routerPost.mock.calls[0];
+    expect(String(url)).toContain("/classify");
+    expect(payload).toMatchObject({
+      retentionPolicy: "custom",
+      retainUntil: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+    });
+  });
+
+  it("pre-fills retain-until for packages already on custom retention", () => {
+    render(
+      <DocumentsPanel
+        documents={[
+          {
+            publicId: "cccccccc-cccc-cccc-cccc-cccccccccccc",
+            title: "Disclosure",
+            category: "disclosure",
+            categoryLabel: "Disclosure",
+            requirement: "optional",
+            requirementLabel: "Optional",
+            retentionPolicy: "custom",
+            retentionPolicyLabel: "Custom date",
+            retainUntil: "2030-06-15",
+            createdBy: null,
+            createdAt: null,
+            updatedAt: null,
+            currentVersion: readyVersion,
+            versions: [readyVersion],
+          },
+        ]}
+        documentSchema={schema}
+        expectedVersion="v1"
+        publicId="11111111-1111-1111-1111-111111111111"
+        canEdit
+        canLock
+      />,
+    );
+
+    expect(screen.getByLabelText(/^Retain until/)).toHaveTextContent(
+      formatFormDate("2030-06-15"),
+    );
   });
 });
