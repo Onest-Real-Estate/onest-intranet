@@ -19,6 +19,21 @@ from apps.transactions.views.document_views import (
     transaction_document_revision,
     transaction_document_upload,
 )
+from apps.transactions.views.signature_views import (
+    transaction_signature_artifact_download,
+    transaction_signature_ceremony,
+    transaction_signature_ceremony_complete,
+    transaction_signature_ceremony_decline,
+    transaction_signature_document_preview,
+    transaction_signature_magic_link,
+    transaction_signature_magic_link_complete,
+    transaction_signature_magic_link_decline,
+    transaction_signature_package_cancel,
+    transaction_signature_package_create,
+    transaction_signature_package_save,
+    transaction_signature_package_send,
+    transaction_signature_signer_remind,
+)
 from apps.transactions.views.workspace_views import (
     my_transactions,
     transaction_assignment_save,
@@ -149,5 +164,71 @@ urlpatterns = [
         "transactions/documents/versions/<uuid:public_id>/preview",
         transaction_document_preview,
         name="transaction_document_preview",
+    ),
+    path(
+        "transactions/<uuid:public_id>/signatures",
+        transaction_signature_package_create,
+        name="transaction_signature_package_create",
+    ),
+    path(
+        "transactions/<uuid:public_id>/signatures/<uuid:package_id>",
+        transaction_signature_package_save,
+        name="transaction_signature_package_save",
+    ),
+    path(
+        "transactions/<uuid:public_id>/signatures/<uuid:package_id>/send",
+        transaction_signature_package_send,
+        name="transaction_signature_package_send",
+    ),
+    path(
+        "transactions/<uuid:public_id>/signatures/<uuid:package_id>/cancel",
+        transaction_signature_package_cancel,
+        name="transaction_signature_package_cancel",
+    ),
+    path(
+        "transactions/<uuid:public_id>/signatures/<uuid:package_id>"
+        "/signers/<uuid:signer_id>/remind",
+        transaction_signature_signer_remind,
+        name="transaction_signature_signer_remind",
+    ),
+    path(
+        "transactions/sign/<uuid:public_id>/",
+        transaction_signature_ceremony,
+        name="transaction_signature_ceremony",
+    ),
+    path(
+        "transactions/sign/<uuid:public_id>/complete",
+        transaction_signature_ceremony_complete,
+        name="transaction_signature_ceremony_complete",
+    ),
+    path(
+        "transactions/sign/<uuid:public_id>/decline",
+        transaction_signature_ceremony_decline,
+        name="transaction_signature_ceremony_decline",
+    ),
+    path(
+        "transactions/sign/<uuid:public_id>/documents/<uuid:document_id>/",
+        transaction_signature_document_preview,
+        name="transaction_signature_document_preview",
+    ),
+    path(
+        "transactions/signatures/artifacts/<uuid:public_id>/",
+        transaction_signature_artifact_download,
+        name="transaction_signature_artifact_download",
+    ),
+    path(
+        "sign/p/<str:token>/",
+        transaction_signature_magic_link,
+        name="transaction_signature_magic_link",
+    ),
+    path(
+        "sign/p/<str:token>/complete",
+        transaction_signature_magic_link_complete,
+        name="transaction_signature_magic_link_complete",
+    ),
+    path(
+        "sign/p/<str:token>/decline",
+        transaction_signature_magic_link_decline,
+        name="transaction_signature_magic_link_decline",
     ),
 ]

@@ -158,11 +158,25 @@ def workspace_payload(
         "notes": serialize_notes_for_reader(user, tx),
         "documents": [],
         "documentSchema": None,
+        "signaturePackages": [],
+        "signatureSchema": None,
         "activity": None,
         "activityTeaser": None,
     }
 
-    if active == WorkspaceSection.DOCUMENTS:
+    if active == WorkspaceSection.SIGNATURES:
+        from apps.transactions.deal_documents import serialize_documents_for_reader
+        from apps.transactions.signing.serialize import (
+            serialize_packages_for_reader,
+            signature_schema_payload,
+        )
+
+        payload["signaturePackages"] = serialize_packages_for_reader(user, tx)
+        payload["signatureSchema"] = signature_schema_payload()
+        # A package is built from document versions already on the deal, so the
+        # authoring picker needs the same projection the Documents section uses.
+        payload["documents"] = serialize_documents_for_reader(user, tx)
+    elif active == WorkspaceSection.DOCUMENTS:
         from apps.transactions.deal_documents import (
             document_schema_payload,
             serialize_documents_for_reader,
