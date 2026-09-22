@@ -16,6 +16,7 @@ import {
 import { HubLayout } from "@/components/HubLayout";
 import { PermissionRequired } from "@/components/PermissionRequired";
 import { DocumentsPanel } from "@/components/transactions/DocumentsPanel";
+import { SignaturesPanel } from "@/components/transactions/SignaturesPanel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -776,6 +777,8 @@ export default function TransactionWorkspace() {
     notes,
     documents,
     documentSchema,
+    signaturePackages,
+    signatureSchema,
     activity,
     errors,
   } = props;
@@ -863,6 +866,18 @@ export default function TransactionWorkspace() {
               errors={errors}
             />
           ) : null}
+          {activeSection === "signatures" ? (
+            <SignaturesPanel
+              signaturePackages={signaturePackages}
+              signatureSchema={signatureSchema}
+              documents={documents}
+              parties={parties}
+              expectedVersion={expectedVersion}
+              publicId={transaction.publicId}
+              canEdit={capabilities.manage}
+              errors={errors}
+            />
+          ) : null}
           {activeSection === "activity" ? (
             activity ? (
               <ActivityTimeline title="Activity" page={activity} />
@@ -875,7 +890,7 @@ export default function TransactionWorkspace() {
               />
             )
           ) : null}
-          {["checklist", "tasks", "signatures", "commission", "compliance"].includes(
+          {["checklist", "tasks", "commission", "compliance"].includes(
             activeSection,
           ) ? (
             <StubPanel

@@ -40,9 +40,10 @@ registration, and deployment; don't duplicate it here.
     pusher compatible Open source Centrifugo if you reach for any realtime activity
 14. **Use Pattern /apps/views/{agents_views.py,*}** : Use the above patterns for the file structure
 15. **Use Enum instead of Raw Strings for comapraision**: Always create an Enum for all the states of comparison, if using database and if there is text choices use that for comparsion
-16. **Hub-native agent contract e-sign**. Agent contracts use Hub field
- placement, Hub signing UI, and pyHanko org PKCS#12 sealing — not DocuSeal.
- Customer/transaction packages remain out of scope until a later decision.
+16. **Hub-native e-sign**. Agent contracts and transaction document signature
+ packages use Hub field placement, Hub signing UI, and pyHanko org PKCS#12
+ sealing — not DocuSeal. External transaction signers may use hashed
+ magic-link ceremonies; completion remains Hub-authoritative.
 17. **Use `inertiajs's` `router.post` and `router.get` or <Form/> component instead of default <form tag>**
 
 ## Commands

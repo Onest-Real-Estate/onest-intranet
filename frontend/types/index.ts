@@ -5895,6 +5895,8 @@ export interface TransactionWorkspacePageProps extends PageProps {
   notes: TransactionNoteRow[];
   documents?: TransactionDocumentPackage[];
   documentSchema?: TransactionDocumentSchema | null;
+  signaturePackages?: SignaturePackageRow[];
+  signatureSchema?: SignatureSchema | null;
   activity: ActivityTimelinePage | null;
   activityTeaser: ActivityTimelinePage | null;
   errors?: ValidationErrors;
@@ -5969,6 +5971,168 @@ export interface TransactionDocumentSchema {
     maxCount: number;
     maxBatch: number;
   };
+}
+
+export interface SignatureSchemaOption {
+  value: string;
+  label: string;
+}
+
+export interface SignatureSchema {
+  packageStatuses: SignatureSchemaOption[];
+  routingModes: SignatureSchemaOption[];
+  deliveryMethods: SignatureSchemaOption[];
+  signerStatuses: SignatureSchemaOption[];
+  fieldTypes: SignatureSchemaOption[];
+  disclosure: SigningDisclosure;
+}
+
+export interface SignaturePackageDocumentRow {
+  publicId: string;
+  versionPublicId: string;
+  displayName: string;
+  pageCount: number;
+  sortOrder: number;
+  sourceChecksum: string;
+  previewUrl: string;
+}
+
+export interface SignaturePackageSignerRow {
+  publicId: string;
+  signerKey: string;
+  roleLabel: string;
+  displayName: string;
+  email: string;
+  deliveryMethod: string;
+  deliveryMethodLabel: string;
+  routingOrder: number;
+  status: string;
+  statusLabel: string;
+  isHubUser: boolean;
+  partyPublicId: string | null;
+  invitedAt: string | null;
+  viewedAt: string | null;
+  signedAt: string | null;
+  declinedAt: string | null;
+  declineReason: string;
+}
+
+export interface SignaturePackageArtifactRow {
+  publicId: string;
+  kind: string;
+  kindLabel: string;
+  displayName: string;
+  packageDocumentPublicId: string | null;
+  mediaType: string;
+  byteSize: number;
+  checksum: string;
+  createdAt: string | null;
+  downloadUrl: string;
+}
+
+/**
+ * A placed box. `documentKey` is the package document's public id on a saved
+ * layout and the source version's public id when the authoring UI posts one
+ * back, because that is what the server resolves a chosen document by.
+ */
+export interface SignaturePackageFieldRow {
+  publicId?: string;
+  name: string;
+  type: string;
+  typeLabel?: string;
+  signerKey: string;
+  documentKey: string;
+  page: number;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  required: boolean;
+}
+
+export interface SignaturePackageRow {
+  publicId: string;
+  title: string;
+  status: string;
+  statusLabel: string;
+  routingMode: string;
+  routingModeLabel: string;
+  disclosureVersion: string;
+  isDraft: boolean;
+  isTerminal: boolean;
+  expiresAt: string | null;
+  sentAt: string | null;
+  completedAt: string | null;
+  cancelledAt: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+  progress: { signed: number; total: number };
+  documents: SignaturePackageDocumentRow[];
+  signers: SignaturePackageSignerRow[];
+  artifacts: SignaturePackageArtifactRow[];
+  ceremonyUrl: string;
+  /** Present for drafts the reader can manage; absent once the package is sent. */
+  fields?: SignaturePackageFieldRow[];
+}
+
+export interface SignatureCeremonyDocument {
+  publicId: string;
+  displayName: string;
+  pageCount: number;
+  sortOrder: number;
+  previewUrl: string;
+  /** Only the fields addressed to the signed-in signer — the server filters. */
+  fields: SignaturePackageFieldRow[];
+}
+
+export interface SignatureCeremonyPackage {
+  publicId: string;
+  title: string;
+  status: string;
+  routingMode: string;
+  disclosureVersion: string;
+  expiresAt: string | null;
+  expectedVersion: string;
+}
+
+export interface SignatureCeremonySigner {
+  publicId: string;
+  roleLabel: string;
+  displayName: string;
+  email: string;
+  status: string;
+  statusLabel: string;
+  routingOrder: number;
+  signedAt: string | null;
+}
+
+/**
+ * Which door this ceremony was opened through, and where it posts.
+ *
+ * A magic-link signer has no Hub session, so the server hands back
+ * token-bearing URLs and the query parameter that authorizes a document
+ * preview rather than letting the page derive either from the package id.
+ */
+export interface SignatureCeremonyEndpoints {
+  mode: "hub" | "magicLink";
+  startUrl: string;
+  completeUrl: string;
+  declineUrl: string;
+  previewTokenParam: string;
+  previewToken: string;
+}
+
+export interface TransactionSignatureCeremonyPageProps extends PageProps {
+  canSign: boolean;
+  signingReady: boolean;
+  recovery?: SigningCeremonyRecovery | null;
+  disclosure: SigningDisclosure;
+  package: SignatureCeremonyPackage;
+  signer: SignatureCeremonySigner;
+  documents: SignatureCeremonyDocument[];
+  ceremony: { intentPublicId: string; expiresAt: string } | null;
+  errors: { fields: Record<string, string[]>; form: string[] };
+  endpoints: SignatureCeremonyEndpoints;
 }
 
 export interface TransactionListRow {
