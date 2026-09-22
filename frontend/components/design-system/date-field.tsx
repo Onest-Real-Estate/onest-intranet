@@ -67,6 +67,9 @@ export function DatePicker({
     }
     if (includeTime && selected) {
       next.setHours(selected.getHours(), selected.getMinutes());
+    } else if (includeTime) {
+      const now = new Date();
+      next.setHours(now.getHours(), now.getMinutes(), 0, 0);
     }
     onChange(toFormDate(next, includeTime));
     if (!includeTime) {

@@ -158,7 +158,7 @@ export function CommandPaletteTabs({
     <div
       role="tablist"
       className={cn(
-        "border-border/60 flex items-center gap-1 overflow-x-auto border-b px-2 py-1.5",
+        "border-border/60 flex items-center gap-1 overflow-x-auto scrollbar-none border-b px-2 py-1.5",
         className,
       )}
       {...props}

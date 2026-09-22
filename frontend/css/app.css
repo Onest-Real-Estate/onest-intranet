@@ -435,6 +435,22 @@
   }
 
   /*
+   * Quiet horizontal overflow (section tablists, chip rows). Scroll and
+   * arrow-key navigation stay; the 10px chrome bar above does not. Opt in
+   * with `.scrollbar-none` next to `overflow-x-auto`.
+   */
+  .scrollbar-none {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+  }
+
+  /*
    * Chrome paints its own pale wash over an autofilled field and ignores
    * `background-color` to do it. The inset shadow is the only way to reach the
    * surface, and the transition delay is the standard trick for holding it
