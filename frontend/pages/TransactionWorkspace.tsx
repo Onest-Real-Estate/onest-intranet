@@ -1,9 +1,23 @@
 import { Head, Link, router, usePage } from "@inertiajs/react";
-import { CalendarDays, ClipboardList, StickyNote, Users } from "lucide-react";
-import { type KeyboardEvent as ReactKeyboardEvent, useRef, useState } from "react";
+import {
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  ClipboardList,
+  StickyNote,
+  Users,
+} from "lucide-react";
+import {
+  Fragment,
+  type KeyboardEvent as ReactKeyboardEvent,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { ActivityTimeline } from "@/components/activity/ActivityTimeline";
 import {
   Callout,
+  DatePicker,
   EmptyState,
   FormActionBar,
   FormFieldError,
@@ -12,6 +26,7 @@ import {
   StatusBadge,
   SurfaceCard,
   SurfaceCardContent,
+  TimezonePicker,
 } from "@/components/design-system";
 import { HubLayout } from "@/components/HubLayout";
 import { PermissionRequired } from "@/components/PermissionRequired";
@@ -92,7 +107,54 @@ function WorkspaceTabs({
   publicId: string;
 }) {
   const refs = useRef(new Map<string, HTMLButtonElement>());
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
   const live = sections.filter((s) => s.live || s.stub);
+
+  function scrollByPage(direction: -1 | 1) {
+    const el = scrollerRef.current;
+    if (!el) return;
+    const delta = Math.max(160, Math.round(el.clientWidth * 0.6)) * direction;
+    el.scrollBy({ left: delta, behavior: "smooth" });
+  }
+
+  useEffect(() => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    // Capture tab count so we remeasure when sections change. scrollWidth can
+    // grow without the scroller's client box changing, so ResizeObserver alone
+    // would miss newly-added tabs.
+    void live.length;
+
+    function updateScrollState() {
+      // Re-read the node so the nested callback stays null-safe for tsc.
+      const node = scrollerRef.current;
+      if (!node) return;
+      const max = node.scrollWidth - node.clientWidth;
+      setCanScrollLeft(node.scrollLeft > 1);
+      setCanScrollRight(max > 1 && node.scrollLeft < max - 1);
+    }
+
+    updateScrollState();
+    const observer = new ResizeObserver(updateScrollState);
+    observer.observe(el);
+    el.addEventListener("scroll", updateScrollState, { passive: true });
+    window.addEventListener("resize", updateScrollState);
+    return () => {
+      observer.disconnect();
+      el.removeEventListener("scroll", updateScrollState);
+      window.removeEventListener("resize", updateScrollState);
+    };
+  }, [live.length]);
+
+  useEffect(() => {
+    refs.current.get(active)?.scrollIntoView({
+      inline: "nearest",
+      block: "nearest",
+      behavior: "smooth",
+    });
+  }, [active]);
 
   function onKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
     const offset =
@@ -107,54 +169,85 @@ function WorkspaceTabs({
   }
 
   return (
-    <div
-      role="tablist"
-      aria-label="Transaction workspace sections"
-      onKeyDown={onKeyDown}
-      className="border-border flex items-center gap-1 overflow-x-auto border-b"
-    >
-      {live.map((tab) => {
-        const selected = tab.id === active;
-        return (
-          <button
-            key={tab.id}
+    <div className="border-border relative border-b">
+      {canScrollLeft ? (
+        <div className="from-background via-background/80 pointer-events-none absolute inset-y-0 left-0 z-10 flex items-center bg-gradient-to-r to-transparent pr-8 pl-0.5">
+          <Button
             type="button"
-            role="tab"
-            id={`txn-tab-${tab.id}`}
-            aria-selected={selected}
-            aria-controls={`txn-panel-${tab.id}`}
-            aria-disabled={tab.stub || undefined}
-            tabIndex={selected ? 0 : -1}
-            ref={(node) => {
-              if (node) refs.current.set(tab.id, node);
-              else refs.current.delete(tab.id);
-            }}
-            onClick={() => {
-              if (tab.stub) return;
-              router.get(sectionHref(publicId, tab.id), {}, { preserveScroll: true });
-            }}
-            className={cn(
-              "focus-visible:ring-ring relative flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors duration-(--motion-fast) focus-visible:ring-3 focus-visible:-outline-offset-2 focus-visible:outline-none",
-              selected
-                ? "text-foreground"
-                : tab.stub
-                  ? "text-muted-foreground/60 cursor-not-allowed"
-                  : "text-muted-foreground hover:text-foreground",
-            )}
+            variant="outline"
+            size="icon"
+            className="pointer-events-auto size-7 rounded-full shadow-xs"
+            aria-label="Scroll tabs left"
+            onClick={() => scrollByPage(-1)}
           >
-            {selected ? (
-              <span
-                className="bg-primary absolute inset-x-0 -bottom-px h-0.5"
-                aria-hidden
-              />
-            ) : null}
-            {tab.label}
-            {tab.stub ? (
-              <span className="text-muted-foreground text-xs">Soon</span>
-            ) : null}
-          </button>
-        );
-      })}
+            <ChevronLeft className="size-4" aria-hidden />
+          </Button>
+        </div>
+      ) : null}
+      <div
+        ref={scrollerRef}
+        role="tablist"
+        aria-label="Transaction workspace sections"
+        onKeyDown={onKeyDown}
+        className="flex items-center gap-1 overflow-x-auto scrollbar-none"
+      >
+        {live.map((tab) => {
+          const selected = tab.id === active;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              id={`txn-tab-${tab.id}`}
+              aria-selected={selected}
+              aria-controls={`txn-panel-${tab.id}`}
+              aria-disabled={tab.stub || undefined}
+              tabIndex={selected ? 0 : -1}
+              ref={(node) => {
+                if (node) refs.current.set(tab.id, node);
+                else refs.current.delete(tab.id);
+              }}
+              onClick={() => {
+                if (tab.stub) return;
+                router.get(sectionHref(publicId, tab.id), {}, { preserveScroll: true });
+              }}
+              className={cn(
+                "focus-visible:ring-ring relative flex shrink-0 items-center gap-2 rounded-md px-3 py-2 text-sm font-medium whitespace-nowrap transition-colors duration-(--motion-fast) focus-visible:ring-3 focus-visible:-outline-offset-2 focus-visible:outline-none",
+                selected
+                  ? "text-foreground"
+                  : tab.stub
+                    ? "text-muted-foreground/60 cursor-not-allowed"
+                    : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {selected ? (
+                <span
+                  className="bg-primary absolute inset-x-0 -bottom-px h-0.5"
+                  aria-hidden
+                />
+              ) : null}
+              {tab.label}
+              {tab.stub ? (
+                <span className="text-muted-foreground text-xs">Soon</span>
+              ) : null}
+            </button>
+          );
+        })}
+      </div>
+      {canScrollRight ? (
+        <div className="from-background via-background/80 pointer-events-none absolute inset-y-0 right-0 z-10 flex items-center bg-gradient-to-l to-transparent pr-0.5 pl-8">
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="pointer-events-auto size-7 rounded-full shadow-xs"
+            aria-label="Scroll tabs right"
+            onClick={() => scrollByPage(1)}
+          >
+            <ChevronRight className="size-4" aria-hidden />
+          </Button>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -170,7 +263,7 @@ function OverviewPanel({ props }: { props: TransactionWorkspacePageProps }) {
     .join(", ");
 
   return (
-    <div className="grid gap-6">
+    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,22rem)] lg:items-start">
       <SurfaceCard>
         <SurfaceCardContent className="grid gap-4 py-5 sm:grid-cols-2">
           <ReadOnlyValue label="Office">
@@ -575,20 +668,25 @@ function DatesPanel({
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor="date-occurs">Occurs at</Label>
-              <Input
+              <DatePicker
                 id="date-occurs"
-                type="datetime-local"
                 value={occursAt}
-                onChange={(e) => setOccursAt(e.target.value)}
+                onChange={setOccursAt}
+                includeTime
+                placeholder="Pick date and time"
+                disabled={busy}
+                invalid={Boolean(errors?.fields?.occursAt?.length)}
               />
               <FormFieldError messages={errors?.fields?.occursAt} />
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor="date-tz">Timezone</Label>
-              <Input
+              <TimezonePicker
                 id="date-tz"
                 value={timezone}
-                onChange={(e) => setTimezone(e.target.value)}
+                onChange={setTimezone}
+                disabled={busy}
+                invalid={Boolean(errors?.fields?.timezone?.length)}
               />
               <FormFieldError messages={errors?.fields?.timezone} />
             </div>
@@ -786,28 +884,56 @@ export default function TransactionWorkspace() {
   useValidationToasts(errors);
 
   const activeSection = sections.find((s) => s.id === section)?.id || "overview";
+  const propertyLine = [
+    transaction.property?.line1,
+    transaction.property?.city,
+    transaction.property?.state,
+  ]
+    .filter(Boolean)
+    .join(", ");
+  const typeLine = [
+    transaction.transactionTypeLabel || transaction.transactionType,
+    transaction.representationTypeLabel || transaction.representationType,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  const metaBits = [
+    typeLine || null,
+    transaction.office?.name || null,
+    transaction.primaryAgent?.displayName
+      ? `Agent ${transaction.primaryAgent.displayName}`
+      : null,
+    transaction.mlsNumber ? `MLS ${transaction.mlsNumber}` : null,
+    transaction.closingDate ? `Closing ${transaction.closingDate}` : null,
+  ].filter(Boolean) as string[];
 
   return (
     <PermissionRequired permission={ACCESS}>
       <Head title={transaction.reference || "Transaction"} />
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 py-6">
+      <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 py-4">
         <PageHeader
-          title={transaction.reference || "Transaction"}
-          description={`${transaction.transactionType} · ${transaction.representationType}`}
-          actions={
-            <div className="flex flex-wrap gap-2">
-              <Button asChild variant="outline">
-                <Link href={routes.my_transactions()}>All transactions</Link>
-              </Button>
-              {capabilities.manage ? (
-                <Button asChild>
-                  <Link href={routes.transaction_new()}>New transaction</Link>
-                </Button>
-              ) : null}
-            </div>
+          rule={false}
+          className="gap-2"
+          breadcrumbs={
+            <Link
+              href={routes.my_transactions()}
+              className="hover:text-foreground transition-colors"
+            >
+              Transactions
+            </Link>
           }
+          title={transaction.reference || "Transaction"}
+          description={propertyLine || undefined}
           meta={
-            <StatusBadge status={{ label: transaction.statusLabel, tone: "info" }} />
+            <>
+              <StatusBadge status={{ label: transaction.statusLabel, tone: "info" }} />
+              {metaBits.map((bit) => (
+                <Fragment key={bit}>
+                  <span aria-hidden>·</span>
+                  <span>{bit}</span>
+                </Fragment>
+              ))}
+            </>
           }
         />
 

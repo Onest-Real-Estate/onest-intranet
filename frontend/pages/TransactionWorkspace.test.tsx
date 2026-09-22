@@ -14,7 +14,9 @@ const page = {
     publicId: "11111111-1111-1111-1111-111111111111",
     reference: "TXN-000001",
     transactionType: "buy",
+    transactionTypeLabel: "Buy",
     representationType: "buyer",
+    representationTypeLabel: "Buyer agency",
     status: "draft",
     statusLabel: "Draft",
     office: { stableKey: "fairfax", name: "Fairfax" },
@@ -118,15 +120,54 @@ describe("TransactionWorkspace", () => {
     page.errors = { fields: {}, form: [] };
   });
 
-  it("renders section tablist and deep-links on tab click", async () => {
-    const user = userEvent.setup();
+  it("renders a compact masthead with deal facts, not list-page actions", () => {
     render(<TransactionWorkspace />);
-    expect(
-      screen.getByRole("tablist", { name: "Transaction workspace sections" }),
-    ).toBeTruthy();
-    await user.click(screen.getByRole("tab", { name: "Parties" }));
-    expect(routerGet).toHaveBeenCalled();
-    expect(String(routerGet.mock.calls[0][0])).toContain("section=parties");
+    expect(screen.getByRole("heading", { name: "TXN-000001" })).toBeTruthy();
+    const header = screen.getByRole("banner");
+    expect(header).toHaveTextContent("100 Main, Fairfax, VA");
+    expect(header).toHaveTextContent("Buy · Buyer agency");
+    expect(header).toHaveTextContent("Fairfax");
+    expect(header).toHaveTextContent("Agent Ada");
+    expect(header).toHaveTextContent("MLS MLS-1");
+    expect(screen.getByRole("link", { name: "Transactions" })).toHaveAttribute(
+      "href",
+      expect.stringContaining("transaction"),
+    );
+    expect(screen.queryByRole("link", { name: "All transactions" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "New transaction" })).toBeNull();
+  });
+
+  it("shows side scroll arrows when the tablist overflows", async () => {
+    const user = userEvent.setup();
+    const scrollBy = vi.fn();
+    render(<TransactionWorkspace />);
+    const tablist = screen.getByRole("tablist", {
+      name: "Transaction workspace sections",
+    });
+    Object.defineProperty(tablist, "scrollWidth", {
+      configurable: true,
+      get: () => 900,
+    });
+    Object.defineProperty(tablist, "clientWidth", {
+      configurable: true,
+      get: () => 240,
+    });
+    Object.defineProperty(tablist, "scrollLeft", {
+      configurable: true,
+      get: () => 0,
+    });
+    Object.defineProperty(tablist, "scrollBy", {
+      configurable: true,
+      value: scrollBy,
+    });
+    window.dispatchEvent(new Event("resize"));
+
+    expect(screen.queryByRole("button", { name: "Scroll tabs left" })).toBeNull();
+    const right = await screen.findByRole("button", { name: "Scroll tabs right" });
+    await user.click(right);
+    expect(scrollBy).toHaveBeenCalledWith(
+      expect.objectContaining({ left: expect.any(Number), behavior: "smooth" }),
+    );
   });
 
   it("only shows notes returned by the server", () => {
