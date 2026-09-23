@@ -59,3 +59,25 @@ node_modules/*
 .impeccable-live.json
 
 issues.md
+apps/web/seed_support.py
+apps/user/management/commands/seed_dev.py
+apps/user/user_seed.py
+apps/web/seed.py
+apps/user/office_resource_seed.py
+apps/transactions/seed.py
+apps/reservations/seed.py
+apps/operational_tasks/seed.py
+apps/onboarding_tools/seed.py
+apps/notifications/seed.py
+apps/training/seed.py
+apps/it_support/seed.py
+apps/inventory/seed.py
+apps/marketing/seed.py
+apps/feedback/seed.py
+apps/documents/seed.py
+apps/compliance/seed.py
+apps/contract/seed.py
+apps/user/management/commands/seed_dev.py
+apps/user/user_seed.py
+apps/user/user_seed.py
+apps/user/management/commands/seed_dev.py

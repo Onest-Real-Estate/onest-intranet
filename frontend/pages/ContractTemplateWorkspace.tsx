@@ -63,7 +63,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   buildReadiness,
   publishBlockReason,
-  type WorkbenchStep,
+  type WorkbenchReadiness,
   type WorkbenchStepState,
   type WorkbenchTabId,
 } from "@/lib/contract-template-workbench";
@@ -437,115 +437,113 @@ export default function ContractTemplateWorkspace() {
         <Head
           title={`${versionDetail.displayName || versionDetail.versionLabel} Template`}
         />
-        <PageHeader
-          title={versionDetail.displayName || versionDetail.versionLabel}
-          description={versionDetail.description || undefined}
-          meta={
-            <>
-              <StatusBadge
-                status={{
-                  label: versionDetail.statusLabel,
-                  tone: toStatusTone(versionDetail.statusTone),
-                }}
-              />
-              <span>{versionDetail.template.name}</span>
-              <span aria-hidden>·</span>
-              <span className="tabular-nums">{versionDetail.versionLabel}</span>
-              <span aria-hidden>·</span>
-              <span className="tabular-nums">
-                {readiness.doneCount} of {readiness.total} steps ready
-              </span>
-            </>
-          }
-          actions={
-            <div className="flex flex-wrap items-center gap-2">
-              {capabilities.canManage && versionDetail.fieldAiConfigured ? (
+        <div className="border-border/70 grid gap-4 border-b pb-4">
+          <PageHeader
+            rule={false}
+            title={versionDetail.displayName || versionDetail.versionLabel}
+            description={versionDetail.description || undefined}
+            meta={
+              <>
+                <StatusBadge
+                  status={{
+                    label: versionDetail.statusLabel,
+                    tone: toStatusTone(versionDetail.statusTone),
+                  }}
+                />
+                <span>{versionDetail.template.name}</span>
+                <span aria-hidden>·</span>
+                <span className="tabular-nums">{versionDetail.versionLabel}</span>
+              </>
+            }
+            actions={
+              <div className="flex flex-wrap items-center gap-2">
+                {capabilities.canManage && versionDetail.fieldAiConfigured ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => postAction("suggest_fields")}
+                    disabled={!versionDetail.sourcePdfUrl || suggesting}
+                  >
+                    <Sparkles className="size-4" aria-hidden />
+                    {suggesting ? "Suggesting…" : "Suggest fields"}
+                  </Button>
+                ) : null}
+                {versionDetail.sourcePdfUrl &&
+                !readiness.ready &&
+                readiness.next?.id !== "preview" ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={generatePreview}
+                    disabled={fieldLayout.length === 0 || savingFields || previewing}
+                  >
+                    <Eye className="size-4" aria-hidden />
+                    {previewing ? "Generating…" : "Generate preview"}
+                  </Button>
+                ) : null}
                 <Button
                   type="button"
-                  variant="ghost"
-                  onClick={() => postAction("suggest_fields")}
-                  disabled={!versionDetail.sourcePdfUrl || suggesting}
+                  onClick={primaryAction.onClick}
+                  disabled={savingFields || previewing}
                 >
-                  <Sparkles className="size-4" aria-hidden />
-                  {suggesting ? "Suggesting…" : "Suggest fields"}
+                  <PrimaryIcon className="size-4" aria-hidden />
+                  {primaryAction.label}
                 </Button>
-              ) : null}
-              {versionDetail.sourcePdfUrl &&
-              !readiness.ready &&
-              readiness.next?.id !== "preview" ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={generatePreview}
-                  disabled={fieldLayout.length === 0 || savingFields || previewing}
-                >
-                  <Eye className="size-4" aria-hidden />
-                  {previewing ? "Generating…" : "Generate preview"}
-                </Button>
-              ) : null}
-              <Button
-                type="button"
-                onClick={primaryAction.onClick}
-                disabled={savingFields || previewing}
-              >
-                <PrimaryIcon className="size-4" aria-hidden />
-                {primaryAction.label}
-              </Button>
-              {capabilities.canApprove ? (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      aria-label="More template actions"
-                    >
-                      <MoreHorizontal className="size-4" aria-hidden />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem
-                      onSelect={generatePreview}
-                      disabled={savingFields || previewing || fieldLayout.length === 0}
-                    >
-                      <Eye className="size-4" aria-hidden />
-                      Generate preview
-                    </DropdownMenuItem>
-                    {isDraft ? (
-                      <DropdownMenuItem onSelect={() => postAction("publish")}>
-                        <Send className="size-4" aria-hidden />
-                        Publish
+                {capabilities.canApprove ? (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        aria-label="More template actions"
+                      >
+                        <MoreHorizontal className="size-4" aria-hidden />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        onSelect={generatePreview}
+                        disabled={
+                          savingFields || previewing || fieldLayout.length === 0
+                        }
+                      >
+                        <Eye className="size-4" aria-hidden />
+                        Generate preview
                       </DropdownMenuItem>
-                    ) : (
-                      <DropdownMenuItem onSelect={() => postAction("activate")}>
-                        <BadgeCheck className="size-4" aria-hidden />
-                        Activate
+                      {isDraft ? (
+                        <DropdownMenuItem onSelect={() => postAction("publish")}>
+                          <Send className="size-4" aria-hidden />
+                          Publish
+                        </DropdownMenuItem>
+                      ) : (
+                        <DropdownMenuItem onSelect={() => postAction("activate")}>
+                          <BadgeCheck className="size-4" aria-hidden />
+                          Activate
+                        </DropdownMenuItem>
+                      )}
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        variant="destructive"
+                        onSelect={() => postAction("retire")}
+                      >
+                        <Archive className="size-4" aria-hidden />
+                        Retire this version
                       </DropdownMenuItem>
-                    )}
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      variant="destructive"
-                      onSelect={() => postAction("retire")}
-                    >
-                      <Archive className="size-4" aria-hidden />
-                      Retire this version
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              ) : null}
-            </div>
-          }
-        />
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                ) : null}
+              </div>
+            }
+          />
+          <ReadinessTimeline
+            readiness={readiness}
+            blockReason={isDraft && capabilities.canApprove ? blockReason : null}
+            onGoToTab={setActiveTab}
+          />
+        </div>
 
         <FormErrorSummary errors={errors} />
-
-        <ReadinessStrip steps={readiness.steps} onGoToTab={setActiveTab} />
-
-        {isDraft && blockReason && capabilities.canApprove ? (
-          <p className="text-muted-foreground text-sm">
-            Publishing is blocked until this is cleared — {blockReason}.
-          </p>
-        ) : null}
 
         <WorkbenchTabs
           active={activeTab}
@@ -1010,63 +1008,100 @@ const STEP_ICON: Record<WorkbenchStepState, typeof Check> = {
 const STEP_MARK: Record<WorkbenchStepState, string> = {
   done: "border-chip-success-edge bg-chip-success text-success",
   attention: "border-chip-warning-edge bg-chip-warning text-warning-ink",
-  todo: "border-border bg-muted text-muted-foreground",
+  todo: "border-border bg-background text-muted-foreground",
 };
 
 /**
- * The pipeline, as one ruled strip rather than four cards.
+ * The pipeline as one line of the masthead, not a block of its own.
  *
- * Publishing a template is a sequence with hard gates, and the old page said so
- * only in prose callouts a thousand pixels apart. Four cells on one surface put
- * the whole state on a single baseline and make the stalled stage the one thing
- * that is coloured.
+ * Four stages with two lines of copy each cost a screen-height band above the
+ * work itself, and three of those detail lines were never the one that
+ * mattered. The line keeps every stage's state visible as a node, spells out
+ * only the stage the draft is waiting on, and folds the publish-blocked notice
+ * into that same sentence instead of repeating it underneath. Every node stays
+ * a button to its tab; the full detail rides on its accessible name.
  */
-function ReadinessStrip({
-  steps,
+function ReadinessTimeline({
+  readiness,
+  blockReason,
   onGoToTab,
 }: {
-  steps: WorkbenchStep[];
+  readiness: WorkbenchReadiness;
+  /** Present only for a draft the reader could publish. */
+  blockReason: string | null;
   onGoToTab: (tab: WorkbenchTabId) => void;
 }) {
+  const { steps, next } = readiness;
+  const headline = next
+    ? blockReason
+      ? `Publishing blocked — ${next.detail.toLowerCase()}`
+      : next.detail
+    : "Ready to publish";
+
   return (
-    <ol className="grid gap-x-8 gap-y-5 sm:grid-cols-2 lg:grid-cols-4">
-      {steps.map((step) => {
-        const Icon = STEP_ICON[step.state];
-        return (
-          <li key={step.id}>
-            <button
-              type="button"
-              onClick={() => onGoToTab(step.tab)}
-              className="focus-visible:ring-ring group -mx-2 flex w-full items-center gap-3 rounded-md px-2 py-1.5 text-left transition-colors duration-(--motion-fast) hover:bg-muted/50 focus-visible:ring-3 focus-visible:outline-none"
-            >
-              <span
+    <nav
+      aria-label={`Publish readiness, ${readiness.doneCount} of ${readiness.total} steps ready`}
+      className="flex flex-col gap-2 lg:flex-row lg:items-center lg:gap-6"
+    >
+      <ol className="flex min-w-0 items-center">
+        {steps.map((step, index) => {
+          const Icon = STEP_ICON[step.state];
+          const current = step.id === next?.id;
+          const previous = steps[index - 1];
+          return (
+            <li key={step.id} className="flex min-w-0 items-center">
+              {previous ? (
+                <span
+                  aria-hidden
+                  className={cn(
+                    "mx-1.5 h-px w-4 shrink-0 sm:w-8",
+                    previous.state === "done" ? "bg-chip-success-edge" : "bg-border",
+                  )}
+                />
+              ) : null}
+              <button
+                type="button"
+                onClick={() => onGoToTab(step.tab)}
+                aria-current={current ? "step" : undefined}
+                aria-label={`${step.label}: ${step.detail}`}
+                title={step.detail}
                 className={cn(
-                  "grid size-7 shrink-0 place-items-center rounded-full border",
-                  STEP_MARK[step.state],
+                  "focus-visible:ring-ring flex items-center gap-2 rounded-full py-1 pr-2.5 pl-1 text-sm transition-colors duration-(--motion-fast) hover:bg-muted/60 focus-visible:ring-3 focus-visible:outline-none",
+                  current ? "text-foreground font-semibold" : "text-muted-foreground",
                 )}
               >
-                <Icon className="size-3.5" aria-hidden />
-              </span>
-              <span className="min-w-0">
-                <span className="block truncate text-sm font-semibold">
-                  {step.label}
-                </span>
                 <span
                   className={cn(
-                    "block truncate text-xs",
-                    step.state === "attention"
-                      ? "text-warning-ink"
-                      : "text-muted-foreground",
+                    "grid size-5 shrink-0 place-items-center rounded-full border",
+                    STEP_MARK[step.state],
+                    current && step.state === "todo" && "border-primary text-primary",
                   )}
                 >
-                  {step.detail}
+                  <Icon className="size-3" aria-hidden />
                 </span>
-              </span>
-            </button>
-          </li>
-        );
-      })}
-    </ol>
+                <span
+                  className={cn("whitespace-nowrap", !current && "hidden sm:inline")}
+                >
+                  {step.label}
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ol>
+      <p
+        className={cn(
+          "min-w-0 truncate text-sm",
+          next?.state === "attention"
+            ? "text-warning-ink"
+            : next
+              ? "text-muted-foreground"
+              : "text-success",
+        )}
+      >
+        {headline}
+      </p>
+    </nav>
   );
 }
 

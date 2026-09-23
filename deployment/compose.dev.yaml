@@ -190,7 +190,7 @@ services:
       - "${MAILPIT_UI_PORT:-8025}:8025"   # web UI
 
   minio:
-    image: minio/minio:latest
+    image: quay.io/minio/minio:latest
     command: server /data --console-address ":9001"
     restart: unless-stopped
     environment:

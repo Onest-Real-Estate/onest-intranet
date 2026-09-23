@@ -146,13 +146,15 @@ describe("ContractTemplateWorkspace", () => {
   it("names the stalled pipeline stage and points the primary action at it", () => {
     render(<ContractTemplateWorkspace />);
 
-    const strip = screen.getByRole("list");
-    expect(within(strip).getByText("Data mapped")).toBeInTheDocument();
-    expect(within(strip).getByText("1 of 1 still unmapped")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Map hub data/ })).toBeInTheDocument();
+    const timeline = screen.getByRole("navigation", { name: /Publish readiness/ });
+    const stalled = within(timeline).getByRole("button", {
+      name: "Data mapped: 1 of 1 still unmapped",
+    });
+    expect(stalled).toHaveAttribute("aria-current", "step");
     expect(
-      screen.getByText(/Publishing is blocked until this is cleared/),
+      within(timeline).getByText("Publishing blocked — 1 of 1 still unmapped"),
     ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Map hub data/ })).toBeInTheDocument();
   });
 
   it("opens on the document when a source PDF exists", () => {
