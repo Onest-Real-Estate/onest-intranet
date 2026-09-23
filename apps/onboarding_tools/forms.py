@@ -18,6 +18,7 @@ from __future__ import annotations
 from typing import cast
 
 from django import forms
+from django.utils.text import slugify
 from django.utils.translation import gettext_lazy as _
 
 from apps.onboarding_tools.models import (
@@ -69,12 +70,45 @@ class OnboardingToolForm(forms.ModelForm):
             scoped_offices if scoped_offices is not None else Office.objects.none()
         )
         self._raw_steps = steps
+        slug_field = self.fields["slug"]
+        if self.instance.pk:
+            # Training items and audit records join on the identifier, so a
+            # saved tool keeps it. A disabled field ignores whatever is posted
+            # and validates the stored value instead.
+            slug_field.disabled = True
+        else:
+            # Derived from the name when left blank, which is almost always.
+            slug_field.required = False
 
     def clean_slug(self) -> str:
-        slug = (self.cleaned_data.get("slug") or "").strip().lower()
+        if self.instance.pk:
+            return self.instance.slug
+        raw = self.cleaned_data.get("slug") or self.data.get("name") or ""
+        slug = slugify(str(raw))[:60].strip("-")
         if not slug:
             raise forms.ValidationError(_("Give the tool a short identifier."))
+        if OnboardingTool.objects.filter(slug=slug).exists():
+            raise forms.ValidationError(
+                _("Another tool already uses “%(slug)s”. Choose a different one.")
+                % {"slug": slug}
+            )
         return slug
+
+    def clean_request_path(self) -> str:
+        """An in-app path only.
+
+        It renders as a link on every agent's card, so anything that is not a
+        same-origin path — another site, ``//host``, ``javascript:`` — is
+        refused rather than trusted because an administrator typed it.
+        """
+        path = (self.cleaned_data.get("request_path") or "").strip()
+        if not path:
+            return ""
+        if not path.startswith("/") or path.startswith("//") or "\\" in path:
+            raise forms.ValidationError(
+                _("Use a path inside the Hub that starts with /, such as /support/it.")
+            )
+        return path
 
     def clean_group(self) -> str:
         group = str(self.cleaned_data.get("group") or "")

@@ -8,10 +8,7 @@ import {
   FormFieldError,
   FormLabel,
   fieldA11yProps,
-  PanelHeader,
   StatusBadge,
-  SurfaceCard,
-  SurfaceCardContent,
 } from "@/components/design-system";
 import {
   descriptionId,
@@ -50,6 +47,11 @@ interface SectionProps {
   onDirty: () => void;
 }
 
+/**
+ * One settings row: what the section is on the left, its fields on the right,
+ * a rule between rows. The page reads top to bottom as a list of questions
+ * with their answers beside them, instead of a stack of boxed forms.
+ */
 function Section({
   id,
   title,
@@ -61,11 +63,23 @@ function Section({
   description: string;
   children: React.ReactNode;
 }) {
+  const headingId = `${id}-heading`;
   return (
-    <SurfaceCard id={id} className="scroll-mt-24">
-      <PanelHeader title={title} description={description} />
-      <SurfaceCardContent className="grid gap-4">{children}</SurfaceCardContent>
-    </SurfaceCard>
+    <section
+      id={id}
+      aria-labelledby={headingId}
+      className="grid scroll-mt-24 gap-4 border-t py-6 first:border-t-0 first:pt-0 @3xl:grid-cols-[minmax(0,15rem)_minmax(0,1fr)] @3xl:gap-10"
+    >
+      <div className="grid content-start gap-1">
+        <h2 id={headingId} className="text-sm font-semibold">
+          {title}
+        </h2>
+        <p className="text-muted-foreground max-w-measure text-sm leading-5">
+          {description}
+        </p>
+      </div>
+      <div className="grid min-w-0 max-w-2xl gap-4">{children}</div>
+    </section>
   );
 }
 
@@ -172,16 +186,19 @@ export function ProfileAddressSection({
         autoComplete="street-address"
         required
       />
-      <div className="grid gap-4 sm:grid-cols-6">
-        <TextField
-          className="sm:col-span-3"
-          name="city"
-          label="City"
-          validation={validation}
-          defaultValue={initial.city}
-          autoComplete="address-level2"
-          required
-        />
+      {/* Spans sit on wrappers: a className on TextField reaches the input,
+          not the grid cell, so the columns never took effect. */}
+      <div className="grid gap-4 sm:grid-cols-7">
+        <div className="sm:col-span-3">
+          <TextField
+            name="city"
+            label="City"
+            validation={validation}
+            defaultValue={initial.city}
+            autoComplete="address-level2"
+            required
+          />
+        </div>
         <div className="sm:col-span-2">
           <SelectField
             name="state"
@@ -200,16 +217,17 @@ export function ProfileAddressSection({
             required
           />
         </div>
-        <TextField
-          className="sm:col-span-1"
-          name="zip_code"
-          label="ZIP"
-          validation={validation}
-          defaultValue={initial.zipCode}
-          autoComplete="postal-code"
-          placeholder="12345"
-          required
-        />
+        <div className="sm:col-span-2">
+          <TextField
+            name="zip_code"
+            label="ZIP"
+            validation={validation}
+            defaultValue={initial.zipCode}
+            autoComplete="postal-code"
+            placeholder="12345"
+            required
+          />
+        </div>
       </div>
     </Section>
   );

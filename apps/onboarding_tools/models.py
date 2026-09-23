@@ -373,6 +373,12 @@ class AgentToolStatus(models.Model):
         verbose_name=_("invitation sent by"),
     )
     ready_at = models.DateTimeField(_("ready at"), null=True, blank=True)
+    #: The agent's own "I have this", kept apart from ``state``. ``state`` is
+    #: what somebody at oNEST confirmed and is what readiness counts; this is
+    #: the agent's claim, which staff read beside it but never substitute for it.
+    agent_confirmed_at = models.DateTimeField(
+        _("agent confirmed at"), null=True, blank=True
+    )
     updated_at = models.DateTimeField(_("updated at"), auto_now=True)
 
     objects = AgentToolStatusQuerySet.as_manager()

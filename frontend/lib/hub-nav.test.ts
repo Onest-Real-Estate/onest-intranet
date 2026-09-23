@@ -92,7 +92,7 @@ describe("navigation registry contract", () => {
     const protectedItems = HUB_NAV_REGISTRY.filter(
       (item) => item.access === "permission-protected",
     );
-    expect(protectedItems).toHaveLength(23);
+    expect(protectedItems).toHaveLength(20);
     for (const item of protectedItems) {
       expect([
         ...(item.permissions.all ?? []),
@@ -104,13 +104,14 @@ describe("navigation registry contract", () => {
   it("matches the reviewed protected route and permission contract", () => {
     expect(
       Object.fromEntries(
-        HUB_ADMIN_NAV.map((item) => [item.route.name, item.permissions.all?.[0]]),
+        HUB_ADMIN_NAV.map((item) => [
+          item.route.name,
+          item.permissions.all?.[0] ?? item.permissions.any?.join(" | "),
+        ]),
       ),
     ).toEqual({
-      admin_users: "web.view_users",
-      admin_new_agents: "web.view_new_agents",
-      admin_add_user: "web.add_users",
-      admin_assign_roles: "web.assign_user_roles",
+      // One entry for three tabs, shown for any of their grants.
+      admin_people: "web.view_users | web.assign_user_roles | web.view_new_agents",
       admin_agent_contracts: "web.view_agent_contracts",
       admin_contract_templates: "contract.manage_contract_templates",
       admin_transactions: "web.view_transactions",
@@ -134,7 +135,7 @@ describe("navigation registry contract", () => {
 
   it("rejects a role list that doubles as authorization or names an unknown role", () => {
     const contract = registryItem("my-contract");
-    const users = registryItem("admin-users");
+    const users = registryItem("admin-people");
 
     expect(validateHubNavRegistry([{ ...contract, roles: ["not_a_role"] }])).toContain(
       "unknown role for my-contract: not_a_role",
@@ -145,7 +146,7 @@ describe("navigation registry contract", () => {
     // Where a permission already decides relevance, a role filter on top can
     // only hide something somebody was deliberately granted.
     expect(validateHubNavRegistry([{ ...users, roles: ["system_admin"] }])).toContain(
-      "permission-protected item declares roles: admin-users",
+      "permission-protected item declares roles: admin-people",
     );
   });
 
@@ -416,7 +417,9 @@ describe("resolveHubNav", () => {
       features(["admin-compliance"]),
       office,
     );
-    expect(groups.some((group) => group.key === "administration")).toBe(false);
+    const administration = groups.find((group) => group.key === "administration");
+    // The grant opens People; nothing it does not cover is labelled.
+    expect(administration?.items.map((item) => item.label)).toEqual(["People"]);
     expect(
       groups.flatMap((group) => group.items.map((item) => item.label)),
     ).not.toContain("Compliance");
@@ -442,8 +445,7 @@ describe("representative effective-permission matrix", () => {
       "Branch",
       branch,
       [
-        "Users",
-        "New Agent List",
+        "People",
         "Inventory",
         "Reservations",
         "Training",
@@ -456,8 +458,7 @@ describe("representative effective-permission matrix", () => {
       "Regional",
       regional,
       [
-        "Users",
-        "New Agent List",
+        "People",
         "Transactions",
         "Inventory",
         "Reservations",
@@ -479,8 +480,9 @@ describe("representative effective-permission matrix", () => {
 
   it.each([
     ["Realtor", [], 0],
-    ["Branch", branch, branch.length],
-    ["Regional", regional, regional.length],
+    // Users and New agents are two grants but one People entry.
+    ["Branch", branch, branch.length - 1],
+    ["Regional", regional, regional.length - 1],
     ["Brokerage", adminPermissions(), HUB_ADMIN_NAV.length],
   ])(
     "shows registered Soon tabs for the %s permission union",
@@ -504,22 +506,20 @@ describe("representative effective-permission matrix", () => {
 
 describe("active matching", () => {
   it("matches index, detail, query, and trailing-slash routes", () => {
-    const users = registryItem("admin-users");
-    expect(isHubNavItemActive(users, "/operations/users")).toBe(true);
-    expect(isHubNavItemActive(users, "/operations/users/42?tab=roles")).toBe(true);
-    expect(isHubNavItemActive(users, "/operations/users/42/#roles")).toBe(true);
+    const people = registryItem("admin-people");
+    expect(isHubNavItemActive(people, "/operations/people")).toBe(true);
+    expect(isHubNavItemActive(people, "/operations/users")).toBe(true);
+    expect(isHubNavItemActive(people, "/operations/users/42?tab=roles")).toBe(true);
+    expect(isHubNavItemActive(people, "/operations/users/42/#roles")).toBe(true);
   });
 
-  it("does not activate a prefix collision or an excluded sibling", () => {
-    const users = registryItem("admin-users");
-    expect(isHubNavItemActive(users, "/operations/users-archive")).toBe(false);
-    expect(isHubNavItemActive(users, "/operations/users/new/confirm")).toBe(false);
-    expect(
-      isHubNavItemActive(
-        registryItem("admin-add-user"),
-        "/operations/users/new/confirm",
-      ),
-    ).toBe(true);
+  it("stays active on every People tab and nowhere else", () => {
+    const people = registryItem("admin-people");
+    expect(isHubNavItemActive(people, "/operations/role-assignments/7")).toBe(true);
+    expect(isHubNavItemActive(people, "/operations/new-agents")).toBe(true);
+    expect(isHubNavItemActive(people, "/operations/users/new")).toBe(true);
+    expect(isHubNavItemActive(people, "/operations/users-archive")).toBe(false);
+    expect(isHubNavItemActive(people, "/operations/offices")).toBe(false);
   });
 });
 

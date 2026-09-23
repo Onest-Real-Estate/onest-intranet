@@ -120,7 +120,10 @@ function approvedTitles() {
 }
 
 function adminPermissions() {
-  return HUB_ADMIN_NAV.flatMap((item) => item.permissions.all ?? []);
+  return HUB_ADMIN_NAV.flatMap((item) => [
+    ...(item.permissions.all ?? []),
+    ...(item.permissions.any ?? []),
+  ]);
 }
 
 beforeEach(() => {
@@ -335,7 +338,7 @@ describe("HubLayout navigation", () => {
     );
   });
 
-  it("marks a nested users detail route active without activating Add New User", () => {
+  it("keeps People active on a nested users detail route", () => {
     setPage(
       {
         user: {
@@ -346,13 +349,12 @@ describe("HubLayout navigation", () => {
       "/operations/users/42?tab=roles",
     );
     renderLayout();
-    expect(within(nav()).getByRole("link", { name: /^Users/ })).toHaveAttribute(
+    expect(within(nav()).getByRole("link", { name: /^People/ })).toHaveAttribute(
       "aria-current",
       "page",
     );
-    expect(
-      within(nav()).getByRole("link", { name: /Add New User/ }),
-    ).not.toHaveAttribute("aria-current");
+    // Add user is a button on the People page now, not a second rail entry.
+    expect(within(nav()).queryByRole("link", { name: /Add New User/ })).toBeNull();
   });
 
   it("supports keyboard-operated nested sections and persists only section keys", async () => {
@@ -388,7 +390,7 @@ describe("HubLayout navigation", () => {
       "aria-expanded",
       "true",
     );
-    expect(within(nav()).getByRole("link", { name: "Users" })).toHaveAttribute(
+    expect(within(nav()).getByRole("link", { name: "People" })).toHaveAttribute(
       "aria-current",
       "page",
     );
@@ -469,9 +471,7 @@ describe("HubLayout navigation", () => {
     });
     renderLayout();
     await userEvent.click(screen.getAllByRole("button", { name: /sidebar/i })[0]);
-    expect(
-      within(nav()).getByRole("link", { name: /Assign User Roles/ }),
-    ).toBeVisible();
+    expect(within(nav()).getByRole("link", { name: /^People/ })).toBeVisible();
     expect(within(nav()).getByRole("link", { name: /Platform Tasks/ })).toBeVisible();
   });
 

@@ -25,6 +25,7 @@ import { cn } from "@/lib/utils";
 export function FilterControls({
   children,
   leading,
+  trailing,
   activeCount = 0,
   onReset,
   disabled = false,
@@ -39,6 +40,8 @@ export function FilterControls({
    * to say so twice.
    */
   leading?: React.ReactNode;
+  /** A control that belongs on the toolbar row itself, such as a sort. */
+  trailing?: React.ReactNode;
   activeCount?: number;
   onReset?: () => void;
   disabled?: boolean;
@@ -74,12 +77,15 @@ export function FilterControls({
   return (
     <section aria-label="Filters" className={cn("grid gap-2", className)} {...props}>
       <div className="flex flex-wrap items-center gap-2">
-        {leading ? <div className="min-w-56 max-w-sm flex-1">{leading}</div> : null}
+        {/* The search takes the row: it is the control most visits use, and
+            a narrow box beside two wide buttons reads as the minor one. */}
+        {leading ? <div className="min-w-56 flex-1">{leading}</div> : null}
+        {trailing}
         {collapsible ? (
           <Button
             type="button"
             variant="outline"
-            size="sm"
+            className="bg-card"
             aria-expanded={expanded}
             aria-controls={panelId}
             onClick={() => setOpen((current) => !current)}

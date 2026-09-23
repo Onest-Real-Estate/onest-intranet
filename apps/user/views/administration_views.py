@@ -7,11 +7,14 @@ scope before it reads or writes anything. Mixing the two would mean one POST
 contract carrying both privileges.
 """
 
+from enum import StrEnum
 from typing import cast
+from urllib.parse import parse_qsl, urlencode
 
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect
+from django.urls import reverse
 from django.views.decorators.http import require_GET, require_POST
 from inertia import inertia, render
 
@@ -204,6 +207,42 @@ def _revoke_assignment(request: HttpRequest, actor: User, target: User):
     return redirect("user_administration", user_id=target.pk)
 
 
+class AccountStateReturn(StrEnum):
+    """Where an account-state change goes back to. The record by default."""
+
+    RECORD = "record"
+    USERS = "users"
+
+
+#: Query keys the Users list understands. A return query is rebuilt from these
+#: alone, so the redirect can never carry anything the list would not accept.
+USERS_LIST_KEYS = frozenset(
+    {
+        "q",
+        "office",
+        "region",
+        "role",
+        "status",
+        "account",
+        "onboarding",
+        "contract",
+        "lastLogin",
+        "page",
+        "pageSize",
+        "sort",
+        "direction",
+    }
+)
+
+
+def _users_list_query(raw: str) -> dict[str, str]:
+    return {
+        key: value[:120]
+        for key, value in parse_qsl((raw or "").lstrip("?")[:1000])
+        if key in USERS_LIST_KEYS and value
+    }
+
+
 @enforce_policy("user_account_state")
 @require_POST
 def user_account_state(request: HttpRequest, user_id: int):
@@ -213,16 +252,38 @@ def user_account_state(request: HttpRequest, user_id: int):
     policy, its own permission, its own form, and its own service. Nothing
     about somebody's access can ride along on a record edit, and nothing about
     their record can ride along on a lockout.
+
+    Started from a Users row (``returnTo=users``), success and refusal both
+    land back on that list with its filters intact rather than on a record the
+    administrator never opened.
     """
     actor = cast(User, request.user)
     target = _target(request, user_id)
     ensure_view_authority(actor, target)
+    from_list = request.POST.get("returnTo") == AccountStateReturn.USERS
+    list_query = _users_list_query(request.POST.get("returnQuery") or "")
+
+    def refused(errors: dict, status: int, *, fresh: bool = False) -> HttpResponse:
+        if from_list:
+            from .directory_views import directory_props
+
+            response = render(
+                request,
+                "UserDirectory",
+                directory_props(actor, list_query, errors=errors),
+            )
+            response.status_code = status
+            return response
+        return _render_administration(
+            request,
+            User.objects.get(pk=target.pk) if fresh else target,
+            errors=errors,
+            status=status,
+        )
 
     form = AccountStateForm(request.POST)
     if not form.is_valid():
-        return _render_administration(
-            request, target, errors=form_errors(form), status=422
-        )
+        return refused(form_errors(form), 422)
 
     try:
         set_account_state(
@@ -233,18 +294,11 @@ def user_account_state(request: HttpRequest, user_id: int):
             expected_version=form.cleaned_data.get("expected_version", ""),
         )
     except StaleAdministrationVersion as exc:
-        return _render_administration(
-            request,
-            User.objects.get(pk=target.pk),
-            errors={"fields": {}, "form": [exc.message]},
-            status=409,
-        )
+        return refused({"fields": {}, "form": [exc.message]}, 409, fresh=True)
     except ValidationError as exc:
-        return _render_administration(
-            request,
-            target,
-            errors={"fields": {}, "form": list(exc.messages)},
-            status=422,
-        )
+        return refused({"fields": {}, "form": list(exc.messages)}, 422)
 
+    if from_list:
+        url = reverse("admin_users")
+        return redirect(f"{url}?{urlencode(list_query)}" if list_query else url)
     return redirect("user_administration", user_id=target.pk)

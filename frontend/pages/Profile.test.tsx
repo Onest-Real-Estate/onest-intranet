@@ -180,7 +180,13 @@ function setPage(overrides: Partial<ProfilePageProps> = {}) {
 }
 
 describe("Profile", () => {
+  /** Open a profile tab the way a reader does — by its tab. */
+  async function openTab(user: ReturnType<typeof userEvent.setup>, name: string) {
+    await user.click(screen.getByRole("tab", { name }));
+  }
+
   beforeEach(() => {
+    window.history.replaceState({}, "", "/profile");
     setPage();
     routerPost.mockReset();
     routerPost.mockImplementation(
@@ -223,25 +229,30 @@ describe("Profile", () => {
       formatFormDate("2030-06-30"),
     );
     expect(screen.getByLabelText(/^Professional bio/)).toHaveValue("Hello");
-    expect(screen.getByLabelText(/^Website/)).toHaveValue(
+    expect(screen.getByLabelText(/^Website/, { selector: "input" })).toHaveValue(
       "https://bobsells.example.com",
     );
   });
 
-  it("renders Microsoft identity and roles as read-only values, not inputs", () => {
+  it("renders Microsoft identity and roles as read-only values, not inputs", async () => {
+    const user = userEvent.setup();
     render(<Profile />);
+    await openTab(user, "Account");
     expect(screen.getByRole("heading", { name: "Account details" })).toBeVisible();
-    expect(screen.getByText("bob@onest.realestate")).toBeInTheDocument();
-    expect(screen.getByText("Realtor")).toBeInTheDocument();
-    expect(screen.getByText("Active")).toBeInTheDocument();
+    const account = screen.getByRole("tabpanel", { name: "Account" });
+    expect(within(account).getByText("bob@onest.realestate")).toBeInTheDocument();
+    expect(within(account).getByText("Realtor")).toBeInTheDocument();
+    expect(within(account).getByText("Active")).toBeInTheDocument();
     // Read-only means no control at all — not a disabled one the user can focus.
     expect(screen.queryByLabelText(/work email/i)).toBeNull();
     expect(screen.queryByDisplayValue("bob@onest.realestate")).toBeNull();
     expect(screen.queryByDisplayValue("Realtor")).toBeNull();
   });
 
-  it("shows the brokerage record as read-only facts, never as controls", () => {
+  it("shows the brokerage record as read-only facts, never as controls", async () => {
+    const user = userEvent.setup();
     render(<Profile />);
+    await openTab(user, "Account");
     expect(screen.getByRole("heading", { name: "Brokerage record" })).toBeVisible();
     expect(screen.getByText("On leave")).toBeInTheDocument();
     expect(screen.getByText("ON-4412")).toBeInTheDocument();
@@ -282,8 +293,10 @@ describe("Profile", () => {
     ).toBeInTheDocument();
   });
 
-  it("points at support for the values it cannot change", () => {
+  it("points at support for the values it cannot change", async () => {
+    const user = userEvent.setup();
     render(<Profile />);
+    await openTab(user, "Account");
     expect(
       screen.getByRole("link", { name: "Open a support request" }),
     ).toHaveAttribute("href", "https://help.example.com");
@@ -351,6 +364,7 @@ describe("Profile", () => {
   it("keeps the language selection in hidden inputs the form can post", async () => {
     const user = userEvent.setup();
     const { container } = render(<Profile />);
+    await openTab(user, "Professional");
     const posted = () =>
       Array.from(
         container.querySelectorAll<HTMLInputElement>("input[name='languages']"),
@@ -367,6 +381,7 @@ describe("Profile", () => {
     const user = userEvent.setup();
     setPage({ limits: { ...pageProps.current.limits, maxLanguages: 1 } });
     render(<Profile />);
+    await openTab(user, "Professional");
     expect(screen.getByRole("checkbox", { name: "Spanish" })).toBeDisabled();
     await user.click(screen.getByRole("checkbox", { name: "English" }));
     expect(screen.getByRole("checkbox", { name: "Spanish" })).toBeEnabled();
@@ -380,14 +395,50 @@ describe("Profile", () => {
     expect(screen.getByText("6 of 1500 characters used.")).toBeInTheDocument();
   });
 
-  it("links missing optional details to the section that owns them", () => {
+  it("says what is missing and takes the reader to it", async () => {
+    const user = userEvent.setup();
     render(<Profile />);
-    // The link names its destination section as well as the field now, so a
-    // screen-reader user hears where the jump lands, not just what is missing.
-    expect(
-      screen.getByRole("link", { name: "MLS numberOffice and credentials" }),
-    ).toHaveAttribute("href", "#profile-credentials");
-    expect(screen.getByText("15 of 20 details filled in.")).toBeInTheDocument();
+    expect(screen.getByText(/Still to add: MLS number/)).toBeVisible();
+    expect(screen.getByText("15 of 20 details")).toBeVisible();
+
+    await user.click(screen.getByRole("button", { name: /Add mls number/i }));
+    expect(screen.getByRole("tab", { name: "Professional" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(window.location.hash).toBe("#professional");
+  });
+
+  it("keeps every tab's fields in the form so Save posts the whole profile", async () => {
+    const user = userEvent.setup();
+    render(<Profile />);
+    // Professional is not showing, yet its values still travel.
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+    const body = routerPost.mock.calls[0][1] as FormData;
+    expect(body.get("license_number")).toBe("VA-9911");
+    expect(body.get("first_name")).toBe("Bob");
+  });
+
+  it("opens the tab holding the error after a refused save", () => {
+    setPage({
+      validation: { fields: { license_number: ["Required."] }, form: [] },
+    });
+    render(<Profile />);
+    const professional = screen.getByRole("tab", { name: /Professional/ });
+    expect(professional).toHaveAttribute("aria-selected", "true");
+    expect(professional).toHaveTextContent("1");
+  });
+
+  it("moves between tabs with the arrow keys", async () => {
+    const user = userEvent.setup();
+    render(<Profile />);
+    screen.getByRole("tab", { name: "Personal" }).focus();
+    await user.keyboard("{ArrowRight}");
+    expect(screen.getByRole("tab", { name: "Professional" })).toHaveFocus();
+    expect(screen.getByRole("tab", { name: "Professional" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
   });
 
   it("is reachable by keyboard through the editable fields in order", async () => {

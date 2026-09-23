@@ -2,6 +2,7 @@ from django.urls import path
 
 from apps.onboarding_tools.views import (
     agent_tools,
+    confirm_my_tool,
     my_tools,
     reorder_tools_view,
     save_tool_view,
@@ -14,6 +15,7 @@ urlpatterns = [
     # Every agent's own checklist. No grant: a person is always entitled to
     # know what they are expected to have and how to get it.
     path("my-tools", my_tools, name="my_tools"),
+    path("my-tools/<slug:slug>/have", confirm_my_tool, name="my_tool_have"),
     path("operations/tool-readiness", team_readiness, name="team_tool_readiness"),
     path(
         "operations/tool-readiness/<int:agent_id>",

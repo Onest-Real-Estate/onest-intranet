@@ -39,11 +39,12 @@ from apps.user.administration_fields import (
     agent_status_options,
 )
 from apps.user.models import Office, User, UserRoleAssignment
-from apps.user.roles import ROLE_DEFINITIONS, normalize_role_code
+from apps.user.roles import ROLE_DEFINITIONS, ROLE_LABELS, normalize_role_code
 from apps.user.services.agent_administration import (
     CHANGE_PERMISSION,
     VIEW_PERMISSION,
     administered_user_queryset,
+    administration_version,
     contract_domain,
     contract_status,
 )
@@ -243,6 +244,18 @@ def parse_sort(params) -> tuple[str, str]:
     return key, direction
 
 
+#: The sizes the list offers. Anything else posted is ignored, not honoured.
+PAGE_SIZE_OPTIONS: tuple[int, ...] = (10, 25, 50, 100)
+
+
+def parse_page_size(params) -> int:
+    try:
+        value = int(params.get("pageSize", PAGE_SIZE))
+    except (TypeError, ValueError):
+        return PAGE_SIZE
+    return value if value in PAGE_SIZE_OPTIONS else PAGE_SIZE
+
+
 def parse_page(params) -> int:
     try:
         return max(1, int(params.get("page", "1")))
@@ -376,8 +389,48 @@ def onboarding_payload(user: User) -> dict[str, str]:
     return {"value": value, "label": label, "tone": tone}
 
 
-def directory_row(user: User, *, groups: frozenset[str]) -> dict[str, Any]:
-    """One row, carrying only the keys this reader is allowed to have."""
+def live_role_labels(users: list[User]) -> dict[int, list[str]]:
+    """Every live role per user, in catalog order, from one query.
+
+    Live means active or scheduled — the same set the role workspace calls
+    live — so the chips on a list row never disagree with the person's record.
+    """
+    order = {
+        definition.code: index for index, definition in enumerate(ROLE_DEFINITIONS)
+    }
+    found: dict[int, set[str]] = {}
+    rows = UserRoleAssignment.objects.filter(
+        user__in=users,
+        status__in=(
+            UserRoleAssignment.Status.ACTIVE,
+            UserRoleAssignment.Status.SCHEDULED,
+        ),
+    ).values_list("user_id", "role")
+    for user_id, role in rows:
+        found.setdefault(user_id, set()).add(normalize_role_code(role) or role)
+    return {
+        user_id: [
+            ROLE_LABELS.get(code, code)
+            for code in sorted(codes, key=lambda code: (order.get(code, 999), code))
+        ]
+        for user_id, codes in found.items()
+    }
+
+
+def directory_row(
+    user: User,
+    *,
+    groups: frozenset[str],
+    roles: list[str] | None = None,
+    account_actor: User | None = None,
+) -> dict[str, Any]:
+    """One row, carrying only the keys this reader is allowed to have.
+
+    ``account_actor`` is set only when the reader holds the account-state
+    grant; the row then says whether this particular account may be switched
+    from the list and carries the freshness token the write checks. Nobody
+    may lock themselves out, so their own row never offers it.
+    """
     row: dict[str, Any] = {
         "id": user.pk,
         "name": str(user),
@@ -393,7 +446,10 @@ def directory_row(user: User, *, groups: frozenset[str]) -> dict[str, Any]:
         },
         "lastLoginAt": user.last_login.isoformat() if user.last_login else None,
         "onboarding": onboarding_payload(user),
+        "roles": roles or [],
     }
+    if account_actor is not None and account_actor.pk != user.pk:
+        row["account"] = {"version": administration_version(user)}
     if FieldGroup.ADMINISTRATION in groups:
         row["agentStatus"] = _status_payload(user)
         row["agentIdentifier"] = user.agent_identifier
@@ -533,9 +589,28 @@ def build_directory_page(
     total_pages = max(1, (total + page_size - 1) // page_size)
     page = min(max(page, 1), total_pages)
     start = (page - 1) * page_size
+    # Deep enough for the whole office path (head office → region → regional
+    # office → branch), so ``path_label`` walks joined rows, not queries.
+    page_users = list(
+        ordered.select_related("office__parent__parent__parent")[
+            start : start + page_size
+        ]
+    )
+    roles = live_role_labels(page_users)
+    account_actor = (
+        actor
+        if has_effective_permission(actor, VIEW_PERMISSION)
+        and has_effective_permission(actor, ACCOUNT_STATE_PERMISSION)
+        else None
+    )
     rows = [
-        directory_row(user, groups=groups)
-        for user in ordered[start : start + page_size]
+        directory_row(
+            user,
+            groups=groups,
+            roles=roles.get(user.pk, []),
+            account_actor=account_actor,
+        )
+        for user in page_users
     ]
     return (
         DirectoryPage(

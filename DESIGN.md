@@ -457,10 +457,17 @@ from the palette and the radius, not from decoration.
 
 ### Tables
 
-- Muted header surface, 12px uppercase micro-caps column labels at 0.06em, 40px
-  header row, 1px horizontal rules, and vertical rules between cells so a wide
-  row stays readable across the screen. Numbers right-align and run tabular.
-  Row hover is a muted wash (`--muted` at 40%).
+- Header sits on the card itself (no grey band): 12px uppercase micro-caps
+  column labels at 0.06em, 44px header row, one rule beneath it. Rows are
+  roomy (14px vertical padding) and separated by horizontal rules only — a
+  record reads as one band across the table. Numbers right-align and run
+  tabular. Row hover is a muted wash (`--muted` at 40%).
+- A list page's toolbar is one row: full-width search, then an optional sort
+  select, then the Filters button. Pagination is outline square page buttons
+  on the left and the `first–last of total` count plus rows-per-page on the
+  right.
+- Sibling list pages share a `PageTabs` row (gold-tinted current tab, the
+  sidebar's own "you are here" signal) with section actions at its right edge.
 - **Schedule matrix:** the leading resource header stays sticky on the card
   surface while date columns scroll horizontally. Resource and date widths step
   up with their container; the semantic list form preserves the same labels,
