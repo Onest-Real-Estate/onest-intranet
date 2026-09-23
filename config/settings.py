@@ -362,7 +362,7 @@ CONTRACT_SIGNING_CERT_PASSPHRASE = config(
 CONTRACT_SIGNING_ALLOW_UNSIGNED_DEV = config(
     "CONTRACT_SIGNING_ALLOW_UNSIGNED_DEV", default=True, cast=bool
 )
-# Azure OpenAI / OpenAI / Gemini vision for field suggestions (optional).
+# Azure OpenAI / OpenAI / Gemini chat for announcement summaries (optional).
 CONTRACT_FIELD_AI_ENDPOINT = config("CONTRACT_FIELD_AI_ENDPOINT", default="")
 CONTRACT_FIELD_AI_API_KEY = config("CONTRACT_FIELD_AI_API_KEY", default="")
 CONTRACT_FIELD_AI_DEPLOYMENT = config("CONTRACT_FIELD_AI_DEPLOYMENT", default="")
@@ -370,6 +370,9 @@ CONTRACT_FIELD_AI_API_VERSION = config(
     "CONTRACT_FIELD_AI_API_VERSION", default="2024-08-01-preview"
 )
 CONTRACT_FIELD_AI_MODEL = config("CONTRACT_FIELD_AI_MODEL", default="gpt-4o")
+# Mistral Document AI OCR for Hub field suggestions (optional).
+MISTRAL_API_KEY = config("MISTRAL_API_KEY", default="")
+MISTRAL_OCR_MODEL = config("MISTRAL_OCR_MODEL", default="mistral-ocr-latest")
 
 # Transaction signature packages. The org seal reuses CONTRACT_SIGNING_CERT_*
 # — one brokerage certificate signs both agent contracts and deal documents.

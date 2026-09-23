@@ -1,7 +1,5 @@
 import io
-import json
-import urllib.error
-from email.message import Message
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
@@ -87,71 +85,48 @@ def _blank_pdf() -> bytes:
     return buf.getvalue()
 
 
-@override_settings(
-    CONTRACT_FIELD_AI_ENDPOINT="https://generativelanguage.googleapis.com",
-    CONTRACT_FIELD_AI_API_KEY="test-key",
-    CONTRACT_FIELD_AI_MODEL="gemini-2.5-flash",
-    CONTRACT_FIELD_AI_DEPLOYMENT="",
-)
-def test_suggest_fields_surfaces_http_404():
-    error = urllib.error.HTTPError(
-        url="https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
-        code=404,
-        msg="Not Found",
-        hdrs=Message(),
-        fp=io.BytesIO(b'{"error":{"message":"no longer available"}}'),
-    )
-    with (
-        patch(
-            "apps.contract.field_ai.render_pdf_page_png",
-            return_value=(b"png", 300.0, 200.0),
-        ),
-        patch("urllib.request.urlopen", side_effect=error),
-        pytest.raises(ValidationError) as excinfo,
-    ):
+@override_settings(MISTRAL_API_KEY="")
+def test_suggest_fields_requires_mistral_key():
+    with pytest.raises(ValidationError) as excinfo:
         suggest_fields_for_pdf(_blank_pdf())
-    assert "model was not found" in excinfo.value.message_dict["form"][0]
+    assert "MISTRAL_API_KEY" in excinfo.value.message_dict["form"][0]
 
 
-@override_settings(
-    CONTRACT_FIELD_AI_ENDPOINT="https://generativelanguage.googleapis.com",
-    CONTRACT_FIELD_AI_API_KEY="test-key",
-    CONTRACT_FIELD_AI_MODEL="gemini-3.6-flash",
-    CONTRACT_FIELD_AI_DEPLOYMENT="",
-)
-def test_suggest_fields_parses_markdown_wrapped_json():
-    payload = {
-        "choices": [
-            {
-                "message": {
-                    "content": (
-                        '```json\n{"fields":[{"name":"AgentSignature","type":'
-                        '"signature","role":"Agent","x":0.1,"y":0.2,"w":0.3,'
-                        '"h":0.05}]}\n```'
-                    )
+@override_settings(MISTRAL_API_KEY="test-key")
+def test_suggest_fields_maps_labels_onto_ocr_blocks():
+    response = SimpleNamespace(
+        document_annotation={
+            "fields": [
+                {
+                    "name": "AgentSignature",
+                    "type": "signature",
+                    "role": "Agent",
+                    "page": 1,
+                    "anchor": "Signature",
                 }
-            }
-        ]
-    }
-
-    class _Response:
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *args):
-            return False
-
-        def read(self):
-            return json.dumps(payload).encode()
-
-    with (
-        patch(
-            "apps.contract.field_ai.render_pdf_page_png",
-            return_value=(b"png", 300.0, 200.0),
-        ),
-        patch("urllib.request.urlopen", return_value=_Response()),
-    ):
+            ]
+        },
+        pages=[
+            SimpleNamespace(
+                index=0,
+                dimensions=SimpleNamespace(width=300, height=200, dpi=72),
+                blocks=[
+                    SimpleNamespace(
+                        type="signature",
+                        top_left_x=30,
+                        top_left_y=120,
+                        bottom_right_x=180,
+                        bottom_right_y=160,
+                        content="",
+                    )
+                ],
+            )
+        ],
+    )
+    with patch("apps.contract.field_ai.ocr_document", return_value=response):
         fields = suggest_fields_for_pdf(_blank_pdf())
     assert fields[0]["type"] == "signature"
     assert fields[0]["role"] == "Agent"
     assert fields[0]["page"] == 1
+    assert fields[0]["x"] == pytest.approx(30.0)
+    assert fields[0]["y"] == pytest.approx(120.0)

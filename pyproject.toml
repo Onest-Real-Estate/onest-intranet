@@ -32,6 +32,8 @@ dependencies = [
     "extruct>=0.18.0",
     "trafilatura>=2.2.0",
     "qrcode[pil]>=8.0",
+    "mistralai>=2.10.1",
+    "pymupdf>=1.28.2",
 ]
 
 [dependency-groups]

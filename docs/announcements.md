@@ -746,10 +746,10 @@ stored on the row. Extract text is held in a short-lived cache (~15 minutes)
 under an opaque `extractToken` scoped to the actor, then discarded.
 
 **Generate summary** is a separate opt-in action. It reuses the same
-`CONTRACT_FIELD_AI_*` settings as contract field placement (Azure OpenAI /
-OpenAI / Gemini OpenAI-compat). It runs only when enough readable extract text
-was retrieved; metadata-only fetches cannot claim the model “read the article.”
-AI is never called on paste, save, or publish.
+`CONTRACT_FIELD_AI_*` settings (Azure OpenAI / OpenAI / Gemini OpenAI-compat).
+Contract field suggestions use `MISTRAL_API_KEY` separately. It runs only when
+enough readable extract text was retrieved; metadata-only fetches cannot claim
+the model “read the article.” AI is never called on paste, save, or publish.
 
 **Remote images** are candidates only. **Import as hero** re-validates the URL
 (SSRF), downloads bounded bytes, and runs them through the existing

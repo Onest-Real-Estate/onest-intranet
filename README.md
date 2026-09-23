@@ -371,7 +371,8 @@ MICROSOFT_TENANT=common
 > worker + beat scheduler, so nothing external is needed. Agent contract
 > templates and signing are Hub-native (field placer + SignaturePad + optional
 > org PKCS#12 seal). See `docs/agent-contracts.md` and set
-> `CONTRACT_SIGNING_*` / optional `CONTRACT_FIELD_AI_*` in `.env`.
+> `CONTRACT_SIGNING_*` / optional `MISTRAL_API_KEY` / optional
+> `CONTRACT_FIELD_AI_*` in `.env`.
 
 ## Background tasks (Celery)
 

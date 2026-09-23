@@ -13,7 +13,8 @@ from django.utils import timezone
 
 from apps.audit.models import AuditEvent
 from apps.audit.service import AuditTarget, actor_from_user, log_event
-from apps.contract.field_ai import field_ai_configured, suggest_fields_for_pdf
+from apps.contract.document_ocr import ocr_configured
+from apps.contract.field_ai import suggest_fields_for_pdf
 from apps.contract.field_layout import (
     assert_publishable_layout,
     normalize_field_layout,
@@ -336,14 +337,9 @@ def suggest_field_layout(
     _ensure_manage(actor)
     if version.status != ContractTemplateVersion.Status.DRAFT:
         raise ValidationError({"form": ["Only draft versions can run field AI."]})
-    if not field_ai_configured():
+    if not ocr_configured():
         raise ValidationError(
-            {
-                "form": [
-                    "Field AI is not configured. Set CONTRACT_FIELD_AI_ENDPOINT "
-                    "and CONTRACT_FIELD_AI_API_KEY."
-                ]
-            }
+            {"form": ["Field AI is not configured. Set MISTRAL_API_KEY."]}
         )
     pdf_bytes = _read_version_source_bytes(version)
     return suggest_fields_for_pdf(pdf_bytes)
@@ -759,7 +755,7 @@ def serialize_version_detail(version: ContractTemplateVersion) -> dict[str, Any]
             else None
         ),
         "fieldLayout": list(version.field_layout or []),
-        "fieldAiConfigured": field_ai_configured(),
+        "fieldAiConfigured": ocr_configured(),
         "mergeSourceOptions": list(MERGE_SOURCE_OPTIONS),
         "placeholderKeys": list(version.extracted_placeholder_keys or []),
         "mergeSchema": list(version.merge_schema or []),

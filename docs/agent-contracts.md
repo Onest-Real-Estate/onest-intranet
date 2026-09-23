@@ -390,9 +390,9 @@ existing authorized artifact delivery path (no durable/presigned URL).
 - Set `SITE_BASE_URL` so invite emails link back to the hub.
 - Production requires `CONTRACT_SIGNING_CERT_PATH` (+ passphrase) for the org
   PKCS#12 seal. Local DEBUG may set `CONTRACT_SIGNING_ALLOW_UNSIGNED_DEV=1`.
-- Optional field AI: `CONTRACT_FIELD_AI_*` (Azure OpenAI, OpenAI, or Gemini).
-  Gemini OpenAI-compat currently expects `gemini-3.6-flash` (older
-  `gemini-2.5-flash` ids 404 for new API keys).
+- Optional field suggestions: `MISTRAL_API_KEY` (Mistral Document AI OCR via
+  the official `mistralai` client). Optional `MISTRAL_OCR_MODEL` defaults to
+  `mistral-ocr-latest`.
 - S3 private storage uses `file_overwrite=False`; application no-replace
   semantics remain the primary immutability guarantee.
 ## Constraints and indexes
