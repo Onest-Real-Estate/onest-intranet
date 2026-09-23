@@ -780,12 +780,16 @@ def suggest_layout_from_ocr(
     """Build Hub field suggestions from OCR blocks + annotation labels."""
     native_regions = extract_native_pdf_regions(pdf_bytes or b"")
     ocr_regions = extract_ocr_regions(response, page_sizes=page_sizes)
-    # Native blanks are exact for digital PDFs. Keep OCR-only signature and
-    # checkbox detections, since those often have no text or drawing primitive.
-    regions = native_regions + [
-        region for region in ocr_regions if region.kind in {"signature", "checkbox"}
-    ]
-    if not regions:
+    # Native blanks are exact for digital PDFs. Prefer them over OCR paragraph
+    # blanks when present, but keep OCR-only signature and checkbox detections
+    # (those often have no text or drawing primitive). When there is no native
+    # geometry at all, fall back to the full OCR region set — otherwise a lone
+    # OCR signature would drop every OCR blank and starve text-field mapping.
+    if native_regions:
+        regions = list(native_regions) + [
+            region for region in ocr_regions if region.kind in {"signature", "checkbox"}
+        ]
+    else:
         regions = ocr_regions
     labels = _annotation_fields(response)
     suggestions = map_fields_to_ocr_regions(labels, regions, page_sizes=page_sizes)
