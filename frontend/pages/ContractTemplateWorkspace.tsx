@@ -843,9 +843,8 @@ export default function ContractTemplateWorkspace() {
                       tone="neutral"
                       title="Field suggestions are not configured"
                     >
-                      Set CONTRACT_FIELD_AI_ENDPOINT and CONTRACT_FIELD_AI_API_KEY to
-                      have the Hub propose field boxes from the PDF. Manual placement
-                      always works.
+                      Set MISTRAL_API_KEY to have the Hub propose field boxes from the
+                      PDF via Mistral OCR. Manual placement always works.
                     </Callout>
                   ) : null}
                   {canEdit && draftDirty ? (
