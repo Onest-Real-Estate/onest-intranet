@@ -592,21 +592,19 @@ export function Pagination({
           )}
         </p>
         {pageSizeOptions && onPageSizeChange ? (
-          <label className="flex items-center gap-2">
-            <span className="sr-only">Rows per page</span>
-            <NativeSelect
-              value={pagination.pageSize}
-              disabled={disabled}
-              onChange={(event) => onPageSizeChange(Number(event.target.value))}
-              className="bg-card h-9 w-32 font-medium tabular-nums"
-            >
-              {pageSizeOptions.map((size) => (
-                <option key={size} value={size}>
-                  {size} / page
-                </option>
-              ))}
-            </NativeSelect>
-          </label>
+          <NativeSelect
+            aria-label="Rows per page"
+            value={pagination.pageSize}
+            disabled={disabled}
+            onChange={(event) => onPageSizeChange(Number(event.target.value))}
+            className="bg-card h-9 w-32 font-medium tabular-nums"
+          >
+            {pageSizeOptions.map((size) => (
+              <option key={size} value={size}>
+                {size} / page
+              </option>
+            ))}
+          </NativeSelect>
         ) : null}
       </div>
     </nav>
