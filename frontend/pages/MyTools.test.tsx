@@ -9,8 +9,18 @@ const routerPost = vi.hoisted(() => vi.fn());
 
 vi.mock("@inertiajs/react", () => ({
   usePage: () => ({ props: pageProps.current, url: "/my-tools" }),
-  Link: ({ href, children }: { href: string; children: ReactNode }) => (
-    <a href={href}>{children}</a>
+  Link: ({
+    href,
+    children,
+    ...rest
+  }: {
+    href: string;
+    children: ReactNode;
+    "aria-label"?: string;
+  }) => (
+    <a href={href} {...rest}>
+      {children}
+    </a>
   ),
   Head: () => null,
   router: { post: routerPost },
@@ -43,6 +53,10 @@ function tool(overrides: Partial<AgentTool> = {}): AgentTool {
     complete: false,
     note: "",
     updatedAt: null,
+    haveIt: false,
+    haveItAt: null,
+    supportHref: "/support/it?tool=rpr",
+    training: null,
     ...overrides,
   };
 }
@@ -93,6 +107,19 @@ beforeEach(() => {
   setPage();
 });
 
+function withTools(tools: AgentTool[], extra: Partial<MyToolsPageProps> = {}) {
+  setPage({
+    groups: [
+      { code: "company", label: "Company tools", tools, ready: 0, total: tools.length },
+    ],
+    ...extra,
+  });
+}
+
+function card(name: string): HTMLElement {
+  return screen.getByRole("article", { name });
+}
+
 describe("MyTools", () => {
   it("lists each tool with what it is for", () => {
     render(<MyTools />);
@@ -102,14 +129,87 @@ describe("MyTools", () => {
     ).toBeVisible();
   });
 
-  it("opens the setup guide without leaving the page", async () => {
+  it("checks a tool off and posts only the agent's own mark", async () => {
     const user = userEvent.setup();
     render(<MyTools />);
 
-    // A dialog rather than an inline expand: a card that grows in place shoves
-    // every card after it down the grid, so opening one answer would cost the
-    // reader the position of every other.
-    await user.click(screen.getByRole("button", { name: /How to set it up/ }));
+    const box = screen.getByRole("checkbox", { name: "I have RPR" });
+    await user.click(box);
+
+    expect(routerPost).toHaveBeenCalledOnce();
+    expect(routerPost.mock.calls[0][0]).toBe("/my-tools/rpr/have");
+    expect(routerPost.mock.calls[0][1]).toEqual({ have: true });
+    // The tick lands before the server answers.
+    expect(box).toBeChecked();
+    expect(
+      screen.getByRole("progressbar", { name: "1 of 1 tools checked off" }),
+    ).toHaveAttribute("aria-valuenow", "1");
+  });
+
+  it("unticks a tool the agent had checked off", async () => {
+    const user = userEvent.setup();
+    withTools([tool({ haveIt: true, haveItAt: "2026-09-01T12:00:00Z" })]);
+    render(<MyTools />);
+
+    await user.click(screen.getByRole("checkbox", { name: "I have RPR" }));
+    expect(routerPost.mock.calls[0][1]).toEqual({ have: false });
+  });
+
+  it("clicking the tool name toggles the box", async () => {
+    const user = userEvent.setup();
+    render(<MyTools />);
+    await user.click(screen.getByText("RPR"));
+    expect(routerPost).toHaveBeenCalledOnce();
+  });
+
+  it("shows somebody else's checklist read-only, with when they ticked it", () => {
+    withTools([tool({ haveIt: true, haveItAt: "2026-09-03T12:00:00Z" })], {
+      agent: { id: 7, name: "Ada", office: null, isSelf: false },
+    });
+    render(<MyTools />);
+
+    const box = screen.getByRole("checkbox", { name: /checked off by agent/ });
+    expect(box).toBeDisabled();
+    expect(box).toBeChecked();
+    expect(within(card("RPR")).getByText(/Agent checked off/)).toBeVisible();
+  });
+
+  it("links the tool's training when one is linked", () => {
+    withTools([
+      tool({
+        training: {
+          href: "/training/12",
+          title: "Getting started with RPR",
+          minutes: 6,
+          completed: false,
+          inProgress: false,
+        },
+      }),
+    ]);
+    render(<MyTools />);
+
+    const link = within(card("RPR")).getByRole("link", { name: /Training for RPR/ });
+    expect(link).toHaveAttribute("href", "/training/12");
+    expect(within(link).getByText("6 min")).toBeVisible();
+  });
+
+  it("offers no training button when nothing is linked", () => {
+    render(<MyTools />);
+    expect(within(card("RPR")).queryByRole("link", { name: /Training/ })).toBeNull();
+  });
+
+  it("sends Support straight to help for that tool", () => {
+    render(<MyTools />);
+    expect(
+      within(card("RPR")).getByRole("link", { name: "Get support with RPR" }),
+    ).toHaveAttribute("href", "/support/it?tool=rpr");
+  });
+
+  it("opens the setup steps without leaving the page", async () => {
+    const user = userEvent.setup();
+    render(<MyTools />);
+
+    await user.click(screen.getByRole("button", { name: "Setup steps for RPR" }));
 
     const guide = await screen.findByRole("dialog");
     expect(
@@ -118,77 +218,92 @@ describe("MyTools", () => {
     expect(within(guide).getByText(/Your branch admin/)).toBeVisible();
   });
 
-  it("says who to ask for a tool oNEST provisions", async () => {
-    const user = userEvent.setup();
-    setPage({
-      groups: [
-        {
-          code: "company",
-          label: "Company tools",
-          tools: [
-            tool({
-              slug: "lofty",
-              name: "Lofty",
-              provisioning: "onest",
-              provisioningLabel: "oNEST sets this up for you",
-              selfServe: false,
-              steps: [],
-              contact: "IT support — we create the seat",
-            }),
-          ],
-          ready: 0,
-          total: 1,
-        },
-      ],
-    });
+  it("shows the agent why their own tool is blocked, on the card", () => {
+    withTools([
+      tool({
+        state: { code: "blocked", label: "Blocked", tone: "destructive" },
+        note: "Waiting on the association for the NRDS number.",
+      }),
+    ]);
     render(<MyTools />);
-
-    await user.click(screen.getByRole("button", { name: /How to set it up/ }));
-
-    const guide = await screen.findByRole("dialog");
-    expect(within(guide).getByText(/IT support — we create the seat/)).toBeVisible();
-    // No empty numbered list where there are no steps.
-    expect(within(guide).queryByRole("list")).toBeNull();
-  });
-
-  it("shows the agent why their own tool is blocked", async () => {
-    const user = userEvent.setup();
-    setPage({
-      groups: [
-        {
-          code: "company",
-          label: "Company tools",
-          tools: [
-            tool({
-              state: { code: "blocked", label: "Blocked", tone: "destructive" },
-              note: "Waiting on the association for the NRDS number.",
-            }),
-          ],
-          ready: 0,
-          total: 1,
-        },
-      ],
-    });
-    render(<MyTools />);
-
-    await user.click(screen.getByRole("button", { name: /How to set it up/ }));
-
-    // The reason is about them, so they see it — only the control that changes
-    // it is staff-only. It leads the dialog, because it is why they opened it.
-    const guide = await screen.findByRole("dialog");
     expect(
-      within(guide).getByText("Waiting on the association for the NRDS number."),
+      within(card("RPR")).getByText("Waiting on the association for the NRDS number."),
     ).toBeVisible();
+    expect(within(card("RPR")).getByText("Blocked")).toBeVisible();
   });
 
-  it("does not offer the state control to somebody who may not manage", async () => {
-    const user = userEvent.setup();
+  it("keeps what oNEST confirmed apart from the agent's tick", () => {
+    withTools([
+      tool({ slug: "rpr", name: "RPR" }),
+      tool({ slug: "lofty", name: "Lofty", selfServe: false, provisioning: "onest" }),
+      tool({
+        slug: "skyslope",
+        name: "SkySlope",
+        selfServe: false,
+        complete: true,
+        state: { code: "ready", label: "Ready", tone: "success" },
+      }),
+    ]);
     render(<MyTools />);
-    await user.click(screen.getByText("RPR"));
-    expect(screen.queryByLabelText("Mark as")).toBeNull();
+
+    // A self-serve tool nobody has touched has nothing to say beyond the box.
+    expect(within(card("RPR")).queryByText(/oNEST|office/)).toBeNull();
+    expect(within(card("Lofty")).getByText("Waiting on your office")).toBeVisible();
+    expect(within(card("SkySlope")).getByText("Confirmed by oNEST")).toBeVisible();
+    // Confirmation is not a tick: the agent still has checked off nothing.
+    expect(screen.getByRole("checkbox", { name: "I have SkySlope" })).not.toBeChecked();
   });
 
-  it("offers the state control to a manager and posts the change", async () => {
+  it("leaves optional and excused tools out of the count", () => {
+    withTools([
+      tool({ slug: "rpr", name: "RPR", haveIt: true }),
+      tool({ slug: "facebook", name: "Facebook", required: false }),
+      tool({
+        slug: "smartmls",
+        name: "SmartMLS",
+        state: { code: "not_applicable", label: "Not needed", tone: "neutral" },
+      }),
+    ]);
+    render(<MyTools />);
+
+    expect(within(card("Facebook")).getByText("Optional")).toBeVisible();
+    expect(screen.getByRole("checkbox", { name: "I have SmartMLS" })).toBeDisabled();
+    expect(screen.getByText("You have every tool you need")).toBeVisible();
+  });
+
+  it("counts each group separately", () => {
+    setPage({
+      groups: [
+        {
+          code: "company",
+          label: "Company tools",
+          tools: [tool({ haveIt: true })],
+          ready: 0,
+          total: 1,
+        },
+        {
+          code: "association",
+          label: "Association & MLS",
+          tools: [tool({ slug: "smartmls", name: "SmartMLS" })],
+          ready: 0,
+          total: 1,
+        },
+      ],
+    });
+    render(<MyTools />);
+
+    const company = screen.getByRole("region", { name: "Company tools" });
+    const mls = screen.getByRole("region", { name: "Association & MLS" });
+    expect(within(company).getByText("1 of 1 checked off")).toBeVisible();
+    expect(within(mls).getByText("0 of 1 checked off")).toBeVisible();
+  });
+
+  it("does not offer the status control to somebody who may not manage", () => {
+    render(<MyTools />);
+    expect(screen.queryByLabelText("oNEST status")).toBeNull();
+  });
+
+  it("offers the status control to a manager and posts the change", async () => {
     const user = userEvent.setup();
     setPage({
       canManage: true,
@@ -196,144 +311,66 @@ describe("MyTools", () => {
     });
     render(<MyTools />);
 
-    await user.click(screen.getByText("RPR"));
-    await user.selectOptions(screen.getByLabelText("Mark as"), "ready");
+    await user.selectOptions(screen.getByLabelText("oNEST status"), "ready");
 
     expect(routerPost).toHaveBeenCalledOnce();
     expect(routerPost.mock.calls[0][0]).toBe("/operations/tool-readiness/7/state");
     expect(routerPost.mock.calls[0][1]).toMatchObject({ tool: "rpr", state: "ready" });
   });
 
-  it("marks an optional tool in words so the count reads honestly", () => {
-    setPage({
-      groups: [
-        {
-          code: "marketing",
-          label: "Profiles & marketing",
-          tools: [tool({ slug: "facebook", name: "Facebook", required: false })],
-          // Optional tools are excluded from the denominator, which would look
-          // like a bug without the label.
-          ready: 0,
-          total: 0,
-        },
-      ],
-    });
-    render(<MyTools />);
-    expect(screen.getByText("Optional")).toBeVisible();
-  });
-
-  it("reports readiness as a labelled progress bar", () => {
-    setPage({ readiness: { ready: 5, total: 21, percent: 24, complete: false } });
-    render(<MyTools />);
-
-    const bar = screen.getByRole("progressbar", { name: /5 of 21/ });
-    expect(bar).toHaveAttribute("aria-valuenow", "24");
-    expect(screen.getByText("24%")).toBeVisible();
-  });
-
-  it("says so plainly when everything is set up", () => {
-    setPage({ readiness: { ready: 4, total: 4, percent: 100, complete: true } });
-    render(<MyTools />);
-    expect(screen.getByText("Everything is set up")).toBeVisible();
-  });
-
-  it("counts each group separately so a reader can see which shelf is behind", () => {
-    setPage({
-      groups: [
-        {
-          code: "company",
-          label: "Company tools",
-          tools: [tool()],
-          ready: 3,
-          total: 9,
-        },
-        {
-          code: "association",
-          label: "Association & MLS",
-          tools: [tool({ slug: "smartmls", name: "SmartMLS" })],
-          ready: 0,
-          total: 7,
-        },
-      ],
+  it("lets a manager confirm a tool the agent ticked in one click", async () => {
+    const user = userEvent.setup();
+    withTools([tool({ haveIt: true, haveItAt: "2026-09-03T12:00:00Z" })], {
+      canManage: true,
+      agent: { id: 7, name: "Ada", office: null, isSelf: false },
     });
     render(<MyTools />);
 
-    expect(screen.getByText("Company tools")).toBeVisible();
-    expect(screen.getByText("3 of 9 ready")).toBeVisible();
-    expect(screen.getByText("Association & MLS")).toBeVisible();
-    expect(screen.getByText("0 of 7 ready")).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Confirm ready" }));
+
+    expect(routerPost.mock.calls[0][0]).toBe("/operations/tool-readiness/7/state");
+    expect(routerPost.mock.calls[0][1]).toEqual({ tool: "rpr", state: "ready" });
   });
 
-  it("names what the accent means, so it reads as a filter not decoration", () => {
-    setPage({
-      readiness: { ready: 1, total: 4, percent: 25, complete: false },
-      groups: [
-        {
-          code: "company",
-          label: "Company tools",
-          tools: [
-            tool({ slug: "rpr", selfServe: true }),
-            tool({ slug: "onedrive", selfServe: true }),
-            tool({ slug: "lofty", selfServe: false }),
-            tool({ slug: "skyslope", selfServe: false, complete: true }),
-          ],
-          ready: 1,
-          total: 4,
-        },
-      ],
+  it("offers no confirm button until the agent has ticked", () => {
+    withTools([tool()], {
+      canManage: true,
+      agent: { id: 7, name: "Ada", office: null, isSelf: false },
     });
     render(<MyTools />);
-
-    expect(screen.getByText("2 you can set up now")).toBeVisible();
-    // The finished tool is excluded: whose move it was is moot once it is done.
-    expect(screen.getByText("1 waiting on oNEST")).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Confirm ready" })).toBeNull();
   });
 
-  it("drops the split once everything is set up", () => {
-    setPage({ readiness: { ready: 4, total: 4, percent: 100, complete: true } });
-    render(<MyTools />);
-    expect(screen.queryByText(/you can set up now/)).toBeNull();
-  });
-
-  it("marks your move with a glyph, not a tint", () => {
+  it("explains an empty checklist instead of showing nothing", () => {
     setPage({
-      groups: [
-        {
-          code: "company",
-          label: "Company tools",
-          tools: [
-            tool({ slug: "rpr", name: "RPR", selfServe: true }),
-            tool({
-              slug: "onedrive",
-              name: "OneDrive",
-              selfServe: true,
-              complete: true,
-              state: { code: "ready", label: "Ready", tone: "success" },
-            }),
-          ],
-          ready: 1,
-          total: 2,
-        },
-      ],
+      groups: [],
+      readiness: { ready: 0, total: 0, percent: 100, complete: true },
     });
     render(<MyTools />);
-
-    // Most of this catalog is self-serve, so tinting "your move" lit up two
-    // thirds of the page. The accent stays in the header count where it is
-    // rare; the cards carry the distinction as a glyph instead.
-    const outstanding = screen.getByText("RPR").closest("article");
-    const done = screen.getByText("OneDrive").closest("article");
-
-    expect(
-      within(outstanding as HTMLElement).getByText("You set this up"),
-    ).toBeVisible();
-    expect(within(done as HTMLElement).getByText("You set this up")).toBeVisible();
-    // No card-level accent competing with the state marks.
-    expect((outstanding as HTMLElement).querySelectorAll(".text-info").length).toBe(0);
+    expect(screen.getByText("No tools to set up")).toBeVisible();
   });
 
   it("has no automated accessibility violations", async () => {
-    setPage({ canManage: true });
+    withTools(
+      [
+        tool({
+          training: {
+            href: "/training/12",
+            title: "RPR basics",
+            minutes: 6,
+            completed: true,
+            inProgress: false,
+          },
+        }),
+        tool({
+          slug: "lofty",
+          name: "Lofty",
+          selfServe: false,
+          openUrl: "https://lofty.com",
+        }),
+      ],
+      { canManage: true },
+    );
     const { container } = render(<MyTools />);
     expect(await axe(container)).toHaveNoViolations();
   });

@@ -146,6 +146,18 @@ Branch and Regional Admins should hold it is an open product decision; see
 their own Office 365 "ready" tells nobody anything, and the figure would stop
 meaning "IT confirmed this works".
 
+### The agent's own mark
+
+`AgentToolStatus.agent_confirmed_at` is the agent ticking "I have this" on
+`/my-tools`. It is a **separate fact from `state`**, not a way round the rule
+above: the agent sets it, only on their own row, through
+`POST /my-tools/<slug>/have` (`services.set_agent_confirmation`), and only for a
+tool on their own resolved checklist — a slug for another office's MLS is a 404.
+It never moves `state`, `ready_at`, or the readiness figure, so "Ready" still
+means somebody at oNEST confirmed it. Staff see the tick beside the state on the
+per-agent page. Each change writes an `onboarding_tool.agent_confirmed` /
+`agent_unconfirmed` audit entry; a repeated tick is a no-op.
+
 ### Who may watch it
 
 `AgentToolStatus.objects.for_reader(user, access=…)` is the ordinary office-tree
@@ -187,10 +199,9 @@ branch manager runs onboarding for their branch, and deciding what every office
 in the brokerage needs is a different, wider decision. Holding one does not
 imply the other.
 
-Editing happens **in place** — a row opens into its own form rather than sending
-an administrator to a separate page and back. At two dozen rows across three
-shelves, keeping the list on screen is what makes "does this read right next to
-its neighbours" answerable while editing.
+Editing happens in a **side sheet** over the list rather than on a separate
+page, so "does this read right next to its neighbours" stays answerable while
+editing.
 
 ### The guide editor
 
@@ -217,6 +228,37 @@ should link to it instead.
 
 Every save and reorder writes an audit event.
 
+### Identifier and links
+
+- **The identifier is derived from the name** when left blank and **locked once
+  saved**: training items join on it through `tool_code`, and audit history
+  names it. The form disables the field on edit, so a posted change is ignored.
+- **`request_path` is an in-app path only** (`/…`, never `//host`,
+  `javascript:`, or another site). It renders as the Support link on every
+  agent's card, so it is validated rather than trusted.
+
+### What each row reads (`catalog_admin.py`)
+
+Bounded queries whatever the catalog size (a test pins that adding a tool adds
+none):
+
+- **Health** — `ToolHealth` gaps on active rows: `no_audience`, `no_training`
+  (no *published* item tagged with the slug), `no_open_link`. Only the first two
+  put a row on **Needs attention**; a missing open link is named on the row but
+  would otherwise flag nearly the whole catalog.
+- **Training** — per-tool counts across all non-archived items, plus up to three
+  items from the reader's own `manageable_queryset`, so an edit link never 404s.
+- **Adoption** — ready, blocked, and *ticked but not yet confirmed* counts from
+  `AgentToolStatus.for_reader`, i.e. only agents within the reader's reach. The
+  summary's "Agent ticks to confirm" links to the readiness queue; the per-agent
+  page offers **Confirm ready** on exactly those rows.
+
+Search (`q`) and status (`show`: all · attention · active · inactive) live in the
+URL. Reordering is offered only on the unfiltered list, because moving a row
+relative to neighbours the administrator cannot see is not a decision they can
+make. The editor is a side sheet opened by `?edit=<slug>` / `?edit=new`, posted
+through Inertia with the page's validation contract.
+
 ## Surface
 
 | Route | Who | What |
@@ -231,27 +273,27 @@ Every save and reorder writes an audit event.
 looking at their own rows, because self-attestation would make the figure
 meaningless.
 
-### Why rows and not cards
+### Layout
 
-The live system this replaces draws the catalog as a grid of bordered cards with
-status chips. Two dozen same-sized boxes float independently, so the eye compares
-their *edges* rather than reading them, and DESIGN.md's Rule Before The Box calls
-that out by name. Ruled rows put every state mark on one left edge, which is the
-column a reader actually scans to find what is left.
+Cards in container-query columns, grouped by shelf, with the checkbox leading
+each card because checking off is the page's job. A ruled summary strip above
+them fills one segment per counted tool (required and not excused), in catalog
+order, and keeps "Confirmed by oNEST" apart from the agent's own count.
 
-The **guide opens in place**, using `<details>`. It is the only reason this page
-beats a spreadsheet, so it must not sit behind a navigation — and the native
-element carries its own keyboard and screen-reader behaviour rather than a
-hand-rolled disclosure that forgets half of it.
+### Card actions
 
-### Activation guides
+Each card on `/my-tools` carries the agent's tick plus three ways to get
+unstuck:
 
-`invitation_sent_at` is what the dashboard's Next steps reads to unlock a tool's
-"Watch how to activate X" — each row on its own timestamp, never on another
-tool's. That is the reason the lifecycle stores invitation provenance as columns
-rather than as a note. The guide itself is a published training item tagged with
-this tool's slug; `help_url` and `request_path` are the fallback when no guide
-reaches the agent. See `docs/onboarding-operations.md` for the state table.
+- **Training** — the tool's current activation guide from
+  `training.tool_guides.activation_guides_for`, resolved once for the whole
+  checklist and for the *reader*, so the button never links to an item they
+  cannot open. No offerable guide, no button.
+- **Support** — the row's `request_path` when an administrator set one,
+  otherwise `/support/it?tool=<slug>`, which opens the IT form with the subject
+  and category filled in. Only a live catalog slug is honoured and only the
+  tool's own name is written into the draft.
+- **Setup** — the steps and contact, in a dialog.
 
 A blocked row shows its note **to the agent**, not only to staff: the reason you
 are stuck is the one thing you most need. Only the control that changes the state

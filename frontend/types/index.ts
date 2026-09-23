@@ -770,6 +770,22 @@ export interface AgentTool {
   complete: boolean;
   note: string;
   updatedAt: string | null;
+  /** The agent's own "I have this". Separate from `state`, which is what
+   *  oNEST confirmed and what readiness counts. */
+  haveIt: boolean;
+  haveItAt: string | null;
+  /** The tool's own request path, or IT support opened about this tool. */
+  supportHref: string;
+  /** The training item linked to this tool, when the reader may open one. */
+  training: AgentToolTraining | null;
+}
+
+export interface AgentToolTraining {
+  href: string;
+  title: string;
+  minutes: number | null;
+  completed: boolean;
+  inProgress: boolean;
 }
 
 /** Grouped server-side so the order, counts, and empty groups are the same
@@ -824,18 +840,49 @@ export interface CatalogTool {
    *  who actually gets the tool. */
   appliesTo: string;
   officeIds: number[];
+  /** Each audience row with its full path, so "Branford" reads as
+   *  "Northeast / Connecticut / Branford". */
+  audience: { id: number; name: string; path: string; active: boolean }[];
   required: boolean;
   active: boolean;
   sortOrder: number;
+  /** Gaps that make the row worse for agents, worst first. */
+  health: { code: "no_audience" | "no_training" | "no_open_link"; label: string }[];
+  /** Tagged training: counts cover every item, `items` only those this reader
+   *  may open in the training workspace. */
+  training: {
+    published: number;
+    draft: number;
+    items: { id: number; title: string; published: boolean; href: string }[];
+    more: number;
+  };
+  /** Agents within this reader's reach, never beyond it. */
+  adoption: { ready: number; blocked: number; awaiting: number };
+}
+
+export interface CatalogOffice extends FilterOption {
+  path: string;
+  kind: string;
 }
 
 export interface OnboardingToolCatalogPageProps extends PageProps {
   groups: { code: string; label: string; tools: CatalogTool[] }[];
-  offices: FilterOption[];
+  summary: {
+    active: number;
+    inactive: number;
+    attention: number;
+    trained: number;
+    awaiting: number;
+  };
+  filters: { q: string; show: "all" | "attention" | "active" | "inactive" };
+  canReorder: boolean;
+  offices: CatalogOffice[];
   options: {
     groups: FilterOption[];
     provisioning: FilterOption[];
+    show: FilterOption[];
   };
+  links: { teamReadiness: string; trainingAdmin: string };
   maxSteps: number;
   /** Which row's editor is open — a slug, "new", or "". */
   editing: string;
@@ -1954,6 +2001,11 @@ export interface DirectoryRow {
   startDate?: string | null;
   /** Needs `web.view_agent_contracts`. */
   contract?: DirectoryStateBadge & { available: boolean };
+  /** Live role labels (active or scheduled), in catalog order. */
+  roles: string[];
+  /** Present only when this reader may disable or reactivate this account
+   *  from the list; carries the freshness token the write checks. */
+  account?: { version: string };
 }
 
 export interface DirectoryFilters {
@@ -1997,6 +2049,10 @@ export interface UserDirectoryPageProps extends PageProps {
   visible: { administration: boolean; contract: boolean; onboarding: boolean };
   /** Whether rows may link into the administrative record. */
   canOpenRecord: boolean;
+  /** Rows-per-page sizes the server accepts. */
+  pageSizeOptions: number[];
+  /** A refused lockout started from a row comes back here. */
+  errors: ValidationErrors;
 }
 
 // ---------------------------------------------------------------------------

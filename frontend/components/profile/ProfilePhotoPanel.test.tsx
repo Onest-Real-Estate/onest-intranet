@@ -32,6 +32,11 @@ function panel(headshotUrl: string | null = null) {
   );
 }
 
+/** The uploader lives in a dialog behind the camera button on the avatar. */
+async function openPhotoDialog(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole("button", { name: /(add|change) profile photo/i }));
+}
+
 function jsonResponse(body: unknown, ok = true, status = 200) {
   return {
     ok,
@@ -50,10 +55,12 @@ afterEach(() => {
 });
 
 describe("ProfilePhotoPanel", () => {
-  it("states the server's constraints and falls back to initials", () => {
+  it("states the server's constraints and falls back to initials", async () => {
+    const user = userEvent.setup();
     render(panel());
     expect(screen.getByText("Bobby Lee")).toBeInTheDocument();
-    expect(screen.getByText("No photo yet")).toBeInTheDocument();
+    expect(screen.getByText(/No photo yet/)).toBeInTheDocument();
+    await openPhotoDialog(user);
     expect(
       screen.getByText("JPEG or PNG · at least 200×200 px · max 5 MB"),
     ).toBeInTheDocument();
@@ -68,6 +75,7 @@ describe("ProfilePhotoPanel", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     render(panel());
+    await openPhotoDialog(user);
     await user.upload(screen.getByLabelText(/choose file/i), pngFile());
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -103,6 +111,7 @@ describe("ProfilePhotoPanel", () => {
     );
 
     render(panel());
+    await openPhotoDialog(user);
     await user.upload(screen.getByLabelText(/choose file/i), pngFile());
 
     const alert = await screen.findByRole("alert");
@@ -116,6 +125,7 @@ describe("ProfilePhotoPanel", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     render(panel());
+    await openPhotoDialog(user);
     await user.upload(
       screen.getByLabelText(/choose file/i),
       new File([new ArrayBuffer(limits.headshotMaxBytes + 1)], "huge.png", {
@@ -136,12 +146,13 @@ describe("ProfilePhotoPanel", () => {
 
     render(panel("/media/headshots/old.png"));
     expect(screen.getByText("Photo on file")).toBeInTheDocument();
+    await openPhotoDialog(user);
     await user.click(screen.getByRole("button", { name: /remove photo/i }));
 
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe("/account/headshot");
     expect((init.body as FormData).get("remove")).toBe("1");
-    expect(await screen.findByText("No photo yet")).toBeInTheDocument();
+    expect(await screen.findByText(/No photo yet/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /remove photo/i })).toBeNull();
   });
 
@@ -150,6 +161,7 @@ describe("ProfilePhotoPanel", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({}, false, 500)));
 
     render(panel("/media/headshots/old.png"));
+    await openPhotoDialog(user);
     await user.click(screen.getByRole("button", { name: /remove photo/i }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(

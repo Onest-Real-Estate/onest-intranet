@@ -20,6 +20,7 @@ from .views.auth_views import (
     profile,
     profile_submit,
 )
+from .views.directory_views import people_hub
 from .views.office_administration_views import (
     office_administration_contact,
     office_administration_contact_end,
@@ -66,6 +67,8 @@ from .views.role_assignment_views import (
 )
 
 urlpatterns = [
+    # One navigation entry for Users, Roles & permissions, and New agents.
+    path("operations/people", people_hub, name="admin_people"),
     path("", login_page, name="login"),
     path("login", RedirectView.as_view(pattern_name="login", query_string=True)),
     path("logout", logout, name="logout"),

@@ -321,3 +321,239 @@ def test_a_refused_save_re_renders_with_the_row_still_open(seeded, client):
     assert "contact_label" in props["errors"]["fields"]
     # …and the draft comes back, so nothing typed is lost.
     assert props["draft"]["name"] == "Follow Up Boss"
+
+
+# --------------------------------------------------------------------------- #
+# Identifier and links
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.django_db
+def test_a_new_tool_takes_its_identifier_from_the_name(seeded):
+    form = build(catalog_admin(), slug="", name="Follow Up Boss!")
+    assert form.is_valid(), form.errors
+    assert form.cleaned_data["slug"] == "follow-up-boss"
+
+
+@pytest.mark.django_db
+def test_an_identifier_already_in_use_is_refused_by_field(seeded):
+    form = build(catalog_admin(), slug="", name="SmartMLS")
+    assert not form.is_valid()
+    assert "slug" in form.errors
+
+
+@pytest.mark.django_db
+def test_a_saved_tool_keeps_its_identifier(seeded):
+    """Training and audit join on it; a posted change is ignored, not applied."""
+    admin = catalog_admin()
+    existing = tool("rpr")
+    form = build(
+        admin,
+        instance=existing,
+        slug="renamed",
+        name=existing.name,
+        contact_label="Branch admin",
+    )
+    assert form.is_valid(), form.errors
+    saved = services.save_tool(actor=admin, form=form, instance=existing)
+    assert saved.slug == "rpr"
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "path",
+    ["javascript:alert(1)", "https://evil.example", "//evil.example", "support/it"],
+)
+def test_a_support_link_must_stay_inside_the_hub(seeded, path):
+    form = build(catalog_admin(), request_path=path)
+    assert not form.is_valid()
+    assert "request_path" in form.errors
+
+
+@pytest.mark.django_db
+def test_an_in_app_support_link_is_kept(seeded):
+    form = build(catalog_admin(), request_path="/support/it?category=software")
+    assert form.is_valid(), form.errors
+    assert form.cleaned_data["request_path"] == "/support/it?category=software"
+
+
+@pytest.mark.django_db
+def test_the_editor_saves_over_inertia_json(seeded, client):
+    """Inertia posts JSON; booleans arrive as "1"/"false" through the
+    middleware, and lists as repeated values."""
+    import json
+
+    client.force_login(catalog_admin())
+    response = client.post(
+        reverse("onboarding_tool_create"),
+        data=json.dumps(
+            {
+                **form_data(slug="", company_wide=False, is_required=False),
+                "offices": [str(office("fairfax-va").pk)],
+                "step": ["Sign up.", "Tell your branch admin."],
+            }
+        ),
+        content_type="application/json",
+    )
+
+    assert response.status_code == 302
+    created = OnboardingTool.objects.get(slug="follow-up-boss")
+    assert created.company_wide is False
+    assert created.is_required is False
+    assert created.setup_steps == ["Sign up.", "Tell your branch admin."]
+    assert list(created.office_audiences.values_list("office__slug", flat=True)) == [
+        "fairfax-va"
+    ]
+
+
+# --------------------------------------------------------------------------- #
+# What the list reads
+# --------------------------------------------------------------------------- #
+
+
+def catalog_props(client, **params) -> dict:
+    import json
+
+    response = client.get(
+        reverse("onboarding_tool_catalog"), params, HTTP_X_INERTIA="true"
+    )
+    assert response.status_code == 200
+    return json.loads(response.content)["props"]
+
+
+def catalog_row(props: dict, slug: str) -> dict:
+    return next(
+        row
+        for group in props["groups"]
+        for row in group["tools"]
+        if row["slug"] == slug
+    )
+
+
+@pytest.mark.django_db
+def test_each_row_names_its_gaps(seeded, client):
+    rpr = tool("rpr")
+    rpr.open_url = ""
+    rpr.save(update_fields=["open_url"])
+    client.force_login(catalog_admin())
+
+    row = catalog_row(catalog_props(client), "rpr")
+
+    codes = {issue["code"] for issue in row["health"]}
+    assert {"no_training", "no_open_link"} <= codes
+    assert row["training"]["published"] == 0
+
+
+@pytest.mark.django_db
+def test_a_retired_tool_has_no_gaps_to_close(seeded, client):
+    rpr = tool("rpr")
+    rpr.is_active = False
+    rpr.save(update_fields=["is_active"])
+    client.force_login(catalog_admin())
+
+    props = catalog_props(client)
+
+    assert catalog_row(props, "rpr")["health"] == []
+    assert props["summary"]["inactive"] == 1
+
+
+@pytest.mark.django_db
+def test_the_audience_carries_its_full_path(seeded, client):
+    client.force_login(catalog_admin())
+    row = catalog_row(catalog_props(client), "smartmls")
+    assert row["audience"][0]["name"] == "Connecticut"
+    assert row["audience"][0]["path"].endswith("Connecticut")
+    assert " / " in row["audience"][0]["path"]
+
+
+@pytest.mark.django_db
+def test_adoption_counts_ready_blocked_and_ticks_waiting_on_a_check(seeded, client):
+    from apps.onboarding_tools.models import ToolState
+    from apps.onboarding_tools.tests.test_catalog import manager
+
+    staff = manager("ops@example.com")
+    ready, blocked, ticked = (person(f"agent{i}@example.com") for i in range(3))
+    services.set_state(
+        actor=staff, agent=ready, tool=tool("rpr"), state=ToolState.READY
+    )
+    services.set_state(
+        actor=staff, agent=blocked, tool=tool("rpr"), state=ToolState.BLOCKED
+    )
+    services.set_agent_confirmation(agent=ticked, slug="rpr", confirmed=True)
+    client.force_login(catalog_admin())
+
+    props = catalog_props(client)
+
+    assert catalog_row(props, "rpr")["adoption"] == {
+        "ready": 1,
+        "blocked": 1,
+        "awaiting": 1,
+    }
+    assert props["summary"]["awaiting"] == 1
+
+
+@pytest.mark.django_db
+def test_adoption_stays_inside_the_readers_reach(seeded, client):
+    """A branch-scoped catalog editor must not learn another branch's figures."""
+    from apps.onboarding_tools.models import ToolState
+    from apps.onboarding_tools.tests.test_catalog import manager
+
+    services.set_state(
+        actor=manager("ops@example.com"),
+        agent=person("elsewhere@example.com", "onest-head-office"),
+        tool=tool("rpr"),
+        state=ToolState.READY,
+    )
+    editor = person("branch@example.com", "fairfax-va")
+    assign_role(editor, "branch_manager", "office", office("fairfax-va"))
+    client.force_login(grant(editor, "manage_onboarding_tools"))
+
+    assert catalog_row(catalog_props(client), "rpr")["adoption"]["ready"] == 0
+
+
+@pytest.mark.django_db
+def test_search_and_filters_narrow_the_list_and_stop_reordering(seeded, client):
+    client.force_login(catalog_admin())
+
+    props = catalog_props(client, q="smart", show="active")
+
+    slugs = [row["slug"] for group in props["groups"] for row in group["tools"]]
+    assert slugs == ["smartmls"]
+    assert props["filters"] == {"q": "smart", "show": "active"}
+    assert props["canReorder"] is False
+    # The summary still describes the whole catalog, not the narrowed view.
+    assert props["summary"]["active"] > 1
+
+
+@pytest.mark.django_db
+def test_an_unknown_filter_falls_back_to_everything(seeded, client):
+    client.force_login(catalog_admin())
+    props = catalog_props(client, show="nonsense")
+    assert props["filters"]["show"] == "all"
+    assert props["canReorder"] is True
+
+
+@pytest.mark.django_db
+def test_the_list_does_not_cost_a_query_per_tool(seeded, client):
+    from django.db import connection
+    from django.test.utils import CaptureQueriesContext
+
+    client.force_login(catalog_admin())
+    catalog_props(client)  # warm caches
+
+    with CaptureQueriesContext(connection) as queries:
+        catalog_props(client)
+    before = len(queries)
+
+    OnboardingTool.objects.create(
+        slug="extra-tool",
+        name="Extra",
+        description="One more.",
+        group="company",
+        provisioning="onest",
+        contact_label="IT",
+        company_wide=True,
+    )
+    with CaptureQueriesContext(connection) as queries:
+        catalog_props(client)
+    assert len(queries) == before

@@ -193,3 +193,19 @@ onboarding is complete keeps full access at any score.
 A successful save writes `user.profile.updated` with a before/after diff over
 `services.profile.PROFILE_AUDIT_FIELDS`. Home address, phone, email, and the photo are
 excluded, and `apps.audit.service.redact` would strip them regardless.
+
+## Page layout
+
+`/profile` is a settings page: a summary card (photo, name, email, role,
+office, completeness), a callout naming what is still missing with a button
+that jumps to it, and three in-page tabs — **Personal** (contact, address),
+**Professional** (office and credentials, biography, links), and **Account**
+(the read-only identity and brokerage record). The open tab is kept in the URL
+hash so a link or refresh lands on it.
+
+The tabs are presentation only. Every editable field stays mounted inside the
+one form (inactive panels use the `hidden` attribute), so **Save** still posts
+the complete allowlist as one Inertia visit and a 422 re-renders with
+everything typed intact; the page then opens the tab holding the first error
+and shows a per-tab error count. The photo saves through its own endpoint from
+a dialog on the summary card, outside the form.

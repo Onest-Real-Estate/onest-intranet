@@ -47,6 +47,7 @@ from apps.it_support.taxonomy import (
     PRIORITY_BY_KEY,
     STATUS_CODES,
     ContactMethod,
+    SupportCategory,
     SupportPermission,
 )
 from apps.user.models import Office, User
@@ -164,7 +165,25 @@ def it_support(request: HttpRequest):
     No permission gates this page: every authenticated person may report that
     the tool they are told to use is broken.
     """
-    return _submit_props(request)
+    return _submit_props(request, draft=_tool_draft(request))
+
+
+def _tool_draft(request: HttpRequest) -> dict[str, str] | None:
+    """Start the form about one catalog tool, when My Tools linked here.
+
+    Only a live catalog slug is honoured, and only the tool's own name is
+    written into the draft — never anything else from the query string, so
+    the link cannot be used to put arbitrary words in somebody's ticket.
+    """
+    from apps.onboarding_tools.models import OnboardingTool
+
+    slug = (request.GET.get("tool") or "").strip()[:60]
+    if not slug:
+        return None
+    tool = OnboardingTool.objects.live().filter(slug=slug).only("name").first()
+    if tool is None:
+        return None
+    return {"subject": f"Help with {tool.name}", "category": SupportCategory.SOFTWARE}
 
 
 @enforce_policy("it_support_submit")

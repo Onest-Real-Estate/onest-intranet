@@ -95,6 +95,8 @@ class ToolProgress:
     note: str
     updated_at: Any
     invitation_sent_at: Any = None
+    #: The agent's own "I have this". Never counted toward readiness.
+    agent_confirmed_at: Any = None
 
     @property
     def is_complete(self) -> bool:
@@ -136,7 +138,12 @@ def checklist_for(agent) -> list[ToolProgress]:
     states = {
         row.tool_id: row
         for row in AgentToolStatus.objects.filter(agent=agent, tool__in=tools).only(
-            "tool_id", "state", "note", "updated_at", "invitation_sent_at"
+            "tool_id",
+            "state",
+            "note",
+            "updated_at",
+            "invitation_sent_at",
+            "agent_confirmed_at",
         )
     }
     progress: list[ToolProgress] = []
@@ -149,6 +156,7 @@ def checklist_for(agent) -> list[ToolProgress]:
                 note=row.note if row else "",
                 updated_at=row.updated_at if row else None,
                 invitation_sent_at=row.invitation_sent_at if row else None,
+                agent_confirmed_at=row.agent_confirmed_at if row else None,
             )
         )
     return progress
@@ -667,6 +675,49 @@ def set_state(*, actor, agent, tool: OnboardingTool, state: str, note: str = "")
         },
     )
     _publish_state_change(actor=actor, agent=agent, tool=tool, before=before, row=row)
+    return row
+
+
+@transaction.atomic
+def set_agent_confirmation(*, agent, slug: str, confirmed: bool) -> AgentToolStatus:
+    """Record or withdraw the agent's own "I have this" on one tool.
+
+    Only ever the signed-in agent's own row: there is no ``actor`` because the
+    agent *is* the actor, and nobody may claim a tool on somebody else's
+    behalf. The tool is resolved against the agent's applicable catalog, so a
+    slug for another office's MLS is refused rather than silently recorded.
+
+    ``state`` is deliberately untouched. Readiness still means "somebody at
+    oNEST confirmed this", which is why self-management stays refused there.
+    """
+    tool = (
+        OnboardingTool.objects.for_office(getattr(agent, "office", None))
+        .filter(slug=slug)
+        .first()
+    )
+    if tool is None:
+        raise ValidationError({"tool": ["That tool is not on your checklist."]})
+
+    row, _created = AgentToolStatus.objects.select_for_update(
+        of=("self",)
+    ).get_or_create(agent=agent, tool=tool)
+    if bool(row.agent_confirmed_at) == confirmed:
+        # Idempotent: a double-clicked box is not two events.
+        return row
+
+    before = row.agent_confirmed_at
+    row.agent_confirmed_at = timezone.now() if confirmed else None
+    row.save(update_fields=["agent_confirmed_at"])
+    log_on_commit(
+        action="onboarding_tool.agent_confirmed"
+        if confirmed
+        else "onboarding_tool.agent_unconfirmed",
+        actor=actor_from_user(agent),
+        target=target_from_instance(row, label=f"{agent} / {tool.name}"),
+        before={"agentConfirmed": before is not None},
+        after={"agentConfirmed": confirmed},
+        metadata={"agent_id": agent.pk, "tool": tool.slug},
+    )
     return row
 
 

@@ -7,7 +7,11 @@ builder that could decide visibility would be a second authorization path.
 
 from __future__ import annotations
 
-from typing import Any
+from collections.abc import Mapping
+from typing import TYPE_CHECKING, Any
+from urllib.parse import urlencode
+
+from django.urls import reverse
 
 from apps.onboarding_tools.models import (
     COMPLETE_STATES,
@@ -18,6 +22,9 @@ from apps.onboarding_tools.models import (
     invitation_presentation,
 )
 from apps.onboarding_tools.services import Readiness, ToolProgress
+
+if TYPE_CHECKING:
+    from apps.training.tool_guides import ActivationGuide
 
 #: State → chip tone. Presentation lives here rather than on the model so a
 #: design change never becomes a data migration.
@@ -34,7 +41,37 @@ GROUP_LABELS: dict[str, str] = dict(ToolGroup.choices)
 PROVISIONING_LABELS: dict[str, str] = dict(Provisioning.choices)
 
 
-def tool_payload(item: ToolProgress) -> dict[str, Any]:
+def support_href(tool: OnboardingTool) -> str:
+    """Where "Support" goes for this tool.
+
+    A catalog row may name its own request path; otherwise the IT support form
+    opens already about this tool, so the agent does not retype its name.
+    """
+    if tool.request_path:
+        return tool.request_path
+    return f"{reverse('it_support')}?{urlencode({'tool': tool.slug})}"
+
+
+def training_payload(guide: ActivationGuide | None) -> dict[str, Any] | None:
+    """The one training item linked to a tool, or nothing.
+
+    Narrow on purpose: the typed route opens the item under the training
+    surface's own permission check, so no media URL or audience travels here.
+    """
+    if guide is None:
+        return None
+    return {
+        "href": guide.href,
+        "title": guide.title,
+        "minutes": guide.estimated_minutes,
+        "completed": guide.completed,
+        "inProgress": guide.in_progress,
+    }
+
+
+def tool_payload(
+    item: ToolProgress, guide: ActivationGuide | None = None
+) -> dict[str, Any]:
     tool: OnboardingTool = item.tool
     return {
         "slug": tool.slug,
@@ -71,6 +108,13 @@ def tool_payload(item: ToolProgress) -> dict[str, Any]:
             ),
         },
         "updatedAt": item.updated_at.isoformat() if item.updated_at else None,
+        # The agent's own claim, separate from ``state`` (what oNEST confirmed).
+        "haveIt": item.agent_confirmed_at is not None,
+        "haveItAt": (
+            item.agent_confirmed_at.isoformat() if item.agent_confirmed_at else None
+        ),
+        "supportHref": support_href(tool),
+        "training": training_payload(guide),
     }
 
 
@@ -83,7 +127,10 @@ def readiness_payload(readiness: Readiness) -> dict[str, Any]:
     }
 
 
-def grouped_payload(items: list[ToolProgress]) -> list[dict[str, Any]]:
+def grouped_payload(
+    items: list[ToolProgress],
+    guides: Mapping[str, ActivationGuide] | None = None,
+) -> list[dict[str, Any]]:
     """The catalog in its three shelves, each with its own count.
 
     Grouped **server-side** so the order, the counts, and the empty groups are
@@ -100,7 +147,10 @@ def grouped_payload(items: list[ToolProgress]) -> list[dict[str, Any]]:
             {
                 "code": code,
                 "label": str(label),
-                "tools": [tool_payload(item) for item in rows],
+                "tools": [
+                    tool_payload(item, (guides or {}).get(item.tool.slug))
+                    for item in rows
+                ],
                 "ready": sum(1 for item in required if item.state in COMPLETE_STATES),
                 "total": len(required),
             }

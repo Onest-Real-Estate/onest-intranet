@@ -33,6 +33,7 @@ from apps.onboarding_tools.payloads import (
     readiness_payload,
     state_options,
 )
+from apps.training.tool_guides import activation_guides_for
 from apps.user.models import User
 from apps.web.authorization import enforce_policy, scope_queryset_for_user_office
 from apps.web.capability import access_for
@@ -45,6 +46,10 @@ TEAM_PAGE = "TeamToolReadiness"
 def _agent_props(request: HttpRequest, agent: User, *, managed: bool) -> dict[str, Any]:
     checklist = services.checklist_for(agent)
     actor = cast(User, request.user)
+    # Guides are resolved for the *reader*: the button opens the item under the
+    # reader's own training visibility, so offering one they cannot open would
+    # be a dead link. Two bounded queries, whatever the catalog size.
+    guides = activation_guides_for(actor, [item.tool.slug for item in checklist])
     return {
         "agent": {
             "id": agent.pk,
@@ -52,7 +57,7 @@ def _agent_props(request: HttpRequest, agent: User, *, managed: bool) -> dict[st
             "office": agent.office.name if agent.office else None,
             "isSelf": agent.pk == actor.pk,
         },
-        "groups": grouped_payload(checklist),
+        "groups": grouped_payload(checklist, guides),
         "readiness": readiness_payload(services.readiness_for(agent)),
         # Whether *this* reader may move *this* agent's rows. Self-management is
         # refused, so an administrator opening their own page gets a read-only
@@ -69,6 +74,28 @@ def _agent_props(request: HttpRequest, agent: User, *, managed: bool) -> dict[st
 def my_tools(request: HttpRequest):
     """The signed-in agent's own checklist."""
     return _agent_props(request, cast(User, request.user), managed=False)
+
+
+@enforce_policy("my_tools")
+@require_POST
+def confirm_my_tool(request: HttpRequest, slug: str):
+    """The agent ticks, or unticks, "I have this" on their own checklist.
+
+    Self only, by construction: the row written is always the signed-in
+    user's, and nothing posted can name anybody else.
+    """
+    # ``"1"`` is what the JSON middleware makes of ``true``; ``"true"`` is a
+    # plain form post. Anything else, including a missing value, unticks.
+    confirmed = (request.POST.get("have") or "").strip().lower() in {"1", "true"}
+    try:
+        services.set_agent_confirmation(
+            agent=cast(User, request.user), slug=slug, confirmed=confirmed
+        )
+    except ValidationError:
+        # The slug is not on this agent's checklist. A 404 rather than a form
+        # error: nothing on the page could have produced it.
+        raise Http404("No tool matches that slug.") from None
+    return redirect(reverse("my_tools"))
 
 
 def _readable_agents(request: HttpRequest):
@@ -239,64 +266,36 @@ def _catalog_offices(request: HttpRequest):
 def _catalog_props(
     request: HttpRequest, *, errors=None, editing: str = "", draft=None
 ) -> dict[str, Any]:
+    from apps.onboarding_tools.catalog_admin import (
+        CatalogFilters,
+        CatalogShow,
+        catalog_rows,
+        office_paths,
+    )
     from apps.onboarding_tools.forms import MAX_STEPS
     from apps.onboarding_tools.models import Provisioning, ToolGroup
 
-    tools = (
-        OnboardingTool.objects.all()
-        .prefetch_related("office_audiences__office")
-        .order_by("group", "sort_order", "name")
-    )
-    groups: list[dict[str, Any]] = []
-    for code, label in ToolGroup.choices:
-        rows = [tool for tool in tools if tool.group == code]
-        groups.append(
-            {
-                "code": code,
-                "label": str(label),
-                "tools": [
-                    {
-                        "slug": tool.slug,
-                        "name": tool.name,
-                        "description": tool.description,
-                        "group": tool.group,
-                        "provisioning": tool.provisioning,
-                        "provisioningLabel": str(
-                            dict(Provisioning.choices).get(tool.provisioning, "")
-                        ),
-                        "openUrl": tool.open_url,
-                        "helpUrl": tool.help_url,
-                        "steps": [str(step) for step in (tool.setup_steps or [])],
-                        "contact": tool.contact_label,
-                        "requestPath": tool.request_path,
-                        "companyWide": tool.company_wide,
-                        # Named in words, because "not company-wide" tells an
-                        # administrator nothing about who actually gets it.
-                        "appliesTo": (
-                            "Everywhere"
-                            if tool.company_wide
-                            else ", ".join(
-                                row.office.name for row in tool.office_audiences.all()
-                            )
-                            or "Nobody yet"
-                        ),
-                        "officeIds": [
-                            row.office_id for row in tool.office_audiences.all()
-                        ],
-                        "required": tool.is_required,
-                        "active": tool.is_active,
-                        "sortOrder": tool.sort_order,
-                    }
-                    for tool in rows
-                ],
-            }
-        )
+    actor = cast(User, request.user)
+    filters = CatalogFilters.from_params(request.GET)
+    catalog = catalog_rows(actor, filters)
+    offices = list(_catalog_offices(request)[:500])
+    paths = office_paths(offices)
 
     return {
-        "groups": groups,
+        "groups": catalog["groups"],
+        "summary": catalog["summary"],
+        "filters": filters.payload(),
+        # Reordering a filtered list would move a row relative to neighbours
+        # the administrator cannot see, so the page offers it only unfiltered.
+        "canReorder": not filters.narrowed,
         "offices": [
-            {"value": str(office.pk), "label": office.name}
-            for office in _catalog_offices(request)[:200]
+            {
+                "value": str(office.pk),
+                "label": office.name,
+                "path": paths.get(office.pk, office.name),
+                "kind": office.kind,
+            }
+            for office in offices
         ],
         "options": {
             "groups": [
@@ -307,6 +306,16 @@ def _catalog_props(
                 {"value": code, "label": str(label)}
                 for code, label in Provisioning.choices
             ],
+            "show": [
+                {"value": CatalogShow.ALL.value, "label": "All tools"},
+                {"value": CatalogShow.ATTENTION.value, "label": "Needs attention"},
+                {"value": CatalogShow.ACTIVE.value, "label": "Active"},
+                {"value": CatalogShow.INACTIVE.value, "label": "Inactive"},
+            ],
+        },
+        "links": {
+            "teamReadiness": reverse("team_tool_readiness"),
+            "trainingAdmin": reverse("admin_training"),
         },
         "maxSteps": MAX_STEPS,
         # Which row's editor is open, and what it should be filled with. Both
@@ -324,6 +333,11 @@ def tool_catalog(request: HttpRequest):
     return _catalog_props(request, editing=(request.GET.get("edit") or "").strip())
 
 
+def _checked(request: HttpRequest, name: str) -> bool:
+    """A box as a browser form (``on``) or the JSON middleware (``1``) sends it."""
+    return (request.POST.get(name) or "").lower() in {"on", "1", "true"}
+
+
 def _draft_from(request: HttpRequest) -> dict[str, Any]:
     return {
         "slug": request.POST.get("slug") or "",
@@ -335,9 +349,9 @@ def _draft_from(request: HttpRequest) -> dict[str, Any]:
         "helpUrl": request.POST.get("help_url") or "",
         "contact": request.POST.get("contact_label") or "",
         "requestPath": request.POST.get("request_path") or "",
-        "companyWide": request.POST.get("company_wide") == "on",
-        "required": request.POST.get("is_required") == "on",
-        "active": request.POST.get("is_active") == "on",
+        "companyWide": _checked(request, "company_wide"),
+        "required": _checked(request, "is_required"),
+        "active": _checked(request, "is_active"),
         "sortOrder": request.POST.get("sort_order") or "0",
         "steps": [step for step in request.POST.getlist("step") if step.strip()],
         "officeIds": [

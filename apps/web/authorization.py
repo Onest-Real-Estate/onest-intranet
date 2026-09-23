@@ -489,11 +489,29 @@ ROUTE_POLICIES: dict[str, AuthorizationPolicy] = {
         description=(
             "The signed-in agent's own tool checklist and setup guides. No "
             "grant: a person is always entitled to know what they are expected "
-            "to have and how to obtain it. Reads only their own row set."
+            "to have and how to obtain it. Reads only their own row set, and "
+            'writes only their own "I have this" mark, never the '
+            "staff-confirmed state."
+        ),
+        methods=("GET", "POST"),
+        route_names=("my_tools", "my_tool_have"),
+        scope_rule="self_only",
+    ),
+    "operations_people": AuthorizationPolicy(
+        key="operations_people",
+        access="permission_protected",
+        description=(
+            "The single People entry in the navigation. Redirects to the first "
+            "tab this reader may open — Users, Roles & permissions, or New "
+            "agents — each of which enforces its own policy on arrival."
         ),
         methods=("GET",),
-        route_names=("my_tools",),
-        scope_rule="self_only",
+        route_names=("admin_people",),
+        any_permissions=(
+            "web.view_users",
+            "web.assign_user_roles",
+            "web.view_new_agents",
+        ),
     ),
     "team_tool_readiness": AuthorizationPolicy(
         key="team_tool_readiness",

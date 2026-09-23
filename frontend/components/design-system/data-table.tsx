@@ -13,6 +13,7 @@ import type * as React from "react";
 import { useLayoutEffect, useRef, useState } from "react";
 
 import { EmptyState } from "@/components/design-system/empty-state";
+import { NativeSelect } from "@/components/design-system/native-select";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -272,15 +273,17 @@ export function DataTable<Row>({
 
   const table = (
     <>
-      {/* Vertical rules between cells turn a list of values back into a grid:
-          across a wide table the column edge is what keeps the eye on one
-          record. They live on the table, not the frame wrapper, so `bare` and
-          `bleed` still contribute no outer border of their own. */}
-      <Table className="[&_tr>*+*]:border-l">
+      {/* Horizontal rules only, and rows with room in them: each record reads
+          as one band across the table, so the eye follows a row by its rule
+          rather than by boxing every value into a cell. The cell padding and
+          header treatment live here, not on the primitives, so every list page
+          takes the same shape from one place. */}
+      <Table className="[&_td]:py-3.5 [&_td]:whitespace-normal">
         <caption className="sr-only">{caption}</caption>
-        {/* Micro-caps headers: the column names read as labels rather than as
-            another row of data competing with the values below them. */}
-        <TableHeader>
+        {/* Micro-caps headers on the card itself, not a grey band: the column
+            names read as labels over the data, and the rule beneath them is the
+            only thing separating the two. */}
+        <TableHeader className="bg-transparent [&_tr]:border-border [&_tr]:hover:bg-transparent [&_th]:h-11">
           <TableRow>
             {selectable ? (
               <TableHead className="w-11">
@@ -490,64 +493,70 @@ export function paginationItems(page: number, totalPages: number): PaginationIte
 export function Pagination({
   pagination,
   onPageChange,
+  pageSizeOptions,
+  onPageSizeChange,
   disabled = false,
   className,
 }: {
   pagination: PaginationMeta;
   onPageChange: (page: number) => void;
+  /** Offer a rows-per-page choice. Only sizes the server accepts belong here. */
+  pageSizeOptions?: number[];
+  onPageSizeChange?: (size: number) => void;
   disabled?: boolean;
   className?: string;
 }) {
   const items = paginationItems(pagination.page, pagination.totalPages);
+  const first =
+    pagination.totalItems === 0 ? 0 : (pagination.page - 1) * pagination.pageSize + 1;
+  const last = Math.min(pagination.page * pagination.pageSize, pagination.totalItems);
+  const square = "size-9 px-0 tabular-nums pointer-coarse:size-11 bg-card font-medium";
 
   return (
     <nav
       aria-label="Pagination"
       className={cn(
-        "flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-center sm:justify-between",
+        "flex flex-col-reverse gap-3 border-t pt-4 sm:flex-row sm:items-center sm:justify-between",
         className,
       )}
     >
-      <p className="text-muted-foreground text-sm tabular-nums">
-        <strong className="text-foreground font-semibold">
-          {pagination.totalItems}
-        </strong>{" "}
-        {pagination.totalItems === 1 ? "result" : "results"}
-        <span className="hidden sm:inline">
-          {" "}
-          · page {pagination.page} of {pagination.totalPages}
-        </span>
-      </p>
-      <div className="flex items-center gap-1">
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          disabled={disabled || !pagination.hasPrevious}
-          onClick={() => onPageChange(pagination.page - 1)}
-        >
-          <ChevronLeft className="size-4" aria-hidden />
-          <span className="hidden sm:inline">Previous</span>
-        </Button>
+      <div className="flex flex-wrap items-center gap-1.5">
+        {pagination.hasPrevious ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className={square}
+            disabled={disabled}
+            aria-label="Previous page"
+            onClick={() => onPageChange(pagination.page - 1)}
+          >
+            <ChevronLeft className="size-4" aria-hidden />
+          </Button>
+        ) : null}
         {items.map(({ key, page }) =>
           page === null ? (
-            <span key={key} aria-hidden className="text-muted-foreground px-1 text-sm">
+            <span
+              key={key}
+              aria-hidden
+              className="text-muted-foreground grid size-9 place-items-center rounded-md border text-sm"
+            >
               …
             </span>
           ) : (
             <Button
               key={key}
               type="button"
-              variant={page === pagination.page ? "secondary" : "ghost"}
-              size="sm"
+              variant="outline"
+              size="icon"
               disabled={disabled}
               aria-current={page === pagination.page ? "page" : undefined}
               aria-label={`Page ${page}`}
               className={cn(
-                // 36px suits a mouse; a finger needs the full target, and the
-                // pointer type says which one is in use better than width does.
-                "size-9 px-0 tabular-nums pointer-coarse:size-11",
-                page === pagination.page && "text-foreground font-semibold",
+                square,
+                page === pagination.page
+                  ? "border-foreground/40 text-foreground font-semibold"
+                  : "text-muted-foreground",
               )}
               onClick={() => onPageChange(page)}
             >
@@ -555,16 +564,48 @@ export function Pagination({
             </Button>
           ),
         )}
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          disabled={disabled || !pagination.hasNext}
-          onClick={() => onPageChange(pagination.page + 1)}
-        >
-          <span className="hidden sm:inline">Next</span>
-          <ChevronRight className="size-4" aria-hidden />
-        </Button>
+        {pagination.hasNext ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className={square}
+            disabled={disabled}
+            aria-label="Next page"
+            onClick={() => onPageChange(pagination.page + 1)}
+          >
+            <ChevronRight className="size-4" aria-hidden />
+          </Button>
+        ) : null}
+      </div>
+      <div className="flex items-center gap-3">
+        <p className="text-muted-foreground text-sm tabular-nums">
+          {pagination.totalItems === 0 ? (
+            "No results"
+          ) : (
+            <>
+              <span className="text-foreground font-medium">
+                {first}–{last}
+              </span>{" "}
+              of {pagination.totalItems}
+            </>
+          )}
+        </p>
+        {pageSizeOptions && onPageSizeChange ? (
+          <NativeSelect
+            aria-label="Rows per page"
+            value={pagination.pageSize}
+            disabled={disabled}
+            onChange={(event) => onPageSizeChange(Number(event.target.value))}
+            className="bg-card h-9 w-32 font-medium tabular-nums"
+          >
+            {pageSizeOptions.map((size) => (
+              <option key={size} value={size}>
+                {size} / page
+              </option>
+            ))}
+          </NativeSelect>
+        ) : null}
       </div>
     </nav>
   );

@@ -14,14 +14,25 @@ import type {
 
 const pageProps = vi.hoisted(() => ({ current: {} as UserDirectoryPageProps }));
 const routerGet = vi.hoisted(() => vi.fn());
+const routerPost = vi.hoisted(() => vi.fn());
 
 vi.mock("@inertiajs/react", () => ({
   usePage: () => ({ props: pageProps.current, url: "/operations/users" }),
   Head: () => null,
-  Link: ({ href, children }: { href: string; children: ReactNode }) => (
-    <a href={href}>{children}</a>
+  Link: ({
+    href,
+    children,
+    ...rest
+  }: {
+    href: string;
+    children: ReactNode;
+    className?: string;
+  }) => (
+    <a href={href} {...rest}>
+      {children}
+    </a>
   ),
-  router: { get: routerGet },
+  router: { get: routerGet, post: routerPost },
 }));
 
 const ROW: DirectoryRow = {
@@ -44,6 +55,8 @@ const ROW: DirectoryRow = {
     tone: "neutral",
     available: false,
   },
+  roles: ["Realtor", "Branch Manager", "Compliance"],
+  account: { version: "2026-09-01T00:00:00+00:00" },
 };
 
 const FILTER_OPTIONS: DirectoryFilterOptions = {
@@ -76,7 +89,11 @@ function setPage({
   visible = { administration: true, contract: true, onboarding: true },
   canOpenRecord = true,
   filterOptions = FILTER_OPTIONS,
+  permissions = ["web.view_users", "user.view_user_administration"],
+  errors = { fields: {}, form: [] },
 }: {
+  permissions?: string[];
+  errors?: UserDirectoryPageProps["errors"];
   items?: DirectoryRow[];
   summary?: DirectorySummary;
   visible?: UserDirectoryPageProps["visible"];
@@ -89,7 +106,7 @@ function setPage({
       email: "ada@onest.realestate",
       name: "Ada Admin",
       headshotUrl: null,
-      permissions: ["web.view_users", "user.view_user_administration"],
+      permissions,
       roles: ["System Admin"],
       roleLabel: "System Admin",
       isStaff: false,
@@ -139,6 +156,8 @@ function setPage({
     scope: { level: "brokerage", label: "Brokerage-wide" },
     visible,
     canOpenRecord,
+    pageSizeOptions: [10, 25, 50, 100],
+    errors,
   };
 }
 
@@ -152,35 +171,163 @@ function rowFor(name: string): HTMLElement {
 
 beforeEach(() => {
   routerGet.mockClear();
+  routerPost.mockClear();
   setPage();
   window.history.replaceState({}, "", "/operations/users");
 });
 
 describe("UserDirectory", () => {
-  it("shows the scoped counts and the record destination for each row", () => {
+  it("sits under the People tabs this reader may open", () => {
     setPage({
-      summary: { total: 42, active: 40, disabled: 2, pendingOnboarding: 3 },
+      permissions: ["web.view_users", "web.view_new_agents", "web.add_users"],
     });
     render(<UserDirectory />);
-    expect(screen.getByText("42")).toBeVisible();
+    const tabs = screen.getByRole("navigation", { name: "People sections" });
+    expect(within(tabs).getByRole("link", { name: "Users" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    expect(within(tabs).getByRole("link", { name: "New agents" })).toBeVisible();
+    // No grant, no tab: roles are not assignable by this reader.
+    expect(within(tabs).queryByRole("link", { name: /Roles/ })).toBeNull();
+    expect(screen.getByRole("link", { name: /Add user/ })).toHaveAttribute(
+      "href",
+      "/operations/users/new",
+    );
+  });
+
+  it("offers Add user only with the grant", () => {
+    render(<UserDirectory />);
+    expect(screen.queryByRole("link", { name: /Add user/ })).toBeNull();
+  });
+
+  it("shows each person with their status and a way to edit the record", () => {
+    render(<UserDirectory />);
     const row = rowFor("Bob Lee");
     expect(within(row).getByText("bob@onest.realestate")).toBeVisible();
-    expect(within(row).getByRole("link", { name: /open the record/i })).toHaveAttribute(
+    expect(within(row).getAllByText("Active").length).toBeGreaterThan(0);
+    expect(within(row).getByRole("link", { name: /Edit/ })).toHaveAttribute(
       "href",
       "/operations/users/9/administration",
     );
   });
 
+  it("shows roles as chips, folding the rest into a count", () => {
+    render(<UserDirectory />);
+    const row = rowFor("Bob Lee");
+    expect(within(row).getByText("Realtor")).toBeVisible();
+    expect(within(row).getByText("Branch Manager")).toBeVisible();
+    expect(within(row).getByText("+1")).toHaveAttribute("title", "Compliance");
+  });
+
+  it("links role chips to the role workspace only for a reader who may assign", () => {
+    setPage({ permissions: ["web.view_users", "web.assign_user_roles"] });
+    render(<UserDirectory />);
+    expect(
+      within(rowFor("Bob Lee")).getByRole("link", { name: /Manage roles for Bob Lee/ }),
+    ).toHaveAttribute("href", "/operations/role-assignments/9");
+  });
+
+  it("deactivates from the row with a reason and comes back to the list", async () => {
+    const user = userEvent.setup();
+    window.history.replaceState({}, "", "/operations/users?role=realtor");
+    render(<UserDirectory />);
+
+    await user.click(
+      within(rowFor("Bob Lee")).getByRole("button", { name: /Deactivate/ }),
+    );
+    const dialog = await screen.findByRole("dialog");
+    const confirm = within(dialog).getByRole("button", { name: "Deactivate account" });
+    // No reason, no lockout.
+    expect(confirm).toBeDisabled();
+
+    await user.type(
+      within(dialog).getByLabelText(/Business reason/),
+      "Left the brokerage.",
+    );
+    await user.click(confirm);
+
+    expect(routerPost).toHaveBeenCalledOnce();
+    const [url, data] = routerPost.mock.calls[0];
+    expect(url).toBe("/operations/users/9/account-state");
+    expect(data).toEqual({
+      action: "disable",
+      business_reason: "Left the brokerage.",
+      expected_version: "2026-09-01T00:00:00+00:00",
+      returnTo: "users",
+      returnQuery: "?role=realtor",
+    });
+  });
+
+  it("offers Activate on a deactivated account", () => {
+    setPage({
+      items: [
+        {
+          ...ROW,
+          isActive: false,
+          accountState: { value: "disabled", label: "Disabled", tone: "destructive" },
+        },
+      ],
+    });
+    render(<UserDirectory />);
+    const row = rowFor("Bob Lee");
+    expect(within(row).getByText("Disabled")).toBeVisible();
+    expect(within(row).getByRole("button", { name: /Activate/ })).toBeVisible();
+  });
+
+  it("shows no account action where the server did not offer one", () => {
+    const { account, ...withoutAccount } = ROW;
+    setPage({ items: [withoutAccount] });
+    render(<UserDirectory />);
+    expect(
+      within(rowFor("Bob Lee")).queryByRole("button", { name: /Deactivate/ }),
+    ).toBeNull();
+  });
+
   it("delegates every filter change to the scoped server list", async () => {
     const user = userEvent.setup();
     render(<UserDirectory />);
-    await user.click(screen.getByRole("combobox", { name: "Account" }));
-    await user.click(screen.getByRole("option", { name: "Disabled" }));
+    await user.click(screen.getByRole("combobox", { name: "Role" }));
+    await user.click(screen.getByRole("option", { name: "Branch Manager" }));
+    expect(routerGet).toHaveBeenCalledWith(
+      expect.stringContaining("role=branch_manager"),
+      {},
+      expect.anything(),
+    );
+  });
+
+  it("narrows to deactivated accounts from the quick view", async () => {
+    const user = userEvent.setup();
+    setPage({ summary: { total: 42, active: 40, disabled: 2, pendingOnboarding: 0 } });
+    render(<UserDirectory />);
+    await user.click(screen.getByRole("button", { name: /^Deactivated/ }));
     expect(routerGet).toHaveBeenCalledWith(
       expect.stringContaining("account=disabled"),
       {},
       expect.anything(),
     );
+  });
+
+  it("sorts from the toolbar through the URL", async () => {
+    const user = userEvent.setup();
+    render(<UserDirectory />);
+    await user.selectOptions(
+      screen.getByRole("combobox", { name: "Sort by" }),
+      "lastLogin-desc",
+    );
+    const url = routerGet.mock.calls.at(-1)?.[0] as string;
+    expect(url).toContain("sort=lastLogin");
+    expect(url).toContain("direction=desc");
+  });
+
+  it("changes the page size through the URL", async () => {
+    const user = userEvent.setup();
+    render(<UserDirectory />);
+    await user.selectOptions(
+      screen.getByRole("combobox", { name: /Rows per page/ }),
+      "50",
+    );
+    expect(routerGet.mock.calls.at(-1)?.[0]).toContain("pageSize=50");
   });
 
   it("resets to the first page when the search term changes", async () => {
@@ -194,7 +341,7 @@ describe("UserDirectory", () => {
   });
 
   it("omits administrative columns a reader may not have", () => {
-    const { agentStatus, agentIdentifier, startDate, contract, ...bare } = ROW;
+    const { agentStatus, agentIdentifier, startDate, contract, account, ...bare } = ROW;
     setPage({
       items: [bare],
       visible: { administration: false, contract: false, onboarding: true },
@@ -209,7 +356,7 @@ describe("UserDirectory", () => {
     expect(
       screen.queryByRole("combobox", { name: "Agent status" }),
     ).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: /open the record/i })).toBeNull();
+    expect(screen.queryByRole("link", { name: /Edit/ })).toBeNull();
     expect(screen.getByText(/not open their administrative record/i)).toBeVisible();
   });
 
@@ -230,39 +377,6 @@ describe("UserDirectory", () => {
     pageProps.current.users.filters.q = "zzz";
     render(<UserDirectory />);
     expect(screen.getByText("Nobody matches")).toBeVisible();
-  });
-
-  it("offers a shortcut to the disabled accounts still in scope", async () => {
-    const user = userEvent.setup();
-    setPage({
-      summary: { total: 42, active: 40, disabled: 2, pendingOnboarding: 0 },
-    });
-    render(<UserDirectory />);
-    await user.click(screen.getByRole("button", { name: /show them/i }));
-    expect(routerGet).toHaveBeenCalledWith(
-      expect.stringContaining("account=disabled"),
-      {},
-      expect.anything(),
-    );
-  });
-
-  it("marks a disabled account in its own row", () => {
-    setPage({
-      items: [
-        {
-          ...ROW,
-          isActive: false,
-          accountState: {
-            value: "disabled",
-            label: "Disabled",
-            tone: "destructive",
-          },
-        },
-      ],
-      summary: { total: 1, active: 0, disabled: 1, pendingOnboarding: 0 },
-    });
-    render(<UserDirectory />);
-    expect(within(rowFor("Bob Lee")).getByText("Disabled")).toBeVisible();
   });
 
   it("has no detectable accessibility violations", async () => {
