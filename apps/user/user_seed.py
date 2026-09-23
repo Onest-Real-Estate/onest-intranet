@@ -24,6 +24,7 @@ from apps.user.roles import (
     BRANCH_ADMIN,
     BRANCH_MANAGER,
     BROKER_ADMIN,
+    COMPLIANCE,
     IT_SUPPORT,
     MARKETING_TEAM,
     PRINCIPAL_BROKER,
@@ -137,6 +138,42 @@ DEV_USER_TEMPLATES: tuple[UserSeedTemplate, ...] = (
         role=AGENT,
         scope_type=ScopeType.OFFICE,
         scope_office_slug="connecticut",
+    ),
+    # Appended, never inserted: Faker draws names in template order, so adding
+    # rows at the end keeps every earlier person's seeded name stable.
+    UserSeedTemplate(
+        email="agent.philadelphia@onest.test",
+        office_slug="philadelphia",
+        role=AGENT,
+        scope_type=ScopeType.OFFICE,
+        scope_office_slug="philadelphia",
+    ),
+    UserSeedTemplate(
+        email="agent.massachusetts@onest.test",
+        office_slug="massachusetts",
+        role=AGENT,
+        scope_type=ScopeType.OFFICE,
+        scope_office_slug="massachusetts",
+    ),
+    UserSeedTemplate(
+        email="agent.pittsburgh@onest.test",
+        office_slug="pittsburgh",
+        role=AGENT,
+        scope_type=ScopeType.OFFICE,
+        scope_office_slug="pittsburgh",
+    ),
+    UserSeedTemplate(
+        email="newhire.fairfax@onest.test",
+        office_slug="fairfax-va",
+        role=AGENT,
+        scope_type=ScopeType.OFFICE,
+        scope_office_slug="fairfax-va",
+    ),
+    UserSeedTemplate(
+        email="compliance@onest.test",
+        office_slug="onest-head-office",
+        role=COMPLIANCE,
+        scope_type=ScopeType.COMPANY,
     ),
 )
 
@@ -701,3 +738,49 @@ def seed_users(
     report.contacts_created = staff_report.contacts_created
     report.contacts_matched = staff_report.contacts_matched
     return report
+
+
+def ready_existing_superusers(*, office_slug: str = "onest-head-office") -> list[str]:
+    """Make hand-made superusers usable against the seeded hub.
+
+    ``createsuperuser`` leaves an account with no office and an incomplete
+    profile, so onboarding middleware bounces it and every office-scoped page
+    renders empty. Only blank fields are filled — a name or office somebody
+    already chose is left alone — and a company-scope ``system_admin`` grant is
+    added so scope resolution matches the permissions the flag implies.
+    """
+    office = _resolve_office(office_slug)
+    readied: list[str] = []
+    for user in User.objects.filter(is_superuser=True, is_active=True):
+        local = user.email.split("@", 1)[0]
+        fills = {
+            "office": user.office or office,
+            "first_name": user.first_name or local.capitalize(),
+            "last_name": user.last_name or "Admin",
+            "phone_number": user.phone_number or "(703) 555-0100",
+            "street_address": user.street_address or "1 Hub Plaza",
+            "city": user.city or "Fairfax",
+            "state": user.state or "VA",
+            "zip_code": user.zip_code or "22030",
+            "profile_completed": True,
+            "profile_completed_at": user.profile_completed_at or timezone.now(),
+        }
+        if not user.display_name:
+            fills["display_name"] = f"{fills['first_name']} {fills['last_name']}"
+        User.objects.filter(pk=user.pk).update(**fills)
+        user.refresh_from_db()
+        _ensure_role_assignment(
+            UserSeedReport(),
+            user,
+            UserSeedSpec(
+                email=user.email,
+                first_name=user.first_name,
+                last_name=user.last_name,
+                display_name=user.display_name,
+                office_slug=office_slug,
+                role=ADMIN,
+                scope_type=ScopeType.COMPANY,
+            ),
+        )
+        readied.append(user.email)
+    return readied
