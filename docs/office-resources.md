@@ -47,7 +47,7 @@ search, and the download view all go through the same gate.
 ## Files
 
 Uploads never use public media URLs. Locally they live under
-`MEDIA_ROOT/private/` with no browsable base URL; on S3/MinIO they are stored
+`MEDIA_ROOT/private/` with no browsable base URL; on S3/RustFS they are stored
 under `private/` with a private ACL. The only read path is
 `GET /office-resources/<slug>/download`, which re-resolves the actor's
 effective resources (same gate as the page), streams via `FileResponse` with

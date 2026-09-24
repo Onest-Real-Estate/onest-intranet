@@ -6,7 +6,7 @@ name: onest-dev
 #   docker compose --env-file .env -f deployment/compose.dev.yaml up -d
 #   pnpm run dev   # on the host, for HMR
 #
-# Services: web (Django) · db (PostgreSQL) · redis · mailpit · minio (S3)
+# Services: web (Django) · db (PostgreSQL) · redis · mailpit · rustfs (S3)
 #          · celery (workers) · celery-beat (django-celery-beat scheduler)
 
 # Shared config for the celery worker and beat services (dev image: code
@@ -35,14 +35,14 @@ x-celery-service: &celery-service
     # Object storage — must match the web service exactly. Tasks read back the
     # bytes a request wrote: announcement media is uploaded by web and then
     # verified, stripped, and resized here. Without these the worker falls back
-    # to local-disk storage, looks for a key that only exists in MinIO, and
+    # to local-disk storage, looks for a key that only exists in RustFS, and
     # fails every file with "The stored file could not be read".
     USE_S3: "1"
-    AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
-    AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    AWS_ACCESS_KEY_ID: ${RUSTFS_ACCESS_KEY:-rustfsadmin}
+    AWS_SECRET_ACCESS_KEY: ${RUSTFS_SECRET_KEY:-rustfsadmin}
     AWS_STORAGE_BUCKET_NAME: onest
-    AWS_S3_ENDPOINT_URL: http://minio:9000
-    AWS_S3_CUSTOM_DOMAIN: localhost:${MINIO_S3_PORT:-9000}
+    AWS_S3_ENDPOINT_URL: http://rustfs:9000
+    AWS_S3_CUSTOM_DOMAIN: localhost:${RUSTFS_S3_PORT:-9000}
     AWS_S3_URL_PROTOCOL: "http:"
     AWS_S3_REGION_NAME: us-east-1
     AWS_S3_ADDRESSING_STYLE: path
@@ -116,20 +116,20 @@ services:
       EMAIL_BACKEND: django.core.mail.backends.smtp.EmailBackend
       EMAIL_HOST: mailpit
       EMAIL_PORT: "1025"
-      # Object storage via MinIO (S3). boto3 uploads over the compose network
-      # (minio:9000); browsers fetch media via the published port
-      # (localhost:9000) using public URLs (minio-init applies an anonymous
-      # download policy). If you change MINIO_S3_PORT, mirror it here.
+      # Object storage via RustFS (S3). boto3 uploads over the compose network
+      # (rustfs:9000); browsers fetch media via the published port
+      # (localhost:9000) using public URLs (rustfs-init applies an anonymous
+      # download policy). If you change RUSTFS_S3_PORT, mirror it here.
       USE_S3: "1"
-      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
-      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      AWS_ACCESS_KEY_ID: ${RUSTFS_ACCESS_KEY:-rustfsadmin}
+      AWS_SECRET_ACCESS_KEY: ${RUSTFS_SECRET_KEY:-rustfsadmin}
       AWS_STORAGE_BUCKET_NAME: onest
-      AWS_S3_ENDPOINT_URL: http://minio:9000
-      AWS_S3_CUSTOM_DOMAIN: localhost:${MINIO_S3_PORT:-9000}
+      AWS_S3_ENDPOINT_URL: http://rustfs:9000
+      AWS_S3_CUSTOM_DOMAIN: localhost:${RUSTFS_S3_PORT:-9000}
       AWS_S3_URL_PROTOCOL: "http:"
       AWS_S3_REGION_NAME: us-east-1
-      # MinIO only supports path-style addressing (settings.py defaults to
-      # virtual-hosted style for AWS S3).
+      # RustFS (and other S3-compatible) endpoints need path-style addressing
+      # (settings.py defaults to virtual-hosted style for AWS S3).
       AWS_S3_ADDRESSING_STYLE: path
       # Microsoft SSO
       MICROSOFT_CLIENT_ID: ${MICROSOFT_CLIENT_ID:-}
@@ -146,7 +146,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      minio-init:
+      rustfs-init:
         condition: service_completed_successfully
       migrate:
         condition: service_completed_successfully
@@ -189,18 +189,31 @@ services:
       - "${MAILPIT_SMTP_PORT:-1025}:1025" # SMTP
       - "${MAILPIT_UI_PORT:-8025}:8025"   # web UI
 
-  minio:
-    image: quay.io/minio/minio:latest
-    command: server /data --console-address ":9001"
+  # Apache-2.0 S3-compatible object store (rustfs.com). Single-node layout
+  # matching https://docs.rustfs.com/en/installation/container/docker — named
+  # volumes need no chown; the container user is 10001.
+  rustfs:
+    image: rustfs/rustfs:latest
+    command: ["/data"]
     restart: unless-stopped
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY:-rustfsadmin}
+      RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_KEY:-rustfsadmin}
+      RUSTFS_ADDRESS: ":9000"
+      RUSTFS_CONSOLE_ADDRESS: ":9001"
+      RUSTFS_CONSOLE_ENABLE: "true"
+      RUSTFS_OBS_LOGGER_LEVEL: error
     volumes:
-      - minio_data:/data
+      - rustfs_data:/data
     ports:
-      - "${MINIO_S3_PORT:-9000}:9000"     # S3 API (used for media URLs)
-      - "${MINIO_CONSOLE_PORT:-9001}:9001" # web console
+      - "${RUSTFS_S3_PORT:-9000}:9000"     # S3 API (used for media URLs)
+      - "${RUSTFS_CONSOLE_PORT:-9001}:9001" # web console
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:9000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
 
   celery:
     <<: *celery-service
@@ -217,35 +230,46 @@ services:
       - celery_beat_venv:/app/.venv
 
 
-  # One-shot: waits for MinIO, creates the bucket, and makes it publicly
+  # One-shot: waits for RustFS, creates the bucket, and makes it publicly
   # readable so browsers can fetch media URLs built from AWS_S3_CUSTOM_DOMAIN.
   # Idempotent; safe to re-run on every `docker compose up`.
-  minio-init:
-    # MinIO's own registry: Docker Hub no longer serves minio/mc
-    # ("pull access denied"), which stopped the whole stack from starting.
-    image: quay.io/minio/mc:latest
+  rustfs-init:
+    image: amazon/aws-cli:latest
     restart: "no"
     depends_on:
-      minio:
-        condition: service_started
+      rustfs:
+        condition: service_healthy
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
-      MINIO_BUCKET: onest
-    entrypoint: |
-      /bin/sh -c '
-      until mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD" >/dev/null 2>&1; do
-        echo "minio-init: waiting for MinIO ..."
-        sleep 2
-      done
-      mc mb --ignore-existing "local/$$MINIO_BUCKET"
-      mc anonymous set download "local/$$MINIO_BUCKET"
-      echo "minio-init: bucket $$MINIO_BUCKET ready (public read)"
-      '
+      AWS_ACCESS_KEY_ID: ${RUSTFS_ACCESS_KEY:-rustfsadmin}
+      AWS_SECRET_ACCESS_KEY: ${RUSTFS_SECRET_KEY:-rustfsadmin}
+      AWS_DEFAULT_REGION: us-east-1
+      RUSTFS_BUCKET: onest
+      RUSTFS_ENDPOINT: http://rustfs:9000
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        until aws --endpoint-url "$$RUSTFS_ENDPOINT" s3api list-buckets >/dev/null 2>&1; do
+          echo "rustfs-init: waiting for RustFS ..."
+          sleep 2
+        done
+        if ! aws --endpoint-url "$$RUSTFS_ENDPOINT" s3api head-bucket --bucket "$$RUSTFS_BUCKET" >/dev/null 2>&1; then
+          aws --endpoint-url "$$RUSTFS_ENDPOINT" s3api create-bucket --bucket "$$RUSTFS_BUCKET"
+        fi
+        # Allow a public-read bucket policy (RustFS may default to blocking it).
+        aws --endpoint-url "$$RUSTFS_ENDPOINT" s3api put-public-access-block \
+          --bucket "$$RUSTFS_BUCKET" \
+          --public-access-block-configuration \
+          BlockPublicAcls=false,IgnorePublicAcls=false,BlockPublicPolicy=false,RestrictPublicBuckets=false \
+          >/dev/null 2>&1 || true
+        aws --endpoint-url "$$RUSTFS_ENDPOINT" s3api put-bucket-policy \
+          --bucket "$$RUSTFS_BUCKET" \
+          --policy "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Sid\":\"PublicRead\",\"Effect\":\"Allow\",\"Principal\":\"*\",\"Action\":[\"s3:GetObject\"],\"Resource\":[\"arn:aws:s3:::$$RUSTFS_BUCKET/*\"]}]}"
+        echo "rustfs-init: bucket $$RUSTFS_BUCKET ready (public read)"
 
 volumes:
   postgres_data:
   venv:
   celery_venv:
   celery_beat_venv:
-  minio_data:
+  rustfs_data:

@@ -61,7 +61,7 @@ Two ways to run things. Pick one and stay consistent within a task.
 | `pnpm run typecheck` | `tsc --noEmit` |
 | `pnpm run routes:generate` | Regenerate `frontend/types/routes.ts` |
 
-**Docker dev stack (`make up`)** — bundles Postgres, Redis, Mailpit, MinIO,
+**Docker dev stack (`make up`)** — bundles Postgres, Redis, Mailpit, RustFS,
 Celery worker + beat. Use when the task needs a real database, S3, mail,
 or background tasks. Run commands in the `web` container via
 `make dockerexec cmd="…"` or `make manage cmd="…"`; see `docs/dockerexec.md`.

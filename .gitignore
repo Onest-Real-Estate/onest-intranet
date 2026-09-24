@@ -81,3 +81,5 @@ apps/user/management/commands/seed_dev.py
 apps/user/user_seed.py
 apps/user/user_seed.py
 apps/user/management/commands/seed_dev.py
+
+.env.prod

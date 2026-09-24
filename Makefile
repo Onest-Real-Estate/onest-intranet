@@ -1,6 +1,6 @@
 # oNEST HUB developer shortcuts.
 #
-# Docker stack (Postgres, Redis, Mailpit, MinIO, Celery):
+# Docker stack (Postgres, Redis, Mailpit, RustFS, Celery):
 #   make up                        start the dev stack
 #   make dockerexec cmd="…"        run any command in the web container
 #   make manage cmd="…"            Django management command in the container
@@ -33,7 +33,7 @@ help: ## List targets
 # Docker dev stack
 # --------------------------------------------------------------------------- #
 
-up: ## Start the dev stack (db, redis, mailpit, minio, celery, web)
+up: ## Start the dev stack (db, redis, mailpit, rustfs, celery, web)
 	$(COMPOSE) up
 
 down: ## Stop the dev stack

@@ -356,7 +356,7 @@ uv run ruff check . && uv run ruff format --check . && uv run ty check \
   && pnpm typecheck && pnpm exec biome check . && uv run pytest && pnpm test
 
 # PostgreSQL row-lock and race tests (docker stack; filesystem storage, because
-# the headshot tests patch local storage and the dev stack defaults to MinIO)
+# the headshot tests patch local storage and the dev stack defaults to RustFS)
 make up
 docker compose --env-file .env -f deployment/compose.dev.yaml exec -e USE_S3=0 \
   web uv run pytest --create-db \
