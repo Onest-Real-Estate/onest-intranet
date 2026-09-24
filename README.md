@@ -287,7 +287,7 @@ Notes:
 (Django + gunicorn + WhiteNoise, image built from `deployment/Containerfile.prod`)
 and `redis` (cache + sessions). The database, object storage, and mail server
 are **external/managed services** configured through environment variables:
-the stack does not bundle Postgres, MinIO, or a mail server.
+the stack does not bundle Postgres, RustFS, or a mail server.
 
 The web image builds the frontend bundle as part of the Docker build, so no
 local build step is needed. On every start, `deployment/entrypoint.prod.sh`
@@ -321,10 +321,10 @@ The compose file fails fast with a helpful message if any of these are missing:
 | `DJANGO_ALLOWED_HOSTS`    | `localhost,127.0.0.1`            | Comma-separated hosts for your app                   |
 | `POSTGRES_DB` / `POSTGRES_USER` / `POSTGRES_PORT` | `onest` / `onest` / `5432` |                             |
 | `AWS_STORAGE_BUCKET_NAME` | `onest`                          |                                                      |
-| `AWS_S3_ENDPOINT_URL`     | *(empty)*                        | Set for S3-compatible endpoints (MinIO, Cloudflare R2); omit for real AWS S3 |
+| `AWS_S3_ENDPOINT_URL`     | *(empty)*                        | Set for S3-compatible endpoints (RustFS, Cloudflare R2); omit for real AWS S3 |
 | `AWS_S3_CUSTOM_DOMAIN`    | *(empty)*                        | Public host media URLs are built from (e.g. `media.example.com`) |
 | `AWS_S3_REGION_NAME`      | `us-east-1`                      |                                                      |
-| `AWS_S3_ADDRESSING_STYLE` | `virtual`                        | Set to `path` for MinIO-style endpoints              |
+| `AWS_S3_ADDRESSING_STYLE` | `virtual`                        | Set to `path` for RustFS-style endpoints             |
 | `AWS_S3_URL_PROTOCOL`     | `https:`                         |                                                      |
 | `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `EMAIL_USE_TLS` | `587` / TLS on | External SMTP relay (`EMAIL_HOST` is required to send mail) |
 | `DEFAULT_FROM_EMAIL`      | `Onest <noreply@onest.local>`    |                                                      |
@@ -347,7 +347,7 @@ POSTGRES_PASSWORD=<database password>
 AWS_ACCESS_KEY_ID=<access key>
 AWS_SECRET_ACCESS_KEY=<secret key>
 AWS_STORAGE_BUCKET_NAME=onest
-# omit AWS_S3_ENDPOINT_URL to use real AWS S3; set it for MinIO/R2-style endpoints
+# omit AWS_S3_ENDPOINT_URL to use real AWS S3; set it for RustFS/R2-style endpoints
 
 EMAIL_HOST=smtp.example.com
 EMAIL_PORT=587
@@ -367,7 +367,7 @@ MICROSOFT_TENANT=common
 > `AWS_S3_CUSTOM_DOMAIN` at it).
 
 > **Local development** uses a different stack: `deployment/compose.dev.yaml`
-> (via `make up`) bundles Postgres, Redis, Mailpit, MinIO, and the Celery
+> (via `make up`) bundles Postgres, Redis, Mailpit, RustFS, and the Celery
 > worker + beat scheduler, so nothing external is needed. Agent contract
 > templates and signing are Hub-native (field placer + SignaturePad + optional
 > org PKCS#12 seal). See `docs/agent-contracts.md` and set

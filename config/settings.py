@@ -170,29 +170,29 @@ STATIC_URL = "/static/"
 STATICFILES_DIRS = [BASE_DIR / "assets", BASE_DIR / "static"]
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
-# Local media (used when S3/MinIO is not configured).
+# Local media (used when S3/RustFS is not configured).
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
 # ---------------------------------------------------------------------------
-# Object storage (S3 / MinIO)
+# Object storage (S3 / RustFS)
 # ---------------------------------------------------------------------------
-# Enable with USE_S3=1 and point the AWS_* vars at your MinIO endpoint. The
-# bucket is made publicly readable by the compose minio-init service.
+# Enable with USE_S3=1 and point the AWS_* vars at your RustFS endpoint. The
+# bucket is made publicly readable by the compose rustfs-init service.
 USE_S3 = config("USE_S3", default=False, cast=bool)
 if USE_S3:
     AWS_ACCESS_KEY_ID = config("AWS_ACCESS_KEY_ID", default="")
     AWS_SECRET_ACCESS_KEY = config("AWS_SECRET_ACCESS_KEY", default="")
     AWS_STORAGE_BUCKET_NAME = config("AWS_STORAGE_BUCKET_NAME", default="onest")
     # Endpoint used by boto3 for uploads — the compose-internal service URL
-    # (e.g. http://minio:9000).
+    # (e.g. http://rustfs:9000).
     AWS_S3_ENDPOINT_URL = config("AWS_S3_ENDPOINT_URL", default="")
     # Host browsers can reach, used to build public media URLs (scheme-less
-    # "host:port"; the compose minio-init service sets the bucket to public read).
+    # "host:port"; the compose rustfs-init service sets the bucket to public read).
     AWS_S3_CUSTOM_DOMAIN = config("AWS_S3_CUSTOM_DOMAIN", default="")
     AWS_S3_URL_PROTOCOL = config("AWS_S3_URL_PROTOCOL", default="http:")
     AWS_S3_REGION_NAME = config("AWS_S3_REGION_NAME", default="us-east-1")
-    # Virtual-hosted style is what AWS S3 expects; MinIO-style endpoints need
+    # Virtual-hosted style is what AWS S3 expects; RustFS-style endpoints need
     # "path" (set it via env, e.g. in the dev compose stack).
     AWS_S3_ADDRESSING_STYLE = config("AWS_S3_ADDRESSING_STYLE", default="virtual")
     # Public-read bucket: no presigned URLs needed.
@@ -202,7 +202,7 @@ else:
     DEFAULT_FILE_STORAGE_BACKEND = "django.core.files.storage.FileSystemStorage"
 
 # Static files are served by WhiteNoise in production (compressed + hashed via
-# collectstatic); media files go to MinIO when USE_S3 is enabled.
+# collectstatic); media files go to RustFS when USE_S3 is enabled.
 STORAGES = {
     "default": {"BACKEND": DEFAULT_FILE_STORAGE_BACKEND},
     "staticfiles": {

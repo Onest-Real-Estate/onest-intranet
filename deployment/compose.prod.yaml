@@ -83,7 +83,7 @@ services:
       EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD:-}
       EMAIL_USE_TLS: ${EMAIL_USE_TLS:-1}
       DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL:-Onest <noreply@onest.local>}
-      # Object storage — external S3-compatible service via .env (MinIO,
+      # Object storage — external S3-compatible service via .env (RustFS,
       # AWS S3, Cloudflare R2, ...). Omit AWS_S3_ENDPOINT_URL to use real AWS
       # S3; set AWS_S3_CUSTOM_DOMAIN if media is served from a public host.
       USE_S3: ${USE_S3:-1}
@@ -94,7 +94,7 @@ services:
       AWS_S3_CUSTOM_DOMAIN: ${AWS_S3_CUSTOM_DOMAIN:-}
       AWS_S3_URL_PROTOCOL: ${AWS_S3_URL_PROTOCOL:-https:}
       AWS_S3_REGION_NAME: ${AWS_S3_REGION_NAME:-us-east-1}
-      # Virtual-hosted style for AWS S3; set to "path" for MinIO-style endpoints.
+      # Virtual-hosted style for AWS S3; set to "path" for RustFS-style endpoints.
       AWS_S3_ADDRESSING_STYLE: ${AWS_S3_ADDRESSING_STYLE:-virtual}
       # Microsoft SSO
       MICROSOFT_CLIENT_ID: ${MICROSOFT_CLIENT_ID:-}

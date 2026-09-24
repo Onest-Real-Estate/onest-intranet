@@ -1,7 +1,7 @@
 # Docker exec workflow
 
 The dev stack in `deployment/compose.dev.yaml` runs Django against **PostgreSQL,
-Redis, Mailpit, MinIO, and Celery** inside Docker. Your repo is bind-mounted at
+Redis, Mailpit, RustFS, and Celery** inside Docker. Your repo is bind-mounted at
 `/app` in the `web` container, so code edits on the host are visible immediately.
 
 Use **`make dockerexec`** (or the shorter **`make manage`**) to run commands in

@@ -1,7 +1,7 @@
 """Protected storage for authenticated-only files.
 
 Resource files are never exposed through public media URLs. Locally they live
-in a ``private/`` subtree with no browsable base URL; on S3/MinIO they use a
+in a ``private/`` subtree with no browsable base URL; on S3/RustFS they use a
 private ACL with presigned access. In every configuration the only supported
 read path is an authorized Django view that streams the bytes itself.
 """
